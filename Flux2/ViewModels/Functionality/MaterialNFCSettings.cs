@@ -1,0 +1,66 @@
+﻿using DynamicData;
+using DynamicData.Kernel;
+using Modulo3DStandard;
+using ReactiveUI;
+using System;
+using System.Linq;
+using System.Reactive;
+using System.Reactive.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace Flux.ViewModels
+{
+    public abstract class NFCSettingsViewModel<T> : RemoteControl<T>
+        where T : NFCSettingsViewModel<T>
+    {
+        public IFlux Flux { get; }
+
+        [RemoteCommand]
+        public ReactiveCommand<Unit, Unit> TweetReaderCommand { get; }
+
+        [RemoteInput]
+        public SelectableCache<NFCReaderHandle, string> NFCReaders { get; }
+
+        public NFCSettingsViewModel(IFlux flux, string name) : base(name)
+        {
+            Flux = flux;
+            var cache = flux.NFCProvider.Readers.Connect()
+                .Transform(reader => Optional<NFCReaderHandle>.Create(reader));
+
+            NFCReaders = new SelectableCache<NFCReaderHandle, string>(cache);
+            NFCReaders.AutoSelect = q => q.KeyValues.FirstOrOptional(kvp => kvp.Value.HasValue)
+            .Convert(kvp => kvp.Key);
+
+            var can_tween = NFCReaders.SelectedValueChanged
+                .Select(nfc => nfc.HasValue);
+            TweetReaderCommand = ReactiveCommand.CreateFromTask(TweetReaderAsync, can_tween);
+        }
+
+        private async Task TweetReaderAsync()
+        {
+            if (!NFCReaders.SelectedValue.HasValue)
+                return;
+            var nfc_reader = NFCReaders.SelectedValue.Value;
+
+            await nfc_reader.OpenAsync(h => h.ReaderUISignal(LightSignalMode.Flash, BeepSignalMode.TripleShort), TimeSpan.FromSeconds(1));
+        }
+    }
+
+    public class MaterialNFCSettings : NFCSettingsViewModel<MaterialNFCSettings>, IFeederSettingsViewModel
+    {
+        [RemoteOutput(false)]
+        public ushort Position { get; }
+        public MaterialNFCSettings(FluxViewModel flux, ushort position) : base(flux, $"materialNFCSettings??{position}")
+        {
+            Position = position;
+        }
+    }
+
+    public class ToolNozzleNFCSettings : NFCSettingsViewModel<ToolNozzleNFCSettings>, IReaderSettingsViewModel
+    {
+        public ToolNozzleNFCSettings(FluxViewModel flux) : base(flux, "toolNozzleNFCSettings")
+        {
+        }
+    }
+}
