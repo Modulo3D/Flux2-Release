@@ -1,20 +1,18 @@
 ﻿using DynamicData;
 using DynamicData.Binding;
 using DynamicData.Kernel;
+using DynamicData.PLinq;
 using Modulo3DStandard;
 using ReactiveUI;
-using Splat;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reactive;
-using System.Reactive.Concurrency;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
-using System.Threading.Tasks;
-using DynamicData.PLinq;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
@@ -113,9 +111,9 @@ namespace Flux.ViewModels
                 foreach (var externalDevice in externalDevices)
                     Console.WriteLine(externalDevice.VolumeLabel);
 
-                var removableDrive = externalDevices.FirstOrOptional(d => 
+                var removableDrive = externalDevices.FirstOrOptional(d =>
                     d.VolumeLabel.ToLower().Contains("modulo"));
-                
+
                 RemovableDrivePath = removableDrive.Convert(d => d.RootDirectory);
             }
             catch (Exception ex)
@@ -133,7 +131,7 @@ namespace Flux.ViewModels
                 {
                     _ = Task.Run(async () => { await ImportMCodesAsync(folder.Value); });
                 }
-                catch(Exception ex)
+                catch (Exception ex)
                 {
                     Flux.Messages.LogException(this, ex);
                 }
@@ -144,7 +142,7 @@ namespace Flux.ViewModels
                     operator_file = folder.Value.GetFiles("operator.modulo").FirstOrDefault();
                 }
                 catch
-                { 
+                {
                 }
 
                 if (operator_file.HasValue)
@@ -209,10 +207,10 @@ namespace Flux.ViewModels
                         var file_name = Path.GetFileName(mcode.Value.FullName);
                         var file_path = Path.Combine(mcode_directory.FullName, file_name);
                         if (work_directory.FullName != mcode_directory.FullName)
-                        { 
+                        {
                             if (File.Exists(file_path))
                                 File.Delete(file_path);
- 
+
                             using (var base_stream = mcode.Value.OpenRead())
                             using (var read_stream = new ProgressStream(base_stream, report_load))
                             using (var write_stream = File.Create(file_path))
@@ -300,9 +298,9 @@ namespace Flux.ViewModels
                 if (!result)
                     return false;
 
-                if(Flux.ConnectionProvider.VariableStore.HasVariable(c => c.ENABLE_VACUUM))
+                if (Flux.ConnectionProvider.VariableStore.HasVariable(c => c.ENABLE_VACUUM))
                     await Flux.ConnectionProvider.WriteVariableAsync(m => m.ENABLE_VACUUM, true);
-                
+
                 return true;
 
             }
@@ -311,7 +309,7 @@ namespace Flux.ViewModels
                 IsPreparingFile = false;
                 report_progress_internal(0);
             }
-            
+
             void report_progress_internal(double percentage)
             {
                 mcode.LoadPercentage = percentage;
@@ -434,7 +432,7 @@ namespace Flux.ViewModels
             var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             if (!await Flux.ConnectionProvider.PutFileAsync(
                 c => c.QueuePath,
-                $"{current_index + 1};{mcode.Analyzer.MCode.MCodeGuid}", 
+                $"{current_index + 1};{mcode.Analyzer.MCode.MCodeGuid}",
                 cts.Token))
                 return false;
 
@@ -553,7 +551,7 @@ namespace Flux.ViewModels
 
             return queue.Value.GetGuidDictionaryFromQueue();
         }
-        private IEnumerable<(IFluxMCodeQueueViewModel queue_mcode, ushort queue_pos)> CreateMCodeQueue(Dictionary<ushort, Guid> queue) 
+        private IEnumerable<(IFluxMCodeQueueViewModel queue_mcode, ushort queue_pos)> CreateMCodeQueue(Dictionary<ushort, Guid> queue)
         {
             foreach (var kvp in queue)
             {

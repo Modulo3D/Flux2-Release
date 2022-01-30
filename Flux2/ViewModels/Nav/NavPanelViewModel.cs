@@ -2,7 +2,6 @@
 using DynamicData.Kernel;
 using Modulo3DStandard;
 using System;
-using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -74,7 +73,7 @@ namespace Flux.ViewModels
         {
             var memory = Flux.ConnectionProvider;
             var variable = get_variable(memory);
-            if(variable.HasValue)
+            if (variable.HasValue)
                 AddCommand(name, variable.Value, can_execute, visible);
         }
 
@@ -100,7 +99,7 @@ namespace Flux.ViewModels
         {
             var memory = Flux.ConnectionProvider;
             var array = get_array(memory);
-            if(array.HasValue)
+            if (array.HasValue)
                 AddCommand(name, array.Value, position, can_execute, visible);
         }
 

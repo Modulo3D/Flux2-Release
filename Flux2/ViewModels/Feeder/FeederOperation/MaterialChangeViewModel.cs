@@ -2,7 +2,6 @@
 using DynamicData.Kernel;
 using Modulo3DStandard;
 using ReactiveUI;
-using Splat;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -66,7 +65,7 @@ namespace Flux.ViewModels
                 if (!await Flux.ConnectionProvider.ResetAsync())
                     return (false, default);
 
-                if(!Feeder.ToolNozzle.Document.nozzle.HasValue)
+                if (!Feeder.ToolNozzle.Document.nozzle.HasValue)
                     return (false, default);
                 var nozzle = Feeder.ToolNozzle.Document.nozzle.Value;
 
@@ -89,7 +88,7 @@ namespace Flux.ViewModels
                 }
 
                 using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
-                if(!await Flux.ConnectionProvider.ExecuteParamacroAsync(f => filament_operation(f)(Feeder.Position, nozzle, break_temp), true, cts.Token))
+                if (!await Flux.ConnectionProvider.ExecuteParamacroAsync(f => filament_operation(f)(Feeder.Position, nozzle, break_temp), true, cts.Token))
                 {
                     Flux.Messages.LogMessage(MaterialChangeResult.MATERIAL_CHANGE_ERROR_PARAMACRO, Feeder.Material.State);
                     return (false, current_break_temp);
@@ -187,7 +186,7 @@ namespace Flux.ViewModels
                 {
                     return m.KnownNozzle && m.KnownMaterial && m.Compatible;
                 },
-                (s, valid) => 
+                (s, valid) =>
                 {
                     if (!s.HasValue)
                         return "";
@@ -204,7 +203,7 @@ namespace Flux.ViewModels
         public override async Task UpdateNFCAsync()
         {
             if (!Feeder.Material.Nfc.Tag.HasValue)
-            { 
+            {
                 var operator_usb = Flux.MCodes.OperatorUSB;
                 var reading = await Feeder.Material.ReadTagAsync(true, operator_usb.ConvertOr(o => o.RewriteNFC, () => false));
                 if (!reading.HasValue)
@@ -251,14 +250,14 @@ namespace Flux.ViewModels
         protected override async Task<bool> ExecuteOperationAsync()
         {
             var nfc = Feeder.Material.Nfc;
-            
-            if(Feeder.Material.WirePresence1 == false)
+
+            if (Feeder.Material.WirePresence1 == false)
             {
                 if (nfc.Tag.HasValue)
                 {
                     var tag = Feeder.Material.Nfc.Tag.Value;
                     if (tag.CurWeightG.HasValue)
-                    { 
+                    {
                         var material_limit = tag.MaxWeightG / 100 * 5;
                         if (tag.CurWeightG.Value < material_limit)
                             Feeder.Material.StoreTag(m => m.SetCurWeight(default));
@@ -283,7 +282,7 @@ namespace Flux.ViewModels
         {
             // TODO
             if (Flux.ConnectionProvider.VariableStore.HasVariable(c => c.LOCK_CLOSED))
-            { 
+            {
                 yield return Flux.StatusProvider.TopLockClosed;
                 yield return Flux.StatusProvider.ChamberLockClosed;
             }
@@ -304,7 +303,7 @@ namespace Flux.ViewModels
                         return true;
                     return false;
                 },
-                (value, valid) => 
+                (value, valid) =>
                 {
                     if (!value.HasValue)
                         return "IMPOSSIBILE BLOCCARE IL MATERIALE";
@@ -314,24 +313,24 @@ namespace Flux.ViewModels
                         return valid ? "MATERIALE SCARICATO" : "SBLOCCA IL MATERALE";
                 });
 
-                yield return ConditionViewModel.Create("toolMaterialCompatible??2",
-                    Feeder.ToolMaterial.WhenAnyValue(m => m.State).Select(d => d.ToOptional()),
-                    m =>
-                    {
-                        return m.KnownNozzle && m.KnownMaterial && m.Compatible;
-                    },
-                    (s, valid) =>
-                    {
-                        if (!s.HasValue)
-                            return "";
-                        if (!s.Value.KnownNozzle)
-                            return "LEGGERE UN UTENSILE";
-                        if (!s.Value.KnownMaterial)
-                            return "LEGGERE UN MATERIALE";
-                        if (!s.Value.Compatible)
-                            return "MATERIALE NON COMPATIBILE";
-                        return "MATERIALE COMPATIBILE";
-                    });
+            yield return ConditionViewModel.Create("toolMaterialCompatible??2",
+                Feeder.ToolMaterial.WhenAnyValue(m => m.State).Select(d => d.ToOptional()),
+                m =>
+                {
+                    return m.KnownNozzle && m.KnownMaterial && m.Compatible;
+                },
+                (s, valid) =>
+                {
+                    if (!s.HasValue)
+                        return "";
+                    if (!s.Value.KnownNozzle)
+                        return "LEGGERE UN UTENSILE";
+                    if (!s.Value.KnownMaterial)
+                        return "LEGGERE UN MATERIALE";
+                    if (!s.Value.Compatible)
+                        return "MATERIALE NON COMPATIBILE";
+                    return "MATERIALE COMPATIBILE";
+                });
         }
         public override async Task UpdateNFCAsync()
         {

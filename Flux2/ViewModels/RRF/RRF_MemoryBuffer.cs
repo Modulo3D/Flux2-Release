@@ -1,19 +1,17 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Linq.Expressions;
-using System.Net;
-using System.Reactive.Disposables;
-using System.Reactive.Linq;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-using DynamicData;
+﻿using DynamicData;
 using DynamicData.Kernel;
 using Modulo3DStandard;
 using Newtonsoft.Json.Linq;
 using ReactiveUI;
 using RestSharp;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reactive.Disposables;
+using System.Reactive.Linq;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
@@ -101,7 +99,7 @@ namespace Flux.ViewModels
                 {
                     Processed = true;
                     HasMemoryRead = true;
-                    if(response.HasValue)
+                    if (response.HasValue)
                         MemoryRead?.Invoke(response.Value);
                 }, CTS?.Token ?? CancellationToken.None);
         }
@@ -154,17 +152,17 @@ namespace Flux.ViewModels
             RRFObjectModel = new RRF_ObjectModel();
             GlobalChanged = RRFObjectModel.WhenAnyValue(m => m.Global);
 
-            var ultra_fast  = TimeSpan.FromMilliseconds(350);
-            var fast        = TimeSpan.FromMilliseconds(750);
-            var medium      = TimeSpan.FromMilliseconds(1000);
-            var slow        = TimeSpan.FromMilliseconds(1500);
-            var timeout     = TimeSpan.FromMilliseconds(500);
+            var ultra_fast = TimeSpan.FromMilliseconds(350);
+            var fast = TimeSpan.FromMilliseconds(750);
+            var medium = TimeSpan.FromMilliseconds(1000);
+            var slow = TimeSpan.FromMilliseconds(1500);
+            var timeout = TimeSpan.FromMilliseconds(500);
 
             MemoryReaders = new SourceCache<IRRF_MemoryReader, string>(f => f.Name);
 
             // Model
             AddModelReader<RRF_ObjectModelState>("state", ultra_fast, timeout, IRRF_RequestPriority.Medium, s => RRFObjectModel.State = s);
-                                          
+
             AddModelReader<List<RRF_ObjectModelTool>>("tools", fast, timeout, IRRF_RequestPriority.High, s => RRFObjectModel.Tools = s);
             AddModelReader<RRF_ObjectModelSensors>("sensors", fast, timeout, IRRF_RequestPriority.High, s => RRFObjectModel.Sensors = s);
             AddModelReader<JObject>("global", fast, timeout, IRRF_RequestPriority.High, g => RRFObjectModel.Global = g.ToObject<Dictionary<string, object>>());
@@ -172,12 +170,12 @@ namespace Flux.ViewModels
 
             AddModelReader<RRF_ObjectModelMove>("move", medium, timeout, IRRF_RequestPriority.High, m => RRFObjectModel.Move = m);
             AddModelReader<List<RRF_ObjectModelInput>>("inputs", medium, timeout, IRRF_RequestPriority.High, i => RRFObjectModel.Inputs = i);
-                                           
+
             AddModelReader<RRF_ObjectModelSeqs>("seqs", slow, timeout, IRRF_RequestPriority.High, s => RRFObjectModel.Seqs = s);
             AddModelReader<RRF_ObjectModelHeat>("heat", slow, timeout, IRRF_RequestPriority.High, h => RRFObjectModel.Heat = h);
             AddModelReader<List<RRF_ObjectModelFan>>("fans", slow, timeout, IRRF_RequestPriority.High, f => RRFObjectModel.Fans = f);
             AddModelReader<List<RRF_ObjectModelBoard>>("boards", slow, timeout, IRRF_RequestPriority.High, b => RRFObjectModel.Boards = b);
-            
+
             //AddModelReader<RRF_ObjectModelJob>("job", medium, timeout, IRRF_RequestPriority.High, j => RRFObjectModel.Job = j);
             //AddModelReader<List<RRF_ObjectModelSpindle>>("spindles", slow, timeout, IRRF_RequestPriority.High, s => RRFObjectModel.Spindles = s);
 

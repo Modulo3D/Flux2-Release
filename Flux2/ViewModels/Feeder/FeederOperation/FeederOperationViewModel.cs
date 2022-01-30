@@ -5,7 +5,6 @@ using Modulo3DStandard;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Linq;
@@ -14,13 +13,13 @@ using System.Threading.Tasks;
 namespace Flux.ViewModels
 {
     public interface IOperationViewModel
-    { 
+    {
         string OperationText { get; }
         bool AllConditionsTrue { get; }
         string TitleText { get; }
     }
 
-    public abstract class FeederOperationViewModel<TViewModel> : FluxRoutableViewModel<TViewModel>, IOperationViewModel 
+    public abstract class FeederOperationViewModel<TViewModel> : FluxRoutableViewModel<TViewModel>, IOperationViewModel
         where TViewModel : FeederOperationViewModel<TViewModel>
     {
         public FeederViewModel Feeder { get; }

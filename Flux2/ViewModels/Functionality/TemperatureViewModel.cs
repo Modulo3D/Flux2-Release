@@ -1,19 +1,14 @@
-﻿using DynamicData;
-using DynamicData.Kernel;
+﻿using DynamicData.Kernel;
 using Modulo3DStandard;
 using ReactiveUI;
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Reactive;
-using System.Reactive.Linq;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
     public struct TimestampedFloat
-    { 
+    {
         public float Value { get; set; }
         public DateTime DateTime { get; set; }
         public TimestampedFloat(DateTime datetime, float value)

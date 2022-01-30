@@ -2,7 +2,6 @@
 using DynamicData.Kernel;
 using Modulo3DStandard;
 using ReactiveUI;
-using Splat;
 using System;
 using System.Linq;
 using System.Reactive.Disposables;
@@ -30,7 +29,7 @@ namespace Flux.ViewModels
                         return FluxColors.Error;
                     if (!current_document.HasValue)
                         return FluxColors.Warning;
-                    foreach(var expected_document in expected_document_queue.Value)
+                    foreach (var expected_document in expected_document_queue.Value)
                         if (expected_document.Value.Id != current_document.Value.Id)
                             return FluxColors.Error;
                     return FluxColors.Warning;

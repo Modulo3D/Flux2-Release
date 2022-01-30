@@ -9,8 +9,6 @@ using System.Linq;
 using System.Reactive;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
-using DynamicData.Aggregation;
-using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
@@ -111,7 +109,7 @@ namespace Flux.ViewModels
                 .DisposeWith(Disposables);
 
             DeleteMCodeStorageCommand = ReactiveCommand.CreateFromTask(
-                async () => { await mcodes.DeleteFileAsync(false, this); }, 
+                async () => { await mcodes.DeleteFileAsync(false, this); },
                 this.WhenAnyValue(v => v.CanDelete))
                 .DisposeWith(Disposables);
 
@@ -151,7 +149,7 @@ namespace Flux.ViewModels
         {
             if (selecting)
                 return false;
-            if (!printing_eval.SelectedMCode.HasValue && 
+            if (!printing_eval.SelectedMCode.HasValue &&
                 !printing_eval.SelectedRecovery.HasValue)
                 return true;
             if (!status.HasValue)

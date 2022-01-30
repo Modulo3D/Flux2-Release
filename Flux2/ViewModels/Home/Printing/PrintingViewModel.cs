@@ -52,23 +52,23 @@ namespace Flux.ViewModels
                 (status, printing) => (status, printing));
 
             var canStart = eval
-                .Select(e => 
-                    e.status.IsEnabledAxis.ValueOrDefault() && 
-                    e.status.IsHomed.ValueOrDefault() && 
-                    e.printing.SelectedPartProgram.HasValue && 
+                .Select(e =>
+                    e.status.IsEnabledAxis.ValueOrDefault() &&
+                    e.status.IsHomed.ValueOrDefault() &&
+                    e.printing.SelectedPartProgram.HasValue &&
                     e.status.CanSafePrint);
 
             var canHold = eval
-                .Select(e => 
-                    e.status.IsEnabledAxis.ValueOrDefault() && 
-                    e.status.IsHomed.ValueOrDefault() && 
-                    e.printing.SelectedPartProgram.HasValue && 
+                .Select(e =>
+                    e.status.IsEnabledAxis.ValueOrDefault() &&
+                    e.status.IsHomed.ValueOrDefault() &&
+                    e.printing.SelectedPartProgram.HasValue &&
                     e.status.CanSafeHold);
 
             var canStop = eval
                 .Select(e =>
-                    e.status.IsEnabledAxis.ValueOrDefault() && 
-                    e.status.IsHomed.ValueOrDefault() && 
+                    e.status.IsEnabledAxis.ValueOrDefault() &&
+                    e.status.IsHomed.ValueOrDefault() &&
                     e.printing.SelectedPartProgram.HasValue &&
                     e.status.CanSafeStop);
 

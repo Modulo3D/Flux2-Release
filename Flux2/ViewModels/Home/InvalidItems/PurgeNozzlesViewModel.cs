@@ -2,7 +2,6 @@
 using DynamicData.Kernel;
 using Modulo3DStandard;
 using ReactiveUI;
-using Splat;
 using System;
 using System.Linq;
 using System.Reactive.Disposables;

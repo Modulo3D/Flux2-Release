@@ -2,7 +2,6 @@
 using DynamicData.Kernel;
 using Modulo3DStandard;
 using ReactiveUI;
-using Splat;
 using System.Collections.Generic;
 using System.Reactive.Linq;
 
@@ -25,7 +24,7 @@ namespace Flux.ViewModels
         private IEnumerable<TemperatureViewModel> FindTemperatures(Optional<ushort> extruders)
         {
             if (extruders.HasValue && Flux.ConnectionProvider.VariableStore.HasVariable(m => m.TEMP_TOOL))
-            { 
+            {
                 for (ushort i = 0; i < extruders.Value; i++)
                 {
                     var extruder = i;

@@ -2,12 +2,9 @@
 using Modulo3DStandard;
 using ReactiveUI;
 using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Reactive.Linq;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
@@ -66,7 +63,7 @@ namespace Flux.ViewModels
                         return StatusBarState.Hidden;
                     if (vacuum.not_found.HasValue && vacuum.not_found.Value)
                         return StatusBarState.Error;
-                    if(vacuum.watch.HasValue && vacuum.watch.Value)
+                    if (vacuum.watch.HasValue && vacuum.watch.Value)
                         return vacuum.low.HasValue ? (vacuum.low.Value ? StatusBarState.Error : StatusBarState.Stable) : StatusBarState.Hidden;
                     if (vacuum.enabled.HasValue && vacuum.enabled.Value)
                         return vacuum.low.HasValue ? (vacuum.low.Value ? StatusBarState.Warning : StatusBarState.Stable) : StatusBarState.Hidden;

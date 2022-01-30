@@ -2,9 +2,7 @@
 using DynamicData.Kernel;
 using Modulo3DStandard;
 using ReactiveUI;
-using Splat;
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Disposables;
@@ -184,7 +182,7 @@ namespace Flux.ViewModels
                     var probe_offset_lookup = user_settings.Local.ProbeOffsets.Lookup(probe_offset_key);
                     if (!probe_offset_lookup.HasValue)
                     {
-                        if (db.HasValue) 
+                        if (db.HasValue)
                         {
                             var nozzle = tool_nfc.GetDocument<Tool>(db.Value, tn => tn.ToolGuid);
                             if (nozzle.HasValue)
@@ -216,7 +214,7 @@ namespace Flux.ViewModels
                 this.WhenAnyValue(s => s.ProbeOffset),
                 Feeder.ToolNozzle.WhenAnyValue(f => f.State),
                 Feeder.Material.WhenAnyValue(f => f.State),
-                (tool_offset, probe_offset, tool_state, material_state) => 
+                (tool_offset, probe_offset, tool_state, material_state) =>
                 {
                     if (!tool_state.IsInMagazine() && !tool_state.IsOnTrailer())
                         return FluxProbeState.ERROR_PROBE;
@@ -233,7 +231,7 @@ namespace Flux.ViewModels
 
                     if (!tool_state.IsLoaded() || !material_state.IsLoaded())
                         return FluxProbeState.NO_PROBE;
-       
+
                     if (!probe_offset.HasValue || probe_offset.Value.Z == tool_offset.Value.Z)
                         return FluxProbeState.INVALID_PROBE;
 
@@ -366,9 +364,9 @@ namespace Flux.ViewModels
             var offset_z = new NumericOption("offset_z", "OFFSET Z", 0, 0.01);
 
             offset_x.Value = ProbeOffset.ConvertOr(o => o.X, () => 0);
-            offset_y.Value = ProbeOffset.ConvertOr(o => o.Y, () => 0); 
+            offset_y.Value = ProbeOffset.ConvertOr(o => o.Y, () => 0);
             offset_z.Value = ProbeOffset.ConvertOr(o => o.Z, () => 0);
-            
+
             dialog.AddContent(offset_x);
             dialog.AddContent(offset_y);
             dialog.AddContent(offset_z);
@@ -402,7 +400,7 @@ namespace Flux.ViewModels
 
             var old_offset = UserOffset.ValueOr(() => new UserOffset(UserOffsetKey.Value, 0, 0, 0));
             var new_offset = edit_func(old_offset);
-            
+
             var user_settings = Flux.SettingsProvider.UserSettings;
             user_settings.Local.UserOffsets.AddOrUpdate(new_offset);
         }

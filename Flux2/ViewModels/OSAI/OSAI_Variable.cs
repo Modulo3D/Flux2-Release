@@ -1,12 +1,8 @@
 ﻿using DynamicData.Kernel;
 using Modulo3DStandard;
-using OSAI;
 using ReactiveUI;
 using System;
-using System.Collections.Generic;
-using System.Diagnostics;
 using System.Globalization;
-using System.Linq;
 using System.Reactive;
 using System.Reactive.Linq;
 using System.Text;
@@ -74,7 +70,7 @@ namespace Flux.ViewModels
             FluxMemReadPriority priority,
             Optional<OSAI_BitIndexAddress> physicalAddress = default,
             Optional<VariableUnit> unit = default)
-            : base(connection, name, logicalAddress, priority, physicalAddress, unit) 
+            : base(connection, name, logicalAddress, priority, physicalAddress, unit)
         {
             connection.Convert(c => c.MemoryBuffer)
                 .ConvertMany(m => m.ObserveWordVar(this))
@@ -92,7 +88,7 @@ namespace Flux.ViewModels
             IObservable<Optional<OSAI_Connection>> connection,
             string name,
             OSAI_IndexAddress logicalAddress,
-            FluxMemReadPriority priority, 
+            FluxMemReadPriority priority,
             Optional<OSAI_IndexAddress> physicalAddress = default,
             Optional<VariableUnit> unit = default)
             : base(connection, name, logicalAddress, priority, physicalAddress, unit)
@@ -112,10 +108,10 @@ namespace Flux.ViewModels
             IObservable<Optional<OSAI_Connection>> connection,
             string name,
             OSAI_IndexAddress logicalAddress,
-            FluxMemReadPriority priority, 
+            FluxMemReadPriority priority,
             Optional<VariableUnit> unit = default,
             Optional<OSAI_IndexAddress> physicalAddress = default)
-            : base(connection, name, logicalAddress, priority, physicalAddress, unit) 
+            : base(connection, name, logicalAddress, priority, physicalAddress, unit)
         {
             connection.Convert(c => c.MemoryBuffer)
                 .ConvertMany(m => m.ObserveWordVar(this))
@@ -244,7 +240,7 @@ namespace Flux.ViewModels
         {
         }
 
-        public override Task<Optional<short>> ReadAsync() => Connection.ConvertAsync(c => c.ReadNamedShortAsync(LogicalAddress)); 
+        public override Task<Optional<short>> ReadAsync() => Connection.ConvertAsync(c => c.ReadNamedShortAsync(LogicalAddress));
         public override Task<bool> WriteAsync(short value) => Connection.ConvertOrAsync(c => c.WriteVariableAsync(LogicalAddress, value), () => false);
     }
 
@@ -290,7 +286,7 @@ namespace Flux.ViewModels
         public override bool ReadOnly => true;
         public TSensor Sensor { get; }
         public OSAI_VariablePressure(
-            IObservable<Optional<OSAI_Connection>> connection, 
+            IObservable<Optional<OSAI_Connection>> connection,
             string name,
             OSAI_IndexAddress logicalAddress,
             FluxMemReadPriority priority,

@@ -2,10 +2,7 @@
 using DynamicData.Kernel;
 using Modulo3DStandard;
 using ReactiveUI;
-using System;
-using System.Linq;
 using System.Reactive;
-using System.Reactive.Linq;
 
 namespace Flux.ViewModels
 {
@@ -46,13 +43,13 @@ namespace Flux.ViewModels
             StatusBarItemsSource.AddOrUpdate(new PlateStatusBarViewModel(Flux));
             StatusBarItemsSource.AddOrUpdate(new ChamberStatusBarViewModel(Flux));
             StatusBarItemsSource.AddOrUpdate(new FeedersStatusBarViewModel(Flux));
-            StatusBarItemsSource.AddOrUpdate(new LocksStatusBarViewModel(Flux));      
-            StatusBarItemsSource.AddOrUpdate(new NetworkStatusBarViewModel(Flux));    
-            StatusBarItemsSource.AddOrUpdate(new PressureStatusBarViewModel(Flux));   
-            StatusBarItemsSource.AddOrUpdate(new VacuumStatusBarViewModel(Flux));     
+            StatusBarItemsSource.AddOrUpdate(new LocksStatusBarViewModel(Flux));
+            StatusBarItemsSource.AddOrUpdate(new NetworkStatusBarViewModel(Flux));
+            StatusBarItemsSource.AddOrUpdate(new PressureStatusBarViewModel(Flux));
+            StatusBarItemsSource.AddOrUpdate(new VacuumStatusBarViewModel(Flux));
             StatusBarItemsSource.AddOrUpdate(new DriverStatusBarViewModel(Flux));
             StatusBarItemsSource.AddOrUpdate(new MessagesStatusBarViewModel(Flux));
-            StatusBarItemsSource.AddOrUpdate(new DebugStatusBarViewModel(Flux));      
+            StatusBarItemsSource.AddOrUpdate(new DebugStatusBarViewModel(Flux));
         }
     }
 }

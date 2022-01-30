@@ -2,7 +2,6 @@
 using Modulo3DStandard;
 using Newtonsoft.Json;
 using OSAI;
-using ReactiveUI;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,7 +9,7 @@ using System.Numerics;
 using System.Runtime.Serialization;
 
 namespace Flux.ViewModels
-{   
+{
 
     // 1 : Programmed position
     // 2 : Interpolated position

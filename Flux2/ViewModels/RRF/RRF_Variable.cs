@@ -4,15 +4,9 @@ using Modulo3DStandard;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.IO;
 using System.Linq;
-using System.Linq.Expressions;
-using System.Reactive;
-using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
@@ -202,7 +196,7 @@ namespace Flux.ViewModels
         public RRF_VariableObjectModel(
             IObservable<Optional<RRF_Connection>> connection,
             string name,
-            Func<RRF_ObjectModel, IObservable<Optional<TState>>> get_state, 
+            Func<RRF_ObjectModel, IObservable<Optional<TState>>> get_state,
             Func<RRF_Connection, TState, Optional<TRData>> get_data,
             Func<RRF_Connection, TWData, bool> write_data = default,
             VariableUnit unit = default) :
@@ -215,9 +209,9 @@ namespace Flux.ViewModels
         public RRF_VariableObjectModel(
             IObservable<Optional<RRF_Connection>> connection,
             string name,
-            Func<RRF_ObjectModel, IObservable<Optional<TState>>> get_state, 
-            Func<RRF_Connection, TState, Task<Optional<TRData>>> get_data, 
-            Func<RRF_Connection, TWData, bool> write_data = default, 
+            Func<RRF_ObjectModel, IObservable<Optional<TState>>> get_state,
+            Func<RRF_Connection, TState, Task<Optional<TRData>>> get_data,
+            Func<RRF_Connection, TWData, bool> write_data = default,
             VariableUnit unit = default) :
             base(connection, name, FluxMemReadPriority.DISABLED, unit: unit, write_func: (c, d) => Task.FromResult(write_data?.Invoke(c, d) ?? false))
         {
@@ -228,7 +222,7 @@ namespace Flux.ViewModels
         public RRF_VariableObjectModel(
             IObservable<Optional<RRF_Connection>> connection,
             string name,
-            Func<RRF_ObjectModel, IObservable<Optional<TState>>> get_state, 
+            Func<RRF_ObjectModel, IObservable<Optional<TState>>> get_state,
             Func<RRF_Connection, TState, Optional<TRData>> get_data,
             Func<RRF_Connection, TWData, Task<bool>> write_data = default,
             VariableUnit unit = default) :
@@ -241,9 +235,9 @@ namespace Flux.ViewModels
         public RRF_VariableObjectModel(
             IObservable<Optional<RRF_Connection>> connection,
             string name,
-            Func<RRF_ObjectModel, IObservable<Optional<TState>>> get_state, 
-            Func<RRF_Connection, TState, Task<Optional<TRData>>> get_data, 
-            Func<RRF_Connection, TWData, Task<bool>> write_data = default, 
+            Func<RRF_ObjectModel, IObservable<Optional<TState>>> get_state,
+            Func<RRF_Connection, TState, Task<Optional<TRData>>> get_data,
+            Func<RRF_Connection, TWData, Task<bool>> write_data = default,
             VariableUnit unit = default) :
             base(connection, name, FluxMemReadPriority.DISABLED, unit: unit, write_func: write_data)
         {
@@ -258,7 +252,7 @@ namespace Flux.ViewModels
         public override string Group => "ObjectModel";
         public ushort Start { get; }
         new public ISourceCache<IFLUX_Variable<TRData, TWData>, VariableUnit> Variables { get; }
-        public RRF_ArrayObjectModel(string name, ushort start, ushort count, Func<(string name, VariableUnit unit, ushort position), RRF_VariableObjectModel<TState, TRData, TWData>> get_variables, Optional<IEnumerable<VariableUnit>> custom_unit = default) 
+        public RRF_ArrayObjectModel(string name, ushort start, ushort count, Func<(string name, VariableUnit unit, ushort position), RRF_VariableObjectModel<TState, TRData, TWData>> get_variables, Optional<IEnumerable<VariableUnit>> custom_unit = default)
             : base(name, count, FluxMemReadPriority.DISABLED, custom_unit)
         {
             Variables = new SourceCache<IFLUX_Variable<TRData, TWData>, VariableUnit>(k => k.Unit.ValueOr(() => ""));
@@ -366,7 +360,7 @@ namespace Flux.ViewModels
                   array.WhenAnyValue(a => a.Connection),
                   $"{array.Name} {unit.Value}",
                   FluxMemReadPriority.DISABLED,
-                  write_func: async (c, v) => 
+                  write_func: async (c, v) =>
                   {
                       var gcode = $"M98 P\"/sys/global/write_{array.Variable}.g\" T\"{unit.Value.ToUpper()}\" S{sanitize_value(v)}";
                       var result = await c.PostGCodeAsync(gcode, false, TimeSpan.FromSeconds(5));
@@ -449,7 +443,7 @@ namespace Flux.ViewModels
         public string CreateVariableName => $"write_{Variable}.g";
         public string InitializeVariableString => $"M98 P\"/sys/global/write_{Variable}.g\"";
 
-        public RRF_ArrayGlobalModel(IObservable<Optional<RRF_Connection>> connection, string variable, ushort count, bool stored, Optional<IEnumerable<VariableUnit>> custom_unit = default) 
+        public RRF_ArrayGlobalModel(IObservable<Optional<RRF_Connection>> connection, string variable, ushort count, bool stored, Optional<IEnumerable<VariableUnit>> custom_unit = default)
             : base(variable, count, FluxMemReadPriority.DISABLED, custom_unit)
         {
             Stored = stored;

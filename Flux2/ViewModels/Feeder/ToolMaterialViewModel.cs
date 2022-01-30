@@ -1,5 +1,4 @@
 ﻿using DynamicData.Kernel;
-using Modulo3DDatabase;
 using Modulo3DStandard;
 using ReactiveUI;
 using System.Linq;
@@ -43,7 +42,7 @@ namespace Flux.ViewModels
 
             _State = Observable.CombineLatest(
                 Feeder.Material.WhenAnyValue(v => v.Document),
-                Feeder.ToolNozzle.WhenAnyValue(v => v.Document), 
+                Feeder.ToolNozzle.WhenAnyValue(v => v.Document),
                 this.WhenAnyValue(v => v.Document),
                 (m, tn, tm) => new ToolMaterialState(tn.tool.HasValue && tn.nozzle.HasValue, m.HasValue, tm.HasValue))
                 .ToProperty(this, v => v.State)

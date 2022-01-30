@@ -2,23 +2,13 @@
 using Modulo3DStandard;
 using System.Linq;
 using System.Reactive.Linq;
-using ReactiveUI;
-using System.Collections.Generic;
-using System.Reactive;
-using System.Reactive.Disposables;
-using System.IO;
-using System;
-using DynamicData.Kernel;
-using System.Reactive.Subjects;
-using System.Threading.Tasks;
-using System.Threading;
 
 namespace Flux.ViewModels
 {
     public class MemoryViewModel : FluxRoutableViewModel<MemoryViewModel>
     {
         public SourceCache<MemoryGroupViewModel, string> VariableGroupsSource { get; }
-        
+
         [RemoteContent(true)]
         public IObservableCache<MemoryGroupViewModel, string> VariableGroups { get; }
 

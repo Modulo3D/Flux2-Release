@@ -56,8 +56,8 @@ namespace Flux.ViewModels
             var eval_changed = FeederEvaluator.WhenAnyValue(e => e.FeederReportQueue);
 
             _ExpectedDocumentQueue = Observable.CombineLatest(
-                queue_pos, 
-                db_changed, 
+                queue_pos,
+                db_changed,
                 eval_changed,
                 (p, db, f) => GetExpectedDocumentQueue(p, db, f, GetDocumentId))
                 .ToProperty(this, v => v.ExpectedDocumentQueue);
@@ -100,7 +100,7 @@ namespace Flux.ViewModels
                 return default;
             if (!feered_queue.HasValue)
                 return default;
-            
+
             var document_queue = new Dictionary<ushort, TDocument>();
             foreach (var feeder_queue in feered_queue.Value)
             {
@@ -162,7 +162,7 @@ namespace Flux.ViewModels
             if (!state.IsLoaded())
                 return false;
 
-            foreach(var report in report_queue.Value)
+            foreach (var report in report_queue.Value)
                 if (report.Value.MaterialId != document.Value.Id)
                     return false;
 
@@ -247,7 +247,7 @@ namespace Flux.ViewModels
                 .StartWithEmpty()
                 .DistinctUntilChanged();
 
-            bool compare_queue(Optional<Dictionary<ushort, Guid>> q1, Optional<Dictionary<ushort, Guid>> q2) 
+            bool compare_queue(Optional<Dictionary<ushort, Guid>> q1, Optional<Dictionary<ushort, Guid>> q2)
             {
                 if (q1.HasValue != q2.HasValue)
                     return false;
@@ -276,8 +276,8 @@ namespace Flux.ViewModels
 
             _FeederReportQueue = Observable.CombineLatest(
                 queue_pos,
-                queue, 
-                mcodes, 
+                queue,
+                mcodes,
                 GetFeederReportQueue)
                 .ToProperty(this, e => e.FeederReportQueue);
 
@@ -354,17 +354,17 @@ namespace Flux.ViewModels
                 return default;
             if (!queue.HasValue)
                 return default;
-            
+
             var feeder_report_queue = new Dictionary<ushort, FeederReport>();
             foreach (var mcode_queue in queue.Value)
             {
                 if (mcode_queue.Key < queue_pos.Value)
                     continue;
-                
+
                 var mcode_vm = mcodes.Lookup(mcode_queue.Value);
                 if (!mcode_vm.HasValue)
                     continue;
-                
+
                 var analyzer = mcode_vm.Value.Analyzer;
                 var feeder_report = analyzer.MCode.Feeders.Lookup(Feeder.Position);
                 if (!feeder_report.HasValue)

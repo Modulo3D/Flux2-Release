@@ -1,5 +1,4 @@
-﻿using DynamicData;
-using DynamicData.Kernel;
+﻿using DynamicData.Kernel;
 using Modulo3DStandard;
 using ReactiveUI;
 using System;
@@ -27,13 +26,13 @@ namespace Flux.ViewModels
         [RemoteOutput(false)]
         public ushort Position => Feeder.Position;
 
-        public MagazineItemViewModel(FluxViewModel flux, IFluxFeederViewModel feeder) : base ($"{typeof(MagazineItemViewModel).GetRemoteControlName()}??{feeder.Position}")
+        public MagazineItemViewModel(FluxViewModel flux, IFluxFeederViewModel feeder) : base($"{typeof(MagazineItemViewModel).GetRemoteControlName()}??{feeder.Position}")
         {
             Flux = flux;
             Feeder = feeder;
 
             _ToolNozzeBrush = Feeder.ToolNozzle.WhenAnyValue(f => f.State)
-                .Select(state => 
+                .Select(state =>
                 {
                     if (state.IsNotLoaded())
                         return FluxColors.Empty;

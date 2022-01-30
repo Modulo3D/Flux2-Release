@@ -1,12 +1,10 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using ICSharpCode.SharpZipLib.Zip;
 using Modulo3DStandard;
 using ReactiveUI;
 using RestSharp;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Reactive.Linq;
 using System.Text;
@@ -32,7 +30,7 @@ namespace Flux.ViewModels
         public override OffsetKind OffsetKind => OffsetKind.ToolOrigin;
 
         public CancellationTokenSource CTS { get; private set; }
-        
+
         private ObservableAsPropertyHelper<Optional<bool>> _IsConnecting;
         public override Optional<bool> IsConnecting => _IsConnecting.Value;
 
@@ -86,7 +84,7 @@ namespace Flux.ViewModels
             var status_t = DateTime.Now;
             var network_t = DateTime.Now;
             var memory_buffer_t = DateTime.Now;
-            
+
             StartConnection();
             DisposableTask.Start(async time =>
             {
@@ -107,11 +105,11 @@ namespace Flux.ViewModels
                     }
 
                     if (DateTime.Now - debug_t >= TimeSpan.FromSeconds(5))
-                    {               
+                    {
                         Flux.MCodes.FindDrive();
                         var debug = Flux.MCodes.OperatorUSB.ConvertOr(o => o.AdvancedSettings, () => false);
                         var debug_plc = await ReadVariableAsync(m => m.DEBUG);
-                        if(debug_plc.HasValue && debug != debug_plc)
+                        if (debug_plc.HasValue && debug != debug_plc)
                             await WriteVariableAsync(m => m.DEBUG, debug);
                         debug_t = DateTime.Now;
                     }
@@ -120,7 +118,7 @@ namespace Flux.ViewModels
                         Connection.Value.MemoryBuffer.UpdateBuffer();
                 }
                 catch
-                { 
+                {
                 }
 
             }, TimeSpan.Zero, RxApp.TaskpoolScheduler);
@@ -160,7 +158,7 @@ namespace Flux.ViewModels
                         await CreateTimeoutAsync(TimeSpan.FromSeconds(5), async ct =>
                         {
                             if (Connection.HasValue)
-                            { 
+                            {
                                 Connection.Value.Dispose();
                                 Connection = default;
                             }
@@ -182,7 +180,7 @@ namespace Flux.ViewModels
                                 Flux.Messages.LogMessage(OSAI_ConnectResponse.CONNECT_INVALID_ADDRESS);
                                 return false;
                             }
-                            if(Connection.HasValue)
+                            if (Connection.HasValue)
                                 return await Connection.Value.CreateClientAsync($"http://{plc_address.Value}/");
                             return false;
                         }
@@ -225,7 +223,7 @@ namespace Flux.ViewModels
                         await CreateTimeoutAsync(TimeSpan.FromSeconds(10), async ct =>
                         {
                             var result = await Connection.Value.CreateVariablesAsync(ct);
-                            if(result)
+                            if (result)
                                 ConnectionPhase = RRF_ConnectionPhase.INITIALIZING_VARIABLES;
                         });
                         break;
@@ -273,7 +271,7 @@ namespace Flux.ViewModels
             catch
             {
             }
-            finally 
+            finally
             {
                 try
                 {
@@ -281,7 +279,7 @@ namespace Flux.ViewModels
                     CTS = new CancellationTokenSource(timeout);
                     await func(CTS.Token);
                 }
-                catch 
+                catch
                 {
                 }
             }

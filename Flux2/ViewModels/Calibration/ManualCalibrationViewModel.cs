@@ -50,7 +50,7 @@ namespace Flux.ViewModels
             _CurrentTemperature = this.WhenAnyValue(v => v.SelectedTool)
                 .Select(t =>
                 {
-                    if(!t.HasValue)
+                    if (!t.HasValue)
                         return Observable.Return(Optional<double>.None);
 
                     var tool_key = Flux.ConnectionProvider.VariableStore.GetArrayUnit(m => m.TEMP_TOOL, t.Value);
@@ -112,7 +112,7 @@ namespace Flux.ViewModels
                 {
                     if (e)
                     {
-                        
+
                         var offset = Calibration.Offsets.LookupOptional(SelectedTool);
                         if (!offset.HasValue)
                             return;
@@ -154,9 +154,9 @@ namespace Flux.ViewModels
         private async Task ExitAsync()
         {
             await Flux.ConnectionProvider.ExecuteParamacroAsync(c =>
-            { 
+            {
                 var gcode = new List<string>();
-                if(SelectedTool.HasValue)
+                if (SelectedTool.HasValue)
                     gcode.AddRange(c.GetSetToolTemperatureGCode(SelectedTool.Value, 0));
                 gcode.AddRange(c.GetLowerPlateGCode());
                 gcode.AddRange(c.GetParkToolGCode());
@@ -202,7 +202,7 @@ namespace Flux.ViewModels
                         var print_temperature = tool_material.Convert(tm => tm.PrintTemperature);
                         if (print_temperature.HasValue)
                             gcode.AddRange(c.GetSetToolTemperatureGCode(e, print_temperature.Value));
-                        
+
                         gcode.AddRange(c.GetRaisePlateGCode());
                         return gcode;
                     });

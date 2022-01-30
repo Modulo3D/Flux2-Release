@@ -61,7 +61,7 @@ namespace Flux.ViewModels
                     return Optional<ushort>.None;
                 }))
                 .ConvertMany(f => f.ToolNozzle.WhenAnyValue(n => n.Nfc).Select(nfc => (f.Position, nfc)))
-                .Convert(f => 
+                .Convert(f =>
                 {
                     if (!f.nfc.CardId.HasValue)
                         return Optional<ToolId>.None;
@@ -167,7 +167,7 @@ namespace Flux.ViewModels
         {
             var old_offset = GlobalZOffset.ValueOr(() => 0.0);
             var new_offset = edit_func(old_offset);
-            
+
             var settings = Flux.SettingsProvider.UserSettings.Local;
             settings.GlobalZOffset = new_offset;
         }
@@ -175,7 +175,7 @@ namespace Flux.ViewModels
         public async Task ProbeOffsetsAsync(bool hard_probe)
         {
             var sorted_valid_offsets = SortedOffsets.Items.Where(o => o.ProbeState != FluxProbeState.ERROR_PROBE);
-            if(!hard_probe)
+            if (!hard_probe)
             {
                 if (sorted_valid_offsets.Any(o => o.ProbeState == FluxProbeState.VALID_PROBE))
                 {
@@ -215,7 +215,7 @@ namespace Flux.ViewModels
 
             foreach (var offset in sorted_valid_offsets)
                 await offset.ProbeOffsetAsync();
- 
+
             /*var offsets_by_temp = Offsets.Items
                 .Where(o => o.Feeder.ToolMaterial.ExtrusionTemp.HasValue)
                 .OrderBy(o => o.Feeder.ToolMaterial.ExtrusionTemp.Value);

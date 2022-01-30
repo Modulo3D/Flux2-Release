@@ -105,8 +105,8 @@ namespace Flux.ViewModels
                     await update_status();
 
                 if (DateTime.Now - network_t >= TimeSpan.FromSeconds(10))
-                    await update_network();                
-                
+                    await update_network();
+
                 if (DateTime.Now - debug_t >= TimeSpan.FromSeconds(5))
                     await update_debug();
 
@@ -133,7 +133,7 @@ namespace Flux.ViewModels
                 Flux.MCodes.FindDrive();
                 var debug = Flux.MCodes.OperatorUSB.ConvertOr(o => o.AdvancedSettings, () => false);
                 var debug_plc = await ReadVariableAsync(m => m.DEBUG);
-                if(debug_plc.HasValue && debug != debug_plc)
+                if (debug_plc.HasValue && debug != debug_plc)
                     await WriteVariableAsync(m => m.DEBUG, debug);
                 debug_t = DateTime.Now;
             }
@@ -141,7 +141,7 @@ namespace Flux.ViewModels
             {
                 await Flux.NetProvider.UpdateNetworkStateAsync();
                 if (Flux.NetProvider.PLCNetworkConnectivity.ConvertOr(plc => !plc, () => false))
-                { 
+                {
                     ConnectionPhase = OSAI_ConnectionPhase.START_PHASE;
                     Connection.IfHasValue(c => c.MemoryBuffer.HasFullMemoryRead = false);
                 }
@@ -234,7 +234,7 @@ namespace Flux.ViewModels
                             return await Connection.Value.WaitBootPhaseAsync(
                                 phase => phase == OSAI_BootPhase.SYSTEM_UP_PHASE,
                                 TimeSpan.FromSeconds(0),
-                                TimeSpan.FromSeconds(1), 
+                                TimeSpan.FromSeconds(1),
                                 TimeSpan.FromSeconds(30));
                         }
                         break;
@@ -287,7 +287,7 @@ namespace Flux.ViewModels
                         if (reset_plc)
                             ConnectionPhase = OSAI_ConnectionPhase.INITIALIZED_IS_RESET;
                         else
-                            ConnectionPhase = OSAI_ConnectionPhase.INITIALIZED_BOOT_PHASE;break;
+                            ConnectionPhase = OSAI_ConnectionPhase.INITIALIZED_BOOT_PHASE; break;
 
                     // SET AUTO
                     case OSAI_ConnectionPhase.INITIALIZED_IS_RESET:

@@ -2,7 +2,6 @@
 using DynamicData.Kernel;
 using Modulo3DStandard;
 using ReactiveUI;
-using Splat;
 using System;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
@@ -18,7 +17,7 @@ namespace Flux.ViewModels
 
         private ObservableAsPropertyHelper<string> _InvalidItemBrush;
         public override string InvalidItemBrush => _InvalidItemBrush.Value;
-        
+
         public LowMaterialViewModel(FeederEvaluator eval) : base($"{typeof(LowMaterialViewModel).GetRemoteControlName()}??{eval.Feeder.Position}", eval)
         {
             _InvalidItemBrush = Observable.CombineLatest(

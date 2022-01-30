@@ -2,10 +2,8 @@
 using DynamicData.PLinq;
 using Modulo3DStandard;
 using ReactiveUI;
-using Splat;
 using System;
 using System.Linq;
-using System.Reactive;
 using System.Reactive.Linq;
 
 namespace Flux.ViewModels
@@ -18,7 +16,7 @@ namespace Flux.ViewModels
         [RemoteContent(true)]
         public IObservableCache<IMemoryVariableBase, string> Variables { get; }
 
-        private SourceCache<IMemoryVariableBase, string> VariableSource { get; }     
+        private SourceCache<IMemoryVariableBase, string> VariableSource { get; }
 
         public MemoryGroupViewModel(FluxViewModel flux, IGrouping<string, IFLUX_VariableBase> group) : base(flux, group.Key)
         {

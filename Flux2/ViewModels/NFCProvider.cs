@@ -3,11 +3,7 @@ using DynamicData.Kernel;
 using Modulo3DStandard;
 using ReactiveUI;
 using System;
-using System.Diagnostics;
-using System.IO;
 using System.IO.Ports;
-using System.Reactive.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
@@ -29,7 +25,7 @@ namespace Flux.ViewModels
         {
             Readers.Clear();
             var ports = SerialPort.GetPortNames();
-            foreach(var port in ports)
+            foreach (var port in ports)
             {
                 var reader = await NFCReaderHandle.GetReaderAsync(port, TimeSpan.FromSeconds(5));
                 if (reader.HasValue)

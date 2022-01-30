@@ -30,12 +30,12 @@ namespace Flux.ViewModels
         {
             // TODO
             if (Flux.ConnectionProvider.VariableStore.HasVariable(m => m.LOCK_CLOSED))
-            { 
+            {
                 Conditions.Add(Flux.StatusProvider.TopLockClosed);
                 Conditions.Add(Flux.StatusProvider.ChamberLockClosed);
             }
 
-            if(Flux.ConnectionProvider.VariableStore.HasVariable(m => m.VACUUM_PRESENCE))
+            if (Flux.ConnectionProvider.VariableStore.HasVariable(m => m.VACUUM_PRESENCE))
                 Conditions.Add(Flux.StatusProvider.VacuumPresence);
 
             InitializeRemoteView();

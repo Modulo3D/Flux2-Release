@@ -1,15 +1,11 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
 using Modulo3DStandard;
-using OSAI;
-using ReactiveUI;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reactive.Linq;
-using System.Runtime.InteropServices;
-using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
@@ -75,7 +71,7 @@ namespace Flux.ViewModels
             Func<string, TAddress, FluxMemReadPriority, VariableUnit, ushort, Optional<TAddress>, TVariable> create_var,
             Optional<TAddress> s_physical_address = default,
             Optional<IEnumerable<VariableUnit>> custom_unit = default)
-            :base(name, count, priority, custom_unit)
+            : base(name, count, priority, custom_unit)
         {
 
             Connection = connection;
@@ -153,7 +149,7 @@ namespace Flux.ViewModels
     public class OSAI_ArrayDouble : OSAI_Array<OSAI_VariableDouble, OSAI_IndexAddress, double, double>
     {
         public OSAI_ArrayDouble(
-            IObservable<Optional<OSAI_Connection>> connection, 
+            IObservable<Optional<OSAI_Connection>> connection,
             string name,
             ushort count,
             OSAI_IndexAddress s_logical_address,
@@ -168,7 +164,7 @@ namespace Flux.ViewModels
     public class OSAI_ArrayText : OSAI_Array<OSAI_VariableText, OSAI_IndexAddress, string, string>
     {
         public OSAI_ArrayText(
-            IObservable<Optional<OSAI_Connection>> connection, 
+            IObservable<Optional<OSAI_Connection>> connection,
             string name,
             ushort count,
             OSAI_IndexAddress s_logical_address,

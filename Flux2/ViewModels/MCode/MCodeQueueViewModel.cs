@@ -3,13 +3,11 @@ using DynamicData.Kernel;
 using Modulo3DStandard;
 using ReactiveUI;
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
@@ -39,10 +37,10 @@ namespace Flux.ViewModels
 
         [RemoteCommand]
         public ReactiveCommand<Unit, Unit> DeleteMCodeQueueCommand { get; }
-        
+
         [RemoteCommand]
         public ReactiveCommand<Unit, Unit> MoveUpMCodeQueueCommand { get; }
-        
+
         [RemoteCommand]
         public ReactiveCommand<Unit, Unit> MoveDownMCodeQueueCommand { get; }
 

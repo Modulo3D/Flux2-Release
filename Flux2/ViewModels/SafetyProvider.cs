@@ -3,7 +3,6 @@ using DynamicData.Kernel;
 using Modulo3DStandard;
 using ReactiveUI;
 using System;
-using System.Linq;
 using System.Reactive.Linq;
 
 namespace Flux.ViewModels
@@ -60,13 +59,13 @@ namespace Flux.ViewModels
 
     public class ConditionsViewModel<TIn, TOut> : ConditionViewModel<(TIn @in, TOut @out)>
     {
-        public ConditionsViewModel(string name, IObservable<Optional<(TIn @in, TOut @out)>> value_changed, Func<TIn, TOut, bool> isValid, Func<Optional<(TIn @in, TOut @out)>, bool, string> label, Optional<TimeSpan> throttle = default) 
+        public ConditionsViewModel(string name, IObservable<Optional<(TIn @in, TOut @out)>> value_changed, Func<TIn, TOut, bool> isValid, Func<Optional<(TIn @in, TOut @out)>, bool, string> label, Optional<TimeSpan> throttle = default)
             : base(name, value_changed, tuple => isValid(tuple.@in, tuple.@out), label, throttle)
         {
         }
     }
 
-    public class ConditionViewModel 
+    public class ConditionViewModel
     {
         // Single
         public static ConditionViewModel<TIn> Create<TIn>(
@@ -92,7 +91,7 @@ namespace Flux.ViewModels
             Func<TIn, TOut, bool> valid_func,
             Func<Optional<(TIn @in, TOut @out)>, bool, string> name_func,
             Optional<TimeSpan> throttle = default)
-            => new ConditionsViewModel<TIn, TOut>(name, Observable.CombineLatest(in_value, out_value, (@in, @out) => 
+            => new ConditionsViewModel<TIn, TOut>(name, Observable.CombineLatest(in_value, out_value, (@in, @out) =>
             {
                 if (@in.HasValue && @out.HasValue)
                     return Optional.Some<(TIn @in, TOut @out)>((@in.Value, @out.Value));

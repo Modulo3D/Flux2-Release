@@ -1,20 +1,15 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
 using Modulo3DStandard;
-using OSAI;
 using ReactiveUI;
 using RestSharp;
-using Swan.Logging;
 using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
-using System.Reactive;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
@@ -24,7 +19,7 @@ using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
-    public enum IRRF_RequestPriority 
+    public enum IRRF_RequestPriority
     {
         Immediate = 0,
         High = 1,
@@ -38,7 +33,7 @@ namespace Flux.ViewModels
         public RestRequest Request { get; }
         public CancellationToken CancellationToken { get; }
         public Action<Optional<RRF_Response>> Action { get; }
-        public RRF_Request(RestRequest request, int id, Action<Optional<RRF_Response>> action = default, CancellationToken ct = default) 
+        public RRF_Request(RestRequest request, int id, Action<Optional<RRF_Response>> action = default, CancellationToken ct = default)
         {
             Id = id;
             Action = action;
@@ -79,7 +74,7 @@ namespace Flux.ViewModels
     {
         private Random Random { get; }
         private RRF_MemoryBuffer _MemoryBuffer;
-        public override RRF_MemoryBuffer MemoryBuffer 
+        public override RRF_MemoryBuffer MemoryBuffer
         {
             get
             {
@@ -116,9 +111,9 @@ namespace Flux.ViewModels
             Random = new Random();
 
             ImmediateRequestSubject = new Subject<RRF_Request>().DisposeWith(Disposables);
-            MediumRequestSubject =  new Subject<RRF_Request>().DisposeWith(Disposables);
+            MediumRequestSubject = new Subject<RRF_Request>().DisposeWith(Disposables);
             GCodeRequestSubject = new Subject<RRF_Request>().DisposeWith(Disposables);
-            FastRequestSubject =  new Subject<RRF_Request>().DisposeWith(Disposables);
+            FastRequestSubject = new Subject<RRF_Request>().DisposeWith(Disposables);
             SlowRequestSubject = new Subject<RRF_Request>().DisposeWith(Disposables);
 
             _ProcessedRequest = GCodeRequestSubject
@@ -127,7 +122,7 @@ namespace Flux.ViewModels
                 .MergeWithLowPriorityStream(FastRequestSubject)
                 .MergeWithLowPriorityStream(MediumRequestSubject)
                 .MergeWithLowPriorityStream(SlowRequestSubject)
-                .Select(r => 
+                .Select(r =>
                 {
                     return Observable.FromAsync(async () =>
                     {
@@ -142,7 +137,7 @@ namespace Flux.ViewModels
                                 rrf_response = new RRF_Response(r.Id, response);
                             }
                         }
-                        catch(Exception ex)
+                        catch (Exception)
                         {
                         }
                         finally
@@ -179,7 +174,7 @@ namespace Flux.ViewModels
                 return false;
 
             foreach (var variable in VariableStore.Variables.Values)
-            { 
+            {
                 if (variable is IRRF_VariableBaseGlobalModel global)
                 {
                     if (files.Value.Files.Any(f => f.Name == global.CreateVariableName))
@@ -626,7 +621,7 @@ namespace Flux.ViewModels
                     actual_start_block = recovery_block.Value;
 
                 long actual_source_blocks = 0;
-                if(source_blocks.HasValue)
+                if (source_blocks.HasValue)
                     actual_source_blocks = source_blocks.Value;
                 actual_source_blocks -= actual_start_block;
 
@@ -637,12 +632,12 @@ namespace Flux.ViewModels
                 content_stream.Headers.ContentLength = lines_stream.Length;
 
                 var plc_address = Flux.SettingsProvider.CoreSettings.Local.PLCAddress;
- 
+
                 using var client = new HttpClient();
                 client.BaseAddress = new Uri($"http://{plc_address}");
                 client.DefaultRequestHeaders.Add("Connection", "Keep-Alive");
                 var response = await client.PostAsync($"rr_upload?name=0:/{folder}/{filename}&time={DateTime.Now:s}", content_stream, ct);
-              
+
                 return response.StatusCode == HttpStatusCode.OK;
 
                 IEnumerable<string> get_full_source()
@@ -664,8 +659,8 @@ namespace Flux.ViewModels
                     }
 
                     long current_block = 0;
-                    if(source.HasValue)
-                    { 
+                    if (source.HasValue)
+                    {
                         foreach (var line in source.Value)
                         {
                             if (current_block++ < actual_start_block)
@@ -688,7 +683,7 @@ namespace Flux.ViewModels
                     }
                 }
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 Flux.Messages.LogException(this, ex);
                 return false;
@@ -821,7 +816,7 @@ namespace Flux.ViewModels
         {
             var gcode = nozzle.GetPurgeFilamentGCode(position, temperature);
             if (gcode.HasValue)
-                return new[] {$"T{position}", gcode.Value , "T-1" };
+                return new[] { $"T{position}", gcode.Value, "T-1" };
             return new string[0];
         }
         public override string[] GetProbeToolGCode(ushort position, Nozzle nozzle, double temperature)

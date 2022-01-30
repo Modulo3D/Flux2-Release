@@ -20,7 +20,7 @@ namespace Flux.ViewModels
     }
 
     public interface IInvalidValueViewModel : IInvalidItemViewModel
-    { 
+    {
         string ItemName { get; }
         Optional<string> Item { get; }
     }
@@ -93,7 +93,7 @@ namespace Flux.ViewModels
         public ReactiveCommand<Unit, Unit> ChangeItemsCommand { get; }
     }
 
-    public abstract class InvalidFeedersViewModel<TInvalidFederViewModel> :  HomePhaseViewModel<TInvalidFederViewModel>, IInvalidFeedersViewModel
+    public abstract class InvalidFeedersViewModel<TInvalidFederViewModel> : HomePhaseViewModel<TInvalidFederViewModel>, IInvalidFeedersViewModel
         where TInvalidFederViewModel : InvalidFeedersViewModel<TInvalidFederViewModel>
     {
         [RemoteOutput(true)]
@@ -147,7 +147,7 @@ namespace Flux.ViewModels
 
         [RemoteOutput(true)]
         public abstract bool CanStartWithInvalidValues { get; }
-        
+
         public Comparer<IInvalidValueViewModel> EvaluationComparer { get; }
 
         public InvalidValuesViewModel(FluxViewModel flux, string name = default) : base(flux, name)

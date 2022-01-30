@@ -2,7 +2,6 @@
 using DynamicData.Kernel;
 using Modulo3DStandard;
 using ReactiveUI;
-using System;
 using System.Linq;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
@@ -83,13 +82,13 @@ namespace Flux.ViewModels
                 return true;
 
             if (!await Flux.ConnectionProvider.ResetClampAsync())
-            { 
+            {
                 Flux.Messages.LogMessage("Errore resetta magazzino", "Pinza non resettata", MessageLevel.ERROR, 0);
                 return false;
             }
 
             if (!await Flux.ConnectionProvider.WriteVariableAsync(m => m.IN_CHANGE, false))
-            { 
+            {
                 Flux.Messages.LogMessage("Errore resetta magazzino", "Utensile non deselezionato", MessageLevel.ERROR, 0);
                 return false;
             }
@@ -100,7 +99,7 @@ namespace Flux.ViewModels
                 foreach (var variable in tool_on_trailer.Value.Items)
                 {
                     if (!await Flux.ConnectionProvider.WriteVariableAsync(variable, false))
-                    { 
+                    {
                         Flux.Messages.LogMessage("Errore resetta magazzino", "Tool sul carrello", MessageLevel.ERROR, 0);
                         return false;
                     }
@@ -126,7 +125,7 @@ namespace Flux.ViewModels
                 if (!extr_key.HasValue)
                     return false;
 
-                if(!await Flux.ConnectionProvider.WriteVariableAsync(m => m.MEM_TOOL_IN_MAGAZINE, extr_key.Value, true))
+                if (!await Flux.ConnectionProvider.WriteVariableAsync(m => m.MEM_TOOL_IN_MAGAZINE, extr_key.Value, true))
                 {
                     Flux.Messages.LogMessage("Errore resetta magazzino", "Tool non nel magazzino", MessageLevel.ERROR, 0);
                     return false;

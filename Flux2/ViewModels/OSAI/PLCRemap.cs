@@ -1,8 +1,4 @@
-﻿using OSAI;
-using ReactiveUI;
-using System;
-
-namespace Flux.ViewModels
+﻿namespace Flux.ViewModels
 {
     public enum PLCRemapType
     {

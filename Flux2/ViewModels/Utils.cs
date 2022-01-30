@@ -1,18 +1,14 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
 using Modulo3DStandard;
-using Newtonsoft.Json;
 using ReactiveUI;
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Drawing;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
@@ -75,8 +71,8 @@ namespace Flux.ViewModels
 
     public class NumericOption : DialogOption<NumericOption, double>
     {
-        public double Min 
-        { 
+        public double Min
+        {
             get => RemoteInputs.Lookup("value").ConvertOr(v => v.Min, () => double.MinValue);
             set => RemoteInputs.Lookup("value").IfHasValue(v => v.Min = value);
         }
@@ -121,7 +117,7 @@ namespace Flux.ViewModels
 
         [RemoteCommand()]
         public Optional<ReactiveCommand<Unit, Unit>> CloseCommand { get; }
-        
+
         [RemoteCommand()]
         public Optional<ReactiveCommand<Unit, Unit>> ConfirmCommand { get; }
 
@@ -138,9 +134,9 @@ namespace Flux.ViewModels
         {
             Flux = flux;
             Title = title;
-            
+
             if (close != null)
-            { 
+            {
                 CloseCommand = ReactiveCommand.Create(() =>
                 {
                     Result = ContentDialogResult.None;
@@ -158,7 +154,7 @@ namespace Flux.ViewModels
                     Hide();
                 }).DisposeWith(Disposables);
             }
-            
+
             if (cancel != null)
             {
                 CancelCommand = ReactiveCommand.Create(() =>
@@ -209,14 +205,14 @@ namespace Flux.ViewModels
         }
 
         public ProgressBar(string name, string title) : base(name, title)
-        { 
+        {
         }
     }
 
     public class TextBlock : DialogOption<TextBlock, string>
     {
         [RemoteOutput(false)]
-        public override string Value 
+        public override string Value
         {
             get => Title;
             set => throw new Exception();
@@ -231,7 +227,7 @@ namespace Flux.ViewModels
     {
         private string _Value;
         [RemoteInput]
-        public override string Value 
+        public override string Value
         {
             get => _Value;
             set => this.RaiseAndSetIfChanged(ref _Value, value);

@@ -2,7 +2,6 @@
 using DynamicData.Kernel;
 using Modulo3DStandard;
 using ReactiveUI;
-using Splat;
 using System;
 using System.Linq;
 using System.Reactive;
@@ -92,21 +91,21 @@ namespace Flux.ViewModels
             FeederStateChanged = this.WhenAnyValue(f => f.FeederState);
             HasInvalidStateChanged = this.WhenAnyValue(f => f.HasInvalidState);
 
-            UpdateMaterialTagCommand = ReactiveCommand.CreateFromTask(async () => 
+            UpdateMaterialTagCommand = ReactiveCommand.CreateFromTask(async () =>
                 {
                     var operator_usb = Flux.MCodes.OperatorUSB;
                     var reading = await Material.ReadTagAsync(true, operator_usb.ConvertOr(o => o.RewriteNFC, () => false));
-                    if(reading.HasValue)
-                        await Material.StoreTagAsync(reading.Value); 
+                    if (reading.HasValue)
+                        await Material.StoreTagAsync(reading.Value);
                 },
                 Flux.StatusProvider.CanSafeCycle,
                 RxApp.MainThreadScheduler);
 
-            UpdateToolNozzleTagCommand = ReactiveCommand.CreateFromTask(async () => 
+            UpdateToolNozzleTagCommand = ReactiveCommand.CreateFromTask(async () =>
                 {
                     var operator_usb = Flux.MCodes.OperatorUSB;
                     var reading = await ToolNozzle.ReadTagAsync(true, operator_usb.ConvertOr(o => o.RewriteNFC, () => false));
-                    if(reading.HasValue)
+                    if (reading.HasValue)
                         await ToolNozzle.StoreTagAsync(reading.Value);
                 },
                 Flux.StatusProvider.CanSafeCycle,
@@ -118,7 +117,7 @@ namespace Flux.ViewModels
             AddOutput("materialPercentage", Material.Odometer.WhenAnyValue(v => v.Percentage));
             AddOutput("materialName", Material.WhenAnyValue(v => v.Document).Convert(n => n.Name));
             AddOutput("materialWeight", Material.WhenAnyValue(v => v.Nfc).Select(d => d.Tag).Convert(n => n.CurWeightG), typeof(WeightConverter));
-            
+
             AddCommand("changeToolNozzle", ToolNozzle.ChangeCommand);
             AddCommand("updateToolNozzle", UpdateToolNozzleTagCommand);
             AddOutput("nozzlePercentage", ToolNozzle.Odometer.WhenAnyValue(v => v.Percentage));
@@ -160,7 +159,7 @@ namespace Flux.ViewModels
                 ToolMaterial.WhenAnyValue(v => v.State),
                 (m, tm) =>
                 {
-                    if(!tm.KnownNozzle)
+                    if (!tm.KnownNozzle)
                         return FluxColors.Empty;
                     if (tm.KnownMaterial && !tm.Compatible)
                         return FluxColors.Error;
@@ -175,7 +174,7 @@ namespace Flux.ViewModels
                     return FluxColors.Active;
                 }).ToProperty(this, v => v.MaterialBrush);
         }
-        
+
         // FEEDER
         private EFeederState FindFeederState(ToolNozzleState tool)
         {
@@ -183,7 +182,7 @@ namespace Flux.ViewModels
                 return EFeederState.ERROR;
             if (!tool.Inserted)
                 return EFeederState.FEEDER_EMPTY;
-            if(tool.InMateinance)
+            if (tool.InMateinance)
                 return EFeederState.FEEDER_WAIT;
             if (tool.InMagazine && !tool.OnTrailer)
                 return EFeederState.FEEDER_WAIT;

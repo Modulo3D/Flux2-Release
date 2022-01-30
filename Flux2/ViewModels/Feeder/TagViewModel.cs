@@ -4,7 +4,6 @@ using Modulo3DDatabase;
 using Modulo3DStandard;
 using ReactiveUI;
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reactive.Linq;
@@ -39,9 +38,9 @@ namespace Flux.ViewModels
         public TDocument Document => _Document.Value;
 
         public TagViewModel(
-            FeederViewModel feeder, 
+            FeederViewModel feeder,
             Func<FluxUserSettings, SourceCache<NFCReading, ushort>> get_tag_storage,
-            Func<ILocalDatabase, TNFCTag, TDocument> find_document, 
+            Func<ILocalDatabase, TNFCTag, TDocument> find_document,
             Func<TNFCTag, Guid> check_tag)
         {
             Feeder = feeder;
@@ -79,12 +78,12 @@ namespace Flux.ViewModels
                         var tag = nfc.Tag.Value;
                         var card_id = nfc.CardId.Value;
                         if (tag.PrinterGuid == printer_guid)
-                        { 
+                        {
                             tag_storage.AddOrUpdate(new NFCReading(card_id, Feeder.Position));
                         }
                     }
                     else
-                    { 
+                    {
                         tag_storage.RemoveKey(Feeder.Position);
                     }
                     user_settings.PersistLocalSettings();
@@ -292,7 +291,7 @@ namespace Flux.ViewModels
                         if (File.Exists(bkp_file))
                             File.Delete(bkp_file);
                         File.Copy(tmp_file, bkp_file, true);
-                        
+
                         if (File.Exists(nfc_file))
                             File.Delete(nfc_file);
                         File.Copy(bkp_file, nfc_file, true);
@@ -462,7 +461,7 @@ namespace Flux.ViewModels
             return await Task.Run(async () =>
             {
                 return await Reader.ConvertOr(
-                    r => r.OpenAsync(h => get_tag_async(h), TimeSpan.FromSeconds(5)), 
+                    r => r.OpenAsync(h => get_tag_async(h), TimeSpan.FromSeconds(5)),
                     () => get_tag_async(default));
             });
 
@@ -490,7 +489,7 @@ namespace Flux.ViewModels
                     var printer_guid = core_settings.Local.PrinterGuid;
                     var backup = ReadBackupTag(card_id.Value, CheckTag);
                     if (backup.CardId.HasValue && backup.Tag.HasValue)
-                        if(backup.Tag.Value.PrinterGuid == printer_guid)
+                        if (backup.Tag.Value.PrinterGuid == printer_guid)
                             return Optional.Some(backup);
                 }
 

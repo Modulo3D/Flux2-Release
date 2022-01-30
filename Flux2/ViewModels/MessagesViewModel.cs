@@ -3,7 +3,6 @@ using DynamicData.Kernel;
 using Modulo3DStandard;
 using OSAI;
 using ReactiveUI;
-using Splat;
 using System;
 using System.Collections.Generic;
 using System.Linq;

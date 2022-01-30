@@ -19,7 +19,7 @@ namespace Flux.ViewModels
 
         public Dummy_ConnectionProvider(FluxViewModel flux)
         {
-            Flux  = flux;
+            Flux = flux;
             VariableStore = new Dummy_VariableStore(this);
         }
 

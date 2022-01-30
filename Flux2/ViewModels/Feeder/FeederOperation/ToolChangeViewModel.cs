@@ -1,16 +1,4 @@
-﻿using Modulo3DStandard;
-using ReactiveUI;
-using Splat;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reactive;
-using System.Reactive.Linq;
-using System.Threading.Tasks;
-using DynamicData.Kernel;
-using DynamicData;
-
-namespace Flux.ViewModels
+﻿namespace Flux.ViewModels
 {
     /*public abstract class ToolChangeViewModel : FeederOperationViewModel<ToolChangeViewModel>
     {

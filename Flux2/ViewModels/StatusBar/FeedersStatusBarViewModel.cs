@@ -3,12 +3,8 @@ using DynamicData.Kernel;
 using Modulo3DStandard;
 using ReactiveUI;
 using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Reactive.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
@@ -38,7 +34,7 @@ namespace Flux.ViewModels
 
             var not_found = Flux.Feeders.WhenAnyValue(v => v.SelectedFeeder)
                    .ConvertMany(f => f.WhenAnyValue(f => f.ToolNozzle.Temperature))
-                   .Select(t =>  t.ConvertOr(t => t.Current > 1000, () => false))
+                   .Select(t => t.ConvertOr(t => t.Current > 1000, () => false))
                    .DistinctUntilChanged()
                    .StartWith(false);
 

@@ -1,10 +1,8 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Modulo3DDatabase;
 using Modulo3DStandard;
 using ReactiveUI;
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Linq;
@@ -48,12 +46,12 @@ namespace Flux.ViewModels
         }
 
         private UnloadMaterialViewModel _UnloadMaterialViewModel;
-        public UnloadMaterialViewModel UnloadMaterialViewModel 
+        public UnloadMaterialViewModel UnloadMaterialViewModel
         {
             get
             {
                 if (_UnloadMaterialViewModel == null)
-                { 
+                {
                     _UnloadMaterialViewModel = new UnloadMaterialViewModel(Feeder);
                     _UnloadMaterialViewModel.InitializeRemoteView();
                 }
@@ -71,19 +69,19 @@ namespace Flux.ViewModels
 
             var before_gear_key = Flux.ConnectionProvider.VariableStore.GetArrayUnit(m => m.WIRE_PRESENCE_BEFORE_GEAR, Feeder.Position);
             _WirePresence1 = Flux.ConnectionProvider.ObserveVariable(
-                m => m.WIRE_PRESENCE_BEFORE_GEAR, 
+                m => m.WIRE_PRESENCE_BEFORE_GEAR,
                 before_gear_key.ValueOr(() => ""))
                 .ToProperty(this, v => v.WirePresence1);
 
             var after_gear_key = Flux.ConnectionProvider.VariableStore.GetArrayUnit(m => m.WIRE_PRESENCE_AFTER_GEAR, Feeder.Position);
             _WirePresence2 = Flux.ConnectionProvider.ObserveVariable(
-                m => m.WIRE_PRESENCE_AFTER_GEAR, 
+                m => m.WIRE_PRESENCE_AFTER_GEAR,
                 after_gear_key.ValueOr(() => ""))
                 .ToProperty(this, v => v.WirePresence2);
 
             var on_head_key = Flux.ConnectionProvider.VariableStore.GetArrayUnit(m => m.WIRE_PRESENCE_ON_HEAD, Feeder.Position);
             _WirePresence3 = Flux.ConnectionProvider.ObserveVariable(
-                m => m.WIRE_PRESENCE_ON_HEAD, 
+                m => m.WIRE_PRESENCE_ON_HEAD,
                 on_head_key.ValueOr(() => ""))
                 .ToProperty(this, v => v.WirePresence3);
 
@@ -194,7 +192,7 @@ namespace Flux.ViewModels
                 }
                 await Flux.ConnectionProvider.PurgeAsync(Feeder.Position, extrusion_temp.Value);
             }
-            else 
+            else
             {
                 Flux.Navigator.Navigate(LoadMaterialViewModel);
             }
@@ -215,7 +213,7 @@ namespace Flux.ViewModels
 
             var documents = CompositeQuery.Create(database.Value,
                     db => _ => db.Find(printer.Value, Tool.SchemaInstance), db => db.GetTarget,
-                    db => t => db.Find(t, Nozzle.SchemaInstance), db =>  db.GetTarget,
+                    db => t => db.Find(t, Nozzle.SchemaInstance), db => db.GetTarget,
                     db => n => db.Find(n, ToolMaterial.SchemaInstance), db => db.GetTarget,
                     db => tm => db.Find(Material.SchemaInstance, tm), db => db.GetSource)
                     .Execute()
@@ -231,7 +229,7 @@ namespace Flux.ViewModels
             var material_weights = new[] { 2000.0, 1000.0, 750.0 }
                 .AsObservableChangeSet(w => (int)w)
                 .AsObservableCache();
-   
+
             var material_option = ComboOption.Create("material", "MATERIALE:", materials);
             var cur_weight_option = new NumericOption("curWeight", "PESO CORRENTE:", 1000.0, 50.0, converter: typeof(WeightConverter));
             var max_weight_option = ComboOption.Create("maxWeight", "PESO TOTALE:", material_weights, selection_changed:

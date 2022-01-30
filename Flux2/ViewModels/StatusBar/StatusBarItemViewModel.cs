@@ -1,9 +1,6 @@
-﻿using Modulo3DDatabase;
-using Modulo3DStandard;
+﻿using Modulo3DStandard;
 using ReactiveUI;
 using System;
-using System.Drawing;
-using System.IO;
 using System.Reactive.Linq;
 
 namespace Flux.ViewModels

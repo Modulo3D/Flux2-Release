@@ -1,10 +1,8 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Modulo3DDatabase;
 using Modulo3DStandard;
 using ReactiveUI;
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Linq;
@@ -231,7 +229,7 @@ namespace Flux.ViewModels
                 return (true, default, default, default);
 
             var cur_weight = cur_weight_option.Value;
-            
+
             return (true, nozzle.Value, max_weight.Value, cur_weight);
         }
 

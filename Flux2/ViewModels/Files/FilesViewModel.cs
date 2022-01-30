@@ -1,6 +1,5 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Flux.ViewModels;
 using Modulo3DStandard;
 using ReactiveUI;
 using System;

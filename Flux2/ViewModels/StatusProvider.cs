@@ -8,7 +8,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reactive.Linq;
-using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
@@ -179,7 +178,7 @@ namespace Flux.ViewModels
                 .DistinctUntilChanged();
 
             var is_enabled_axis = Flux.ConnectionProvider.ObserveVariable(m => m.ENABLE_DRIVERS)
-                .QueryWhenChanged(e => 
+                .QueryWhenChanged(e =>
                 {
                     if (e.Items.Any(e => !e.HasValue))
                         return Optional<bool>.None;
@@ -322,7 +321,7 @@ namespace Flux.ViewModels
             CanSafeStop = Observable.CombineLatest(
                 IsCycle,
                 has_safe_state,
-                /*is_safe_stop,*/ 
+                /*is_safe_stop,*/
                 (cycle, safe/*, stop*/) => safe /*&& (!cycle || stop)*/)
                 .StartWith(false)
                 .DistinctUntilChanged();
@@ -336,7 +335,7 @@ namespace Flux.ViewModels
             CanSafeHold = Observable.CombineLatest(
                 IsCycle,
                 has_safe_state,
-                is_safe_hold, 
+                is_safe_hold,
                 (cycle, safe, pause) => cycle.ValueOrDefault() && safe && pause)
                 .StartWith(false)
                 .DistinctUntilChanged();
@@ -357,7 +356,7 @@ namespace Flux.ViewModels
 
             var extrusion_set_queue = Observable.CombineLatest(
                 queue_pos,
-                mcode_queue, 
+                mcode_queue,
                 selected_part_program,
                 mcodes,
                 GetExtrusionSetQueue)
@@ -410,7 +409,7 @@ namespace Flux.ViewModels
         }
 
         public void Initialize()
-        { 
+        {
             // Status with messages
             var messages = Flux.Messages.Messages
                 .Connect()
@@ -431,7 +430,7 @@ namespace Flux.ViewModels
         // Recovery
         private Optional<MCodeRecovery> FindSelectedRecovery(
             Optional<bool> enabled_vacuum,
-            Optional<MCodeRecovery> avaiable_recovery, 
+            Optional<MCodeRecovery> avaiable_recovery,
             Optional<MCodePartProgram> selected_pp)
         {
             try
@@ -488,7 +487,7 @@ namespace Flux.ViewModels
 
                 if (!part_program.HasValue)
                     return default;
-                
+
                 if (string.IsNullOrEmpty(part_program.Value))
                     return default;
 
@@ -526,7 +525,7 @@ namespace Flux.ViewModels
 
                 var analyzer = mcode_lookup.Value.Analyzer;
                 if (hold_num.HasValue && hold_tool.HasValue)
-                { 
+                {
                     return new MCodeRecovery(
                         analyzer.MCode,
                         (uint)hold_num.Value,
@@ -753,7 +752,7 @@ namespace Flux.ViewModels
                 var mcode_analyzer = mcode_vm.Value.Analyzer;
                 var extrusion_set = mcode_analyzer.MCodeReader.GetFilamentExtrusionSet(start_block, mcode_analyzer.MCode.BlockCount);
 
-                extrusion_set_queue.Add(mcode_queue.Key, extrusion_set);    
+                extrusion_set_queue.Add(mcode_queue.Key, extrusion_set);
             }
             return extrusion_set_queue;
         }
@@ -761,7 +760,7 @@ namespace Flux.ViewModels
         {
             if (enabled_vacuum.HasValue && !enabled_vacuum.Value)
                 return default;
-            if(!mcode_vm.HasValue)
+            if (!mcode_vm.HasValue)
                 return default;
             return mcode_vm.Value.Analyzer.MCode;
         }

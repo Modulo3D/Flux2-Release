@@ -4,7 +4,6 @@ using Modulo3DStandard;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Reactive;
 using System.Reactive.Linq;
 using System.Text;
@@ -32,16 +31,16 @@ namespace Flux.ViewModels
             var storage = RRF_StateBuilder.Create(connection, m => m.WhenAnyValue(m => m.Storage));
             var queue = RRF_StateBuilder.Create(connection, m => m.WhenAnyValue(m => m.Queue));
 
-            var state_input = RRF_StateBuilder.Create(connection,  
-                m => Observable.CombineLatest(state.GetState(m), input.GetState(m), 
+            var state_input = RRF_StateBuilder.Create(connection,
+                m => Observable.CombineLatest(state.GetState(m), input.GetState(m),
                 (s, i) => s.Convert(s => i.Convert(i => (s, i)))));
 
             var storage_queue = RRF_StateBuilder.Create(connection,
-                m => Observable.CombineLatest(storage.GetState(m), queue.GetState(m), 
+                m => Observable.CombineLatest(storage.GetState(m), queue.GetState(m),
                 (s, q) => s.Convert(s => q.Convert(q => (s, q)))));
 
             var global_storage_queue = RRF_StateBuilder.Create(connection,
-                m => Observable.CombineLatest(global.GetState(m), storage.GetState(m), queue.GetState(m), 
+                m => Observable.CombineLatest(global.GetState(m), storage.GetState(m), queue.GetState(m),
                 (g, s, q) => g.Convert(g => s.Convert(s => q.Convert(q => (g, s, q))))));
 
             QUEUE = RegisterVariable(queue.CreateVariable<Dictionary<ushort, Guid>, Unit>("QUEUE", (c, m) => m.GetGuidDictionaryFromQueue()));

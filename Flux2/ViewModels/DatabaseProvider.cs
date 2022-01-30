@@ -1,5 +1,4 @@
-﻿using DynamicData.Binding;
-using DynamicData.Kernel;
+﻿using DynamicData.Kernel;
 using LiteDB;
 using Modulo3DDatabase;
 using Modulo3DStandard;
@@ -7,7 +6,6 @@ using ReactiveUI;
 using System;
 using System.IO;
 using System.ServiceModel;
-using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {

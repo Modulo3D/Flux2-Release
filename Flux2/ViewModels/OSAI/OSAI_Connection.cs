@@ -3,11 +3,9 @@ using Modulo3DStandard;
 using OSAI;
 using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Reactive;
 using System.Reactive.Linq;
 using System.Runtime.CompilerServices;
 using System.ServiceModel;
@@ -569,7 +567,7 @@ namespace Flux.ViewModels
         {
             try
             {
-                if(Client.HasValue)
+                if (Client.HasValue)
                     await Client.Value.CloseAsync();
                 return (OSAI_CloseResponse.CLOSE_SUCCESS, CommunicationState.Closed);
             }
@@ -1013,7 +1011,7 @@ namespace Flux.ViewModels
                 var chunk_counter = 0;
                 var chunk_size = 10000;
                 var actual_blocks_count = source_blocks.Convert(s => s - skipped_blocks);
-                if(source.HasValue)
+                if (source.HasValue)
                 {
                     foreach (var chunk in source.Value.UIntSkip(skipped_blocks).AsChunks(chunk_size))
                     {
@@ -1052,7 +1050,7 @@ namespace Flux.ViewModels
 
                     chunk_counter += chunk_size;
                     if (actual_blocks_count.HasValue)
-                    { 
+                    {
                         var percentage = (double)chunk_counter / actual_blocks_count.Value * 100;
                         report_progress?.Invoke(Math.Max(0, Math.Min(100, percentage)));
                     }

@@ -2,7 +2,6 @@
 using DynamicData.Binding;
 using Modulo3DStandard;
 using ReactiveUI;
-using System.Linq;
 using System.Reactive;
 using System.Reactive.Linq;
 
@@ -18,7 +17,7 @@ namespace Flux.ViewModels
         [RemoteCommand]
         public ReactiveCommand<Unit, Unit> ResetMagazineCommand { get; internal set; }
 
-        public MagazineViewModel(FluxViewModel flux): base(flux, Observable.Return(true).ToOptional())
+        public MagazineViewModel(FluxViewModel flux) : base(flux, Observable.Return(true).ToOptional())
         {
             Magazine = Flux.Feeders.Feeders.Connect()
                 .Transform(f => new MagazineItemViewModel(Flux, f))
@@ -36,10 +35,10 @@ namespace Flux.ViewModels
 
             ResetMagazineCommand = ReactiveCommand.CreateFromTask(async () => { await Flux.SettingsProvider.ResetMagazineAsync(); }, is_idle);
 
-            if(Flux.ConnectionProvider.VariableStore.HasVariable(m => m.OPEN_HEAD_CLAMP))
+            if (Flux.ConnectionProvider.VariableStore.HasVariable(m => m.OPEN_HEAD_CLAMP))
                 AddCommand("toggleClamp", ReactiveCommand.CreateFromTask(async () => { await Flux.ConnectionProvider.ToggleVariableAsync(c => c.OPEN_HEAD_CLAMP); }));
 
-            if(Flux.ConnectionProvider.VariableStore.HasVariable(m => m.LOCK_CLOSED, "top"))
+            if (Flux.ConnectionProvider.VariableStore.HasVariable(m => m.LOCK_CLOSED, "top"))
                 AddCommand("toggleTopLock", ReactiveCommand.CreateFromTask(async () => { await Flux.ConnectionProvider.ToggleVariableAsync(c => c.OPEN_LOCK, "top"); }));
         }
     }

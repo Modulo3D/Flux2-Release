@@ -2,7 +2,6 @@
 using DynamicData.Kernel;
 using Modulo3DStandard;
 using ReactiveUI;
-using Splat;
 using System;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
@@ -27,7 +26,7 @@ namespace Flux.ViewModels
                 (current_weight, expected_weight) =>
                 {
                     var missing_weight = expected_weight - current_weight;
-                    if(missing_weight <= 0)
+                    if (missing_weight <= 0)
                         return FluxColors.Active;
                     if (missing_weight < 1000)
                         return FluxColors.Error;

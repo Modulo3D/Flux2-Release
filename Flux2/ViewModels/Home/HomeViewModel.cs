@@ -1,6 +1,5 @@
 ﻿using Modulo3DStandard;
 using ReactiveUI;
-using Splat;
 using System;
 using System.Reactive;
 using System.Reactive.Linq;
@@ -25,7 +24,7 @@ namespace Flux.ViewModels
             var can_cancel = Flux.StatusProvider.CanSafeStop;
             CancelPrintCommand = ReactiveCommand.CreateFromTask(async () => { await Flux.ConnectionProvider.CancelPrintAsync(false); }, can_cancel);
         }
-        public virtual void Initialize() 
+        public virtual void Initialize()
         {
             InitializeRemoteView();
         }

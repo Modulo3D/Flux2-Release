@@ -1,5 +1,4 @@
-﻿using DynamicData;
-using DynamicData.Kernel;
+﻿using DynamicData.Kernel;
 using Modulo3DStandard;
 using ReactiveUI;
 using System;
@@ -67,14 +66,14 @@ namespace Flux.ViewModels
 
             startup.Where(t =>
                 t.initializing.HasValue &&
-                (t.initializing.Value || 
+                (t.initializing.Value ||
                 (t.IsHomed.HasValue && !t.IsHomed.Value)))
                 .ObserveOn(RxApp.MainThreadScheduler)
                 .Subscribe(t => Flux.Navigator.Navigate(this));
 
-            startup.Where(t => 
-                t.initializing.HasValue && 
-                (!t.initializing.Value && 
+            startup.Where(t =>
+                t.initializing.HasValue &&
+                (!t.initializing.Value &&
                 (t.IsHomed.HasValue && t.IsHomed.Value)))
                 .ObserveOn(RxApp.MainThreadScheduler)
                 .Subscribe(_ => Flux.Navigator.NavigateHome());

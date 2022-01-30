@@ -1,17 +1,12 @@
 ﻿using DynamicData.Kernel;
 using Modulo3DStandard;
 using ReactiveUI;
-using RestSharp;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Reactive;
 using System.Reactive.Disposables;
-using System.Reactive.Linq;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
@@ -33,7 +28,7 @@ namespace Flux.ViewModels
         public string FSFullPath { get; }
         public FilesViewModel Files { get; }
         public Optional<FolderViewModel> Folder { get; }
-        
+
         public FSViewModel(FilesViewModel files, Optional<FolderViewModel> folder, FLUX_File file) : base($"{typeof(TViewModel).GetRemoteControlName()}??{file.Name}")
         {
             Files = files;
@@ -73,7 +68,7 @@ namespace Flux.ViewModels
                 var upload_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 await Files.Flux.ConnectionProvider.PutFileAsync(FSPath, FSName, upload_cts.Token, source);
 
-                IEnumerable<string> read_source(string source) 
+                IEnumerable<string> read_source(string source)
                 {
                     string line;
                     using var reader = new StringReader(textbox.Value);
@@ -92,7 +87,7 @@ namespace Flux.ViewModels
                 var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 var delete_result = await Files.Flux.ConnectionProvider.DeleteFileAsync(FSPath, FSName, cts.Token);
 
-                if(delete_result)
+                if (delete_result)
                     Files.UpdateFolder.OnNext(Unit.Default);
             })
             .DisposeWith(Disposables);

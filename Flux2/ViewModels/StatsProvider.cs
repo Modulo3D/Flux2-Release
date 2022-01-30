@@ -1,6 +1,5 @@
 ﻿using DynamicData;
 using Modulo3DStandard;
-using System;
 
 namespace Flux.ViewModels
 {

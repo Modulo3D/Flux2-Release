@@ -2,7 +2,6 @@
 using Modulo3DStandard;
 using ReactiveUI;
 using System;
-using System.IO;
 using System.Reactive;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
@@ -17,7 +16,7 @@ namespace Flux.ViewModels
         public bool Visible => _Visible.Value;
 
         public CmdButton(
-            string name, 
+            string name,
             Action command,
             Optional<IObservable<bool>> can_execute = default,
             Optional<IObservable<bool>> visible = default,
@@ -33,7 +32,7 @@ namespace Flux.ViewModels
         }
 
         public CmdButton(
-            string name, 
+            string name,
             Func<Task> command,
             Optional<IObservable<bool>> can_execute = default,
             Optional<IObservable<bool>> visible = default,

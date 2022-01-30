@@ -4,14 +4,8 @@ using Newtonsoft.Json;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Dynamic;
-using System.IO;
 using System.Linq;
-using System.Runtime.Serialization;
 using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
@@ -83,14 +77,14 @@ namespace Flux.ViewModels
 
     public class RRF_ObjectModelThermostatic
     {
-    //    [JsonProperty("heaters")]
-    //    public Optional<List<double>> Heaters { get; set; }
+        //    [JsonProperty("heaters")]
+        //    public Optional<List<double>> Heaters { get; set; }
 
-    //    [JsonProperty("highTemperature")]
-    //    public Optional<double> HighTemperature { get; set; }
+        //    [JsonProperty("highTemperature")]
+        //    public Optional<double> HighTemperature { get; set; }
 
-    //    [JsonProperty("lowTemperature")]
-    //    public Optional<double> LowTemperature { get; set; }
+        //    [JsonProperty("lowTemperature")]
+        //    public Optional<double> LowTemperature { get; set; }
     }
 
     public class RRF_ObjectModelFan
@@ -1246,7 +1240,7 @@ namespace Flux.ViewModels
                 .ToDictionary(s => s.MCodeGuid);
         }
 
-        public static Dictionary<ushort, Guid> GetGuidDictionaryFromQueue(this FLUX_FileList queue) 
+        public static Dictionary<ushort, Guid> GetGuidDictionaryFromQueue(this FLUX_FileList queue)
         {
             return queue.GetGuidFromQueue()
                 .GroupBy(s => s.queue_pos)
@@ -1259,7 +1253,7 @@ namespace Flux.ViewModels
             {
                 if (file.Type != FLUX_FileType.File)
                     continue;
-                var parts = file.Name.Split(';', 
+                var parts = file.Name.Split(';',
                     StringSplitOptions.RemoveEmptyEntries);
                 if (parts.Length != 2)
                     continue;

@@ -1,26 +1,16 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using Modulo3DDatabase;
 using Modulo3DStandard;
 using ReactiveUI;
-using Splat;
 using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Drawing;
 using System.IO;
 using System.Linq;
-using System.Linq.Expressions;
 using System.Net;
 using System.Reactive;
-using System.Reactive.Concurrency;
 using System.Reactive.Linq;
-using System.Reflection;
 using System.Text;
 using System.Threading;
-using System.Threading.Channels;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
@@ -116,7 +106,7 @@ namespace Flux.ViewModels
         public StatusBarViewModel StatusBar { get; private set; }
         public CalibrationViewModel Calibration { get; private set; }
         public FunctionalityViewModel Functionality { get; private set; }
-        
+
         public NFCProvider NFCProvider { get; private set; }
         public NetProvider NetProvider { get; private set; }
         public StatsProvider StatsProvider { get; private set; }
@@ -128,7 +118,7 @@ namespace Flux.ViewModels
         private ObservableAsPropertyHelper<DateTime> _CurrentTime;
         [RemoteOutput(true, typeof(DateTimeConverter<DateTimeFormat>))]
         public DateTime CurrentTime => _CurrentTime.Value;
-     
+
         private ObservableAsPropertyHelper<string> _LeftIconForeground;
         [RemoteOutput(true)]
         public string LeftIconForeground => _LeftIconForeground?.Value;
@@ -183,7 +173,7 @@ namespace Flux.ViewModels
                     "Modulo3D (Osai)" => new OSAI_ConnectionProvider(this),
                     _ => new Dummy_ConnectionProvider(this)
                 };
-                
+
                 Messages = new MessagesViewModel(this);
                 NetProvider = new NetProvider(this);
                 NFCProvider = new NFCProvider(this);
@@ -368,7 +358,7 @@ namespace Flux.ViewModels
                     default:
                         return "IN FUNZIONE";
                 }
-            }     
+            }
         }
 
         public async Task<ContentDialogResult> ShowConfirmDialogAsync(string title, string content)

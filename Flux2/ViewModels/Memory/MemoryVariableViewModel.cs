@@ -2,7 +2,6 @@
 using DynamicData.Kernel;
 using Modulo3DStandard;
 using ReactiveUI;
-using Splat;
 using System;
 using System.Reactive;
 using System.Threading.Tasks;
@@ -16,7 +15,7 @@ namespace Flux.ViewModels
     }
 
     public interface IMemoryVariableBase : IRemoteControl
-    { 
+    {
         public string VariableName { get; }
         public IFLUX_VariableBase VariableBase { get; }
     }
@@ -77,7 +76,7 @@ namespace Flux.ViewModels
                 case IFLUX_Variable<double, double> @double:
                     return Optional.Some(set_double_async);
                     async Task set_double_async(ContentDialog dialog, bool is_virtual)
-                    { 
+                    {
                         var tb_double_value = new TextBox("tbValue", "VALORE?", @double.Value.ValueOr(() => 0).ToString());
                         dialog.AddContent(tb_double_value);
 
@@ -151,7 +150,7 @@ namespace Flux.ViewModels
         {
             try
             {
-               using var dialog = new ContentDialog(Flux, Variable.Name, default, () => { }, () => { });
+                using var dialog = new ContentDialog(Flux, Variable.Name, default, () => { }, () => { });
 
                 var cb_virtual_memory = ComboOption.Create("cbVirtual", "MEMORIA VIRTUALE?", Enum.GetValues<BoolSelection>(), b => (uint)b);
                 dialog.AddContent(cb_virtual_memory);

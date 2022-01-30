@@ -15,12 +15,9 @@ using System.Linq;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
-using System.Reactive.Concurrency;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
-using System.Runtime.Serialization;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
@@ -65,8 +62,8 @@ namespace Flux.ViewModels
                         await SendRemoteControlDataAsync(context, data);
                 }
             }
-            catch (Exception ex)
-            { 
+            catch (Exception)
+            {
             }
         }
         public static string Compress(string payload)
@@ -75,7 +72,7 @@ namespace Flux.ViewModels
             using (var ms = new MemoryStream())
             {
                 using (var zip = new GZipStream(ms, CompressionMode.Compress, true))
-                { 
+                {
                     zip.Write(buffer, 0, buffer.Length);
                     zip.Close();
                 }
@@ -159,7 +156,7 @@ namespace Flux.ViewModels
                         await command.Value.Execute();
                     }
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
                 }
             }
@@ -180,7 +177,7 @@ namespace Flux.ViewModels
     {
         public const int WebServerPort = 8080;
 
-        public Ping Pinger { get; } 
+        public Ping Pinger { get; }
         public FluxViewModel Flux { get; }
         public UdpDiscovery UdpDiscovery { get; }
 
@@ -206,7 +203,7 @@ namespace Flux.ViewModels
         }
 
         public void Initialize()
-        { 
+        {
             InitializeWebServer();
             InitializeUDPDiscovery();
         }
@@ -216,11 +213,11 @@ namespace Flux.ViewModels
             var core_settings = Flux.SettingsProvider.CoreSettings.Local;
 
             PLCNetworkConnectivity = await PingAsync(
-                core_settings.PLCAddress, 
+                core_settings.PLCAddress,
                 TimeSpan.FromSeconds(1));
-          
+
             InterNetworkConnectivity = await PingAsync(
-                "8.8.8.8", 
+                "8.8.8.8",
                 TimeSpan.FromSeconds(5));
         }
 
@@ -238,7 +235,7 @@ namespace Flux.ViewModels
 
                 return result.Status == IPStatus.Success;
             }
-            catch(Exception ex)
+            catch (Exception)
             {
                 return false;
             }
@@ -250,12 +247,12 @@ namespace Flux.ViewModels
             var server = new WebServer(WebServerPort)
                 .WithLocalSessionManager()
                 .WithModule(new RemoteControlWebSocket(Flux, "/remote"))
-                .WithAction("/", HttpVerbs.Options, e => 
+                .WithAction("/", HttpVerbs.Options, e =>
                 {
                     e.Response.Headers.Add("Interface-Type", "Flux");
                     return Task.CompletedTask;
                 })
-                .WithWebApi("/api", (c, d) => WebServerUtils.SerializeJson<object>(c, d), m => m.WithController(() => new FluxWebApiController(Flux)))
+                .WithWebApi("/api", (c, d) => WebServerUtils.SerializeJson(c, d), m => m.WithController(() => new FluxWebApiController(Flux)))
                 .WithWebApi("/settings/user", Flux.SettingsProvider.UserSettings, settings =>
                 {
                     settings
@@ -305,7 +302,7 @@ namespace Flux.ViewModels
                 bool GetLocalIPAddress(out IPAddress address)
                 {
                     address = IPAddress.Loopback;
-                    
+
                     var settings = Flux.SettingsProvider.CoreSettings.Local;
                     var plc_address = settings.PLCAddress.Convert(ip =>
                     {
@@ -390,13 +387,13 @@ namespace Flux.ViewModels
                 {
                     await receive_database_async(parser.Files[0].Data, Files.Database.FullName);
                 }
-                else 
+                else
                 {
                     await Flux.DatabaseProvider.Database.Value.AccessLocalDatabaseAsync(db => receive_database_async(parser.Files[0].Data, db.Filename));
                 }
 
                 Flux.DatabaseProvider.Initialize();
-                
+
                 return true;
             }
             catch (Exception ex)

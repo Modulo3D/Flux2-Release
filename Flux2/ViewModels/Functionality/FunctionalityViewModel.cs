@@ -1,7 +1,6 @@
 ﻿using DynamicData.Kernel;
 using Modulo3DStandard;
 using ReactiveUI;
-using Splat;
 using System;
 using System.Linq;
 using System.Reactive.Linq;
@@ -114,7 +113,7 @@ namespace Flux.ViewModels
                 {
                     Clear();
                     if (extruders.HasValue)
-                    { 
+                    {
                         for (ushort extr = 0; extr < extruders.Value; extr++)
                             AddModal(new NFCInnerViewModel(flux, "Tool", f => f.ToolNozzle, extr));
                         for (ushort extr = 0; extr < extruders.Value; extr++)
@@ -141,32 +140,32 @@ namespace Flux.ViewModels
             var status = Flux.StatusProvider
                 .WhenAnyValue(s => s.StatusEvaluation);
             var IS_HOME = status
-                .Select(e => 
+                .Select(e =>
                     e.IsHomed.ValueOrDefault());
             var IS_ENAB = status
-                .Select(e => 
+                .Select(e =>
                     e.IsEnabledAxis.ValueOrDefault())
                 .ToOptional();
             var IS_SAFE = status
                 .Select(e => e.CanSafeCycle)
                 .ToOptional();
             var IS_IDLE = status
-                .Select(e => 
+                .Select(e =>
                     e.IsIdle.ValueOrDefault())
                 .ToOptional();
             var IS_IH = status
-                .Select(e => 
-                    e.IsIdle.ValueOrDefault() && 
+                .Select(e =>
+                    e.IsIdle.ValueOrDefault() &&
                     e.IsHomed.ValueOrDefault())
                 .ToOptional();
             var IS_IEH = status
                 .Select(e =>
-                    e.IsIdle.ValueOrDefault() && 
-                    e.IsEnabledAxis.ValueOrDefault() && 
+                    e.IsIdle.ValueOrDefault() &&
+                    e.IsEnabledAxis.ValueOrDefault() &&
                     e.IsHomed.ValueOrDefault())
                 .ToOptional();
             var IS_IEHS = status
-                .Select(e => 
+                .Select(e =>
                     e.IsIdle.ValueOrDefault() &&
                     e.IsEnabledAxis.ValueOrDefault() &&
                     e.IsHomed.ValueOrDefault() &&
@@ -193,7 +192,7 @@ namespace Flux.ViewModels
                 can_navigate: IS_IDLE,
                 navigate_back: can_naviagate_back);
 
-            if(Flux.ConnectionProvider.VariableStore.HasVariable(c => c.DISABLE_24V))
+            if (Flux.ConnectionProvider.VariableStore.HasVariable(c => c.DISABLE_24V))
                 AddCommand("power", ShutdownAsync, can_execute: IS_IDLE);
 
             AddCommand("cleanPlate", CleanPlate);
@@ -219,11 +218,11 @@ namespace Flux.ViewModels
                     {
                         var operator_usb = Flux.MCodes.OperatorUSB;
                         if (operator_usb.HasValue)
-                        { 
+                        {
                             Flux.MCodes.OperatorUSB = default;
                         }
                         else
-                        { 
+                        {
                             Flux.MCodes.OperatorUSB = new OperatorUSB()
                             {
                                 AdvancedSettings = true,
@@ -277,21 +276,21 @@ namespace Flux.ViewModels
             var status = Flux.StatusProvider
                 .WhenAnyValue(s => s.StatusEvaluation);
             var IS_HOME = status
-                .Select(e => 
+                .Select(e =>
                     e.IsHomed.ValueOrDefault());
             var IS_ENAB = status
-                .Select(e => 
+                .Select(e =>
                     e.IsEnabledAxis.ValueOrDefault())
                 .ToOptional();
             var IS_SAFE = status
                 .Select(e => e.CanSafeCycle)
                 .ToOptional();
             var IS_IDLE = status
-                .Select(e => 
+                .Select(e =>
                     e.IsIdle.ValueOrDefault())
                 .ToOptional();
             var IS_IEHS = status
-                .Select(e => 
+                .Select(e =>
                     e.IsIdle.ValueOrDefault() &&
                     e.IsEnabledAxis.ValueOrDefault() &&
                     e.IsHomed.ValueOrDefault() &&

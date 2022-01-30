@@ -1,6 +1,4 @@
-﻿using ReactiveUI;
-
-namespace Flux.ViewModels
+﻿namespace Flux.ViewModels
 {
     public interface IOSAI_Address
     {
