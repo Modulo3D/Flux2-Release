@@ -4,6 +4,9 @@ using Modulo3DStandard;
 using ReactiveUI;
 using Splat;
 using System;
+using System.Linq;
+using System.Reactive.Disposables;
+using System.Reactive.Linq;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
@@ -13,8 +16,27 @@ namespace Flux.ViewModels
         public override string CurrentValueName => "UTENSILE CARICATO";
         public override string ExpectedValueName => "UTENSILE RICHIESTO";
 
-        public InvalidToolViewModel(FeederEvaluator eval) : base(eval)
+        private ObservableAsPropertyHelper<string> _InvalidItemBrush;
+        public override string InvalidItemBrush => _InvalidItemBrush.Value;
+
+        public InvalidToolViewModel(FeederEvaluator eval) : base($"{typeof(InvalidToolViewModel).GetRemoteControlName()}??{eval.Feeder.Position}", eval)
         {
+            _InvalidItemBrush = Observable.CombineLatest(
+               eval.ToolNozzle.WhenAnyValue(m => m.CurrentDocument),
+               eval.ToolNozzle.WhenAnyValue(m => m.ExpectedDocumentQueue),
+               (current_document, expected_document_queue) =>
+               {
+                   if (!expected_document_queue.HasValue)
+                       return FluxColors.Error;
+                   if (!current_document.HasValue)
+                       return FluxColors.Warning;
+                   foreach (var expected_document in expected_document_queue.Value)
+                       if (expected_document.Value.Id != current_document.Value.Id)
+                           return FluxColors.Error;
+                   return FluxColors.Warning;
+               })
+               .ToProperty(this, v => v.InvalidItemBrush)
+               .DisposeWith(Disposables);
         }
 
         public override IObservable<Optional<string>> GetCurrentValue(FeederEvaluator item)
@@ -24,8 +46,8 @@ namespace Flux.ViewModels
         }
         public override IObservable<Optional<string>> GetExpectedValue(FeederEvaluator item)
         {
-            return item.WhenAnyValue(e => e.ToolNozzle.ExpectedDocument)
-                .Convert(n => n.Name);
+            return item.WhenAnyValue(e => e.ToolNozzle.ExpectedDocumentQueue)
+                .Convert(f => string.Join(Environment.NewLine, f.Values.Select(f => f.Name).Distinct()));
         }
     }
 

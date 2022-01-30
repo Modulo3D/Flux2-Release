@@ -18,9 +18,9 @@ namespace Flux.ViewModels
     {
         public MCodeAnalyzer Analyzer { get; }
 
-        private ObservableAsPropertyHelper<int> _FileNumber;
+        private ObservableAsPropertyHelper<ushort> _FileNumber;
         [RemoteOutput(true)]
-        public int FileNumber => _FileNumber.Value;
+        public ushort FileNumber => _FileNumber.Value;
 
         public MCodesViewModel MCodes { get; }
         public FluxViewModel Flux => MCodes.Flux;
@@ -44,11 +44,11 @@ namespace Flux.ViewModels
         public IObservableCache<Material, ushort> Materials { get; }
 
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> DeleteCommand { get; }
+        public ReactiveCommand<Unit, Unit> DeleteMCodeStorageCommand { get; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> SelectCommand { get; }
+        public ReactiveCommand<Unit, Unit> SelectMCodeStorageCommand { get; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> ToggleInfoCommand { get; }
+        public ReactiveCommand<Unit, Unit> ToggleMCodeStorageInfoCommand { get; }
 
         private ObservableAsPropertyHelper<bool> _CanSelect;
         public bool CanSelect => _CanSelect.Value;
@@ -56,7 +56,7 @@ namespace Flux.ViewModels
         private ObservableAsPropertyHelper<bool> _CanDelete;
         public bool CanDelete => _CanDelete.Value;
 
-        public MCodeStorageViewModel(MCodesViewModel mcodes, MCodeAnalyzer analyzer) : base($"mcodeStorage??{analyzer.MCode.MCodeGuid}")
+        public MCodeStorageViewModel(MCodesViewModel mcodes, MCodeAnalyzer analyzer) : base($"{typeof(MCodeStorageViewModel).GetRemoteControlName()}??{analyzer.MCode.MCodeGuid}")
         {
             MCodes = mcodes;
             Analyzer = analyzer;
@@ -86,32 +86,36 @@ namespace Flux.ViewModels
                 .WhenAnyValue(f => f.IsPreparingFile)
                 .StartWith(false);
 
-            var can_modify = Observable.CombineLatest(
-                is_selecting_file,
-                Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS),
-                Flux.StatusProvider.WhenAnyValue(e => e.PrintingEvaluation),
-                CanModifyMCode);
+            var in_queue = mcodes.QueuedMCodes.Connect()
+                .AutoRefresh(q => q.Storage)
+                .Transform(q => q.Storage, true)
+                .QueryWhenChanged(c => c.Items.Contains(this))
+                .StartWith(false);
 
             _CanDelete = Observable.CombineLatest(
-                can_modify,
-                Flux.ConnectionProvider.ObserveVariable(c => c.QUEUE),
-                (m, queue) => m && queue.ConvertOr(q => !q.Values.Contains(analyzer.MCode.MCodeGuid), () => false))
+                is_selecting_file,
+                in_queue,
+                (s, q) => !s && !q)
                 .ToProperty(this, v => v.CanDelete)
                 .DisposeWith(Disposables);
 
-            _CanSelect = can_modify
+            _CanSelect = Observable.CombineLatest(
+                is_selecting_file,
+                Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS),
+                Flux.StatusProvider.WhenAnyValue(e => e.PrintingEvaluation),
+                CanSelectMCode)
                 .ToProperty(this, v => v.CanSelect)
                 .DisposeWith(Disposables);
 
-            ToggleInfoCommand = ReactiveCommand.Create(() => { ShowInfo = !ShowInfo; })
+            ToggleMCodeStorageInfoCommand = ReactiveCommand.Create(() => { ShowInfo = !ShowInfo; })
                 .DisposeWith(Disposables);
 
-            DeleteCommand = ReactiveCommand.CreateFromTask(
+            DeleteMCodeStorageCommand = ReactiveCommand.CreateFromTask(
                 async () => { await mcodes.DeleteFileAsync(false, this); }, 
                 this.WhenAnyValue(v => v.CanDelete))
                 .DisposeWith(Disposables);
 
-            SelectCommand = ReactiveCommand.CreateFromTask(
+            SelectMCodeStorageCommand = ReactiveCommand.CreateFromTask(
                 async () => { await mcodes.AddToQueueAsync(this); },
                 this.WhenAnyValue(v => v.CanSelect))
                 .DisposeWith(Disposables);
@@ -143,7 +147,7 @@ namespace Flux.ViewModels
             AddOutput("nozzles", nozzles);
         }
 
-        private bool CanModifyMCode(bool selecting, Optional<FLUX_ProcessStatus> status, PrintingEvaluation printing_eval)
+        private bool CanSelectMCode(bool selecting, Optional<FLUX_ProcessStatus> status, PrintingEvaluation printing_eval)
         {
             if (selecting)
                 return false;
@@ -156,7 +160,7 @@ namespace Flux.ViewModels
                 return false;
             return true;
         }
-        private int FindFileNumber(IQuery<IFluxMCodeStorageViewModel, Guid> mcodes_query)
+        private ushort FindFileNumber(IQuery<IFluxMCodeStorageViewModel, Guid> mcodes_query)
         {
             var mcodes = mcodes_query.Items
                 .OrderByDescending(m => m.Analyzer.MCode.Created)
@@ -164,7 +168,7 @@ namespace Flux.ViewModels
                 .ToDictionary(t => t.MCode.MCodeGuid, t => t.index);
 
             if (mcodes.TryGetValue(Analyzer.MCode.MCodeGuid, out var index))
-                return index;
+                return (ushort)index;
 
             return 0;
         }

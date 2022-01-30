@@ -68,7 +68,7 @@ namespace Flux.ViewModels
             }
         }
 
-        private static DirectoryInfo AccessDirectory(DirectoryInfo parent, string name)
+        public static DirectoryInfo AccessDirectory(DirectoryInfo parent, string name)
         {
             var directory = new DirectoryInfo(Path.Combine(parent.FullName, name));
             if (!directory.Exists)
@@ -131,19 +131,19 @@ namespace Flux.ViewModels
      
         private ObservableAsPropertyHelper<string> _LeftIconForeground;
         [RemoteOutput(true)]
-        public string LeftIconForeground => _LeftIconForeground.Value;
+        public string LeftIconForeground => _LeftIconForeground?.Value;
 
         private ObservableAsPropertyHelper<string> _RightIconForeground;
         [RemoteOutput(true)]
-        public string RightIconForeground => _RightIconForeground.Value;
+        public string RightIconForeground => _RightIconForeground?.Value;
 
         private ObservableAsPropertyHelper<string> _StatusText;
         [RemoteOutput(true)]
-        public string StatusText => _StatusText.Value;
+        public string StatusText => _StatusText?.Value;
 
         private ObservableAsPropertyHelper<string> _StatusBrush;
         [RemoteOutput(true)]
-        public string StatusBrush => _StatusBrush.Value;
+        public string StatusBrush => _StatusBrush?.Value;
 
         IFluxNetProvider IFlux.NetProvider => NetProvider;
         IFluxNFCProvider IFlux.NFCProvider => NFCProvider;
@@ -175,19 +175,13 @@ namespace Flux.ViewModels
             DatabaseProvider.Initialize(db =>
             {
                 var printer_id = SettingsProvider.CoreSettings.Local.PrinterID;
-                if (!printer_id.HasValue)
-                    return;
-
-                var printer_result = db.FindById<Printer>(printer_id.Value);
-                if (!printer_result.HasDocuments)
-                    return;
-
-                var printer = printer_result.Documents.FirstOrDefault();
-                ConnectionProvider = printer.MachineGCodeFlavor.ValueOr(() => "") switch
+                var printer_result = db.FindById<Printer>(printer_id.ValueOr(() => 0));
+                var printer = printer_result.Documents.FirstOrDefault().ToOptional();
+                ConnectionProvider = printer.Convert(p => p.MachineGCodeFlavor).ValueOr(() => "") switch
                 {
                     "Modulo3D (Duet)" => new RRF_ConnectionProvider(this),
                     "Modulo3D (Osai)" => new OSAI_ConnectionProvider(this),
-                    _ => new OSAI_ConnectionProvider(this)
+                    _ => new Dummy_ConnectionProvider(this)
                 };
                 
                 Messages = new MessagesViewModel(this);
@@ -264,6 +258,33 @@ namespace Flux.ViewModels
                         };
                     })
                     .ToProperty(this, v => v.StatusBrush);
+            });
+
+            Task.Run(async () =>
+            {
+                await Task.Delay(5000);
+                if (ConnectionProvider is Dummy_ConnectionProvider)
+                {
+                    if (!DatabaseProvider.Database.HasValue)
+                        Environment.Exit(1);
+
+                    var printers = DatabaseProvider.Database.Value
+                        .FindAll<Printer>().Documents
+                        .Distinct()
+                        .OrderBy(d => d.Name)
+                        .AsObservableChangeSet(m => m.Id)
+                        .AsObservableCache();
+
+                    var printer_option = ComboOption.Create("printer", "Stampante:", printers);
+                    var result = await ShowSelectionAsync("Seleziona un modello di stampante", false, printer_option);
+                    if (result != ContentDialogResult.Primary)
+                        Environment.Exit(2);
+
+                    var printer_id = printer_option.Items.SelectedKey;
+                    SettingsProvider.CoreSettings.Local.PrinterID = printer_id;
+                    SettingsProvider.CoreSettings.PersistLocalSettings();
+                    Environment.Exit(0);
+                }
             });
         }
 
@@ -376,9 +397,9 @@ namespace Flux.ViewModels
 
             await dialog_task;
         }
-        public async Task<ContentDialogResult> ShowSelectionAsync(string title, params IDialogOption[] options)
+        public async Task<ContentDialogResult> ShowSelectionAsync(string title, bool can_cancel, params IDialogOption[] options)
         {
-            using var dialog = new ContentDialog(this, title, confirm: () => { }, cancel: () => { });
+            using var dialog = new ContentDialog(this, title, confirm: () => { }, cancel: can_cancel ? () => { } : default);
             dialog.AddContent("options", options);
             return await dialog.ShowAsync();
         }

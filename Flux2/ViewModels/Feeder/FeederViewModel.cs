@@ -63,7 +63,7 @@ namespace Flux.ViewModels
         public bool MaterialLoaded => _MaterialLoaded.Value;
 
         // CONSTRUCTOR
-        public FeederViewModel(FeedersViewModel feeders, ushort position) : base($"feeder??{position}")
+        public FeederViewModel(FeedersViewModel feeders, ushort position) : base($"{typeof(FeederViewModel).GetRemoteControlName()}??{position}")
         {
             Feeders = feeders;
             Flux = feeders.Flux;
@@ -73,9 +73,9 @@ namespace Flux.ViewModels
             ToolNozzle = new ToolNozzleViewModel(this);
             ToolMaterial = new ToolMaterialViewModel(this);
 
+            ToolMaterial.Initialize();
             ToolNozzle.Initialize();
             Material.Initialize();
-            ToolMaterial.Initialize();
 
             _FeederState = ToolNozzle.WhenAnyValue(v => v.State)
                 .Select(FindFeederState)
@@ -155,18 +155,25 @@ namespace Flux.ViewModels
                 return FluxColors.Error;
             }).ToProperty(this, v => v.ToolNozzleBrush);
 
-            _MaterialBrush = Material.WhenAnyValue(v => v.State).Select(state =>
-            {
-                if (state.IsNotLoaded())
-                    return FluxColors.Empty;
-                if (!state.Known)
-                    return FluxColors.Warning;
-                if (!state.IsLoaded())
-                    return FluxColors.Inactive;
-                if (!state.Locked)
-                    return FluxColors.Error;
-                return FluxColors.Active;
-            }).ToProperty(this, v => v.MaterialBrush);
+            _MaterialBrush = Observable.CombineLatest(
+                Material.WhenAnyValue(v => v.State),
+                ToolMaterial.WhenAnyValue(v => v.State),
+                (m, tm) =>
+                {
+                    if(!tm.KnownNozzle)
+                        return FluxColors.Empty;
+                    if (tm.KnownMaterial && !tm.Compatible)
+                        return FluxColors.Error;
+                    if (m.IsNotLoaded())
+                        return FluxColors.Empty;
+                    if (!m.Known)
+                        return FluxColors.Warning;
+                    if (!m.IsLoaded())
+                        return FluxColors.Inactive;
+                    if (!m.Locked)
+                        return FluxColors.Error;
+                    return FluxColors.Active;
+                }).ToProperty(this, v => v.MaterialBrush);
         }
         
         // FEEDER

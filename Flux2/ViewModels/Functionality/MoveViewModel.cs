@@ -13,53 +13,47 @@ namespace Flux.ViewModels
 {
     public class MoveViewModel : FluxRoutableViewModel<MoveViewModel>
     {
-        private double _MoveExponent = 1;
+        private double _MovePrinterExponent = 1;
         [RemoteInput(1, -2, 3)]
-        public double MoveExponent
+        public double MovePrinterExponent
         {
-            get => _MoveExponent;
-            set => this.RaiseAndSetIfChanged(ref _MoveExponent, value);
+            get => _MovePrinterExponent;
+            set => this.RaiseAndSetIfChanged(ref _MovePrinterExponent, value);
         }
 
-        private ObservableAsPropertyHelper<double> _MoveDistance;
+        private ObservableAsPropertyHelper<double> _MovePrinterDistance;
         [RemoteOutput(true)]
-        public double MoveDistance => _MoveDistance.Value;
+        public double MovePrinterDistance => _MovePrinterDistance.Value;
 
-        private double _Feedrate = 1000;
+        private double _MovePrinterFeedrate = 1000;
         [RemoteInput(100, 0)]
-        public double Feedrate
+        public double MovePrinterFeedrate
         {
-            get => _Feedrate;
-            set => this.RaiseAndSetIfChanged(ref _Feedrate, value);
+            get => _MovePrinterFeedrate;
+            set => this.RaiseAndSetIfChanged(ref _MovePrinterFeedrate, value);
         }
 
-        public ReactiveCommand<Unit, Unit> IncreaseExponent { get; }
-        public ReactiveCommand<Unit, Unit> DecreaseExponent { get; }
-
-        public ReactiveCommand<Unit, Unit> IncreaseFeedrate { get; }
-        public ReactiveCommand<Unit, Unit> DecreaseFeedrate { get; }
-
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> MoveLeft { get; }
+        public ReactiveCommand<Unit, Unit> MovePrinterLeftCommand { get; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> MoveRight { get; }
+        public ReactiveCommand<Unit, Unit> MovePrinterRightCommand { get; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> MoveBack { get; }
+        public ReactiveCommand<Unit, Unit> MovePrinterBackCommand { get; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> MoveFront { get; }
+        public ReactiveCommand<Unit, Unit> MovePrinterFrontCommand { get; }
 
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> MoveUp { get; }
+        public ReactiveCommand<Unit, Unit> MovePrinterUpCommand { get; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> MoveDown { get; }
+        public ReactiveCommand<Unit, Unit> MovePrinterDownCommand { get; }
 
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> Extrude { get; }
+        public ReactiveCommand<Unit, Unit> MovePrinterExtrudeCommand { get; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> Retract { get; }
+        public ReactiveCommand<Unit, Unit> MovePrinterRetractCommand { get; }
 
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> Stop { get; }
+        public ReactiveCommand<Unit, Unit> StopPrinterCommand { get; }
 
         [RemoteCommand]
         public ReactiveCommand<Unit, Unit> ShowRoutinesCommand { get; }
@@ -70,19 +64,13 @@ namespace Flux.ViewModels
 
         public MoveViewModel(FluxViewModel flux) : base(flux)
         {
-            _MoveDistance = this.WhenAnyValue(v => v.MoveExponent)
+            _MovePrinterDistance = this.WhenAnyValue(v => v.MovePrinterExponent)
                 .Select(e => Math.Pow(10, e))
-                .ToProperty(this, v => v.MoveDistance);
+                .ToProperty(this, v => v.MovePrinterDistance);
 
             _AxisPosition = Flux.ConnectionProvider.ObserveVariable(m => m.AXIS_POSITION)
                 .QueryWhenChanged(p => string.Join(" ", p.KeyValues.Select(v => $"{v.Key}{v.Value:0.00}")))
                 .ToProperty(this, v => v.AxisPosition);
-
-            IncreaseExponent = ReactiveCommand.Create(() => { MoveExponent++; });
-            DecreaseExponent = ReactiveCommand.Create(() => { MoveExponent--; });
-
-            IncreaseFeedrate = ReactiveCommand.Create(() => { Feedrate += 200; });
-            DecreaseFeedrate = ReactiveCommand.Create(() => { Feedrate -= 200; });
 
             ShowRoutinesCommand = ReactiveCommand.Create(() => { Flux.Navigator.NavigateModal(Flux.Functionality.Routines); });
 
@@ -98,18 +86,19 @@ namespace Flux.ViewModels
                 await Flux.ConnectionProvider.ExecuteParamacroAsync(func);
             }
 
-            MoveLeft    = ReactiveCommand.CreateFromTask(() => moveAsync(c => c.GetRelativeXMovementGCode(-MoveDistance, Feedrate)), can_move);
-            MoveRight   = ReactiveCommand.CreateFromTask(() => moveAsync(c => c.GetRelativeXMovementGCode(MoveDistance, Feedrate)), can_move);
-            MoveBack    = ReactiveCommand.CreateFromTask(() => moveAsync(c => c.GetRelativeYMovementGCode(-MoveDistance, Feedrate)), can_move);
-            MoveFront   = ReactiveCommand.CreateFromTask(() => moveAsync(c => c.GetRelativeYMovementGCode(MoveDistance, Feedrate)), can_move);
-                                                          
-            MoveUp      = ReactiveCommand.CreateFromTask(() => moveAsync(c => c.GetRelativeZMovementGCode(-MoveDistance, Feedrate)), can_move);
-            MoveDown    = ReactiveCommand.CreateFromTask(() => moveAsync(c => c.GetRelativeZMovementGCode(MoveDistance, Feedrate)), can_move);
-                                                               
-            Extrude     = ReactiveCommand.CreateFromTask(() => moveAsync(c => c.GetRelativeEMovementGCode(MoveDistance, Feedrate)), can_move);
-            Retract     = ReactiveCommand.CreateFromTask(() => moveAsync(c => c.GetRelativeEMovementGCode(-MoveDistance, Feedrate)), can_move);
+            MovePrinterLeftCommand    = ReactiveCommand.CreateFromTask(() => moveAsync(c => c.GetRelativeXMovementGCode(-MovePrinterDistance, MovePrinterFeedrate)), can_move);
+            MovePrinterRightCommand   = ReactiveCommand.CreateFromTask(() => moveAsync(c => c.GetRelativeXMovementGCode(MovePrinterDistance, MovePrinterFeedrate)), can_move);
 
-            Stop = ReactiveCommand.CreateFromTask(async () => { await Flux.ConnectionProvider.ResetAsync(); });
+            MovePrinterBackCommand    = ReactiveCommand.CreateFromTask(() => moveAsync(c => c.GetRelativeYMovementGCode(-MovePrinterDistance, MovePrinterFeedrate)), can_move);
+            MovePrinterFrontCommand   = ReactiveCommand.CreateFromTask(() => moveAsync(c => c.GetRelativeYMovementGCode(MovePrinterDistance, MovePrinterFeedrate)), can_move);
+                                                          
+            MovePrinterUpCommand      = ReactiveCommand.CreateFromTask(() => moveAsync(c => c.GetRelativeZMovementGCode(-MovePrinterDistance, MovePrinterFeedrate)), can_move);
+            MovePrinterDownCommand    = ReactiveCommand.CreateFromTask(() => moveAsync(c => c.GetRelativeZMovementGCode(MovePrinterDistance, MovePrinterFeedrate)), can_move);
+                                                               
+            MovePrinterExtrudeCommand     = ReactiveCommand.CreateFromTask(() => moveAsync(c => c.GetRelativeEMovementGCode(MovePrinterDistance, MovePrinterFeedrate)), can_move);
+            MovePrinterRetractCommand     = ReactiveCommand.CreateFromTask(() => moveAsync(c => c.GetRelativeEMovementGCode(-MovePrinterDistance, MovePrinterFeedrate)), can_move);
+
+            StopPrinterCommand = ReactiveCommand.CreateFromTask(async () => { await Flux.ConnectionProvider.ResetAsync(); });
         }
     }
 }

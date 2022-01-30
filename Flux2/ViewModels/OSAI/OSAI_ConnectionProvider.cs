@@ -320,6 +320,20 @@ namespace Flux.ViewModels
             }
         }
 
+        public override async Task<bool> ParkToolAsync()
+        {
+            var position = await ReadVariableAsync(m => m.TOOL_CUR);
+            if (!position.HasValue)
+                return false;
+
+            if (position.Value == 0)
+                return false;
+
+            if (!await MGuard_MagazinePositionAsync((ushort)(position.Value - 1)))
+                return false;
+
+            return await ExecuteParamacroAsync(c => c.GetParkToolGCode());
+        }
         public override async Task<bool> ResetClampAsync()
         {
             if (!await WriteVariableAsync(c => c.OPEN_HEAD_CLAMP, true))
@@ -328,6 +342,7 @@ namespace Flux.ViewModels
                 return false;
             return true;
         }
+
         public override Optional<IEnumerable<string>> GenerateStartMCodeLines(MCode mcode)
         {
             return generate_start_mcode().ToOptional();
@@ -398,23 +413,7 @@ namespace Flux.ViewModels
                 yield return $"G92 A{a_pos}";
             }
         }
-
-        public override async Task<bool> ParkToolAsync()
-        {
-            var position = await ReadVariableAsync(m => m.TOOL_CUR);
-            if (!position.HasValue)
-                return false;
-
-            if (position.Value == 0)
-                return false;
-
-            if (!await MGuard_MagazinePositionAsync((ushort)(position.Value - 1)))
-                return false;
-
-            return await ExecuteParamacroAsync(c => c.GetParkToolGCode());
-        }
-
-        public override Optional<IEnumerable<string>> GenerateEndMCodeLines(MCode mcode)
+        public override Optional<IEnumerable<string>> GenerateEndMCodeLines(MCode mcode, Optional<ushort> queue_size)
         {
             return default;
         }

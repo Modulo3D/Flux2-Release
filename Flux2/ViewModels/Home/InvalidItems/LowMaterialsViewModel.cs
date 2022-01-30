@@ -4,6 +4,8 @@ using Modulo3DStandard;
 using ReactiveUI;
 using Splat;
 using System;
+using System.Reactive.Disposables;
+using System.Reactive.Linq;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
@@ -14,8 +16,25 @@ namespace Flux.ViewModels
         public override string CurrentValueName => "PESO RIMANENTE";
         public override string ExpectedValueName => "PESO RICHIESTO";
 
-        public LowMaterialViewModel(FeederEvaluator eval) : base(eval)
+        private ObservableAsPropertyHelper<string> _InvalidItemBrush;
+        public override string InvalidItemBrush => _InvalidItemBrush.Value;
+        
+        public LowMaterialViewModel(FeederEvaluator eval) : base($"{typeof(LowMaterialViewModel).GetRemoteControlName()}??{eval.Feeder.Position}", eval)
         {
+            _InvalidItemBrush = Observable.CombineLatest(
+               eval.Material.WhenAnyValue(m => m.CurrentWeight).ValueOr(() => 0),
+               eval.Material.WhenAnyValue(m => m.ExpectedWeight).ValueOr(() => 0),
+               (current_weight, expected_weight) =>
+               {
+                   var missing_weight = expected_weight - current_weight;
+                   if (missing_weight <= 0)
+                       return FluxColors.Active;
+                   if (missing_weight < 10)
+                       return FluxColors.Error;
+                   return FluxColors.Warning;
+               })
+               .ToProperty(this, v => v.InvalidItemBrush)
+               .DisposeWith(Disposables);
         }
 
         public override IObservable<Optional<string>> GetItem(FeederEvaluator eval)

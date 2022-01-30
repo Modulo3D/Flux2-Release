@@ -167,7 +167,7 @@ namespace Flux.ViewModels
         {
             var qctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             var storage = await connection.ListFilesAsync(
-                FLUX_FolderType.GCodes,
+                c => c.StoragePath,
                 qctk.Token);
             if (!storage.HasValue)
                 return default;
@@ -178,7 +178,7 @@ namespace Flux.ViewModels
         {
             var qctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             var queue = await connection.ListFilesAsync(
-                FLUX_FolderType.Queue,
+                c => c.QueuePath,
                 qctk.Token);
             if (!queue.HasValue)
                 return default;

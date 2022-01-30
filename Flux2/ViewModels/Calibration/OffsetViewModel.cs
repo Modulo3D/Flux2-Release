@@ -19,6 +19,10 @@ namespace Flux.ViewModels
         public IFluxFeederViewModel Feeder { get; }
         public CalibrationViewModel Calibration { get; }
 
+        private ObservableAsPropertyHelper<bool> _DebugOffsets;
+        [RemoteOutput(true)]
+        public bool DebugOffsets => _DebugOffsets.Value;
+
         private ObservableAsPropertyHelper<Optional<ToolId>> _ToolId;
         public Optional<ToolId> ToolId => _ToolId.Value;
 
@@ -27,6 +31,7 @@ namespace Flux.ViewModels
         public Optional<UserOffsetKey> UserOffsetKey => _UserOffsetKey.Value;
 
         private ObservableAsPropertyHelper<Optional<ProbeOffsetKey>> _ProbeOffsetKey;
+        [RemoteOutput(true, typeof(HasValueConverter<ProbeOffsetKey>))]
         public Optional<ProbeOffsetKey> ProbeOffsetKey => _ProbeOffsetKey.Value;
 
         private ObservableAsPropertyHelper<Optional<ToolOffset>> _ToolOffset;
@@ -94,7 +99,7 @@ namespace Flux.ViewModels
         [RemoteOutput(false)]
         public ushort Position => Feeder.Position;
 
-        public OffsetViewModel(CalibrationViewModel calibration, IFluxFeederViewModel feeder) : base($"offset??{feeder.Position}")
+        public OffsetViewModel(CalibrationViewModel calibration, IFluxFeederViewModel feeder) : base($"{typeof(OffsetViewModel).GetRemoteControlName()}??{feeder.Position}")
         {
             Feeder = feeder;
             Flux = calibration.Flux;
@@ -114,7 +119,8 @@ namespace Flux.ViewModels
                     var tool_card = nfc.CardId.Value;
                     return new ToolId(Feeder.Position, tool_card, tool_nfc);
                 })
-                .ToProperty(this, v => v.ToolId);
+                .ToProperty(this, v => v.ToolId)
+                .DisposeWith(Disposables);
 
             _ToolOffset = Observable.CombineLatest(
                 Flux.DatabaseProvider.WhenAnyValue(v => v.Database),
@@ -133,7 +139,8 @@ namespace Flux.ViewModels
                     var z = tool.Value.ToolZOffset.ValueOr(() => 0);
                     return new ToolOffset(x, y, z);
                 })
-                .ToProperty(this, v => v.ToolOffset);
+                .ToProperty(this, v => v.ToolOffset)
+                .DisposeWith(Disposables);
 
             _UserOffsetKey = Observable.CombineLatest(
                 Calibration.WhenAnyValue(v => v.GroupId),
@@ -211,22 +218,23 @@ namespace Flux.ViewModels
                 Feeder.Material.WhenAnyValue(f => f.State),
                 (tool_offset, probe_offset, tool_state, material_state) => 
                 {
-                    if (!tool_state.IsLoaded() || !material_state.IsLoaded())
-                        return FluxProbeState.NO_PROBE;
-
                     if (!tool_state.IsInMagazine() && !tool_state.IsOnTrailer())
                         return FluxProbeState.ERROR_PROBE;
-
                     if (!tool_offset.HasValue)
                         return FluxProbeState.ERROR_PROBE;
-
-                    if (probe_offset.HasValue && 
-                       (Math.Abs(probe_offset.Value.X - tool_offset.Value.X) > 5 ||
-                        Math.Abs(probe_offset.Value.Y - tool_offset.Value.Y) > 5))
+                    if (probe_offset.HasValue && Math.Abs(probe_offset.Value.X - tool_offset.Value.X) > 5)
+                        return FluxProbeState.ERROR_PROBE;
+                    if (probe_offset.HasValue && Math.Abs(probe_offset.Value.Y - tool_offset.Value.Y) > 5)
+                        return FluxProbeState.ERROR_PROBE;
+                    if (probe_offset.HasValue && Math.Abs(probe_offset.Value.Z - tool_offset.Value.Z) > 2)
+                        return FluxProbeState.ERROR_PROBE;
+                    if (probe_offset.HasValue && probe_offset.Value.Z > tool_offset.Value.Z)
                         return FluxProbeState.ERROR_PROBE;
 
-                    if (!probe_offset.HasValue ||
-                        probe_offset.Value.Z >= tool_offset.Value.Z)
+                    if (!tool_state.IsLoaded() || !material_state.IsLoaded())
+                        return FluxProbeState.NO_PROBE;
+       
+                    if (!probe_offset.HasValue || probe_offset.Value.Z == tool_offset.Value.Z)
                         return FluxProbeState.INVALID_PROBE;
 
                     return FluxProbeState.VALID_PROBE;
@@ -330,7 +338,14 @@ namespace Flux.ViewModels
                 GetOffset)
                 .Throttle(TimeSpan.FromSeconds(1))
                 .Where(o => o.HasValue)
-                .Subscribe(async o => await Flux.ConnectionProvider.SetToolOffsetsAsync(o.Value));
+                .Subscribe(async o => await Flux.ConnectionProvider.SetToolOffsetsAsync(o.Value))
+                .DisposeWith(Disposables);
+
+            _DebugOffsets = Flux.MCodes
+                .WhenAnyValue(s => s.OperatorUSB)
+                .ConvertOr(usb => usb.AdvancedSettings, () => false)
+                .ToProperty(this, v => v.DebugOffsets)
+                .DisposeWith(Disposables);
         }
 
         private void ResetProbeOffset()

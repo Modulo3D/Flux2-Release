@@ -11,24 +11,18 @@ namespace Flux.ViewModels
     public class NavPanelViewModel<TViewModel> : FluxRoutableNavBarViewModel<TViewModel>
         where TViewModel : NavPanelViewModel<TViewModel>
     {
-        private SourceList<BaseButton> Buttons { get; }
+        private SourceList<CmdButton> Buttons { get; }
 
         [RemoteContent(true)]
-        public IObservableList<BaseButton> VisibleButtons { get; }
+        public IObservableList<CmdButton> VisibleButtons { get; }
 
         public NavPanelViewModel(FluxViewModel flux, string name = default) : base(flux, $"navPanel??{typeof(TViewModel).GetRemoteControlName()}{(string.IsNullOrEmpty(name) ? "" : $"??{name}")}")
         {
-            Buttons = new SourceList<BaseButton>();
+            Buttons = new SourceList<CmdButton>();
             VisibleButtons = Buttons.Connect()
                 .AutoRefresh(v => v.Visible)
                 .Filter(v => v.Visible)
                 .AsObservableList();
-        }
-
-        private void AddButton(BaseButton button)
-        {
-            button.Initialize();
-            Buttons.Add(button);
         }
 
         public void AddRoute(
@@ -36,8 +30,8 @@ namespace Flux.ViewModels
             Optional<IObservable<bool>> can_navigate = default,
             Optional<IObservable<bool>> visible = default)
         {
-            var nav_button = new NavButton(Flux, route, true, false, can_navigate, visible);
-            AddButton(nav_button);
+            var nav_button = new NavButton(Flux, route, false, can_navigate, visible);
+            Buttons.Add(nav_button);
         }
 
         public void AddModal(
@@ -48,8 +42,8 @@ namespace Flux.ViewModels
             Optional<IObservable<bool>> show_navbar = default)
         {
             var nav_modal = new NavModalViewModel(Flux, modal, navigate_back, show_navbar);
-            var nav_button = new NavButton(Flux, nav_modal, true, can_navigate, visible);
-            AddButton(nav_button);
+            var nav_button = new NavButton(Flux, nav_modal, false, can_navigate, visible);
+            Buttons.Add(nav_button);
         }
 
         public void AddCommand(
@@ -59,7 +53,7 @@ namespace Flux.ViewModels
             Optional<IObservable<bool>> visible = default)
         {
             var cmd_button = new CmdButton(name, task, can_execute, visible);
-            AddButton(cmd_button);
+            Buttons.Add(cmd_button);
         }
 
         public void AddCommand(
@@ -69,7 +63,7 @@ namespace Flux.ViewModels
             Optional<IObservable<bool>> visible = default)
         {
             var cmd_button = new CmdButton(name, action, can_execute, visible);
-            AddButton(cmd_button);
+            Buttons.Add(cmd_button);
         }
 
         public void AddCommand(
@@ -94,7 +88,7 @@ namespace Flux.ViewModels
                 return;
 
             var toggle_button = new ToggleButton(name, Flux, variable, can_execute, visible);
-            AddButton(toggle_button);
+            Buttons.Add(toggle_button);
         }
 
         public void AddCommand(
@@ -120,10 +114,9 @@ namespace Flux.ViewModels
             var variable = array.Variables.Items.ElementAt(position);
             AddCommand(name, variable, can_execute, visible);
         }
-
-        public void AddCommand(BaseButton button)
+        public void AddCommand(CmdButton button)
         {
-            AddButton(button);
+            Buttons.Add(button);
         }
 
         public void Clear()

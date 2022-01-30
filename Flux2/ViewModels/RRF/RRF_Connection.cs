@@ -95,6 +95,17 @@ namespace Flux.ViewModels
         public Subject<RRF_Request> MediumRequestSubject { get; }
         public Subject<RRF_Request> SlowRequestSubject { get; }
 
+        public override string InnerQueuePath => "gcodes/queue/inner";
+        public override string StoragePath => "gcodes/storage";
+        public override string QueuePath => "gcodes/queue";
+        public string GlobalPath => "sys/global";
+
+        // FLUX_FolderType.InnerQueue => "gcodes/queue/inner",
+        // FLUX_FolderType.Queue => "gcodes/queue",
+        // StoragePath => "gcodes/storage",
+        // FLUX_FolderType.System => "sys",
+        // FLUX_FolderType.Global => "sys/global",
+
         private ObservableAsPropertyHelper<Optional<RRF_Response>> _ProcessedRequest;
         public Optional<RRF_Response> ProcessedRequest => _ProcessedRequest.Value;
 
@@ -163,7 +174,7 @@ namespace Flux.ViewModels
 
         public async Task<bool> CreateVariablesAsync(CancellationToken ct)
         {
-            var files = await ListFilesAsync(FLUX_FolderType.Global, ct);
+            var files = await ListFilesAsync(GlobalPath, ct);
             if (!files.HasValue)
                 return false;
 
@@ -175,7 +186,7 @@ namespace Flux.ViewModels
                         continue;
 
                     var source = global.CreateVariableString.ToOptional();
-                    if (!await PutFileAsync(FLUX_FolderType.Global, global.CreateVariableName, ct, source))
+                    if (!await PutFileAsync(GlobalPath, global.CreateVariableName, ct, source))
                         return false;
                 }
             }
@@ -488,12 +499,12 @@ namespace Flux.ViewModels
                 if (ct.IsCancellationRequested)
                     return false;
 
-                var files = await ListFilesAsync(FLUX_FolderType.GCodes, ct);
+                var files = await ListFilesAsync(StoragePath, ct);
                 if (!files.HasValue)
                     return false;
 
                 if (!files.Value.Files.Any(f => f.Name == "deselected.mcode"))
-                    await PutFileAsync(FLUX_FolderType.GCodes, "deselected.mcode", ct);
+                    await PutFileAsync(StoragePath, "deselected.mcode", ct);
 
                 if (!await SelectPartProgramAsync("deselected.mcode", true, ct))
                     return false;
@@ -505,7 +516,7 @@ namespace Flux.ViewModels
                 return false;
             }
         }
-        public override async Task<bool> DeleteFileAsync(FLUX_FolderType folder_type, string filename, CancellationToken ct)
+        public override async Task<bool> DeleteFileAsync(string folder, string filename, CancellationToken ct)
         {
             try
             {
@@ -515,11 +526,11 @@ namespace Flux.ViewModels
                 if (!Client.HasValue)
                     return false;
 
-                var folder = GetFolderName(folder_type);
-                if (!folder.HasValue)
+                var path = $"{folder}/{filename}".TrimStart('/');
+                if (!await ClearFolderAsync(path))
                     return false;
 
-                var request = new RestRequest($"rr_delete?name=0:/{folder}/{filename}");
+                var request = new RestRequest($"rr_delete?name=0:/{path}");
                 var response = await Client.Value.ExecuteAsync(request, ct);
                 return response.ResponseStatus == ResponseStatus.Completed;
             }
@@ -528,7 +539,7 @@ namespace Flux.ViewModels
                 return false;
             }
         }
-        public async Task<Optional<string>> DownloadFileAsync(FLUX_FolderType folder_type, string filename, CancellationToken ct)
+        public override async Task<Optional<string>> DownloadFileAsync(string folder, string filename, CancellationToken ct)
         {
             try
             {
@@ -536,10 +547,6 @@ namespace Flux.ViewModels
                     return default;
 
                 if (!Client.HasValue)
-                    return default;
-
-                var folder = GetFolderName(folder_type);
-                if (!folder.HasValue)
                     return default;
 
                 var request = new RestRequest($"rr_download?name=0:/{folder}/{filename}");
@@ -577,13 +584,12 @@ namespace Flux.ViewModels
                 return false;
             }
         }
-        public override async Task<Optional<FLUX_FileList>> ListFilesAsync(FLUX_FolderType folder_type, CancellationToken ct)
+        public override async Task<Optional<FLUX_FileList>> ListFilesAsync(string folder, CancellationToken ct)
         {
             try
             {
-                var dir = GetFolderName(folder_type);
                 var response = await PostRequestAsync(
-                    new RestRequest($"rr_filelist?dir={dir}", Method.Get),
+                    new RestRequest($"rr_filelist?dir={folder}", Method.Get),
                     IRRF_RequestPriority.Immediate,
                     ct);
                 return response.Convert(r => r.GetFileSystem());
@@ -595,7 +601,7 @@ namespace Flux.ViewModels
         }
 
         public override async Task<bool> PutFileAsync(
-            FLUX_FolderType folder_type,
+            string folder,
             string filename,
             CancellationToken ct,
             Optional<IEnumerable<string>> source = default,
@@ -613,10 +619,6 @@ namespace Flux.ViewModels
                     return default;
 
                 if (!Client.HasValue)
-                    return false;
-
-                var folder = GetFolderName(folder_type);
-                if (!folder.HasValue)
                     return false;
 
                 long actual_start_block = 0;
@@ -692,27 +694,11 @@ namespace Flux.ViewModels
                 return false;
             }
         }
-
-        public override Optional<string> GetFolderName(FLUX_FolderType folder_type)
-        {
-            return folder_type switch
-            {
-                FLUX_FolderType.InnerQueue => "gcodes/queue/inner",
-                FLUX_FolderType.Queue => "gcodes/queue",
-                FLUX_FolderType.GCodes => "gcodes/storage",
-                FLUX_FolderType.System => "sys",
-                FLUX_FolderType.Global => "sys/global",
-                _ => default
-            };
-        }
-        public override async Task<bool> ClearFolderAsync(FLUX_FolderType folder_type, CancellationToken ct = default)
+        public override async Task<bool> ClearFolderAsync(string folder, CancellationToken ct = default)
         {
             try
             {
-                var folder = GetFolderName(folder_type);
-                if (!folder.HasValue)
-                    return false;
-                return await clear_f_async(folder.Value);
+                return await clear_f_async(folder);
             }
             catch
             {
@@ -860,5 +846,26 @@ namespace Flux.ViewModels
         public override string[] GetRelativeYMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 Y {distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
         public override string[] GetRelativeZMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 Z {distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
         public override string[] GetRelativeEMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 A {distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
+
+        public override async Task<bool> CreateFolderAsync(string folder, string name, CancellationToken ct)
+        {
+            try
+            {
+                if (ct.IsCancellationRequested)
+                    return false;
+
+                if (!Client.HasValue)
+                    return false;
+
+                var path = $"{folder}/{name}".TrimStart('/');
+                var request = new RestRequest($"rr_mkdir?dir=0:/{path}");
+                var response = await Client.Value.ExecuteAsync(request, ct);
+                return response.ResponseStatus == ResponseStatus.Completed;
+            }
+            catch
+            {
+                return false;
+            }
+        }
     }
 }

@@ -170,7 +170,7 @@ namespace Flux.ViewModels
 
             var tool_option = ComboOption.Create("tool", "Utensile:", tools);
             var tool_result = await Flux.ShowSelectionAsync(
-                $"UTENSILE N.{Feeder.Position + 1}{(virtual_tag ? " (VIRTUALE)" : "")}, ID:{card_id}",
+                $"UTENSILE N.{Feeder.Position + 1}{(virtual_tag ? " (VIRTUALE)" : "")}, ID:{card_id}", true,
                 tool_option);
 
             if (tool_result != ContentDialogResult.Primary)
@@ -216,7 +216,7 @@ namespace Flux.ViewModels
             }, converter: typeof(WeightConverter));
 
             var nozzle_result = await Flux.ShowSelectionAsync(
-                $"UGELLO N.{Feeder.Position + 1}{(virtual_tag ? " (VIRTUALE)" : "")}, ID:{card_id}",
+                $"UGELLO N.{Feeder.Position + 1}{(virtual_tag ? " (VIRTUALE)" : "")}, ID:{card_id}", true,
                 nozzle_option, max_weight_option, cur_weight_option);
 
             if (nozzle_result != ContentDialogResult.Primary)

@@ -92,14 +92,16 @@ namespace Flux.ViewModels
                 .Select(p => p.RemainingTime)
                 .ToProperty(this, v => v.RemainingTime);
 
-            _ExpectedMaterials = Flux.StatusProvider.ExpectedMaterials.Connect()
+            _ExpectedMaterials = Flux.StatusProvider.ExpectedMaterialsQueue.Connect()
                 .QueryWhenChanged()
-                .Select(i => i.Select(i => i.Name))
+                .Select(i => i.Select(i => i.Values.FirstOrOptional(i => !string.IsNullOrEmpty(i.Name))))
+                .Select(i => i.Select(i => i.ConvertOr(i => i.Name, () => "---")))
                 .ToProperty(this, v => v.ExpectedMaterials);
 
-            _ExpectedNozzles = Flux.StatusProvider.ExpectedNozzles.Connect()
+            _ExpectedNozzles = Flux.StatusProvider.ExpectedNozzlesQueue.Connect()
                 .QueryWhenChanged()
-                .Select(i => i.Select(i => i.Name))
+                .Select(i => i.Select(i => i.Values.FirstOrOptional(i => !string.IsNullOrEmpty(i.Name))))
+                .Select(i => i.Select(i => i.ConvertOr(i => i.Name, () => "---")))
                 .ToProperty(this, v => v.ExpectedNozzles);
 
             InitializeRemoteView();

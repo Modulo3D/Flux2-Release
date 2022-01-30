@@ -5,6 +5,7 @@ using ReactiveUI;
 using System;
 using System.Collections.Generic;
 using System.Reactive;
+using System.Reactive.Disposables;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
@@ -45,15 +46,20 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public Optional<string> ExpectedValue => _ExpectedValue.Value;
 
-        public InvalidItemViewModel(FeederEvaluator eval)
+        [RemoteOutput(true)]
+        public abstract string InvalidItemBrush { get; }
+
+        public InvalidItemViewModel(string name, FeederEvaluator eval) : base(name)
         {
             Evaluation = eval;
 
             _CurrentValue = GetCurrentValue(eval)
-                .ToProperty(this, e => e.CurrentValue);
+                .ToProperty(this, e => e.CurrentValue)
+                .DisposeWith(Disposables);
 
             _ExpectedValue = GetExpectedValue(eval)
-                .ToProperty(this, e => e.ExpectedValue);
+                .ToProperty(this, e => e.ExpectedValue)
+                .DisposeWith(Disposables);
         }
 
         public abstract IObservable<Optional<string>> GetCurrentValue(FeederEvaluator eval);
@@ -70,10 +76,11 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public Optional<string> Item => _Item.Value;
 
-        public InvalidValueViewModel(FeederEvaluator eval) : base(eval)
+        public InvalidValueViewModel(string name, FeederEvaluator eval) : base(name, eval)
         {
             _Item = GetItem(eval)
-                .ToProperty(this, e => e.Item);
+                .ToProperty(this, e => e.Item)
+                .DisposeWith(Disposables);
         }
 
         public abstract IObservable<Optional<string>> GetItem(FeederEvaluator eval);
@@ -138,6 +145,7 @@ namespace Flux.ViewModels
         [RemoteCommand]
         public ReactiveCommand<Unit, Unit> StartWithInvalidValuesCommand { get; protected set; }
 
+        [RemoteOutput(true)]
         public abstract bool CanStartWithInvalidValues { get; }
         
         public Comparer<IInvalidValueViewModel> EvaluationComparer { get; }

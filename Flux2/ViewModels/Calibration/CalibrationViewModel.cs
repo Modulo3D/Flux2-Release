@@ -97,7 +97,7 @@ namespace Flux.ViewModels
              .Select(e => e.CanSafeCycle);
 
             var no_error_probe = Offsets.Connect()
-                .TrueForAll(p => p.WhenAnyValue(o => o.ProbeState), s => s != FluxProbeState.ERROR_PROBE);
+                .TrueForAny(p => p.WhenAnyValue(o => o.ProbeState), s => s != FluxProbeState.ERROR_PROBE);
 
             var can_probe = Observable.CombineLatest(
                 can_safe_start,
@@ -174,9 +174,10 @@ namespace Flux.ViewModels
 
         public async Task ProbeOffsetsAsync(bool hard_probe)
         {
+            var sorted_valid_offsets = SortedOffsets.Items.Where(o => o.ProbeState != FluxProbeState.ERROR_PROBE);
             if(!hard_probe)
             {
-                if (Offsets.Items.Any(o => o.ProbeState == FluxProbeState.VALID_PROBE))
+                if (sorted_valid_offsets.Any(o => o.ProbeState == FluxProbeState.VALID_PROBE))
                 {
                     var result = await Flux.ShowConfirmDialogAsync("CALIBRAZIONE UTENSILI", $"VUOI RICALIBRARE TUTTI GLI UTENSILI? {Environment.NewLine}LE CALIBRAZIONI PRECEDENTI VERRANNO PERSE.");
                     if (result != ContentDialogResult.Primary)
@@ -212,7 +213,7 @@ namespace Flux.ViewModels
                 }
             }
 
-            foreach (var offset in SortedOffsets.Items)
+            foreach (var offset in sorted_valid_offsets)
                 await offset.ProbeOffsetAsync();
  
             /*var offsets_by_temp = Offsets.Items

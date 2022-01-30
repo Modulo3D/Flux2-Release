@@ -5,6 +5,7 @@ using ReactiveUI;
 using Splat;
 using System;
 using System.Linq;
+using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
 
@@ -16,9 +17,27 @@ namespace Flux.ViewModels
         public override string CurrentValueName => "TEMPERATURA CORRENTE";
         public override string ExpectedValueName => "TEMPERATURA RICHIESTA";
 
-        public PurgeNozzleViewModel(FeederEvaluator eval) : base(eval)
-        {
+        private ObservableAsPropertyHelper<string> _InvalidItemBrush;
+        public override string InvalidItemBrush => _InvalidItemBrush.Value;
 
+        public PurgeNozzleViewModel(FeederEvaluator eval) : base($"{typeof(PurgeNozzleViewModel).GetRemoteControlName()}??{eval.Feeder.Position}", eval)
+        {
+            _InvalidItemBrush = Observable.CombineLatest(
+               eval.Feeder.ToolNozzle.WhenAnyValue(m => m.Temperature),
+               eval.Feeder.ToolMaterial.WhenAnyValue(m => m.ExtrusionTemp).ValueOr(() => 0),
+               (current_temp, expected_temp) =>
+               {
+                   if (!current_temp.HasValue)
+                       return FluxColors.Error;
+                   var missing_temp = expected_temp - current_temp.Value.Current;
+                   if (missing_temp <= 0)
+                       return FluxColors.Active;
+                   if (missing_temp > 15)
+                       return FluxColors.Error;
+                   return FluxColors.Warning;
+               })
+               .ToProperty(this, v => v.InvalidItemBrush)
+               .DisposeWith(Disposables);
         }
 
         public override IObservable<Optional<string>> GetItem(FeederEvaluator evaluation)

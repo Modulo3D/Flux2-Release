@@ -4,6 +4,7 @@ using Modulo3DStandard;
 using ReactiveUI;
 using Splat;
 using System;
+using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
 
@@ -15,8 +16,16 @@ namespace Flux.ViewModels
         public override string CurrentValueName => "TASTATURA CORRENTE";
         public override string ExpectedValueName => "TASTATURA RICHIESTA";
 
-        public InvalidProbeViewModel(FeederEvaluator eval) : base(eval)
+        private ObservableAsPropertyHelper<string> _InvalidItemBrush;
+        public override string InvalidItemBrush => _InvalidItemBrush.Value;
+
+        public InvalidProbeViewModel(FeederEvaluator eval) : base($"{typeof(InvalidProbeViewModel).GetRemoteControlName()}??{eval.Feeder.Position}", eval)
         {
+            _InvalidItemBrush = eval.WhenAnyValue(e => e.Offset)
+                .ConvertMany(o => o.WhenAnyValue(o => o.ProbeStateBrush))
+                .ValueOr(() => FluxColors.Inactive)
+                .ToProperty(this, v => v.InvalidItemBrush)
+                .DisposeWith(Disposables);
         }
 
         public override IObservable<Optional<string>> GetItem(FeederEvaluator evaluation)

@@ -56,7 +56,7 @@ namespace Flux.ViewModels
             switch (Variable)
             {
                 case IFLUX_Variable<bool, bool> @bool:
-                    return Optional.Some((Func<ContentDialog, bool, Task>)set_bool_async);
+                    return Optional.Some(set_bool_async);
                     async Task set_bool_async(ContentDialog dialog, bool is_virtual)
                     {
                         var start_value = (uint)@bool.Value.ConvertOr(b => b ? BoolSelection.True : BoolSelection.False, () => BoolSelection.False);
@@ -75,14 +75,14 @@ namespace Flux.ViewModels
                     }
 
                 case IFLUX_Variable<double, double> @double:
-                    return Optional.Some((Func<ContentDialog, bool, Task>)set_double_async);
+                    return Optional.Some(set_double_async);
                     async Task set_double_async(ContentDialog dialog, bool is_virtual)
                     { 
                         var tb_double_value = new TextBox("tbValue", "VALORE?", @double.Value.ValueOr(() => 0).ToString());
                         dialog.AddContent(tb_double_value);
 
                         var double_result = await dialog.ShowAsync();
-                        if (double_result == ContentDialogResult.Primary && double.TryParse(tb_double_value.Text, out var double_value))
+                        if (double_result == ContentDialogResult.Primary && double.TryParse(tb_double_value.Value, out var double_value))
                         {
                             if (is_virtual)
                                 @double.SetMemoryValue(double_value);
@@ -92,14 +92,14 @@ namespace Flux.ViewModels
                     }
 
                 case IFLUX_Variable<short, short> @short:
-                    return Optional.Some((Func<ContentDialog, bool, Task>)set_short_async);
+                    return Optional.Some(set_short_async);
                     async Task set_short_async(ContentDialog dialog, bool is_virtual)
                     {
                         var tb_short_value = new TextBox("tbValue", "VALORE?", @short.Value.ValueOr(() => (short)0).ToString());
                         dialog.AddContent(tb_short_value);
 
                         var short_result = await dialog.ShowAsync();
-                        if (short_result == ContentDialogResult.Primary && short.TryParse(tb_short_value.Text, out var short_value))
+                        if (short_result == ContentDialogResult.Primary && short.TryParse(tb_short_value.Value, out var short_value))
                         {
                             if (is_virtual)
                                 @short.SetMemoryValue(short_value);
@@ -109,14 +109,14 @@ namespace Flux.ViewModels
                     }
 
                 case IFLUX_Variable<ushort, ushort> word:
-                    return Optional.Some((Func<ContentDialog, bool, Task>)set_word_async);
+                    return Optional.Some(set_word_async);
                     async Task set_word_async(ContentDialog dialog, bool is_virtual)
                     {
                         var tb_word_value = new TextBox("tbValue", "VALORE?", word.Value.ValueOr(() => (ushort)0).ToString());
                         dialog.AddContent(tb_word_value);
 
                         var word_result = await dialog.ShowAsync();
-                        if (word_result == ContentDialogResult.Primary && ushort.TryParse(tb_word_value.Text, out var word_value))
+                        if (word_result == ContentDialogResult.Primary && ushort.TryParse(tb_word_value.Value, out var word_value))
                         {
                             if (is_virtual)
                                 word.SetMemoryValue(word_value);
@@ -126,7 +126,7 @@ namespace Flux.ViewModels
                     }
 
                 case IFLUX_Variable<string, string> @string:
-                    return Optional.Some((Func<ContentDialog, bool, Task>)set_string_async);
+                    return Optional.Some(set_string_async);
                     async Task set_string_async(ContentDialog dialog, bool is_virtual)
                     {
                         var tb_named_string_value = new TextBox("tbValue", "VALORE?", @string.Value.ValueOr(() => ""));
@@ -136,9 +136,9 @@ namespace Flux.ViewModels
                         if (named_string_result == ContentDialogResult.Primary)
                         {
                             if (is_virtual)
-                                @string.SetMemoryValue(tb_named_string_value.Text);
+                                @string.SetMemoryValue(tb_named_string_value.Value);
                             else
-                                await Flux.ConnectionProvider.WriteVariableAsync(@string, tb_named_string_value.Text);
+                                await Flux.ConnectionProvider.WriteVariableAsync(@string, tb_named_string_value.Value);
                         }
                     }
 

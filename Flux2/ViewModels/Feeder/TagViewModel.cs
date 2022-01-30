@@ -132,7 +132,7 @@ namespace Flux.ViewModels
 
             if (card_id != Nfc.CardId)
             {
-                Flux.Messages.LogMessage("Errore blocco tag", "Id del tag non corretto", MessageLevel.ERROR, 33001);
+                Flux.Messages.LogMessage("Errore blocco tag", $"Id del tag non corretto {card_id} -> {Nfc.CardId}", MessageLevel.ERROR, 33001);
                 return false;
             }
 

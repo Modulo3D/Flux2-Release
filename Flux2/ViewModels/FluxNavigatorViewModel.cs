@@ -12,6 +12,8 @@ using System.Linq;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
 using DynamicData.Aggregation;
+using System.Reactive.Concurrency;
+using System.Threading;
 
 namespace Flux.ViewModels
 {
@@ -40,16 +42,17 @@ namespace Flux.ViewModels
             PreviousViewModels = new Stack<IFluxRoutableViewModel>();
             Routes = new SourceCache<INavButton, IFluxRoutableViewModel>(n => n.Route);
 
+            var home = new NavButton(Flux, Flux.Home, true);
+            var storage = new NavButton(Flux, Flux.MCodes, true);
+            var feeders = new NavButton(Flux, Flux.Feeders, true);
+            var calibration = new NavButton(Flux, Flux.Calibration, true);
+            var functionality = new NavButton(Flux, Flux.Functionality, true);
+
+
             _ShowNavBar = this.WhenAnyValue(v => v.CurrentViewModel)
                 .ConvertMany(vm => vm.ShowNavBar)
-                .ValueOr(() => true)
+                .ValueOr(() => false)
                 .ToProperty(this, v => v.ShowNavBar);
-
-            var home = new NavButton(Flux, Flux.Home, true, false);
-            var storage = new NavButton(Flux, Flux.MCodes, true, false);
-            var feeders = new NavButton(Flux, Flux.Feeders, true, false);
-            var calibration = new NavButton(Flux, Flux.Calibration, true, false);
-            var functionality = new NavButton(Flux, Flux.Functionality, true, false);
 
             Routes.AddOrUpdate(home);
             Routes.AddOrUpdate(storage);
@@ -64,79 +67,59 @@ namespace Flux.ViewModels
             AddCommand("functionality", functionality.Command);
         }
 
-        public bool Navigate(IFluxRoutableViewModel route, bool reset = false)
+        public void Navigate(IFluxRoutableViewModel route, bool reset = false)
         {
             try
             {
                 if (reset)
-                { 
+                {
                     PreviousViewModels.Clear();
                 }
                 else
                 {
-                    if (CurrentViewModel.HasValue)
-                    {
-                        if (!PreviousViewModels.TryPeek(out var previous) || previous != route)
-                            PreviousViewModels.Push(CurrentViewModel.Value);
-                    }
+                    if (CurrentViewModel.HasValue && (!PreviousViewModels.TryPeek(out var previous) || previous != route))
+                        PreviousViewModels.Push(CurrentViewModel.Value);
                 }
 
                 CurrentViewModel = route.ToOptional();
-                return true;
             }
             catch (Exception ex)
             {
                 Flux.Messages.LogException(this, ex);
-                return false;
             }
         }
 
-        public bool NavigateModal(
+        public void NavigateModal(
             IFluxRoutableViewModel route,
             Optional<IObservable<bool>> navigate_back = default,
             Optional<IObservable<bool>> show_navbar = default)
         {
-            try
-            {
-                Navigate(new NavModalViewModel(Flux, route, navigate_back, show_navbar), false);
-                return true;
-            }
-            catch (Exception ex)
-            {
-                Flux.Messages.LogException(this, ex);
-                return false;
-            }
+            Navigate(new NavModalViewModel(Flux, route, navigate_back, show_navbar), false);
         }
 
-        public bool NavigateBack()
+        public void NavigateBack()
         {
             try
             {
                 if (PreviousViewModels.TryPop(out var previous))
-                { 
                     CurrentViewModel = previous.ToOptional();
-                }
-                return true;
             }
             catch (Exception ex)
             {
                 Flux.Messages.LogException(this, ex);
-                return false;
             }
         }
 
-        public bool NavigateHome()
+        public void NavigateHome()
         {
             try
             {
                 CurrentViewModel = Flux.Home;
                 PreviousViewModels.Clear();
-                return true;
             }
             catch (Exception ex)
             {
                 Flux.Messages.LogException(this, ex);
-                return false;
             }
         }
     }

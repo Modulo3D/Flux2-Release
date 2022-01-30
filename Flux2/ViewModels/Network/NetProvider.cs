@@ -47,7 +47,7 @@ namespace Flux.ViewModels
             Flux = flux;
             Disposables = new CompositeDisposable();
             flux.WhenAnyValue(v => v.RemoteControlData)
-                //.Sample(TimeSpan.FromSeconds(0.1))
+                .ThrottleMax(TimeSpan.FromSeconds(0.01), TimeSpan.FromSeconds(0.05))
                 .DistinctUntilChanged()
                 .Select(rc => Observable.FromAsync(() => SendRemoteControlDataAsync(rc)))
                 .Merge(1)
@@ -56,12 +56,17 @@ namespace Flux.ViewModels
         }
         private async Task SendRemoteControlDataAsync(Optional<RemoteControlData> rc)
         {
-            if (rc.HasValue)
+            try
+            {
+                if (rc.HasValue)
+                {
+                    var data = JsonUtils.Serialize(rc.Value);
+                    foreach (var context in ActiveContexts)
+                        await SendRemoteControlDataAsync(context, data);
+                }
+            }
+            catch (Exception ex)
             { 
-                var data = JsonUtils.Serialize(rc.Value);
-
-                foreach (var context in ActiveContexts)
-                    await SendRemoteControlDataAsync(context, data);
             }
         }
         public static string Compress(string payload)
@@ -150,11 +155,12 @@ namespace Flux.ViewModels
                         if (!command.HasValue)
                             return;
 
+                        //await Task.Delay(1000);
                         await command.Value.Execute();
                     }
                 }
                 catch (Exception ex)
-                { 
+                {
                 }
             }
             catch (Exception ex)
@@ -174,6 +180,7 @@ namespace Flux.ViewModels
     {
         public const int WebServerPort = 8080;
 
+        public Ping Pinger { get; } 
         public FluxViewModel Flux { get; }
         public UdpDiscovery UdpDiscovery { get; }
 
@@ -194,6 +201,7 @@ namespace Flux.ViewModels
         public NetProvider(FluxViewModel main)
         {
             Flux = main;
+            Pinger = new Ping();
             UdpDiscovery = new UdpDiscovery();
         }
 
@@ -206,10 +214,9 @@ namespace Flux.ViewModels
         public async Task UpdateNetworkStateAsync()
         {
             var core_settings = Flux.SettingsProvider.CoreSettings.Local;
-            var plc_address = core_settings.PLCAddress.ValueOr(() => "127.0.0.1");
 
             PLCNetworkConnectivity = await PingAsync(
-                core_settings.PLCAddress.Value, 
+                core_settings.PLCAddress, 
                 TimeSpan.FromSeconds(1));
           
             InterNetworkConnectivity = await PingAsync(
@@ -217,16 +224,17 @@ namespace Flux.ViewModels
                 TimeSpan.FromSeconds(5));
         }
 
-        public async Task<bool> PingAsync(string address, TimeSpan timeout)
+        public async Task<bool> PingAsync(Optional<string> address, TimeSpan timeout)
         {
             try
             {
-                var ping = new Ping();
+                if (!address.HasValue)
+                    return false;
 
-                address = address.Split(new[] { ":" }, StringSplitOptions.RemoveEmptyEntries)
+                address = address.Value.Split(":", StringSplitOptions.RemoveEmptyEntries)
                     .FirstOrDefault();
 
-                var result = await ping.SendPingAsync(address, (int)timeout.TotalMilliseconds);
+                var result = await Pinger.SendPingAsync(address.Value, (int)timeout.TotalMilliseconds);
 
                 return result.Status == IPStatus.Success;
             }
@@ -297,12 +305,34 @@ namespace Flux.ViewModels
                 bool GetLocalIPAddress(out IPAddress address)
                 {
                     address = IPAddress.Loopback;
+                    
+                    var settings = Flux.SettingsProvider.CoreSettings.Local;
+                    var plc_address = settings.PLCAddress.Convert(ip =>
+                    {
+                        ip = ip.Split(":", StringSplitOptions.RemoveEmptyEntries)
+                            .FirstOrDefault();
+
+                        if (IPAddress.TryParse(ip, out var plc_address))
+                            return plc_address;
+                        return default;
+                    });
+
                     var host = Dns.GetHostEntry(Dns.GetHostName());
+                    if (host.AddressList.Length == 1)
+                    {
+                        address = host.AddressList.FirstOrDefault();
+                        return true;
+                    }
+
+                    var subnet_mask = IPAddress.Parse("255.255.255.0");
                     for (int pos = host.AddressList.Count() - 1; pos >= 0; pos--)
                     {
                         address = host.AddressList.ElementAt(pos);
-                        if (address.AddressFamily == AddressFamily.InterNetwork)
-                            return true;
+                        if (address.AddressFamily != AddressFamily.InterNetwork)
+                            continue;
+                        if (plc_address.HasValue && IPAddressUtils.IsInSameSubnet(address, plc_address.Value, subnet_mask))
+                            continue;
+                        return true;
                     }
                     return false;
                 }

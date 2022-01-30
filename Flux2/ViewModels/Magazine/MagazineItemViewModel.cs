@@ -27,7 +27,7 @@ namespace Flux.ViewModels
         [RemoteOutput(false)]
         public ushort Position => Feeder.Position;
 
-        public MagazineItemViewModel(FluxViewModel flux, IFluxFeederViewModel feeder) : base ($"magazineItem??{feeder.Position}")
+        public MagazineItemViewModel(FluxViewModel flux, IFluxFeederViewModel feeder) : base ($"{typeof(MagazineItemViewModel).GetRemoteControlName()}??{feeder.Position}")
         {
             Flux = flux;
             Feeder = feeder;

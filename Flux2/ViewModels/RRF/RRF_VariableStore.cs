@@ -55,6 +55,7 @@ namespace Flux.ViewModels
             var axes = move.CreateArray("AXIS_POSITION", 0, 4, m => m.Axes);
             AXIS_POSITION = RegisterVariable(axes.Create<double, Unit>((c, a) => a.MachinePosition, axes_unit));
 
+            QUEUE_SIZE = RegisterVariable(new RRF_VariableGlobalModel<ushort>(connection, "queue_size", true));
             QUEUE_POS = RegisterVariable(new RRF_VariableGlobalModel<short>(connection, "queue_pos", true));
             IS_HOMING = RegisterVariable(new RRF_VariableGlobalModel<bool>(connection, "is_homing", false));
             IN_CHANGE = RegisterVariable(new RRF_VariableGlobalModel<bool>(connection, "in_change", true));

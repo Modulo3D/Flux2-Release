@@ -27,7 +27,7 @@ namespace Flux.ViewModels
             Flux = main;
         }
 
-        public bool Initialize(Action<ILocalDatabase> initialize_flux = default)
+        public bool Initialize(Action<ILocalDatabase> initialize_callback = default)
         {
             try
             {
@@ -49,7 +49,7 @@ namespace Flux.ViewModels
             }
             catch (Exception ex)
             {
-                Flux.Messages.LogMessage(DatabaseResponse.DATABASE_DOWNLOAD_EXCEPTION, ex: ex);
+                Flux.Messages?.LogMessage(DatabaseResponse.DATABASE_DOWNLOAD_EXCEPTION, ex: ex);
             }
 
             ILocalDatabase database;
@@ -65,20 +65,20 @@ namespace Flux.ViewModels
                     database = new LocalDatabase(connection);
                     database.Initialize(Modulo3DStandard.Database.RegisterCuraSlicerDatabase);
 
-                    initialize_flux?.Invoke(database);
+                    initialize_callback?.Invoke(database);
                     Database = database.ToOptional();
 
                     return true;
                 }
                 else
                 {
-                    Flux.Messages.LogMessage(DatabaseResponse.DATABASE_NOT_FOUND);
+                    Flux.Messages?.LogMessage(DatabaseResponse.DATABASE_NOT_FOUND);
                     return false;
                 }
             }
             catch (Exception ex)
             {
-                Flux.Messages.LogMessage(DatabaseResponse.DATABASE_LOAD_EXCEPTION, ex: ex);
+                Flux.Messages?.LogMessage(DatabaseResponse.DATABASE_LOAD_EXCEPTION, ex: ex);
                 return false;
             }
         }

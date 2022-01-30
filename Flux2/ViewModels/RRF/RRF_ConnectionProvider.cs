@@ -290,9 +290,12 @@ namespace Flux.ViewModels
         {
             return default;
         }
-        public override Optional<IEnumerable<string>> GenerateEndMCodeLines(MCode mcode)
+        public override Optional<IEnumerable<string>> GenerateEndMCodeLines(MCode mcode, Optional<ushort> queue_size)
         {
-            var end_lines = new List<string>
+            if (!queue_size.HasValue || queue_size.Value <= 1)
+                return new[] { "set global.queue_pos = -1" };
+
+            return new List<string>
             {
                 $"G1 Z290 F1000",
                 $"M106 F0 S255",
@@ -309,7 +312,6 @@ namespace Flux.ViewModels
                 $"    set var.next_job = \"queue/inner/start_\"^floor(global.queue_pos)^\".g\"",
                 $"    M32 {{var.next_job}}"
             };
-            return end_lines;
         }
         public override Optional<IEnumerable<string>> GenerateRecoveryMCodeLines(MCodeRecovery recovery)
         {

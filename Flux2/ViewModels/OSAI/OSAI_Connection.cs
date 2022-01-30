@@ -34,6 +34,10 @@ namespace Flux.ViewModels
             }
         }
 
+        public override string InnerQueuePath => "PROGRAMS\\QUEUE\\INNER";
+        public override string QueuePath => "PROGRAMS\\QUEUE";
+        public override string StoragePath => "PROGRAMS\\STORAGE";
+
         // MEMORY VARIABLES
         public OSAI_Connection(FluxViewModel flux, OSAI_VariableStore variable_store) : base(variable_store)
         {
@@ -773,13 +777,9 @@ namespace Flux.ViewModels
                 if (!Client.HasValue)
                     return false;
 
-                var folder = GetFolderName(FLUX_FolderType.GCodes);
-                if (!folder.HasValue)
-                    return false;
-
                 if (from_drive)
                 {
-                    var select_part_program_request = new SelectPartProgramFromDriveRequest(ProcessNumber, $"{folder}\\{filename}");
+                    var select_part_program_request = new SelectPartProgramFromDriveRequest(ProcessNumber, $"{StoragePath}\\{filename}");
                     var select_part_program_response = await Client.Value.SelectPartProgramFromDriveAsync(select_part_program_request);
 
                     if (!ProcessResponse(
@@ -790,7 +790,7 @@ namespace Flux.ViewModels
                 }
                 else
                 {
-                    var select_part_program_request = new SelectPartProgramRequest(ProcessNumber, $"{folder}\\{filename}");
+                    var select_part_program_request = new SelectPartProgramRequest(ProcessNumber, $"{StoragePath}\\{filename}");
                     var select_part_program_response = await Client.Value.SelectPartProgramAsync(select_part_program_request);
 
                     if (!ProcessResponse(
@@ -810,18 +810,14 @@ namespace Flux.ViewModels
         }
 
         // FILES
-        public override async Task<bool> DeleteFileAsync(FLUX_FolderType folder_type, string filename, CancellationToken ct = default)
+        public override async Task<bool> DeleteFileAsync(string folder, string filename, CancellationToken ct = default)
         {
             try
             {
                 if (!Client.HasValue)
                     return false;
 
-                var folder = GetFolderName(folder_type);
-                if (!folder.HasValue)
-                    return false;
-
-                var remove_file_request = new LogFSRemoveFileRequest(folder.Value, filename);
+                var remove_file_request = new LogFSRemoveFileRequest(folder, filename);
                 var remove_file_response = await Client.Value.LogFSRemoveFileAsync(remove_file_request);
 
                 if (remove_file_response.ErrClass == 5 &&
@@ -842,18 +838,14 @@ namespace Flux.ViewModels
                 return false;
             }
         }
-        public override async Task<Optional<FLUX_FileList>> ListFilesAsync(FLUX_FolderType folder_type, CancellationToken ct = default)
+        public override async Task<Optional<FLUX_FileList>> ListFilesAsync(string folder, CancellationToken ct = default)
         {
             try
             {
                 if (!Client.HasValue)
                     return default;
 
-                var folder = GetFolderName(folder_type);
-                if (!folder.HasValue)
-                    return default;
-
-                var find_first_result = await Client.Value.LogFSFindFirstOrDefaultAsync($"{folder.Value}\\*");
+                var find_first_result = await Client.Value.LogFSFindFirstOrDefaultAsync($"{folder}\\*");
 
                 if (!ProcessResponse(
                     find_first_result.Body.retval,
@@ -861,7 +853,7 @@ namespace Flux.ViewModels
                     find_first_result.Body.ErrNum))
                     return default;
 
-                var files_data = new FLUX_FileList(folder.Value);
+                var files_data = new FLUX_FileList(folder);
 
                 // empty 
                 if (find_first_result.Body.Finder == 0xFFFFFFFF)
@@ -908,7 +900,7 @@ namespace Flux.ViewModels
             }
         }
         public override async Task<bool> PutFileAsync(
-            FLUX_FolderType folder_type,
+            string folder,
             string filename,
             CancellationToken ct,
             Optional<IEnumerable<string>> source,
@@ -923,10 +915,6 @@ namespace Flux.ViewModels
             if (!Client.HasValue)
                 return false;
 
-            var folder = GetFolderName(folder_type);
-            if (!folder.HasValue)
-                return false;
-
             ushort file_id;
             uint block_number = 0;
             uint skipped_blocks = 0;
@@ -934,10 +922,10 @@ namespace Flux.ViewModels
 
             try
             {
-                var remove_file_request = new LogFSRemoveFileRequest($"{folder}", "file_upload.tmp");
+                var remove_file_request = new LogFSRemoveFileRequest(folder, "file_upload.tmp");
                 var remove_file_response = await Client.Value.LogFSRemoveFileAsync(remove_file_request);
 
-                var create_file_request = new LogFSCreateFileRequest($"{folder}file_upload.tmp");
+                var create_file_request = new LogFSCreateFileRequest($"{folder}\\file_upload.tmp");
                 var create_file_response = await Client.Value.LogFSCreateFileAsync(create_file_request);
 
                 if (!ProcessResponse(
@@ -946,7 +934,7 @@ namespace Flux.ViewModels
                     create_file_response.ErrNum))
                     return false;
 
-                var open_file_request = new LogFSOpenFileRequest($"{folder}file_upload.tmp", true, 0, 0);
+                var open_file_request = new LogFSOpenFileRequest($"{folder}\\file_upload.tmp", true, 0, 0);
                 var open_file_response = await Client.Value.LogFSOpenFileAsync(open_file_request);
 
                 if (!ProcessResponse(
@@ -1103,10 +1091,10 @@ namespace Flux.ViewModels
                     close_file_response.ErrNum))
                     return false;
 
-                var remove_file_request = new LogFSRemoveFileRequest(folder.Value, filename);
+                var remove_file_request = new LogFSRemoveFileRequest(folder, filename);
                 var remove_file_response = await Client.Value.LogFSRemoveFileAsync(remove_file_request);
 
-                var rename_request = new LogFSRenameRequest($"{folder}file_upload.tmp", $"{folder.Value}{filename}");
+                var rename_request = new LogFSRenameRequest($"{folder}\\file_upload.tmp", $"{folder}\\{filename}");
                 var rename_responde = await Client.Value.LogFSRenameAsync(rename_request);
                 if (!ProcessResponse(
                     rename_responde.retval,
@@ -1148,18 +1136,7 @@ namespace Flux.ViewModels
                 return false;
             }
         }
-
-        public override Optional<string> GetFolderName(FLUX_FolderType folder_type)
-        {
-            return folder_type switch
-            {
-                FLUX_FolderType.GCodes => "PROGRAMS\\STORAGE\\",
-                FLUX_FolderType.Queue => "PROGRAMS\\QUEUE\\",
-                FLUX_FolderType.InnerQueue => "PROGRAMS\\QUEUE\\INNER\\",
-                _ => default
-            };
-        }
-        public override Task<bool> ClearFolderAsync(FLUX_FolderType folder_type, CancellationToken ct = default) => DeleteFileAsync(folder_type, "*", ct);
+        public override Task<bool> ClearFolderAsync(string folder, CancellationToken ct = default) => DeleteFileAsync(folder, "*", ct);
 
         public override string[] GetHomingGCode()
         {
@@ -1235,5 +1212,15 @@ namespace Flux.ViewModels
         public override string[] GetRelativeYMovementGCode(double distance, double feedrate) => new[] { $"G1 X>>{distance / 2} Y>>{distance / 2} F{feedrate}".Replace(",", ".") };
         public override string[] GetRelativeZMovementGCode(double distance, double feedrate) => new[] { $"G1 Z>>{distance} F{feedrate}".Replace(",", ".") };
         public override string[] GetRelativeEMovementGCode(double distance, double feedrate) => new[] { $"G1 A>>{distance} F{feedrate}".Replace(",", ".") };
+
+        public override Task<Optional<string>> DownloadFileAsync(string folder, string filename, CancellationToken ct)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override Task<bool> CreateFolderAsync(string folder, string name, CancellationToken ct)
+        {
+            throw new NotImplementedException();
+        }
     }
 }

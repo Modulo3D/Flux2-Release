@@ -30,7 +30,7 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public string StateBrush => _StateBrush.Value;
 
-        public StatusBarItemViewModel(FluxViewModel flux) : base($"statusBarItem??{typeof(TViewModel).GetRemoteControlName().Replace("StatusBar", "")}")
+        public StatusBarItemViewModel(FluxViewModel flux) : base($"{typeof(StatusBarItemViewModel<>).GetRemoteControlName()}??{typeof(TViewModel).GetRemoteControlName().Replace("StatusBar", "")}")
         {
             Flux = flux;
             _Notifies = GetItemNotifies()

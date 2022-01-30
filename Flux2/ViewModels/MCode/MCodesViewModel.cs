@@ -67,7 +67,7 @@ namespace Flux.ViewModels
                     return (Func<(IFluxMCodeQueueViewModel queue_mcode, ushort queue_pos), bool>)filter_queue_func;
                     bool filter_queue_func((IFluxMCodeQueueViewModel queue_mcode, ushort queue_pos) queue)
                     {
-                        return queue.queue_pos >= p;
+                        return p > -1 && queue.queue_pos >= p;
                     }
                 });
 
@@ -252,7 +252,7 @@ namespace Flux.ViewModels
         {
             var qctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             var queue = await Flux.ConnectionProvider.ListFilesAsync(
-                FLUX_FolderType.GCodes,
+                c => c.StoragePath,
                 qctk.Token);
 
             if (!queue.HasValue)
@@ -269,7 +269,7 @@ namespace Flux.ViewModels
             Directories.Clear(Directories.MCodes);
 
             var clear_queue_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            if (!await Flux.ConnectionProvider.ClearFolderAsync(FLUX_FolderType.GCodes, clear_queue_cts.Token))
+            if (!await Flux.ConnectionProvider.ClearFolderAsync(c => c.StoragePath, clear_queue_cts.Token))
                 return false;
 
             AvaiableMCodes.Clear();
@@ -348,7 +348,7 @@ namespace Flux.ViewModels
                 if (files.Value.TryGetValue(file.Analyzer.MCode.MCodeGuid, out var mcode))
                 {
                     var delete_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                    if (!await Flux.ConnectionProvider.DeleteFileAsync(FLUX_FolderType.GCodes, $"{mcode}", delete_cts.Token))
+                    if (!await Flux.ConnectionProvider.DeleteFileAsync(c => c.StoragePath, $"{mcode}", delete_cts.Token))
                         return false;
                 }
 
@@ -377,19 +377,26 @@ namespace Flux.ViewModels
         public async Task<bool> ClearQueueAsync()
         {
             var clear_queue_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            if (!await Flux.ConnectionProvider.ClearFolderAsync(FLUX_FolderType.Queue, clear_queue_cts.Token))
+            if (!await Flux.ConnectionProvider.ClearFolderAsync(c => c.QueuePath, clear_queue_cts.Token))
                 return false;
 
             var clear_inner_queue_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            if (!await Flux.ConnectionProvider.ClearFolderAsync(FLUX_FolderType.InnerQueue, clear_inner_queue_cts.Token))
+            if (!await Flux.ConnectionProvider.ClearFolderAsync(c => c.InnerQueuePath, clear_inner_queue_cts.Token))
                 return false;
 
             return true;
         }
         public async Task<bool> AddToQueueAsync(IFluxMCodeStorageViewModel mcode)
         {
-            if (!Flux.StatusProvider.PrintingEvaluation.SelectedPartProgram.HasValue)
-            { 
+            var queue_pos = await Flux.ConnectionProvider.ReadVariableAsync(c => c.QUEUE_POS);
+            if (!queue_pos.HasValue)
+                return false;
+
+            if (queue_pos.Value < 0)
+            {
+                if (!await ClearQueueAsync())
+                    return false;
+
                 Flux.StatusProvider.StartWithLowMaterials = false;
                 if (!await Flux.ConnectionProvider.WriteVariableAsync(c => c.QUEUE_POS, (short)0))
                     return false;
@@ -399,11 +406,16 @@ namespace Flux.ViewModels
             if (!queue.HasValue)
                 return false;
 
+            var optional_queue_size = await Flux.ConnectionProvider
+                .ReadVariableAsync(c => c.QUEUE_SIZE);
+
+            var queue_size = optional_queue_size
+                .ValueOr(() => (ushort)1);
+
             var current_index = queue.Value.Keys.Count > 0 ? (short)queue.Value.Keys.Max() : (short)-1;
             if (current_index > -1)
             {
-                var queue_size = await Flux.ConnectionProvider.ReadVariableAsync(c => c.QUEUE_SIZE);
-                if (queue.Value.Count >= queue_size.ValueOr(() => (ushort)1))
+                if (queue.Value.Count >= queue_size)
                 {
                     if (queue.Value.Count < 1)
                         return false;
@@ -421,10 +433,13 @@ namespace Flux.ViewModels
 
             var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             if (!await Flux.ConnectionProvider.PutFileAsync(
-                FLUX_FolderType.Queue,
+                c => c.QueuePath,
                 $"{current_index + 1};{mcode.Analyzer.MCode.MCodeGuid}", 
                 cts.Token))
                 return false;
+
+            if (queue_size == 1)
+                Flux.Navigator.NavigateHome();
 
             return true;
         }
@@ -454,7 +469,7 @@ namespace Flux.ViewModels
 
                 var cts1 = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 if (!await Flux.ConnectionProvider.DeleteFileAsync(
-                    FLUX_FolderType.Queue,
+                    c => c.QueuePath,
                     $"{current_position};{current_queue_guid}",
                     cts1.Token))
                     return false;
@@ -464,7 +479,7 @@ namespace Flux.ViewModels
 
                 var cts2 = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 if (!await Flux.ConnectionProvider.PutFileAsync(
-                   FLUX_FolderType.Queue,
+                   c => c.QueuePath,
                    $"{current_position};{next_queue_guid}",
                    cts2.Token))
                     return false;
@@ -497,28 +512,28 @@ namespace Flux.ViewModels
 
             var delete_current_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             if (!await Flux.ConnectionProvider.DeleteFileAsync(
-                FLUX_FolderType.Queue,
+                c => c.QueuePath,
                 $"{current_index};{current_guid}",
                 delete_current_cts.Token))
                 return false;
 
             var delete_other_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             if (!await Flux.ConnectionProvider.DeleteFileAsync(
-                FLUX_FolderType.Queue,
+                c => c.QueuePath,
                 $"{other_index};{other_guid}",
                 delete_other_cts.Token))
                 return false;
 
             var put_other_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             if (!await Flux.ConnectionProvider.PutFileAsync(
-               FLUX_FolderType.Queue,
+               c => c.QueuePath,
                $"{current_index};{other_guid}",
                put_other_cts.Token))
                 return false;
 
             var put_current_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             if (!await Flux.ConnectionProvider.PutFileAsync(
-               FLUX_FolderType.Queue,
+               c => c.QueuePath,
                $"{other_index};{current_guid}",
                put_current_cts.Token))
                 return false;
@@ -530,7 +545,7 @@ namespace Flux.ViewModels
         {
             var qctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             var queue = await Flux.ConnectionProvider.ListFilesAsync(
-                FLUX_FolderType.Queue,
+                c => c.QueuePath,
                 qctk.Token);
 
             if (!queue.HasValue)

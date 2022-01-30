@@ -17,26 +17,29 @@ using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
-    public abstract class DialogOption<TViewModel> : RemoteControl<TViewModel>, IDialogOption
-        where TViewModel : DialogOption<TViewModel>
+    public abstract class DialogOption<TViewModel, TValue> : RemoteControl<TViewModel>, IDialogOption<TValue>
+        where TViewModel : DialogOption<TViewModel, TValue>
     {
         [RemoteOutput(false)]
         public string Title { get; }
-        public DialogOption(string name, string title) : base(name)
+        [RemoteOutput(true)]
+        public abstract TValue Value { get; set; }
+        public DialogOption(string name, string title) : base($"{typeof(TViewModel).GetRemoteControlName()}??{name}")
         {
             Title = title;
         }
     }
 
-    public class ComboOption<TValue, TKey> : DialogOption<ComboOption<TValue, TKey>>, IDialogOption<Optional<TValue>>
+    public class ComboOption<TValue, TKey> : DialogOption<ComboOption<TValue, TKey>, Optional<TValue>>
     {
         public SelectableCache<TValue, TKey> Items { get; }
-        public Optional<TValue> Value
+        [RemoteOutput(true)]
+        public override Optional<TValue> Value
         {
             get => Items.SelectedValue;
             set => throw new Exception();
         }
-        public ComboOption(string name, string title, IObservableCache<TValue, TKey> items_source, Optional<TKey> key = default, Action<Optional<TKey>> selection_changed = default, Type converter = default) : base($"comboOption??{name}", title)
+        public ComboOption(string name, string title, IObservableCache<TValue, TKey> items_source, Optional<TKey> key = default, Action<Optional<TKey>> selection_changed = default, Type converter = default) : base(name, title)
         {
             Items = SelectableCache.Create(items_source.Connect().Transform(v => v.ToOptional()))
                 .DisposeWith(Disposables);
@@ -70,7 +73,7 @@ namespace Flux.ViewModels
         }
     }
 
-    public class NumericOption : DialogOption<NumericOption>, IDialogOption<double>
+    public class NumericOption : DialogOption<NumericOption, double>
     {
         public double Min 
         { 
@@ -91,13 +94,14 @@ namespace Flux.ViewModels
         }
 
         private double _Value;
-        public double Value
+        [RemoteOutput(true)]
+        public override double Value
         {
             get => _Value;
             set => this.RaiseAndSetIfChanged(ref _Value, value);
         }
 
-        public NumericOption(string name, string title, double value, double step, double min = double.MinValue, double max = double.MaxValue, Type converter = default) : base($"numericOption??{name}", title)
+        public NumericOption(string name, string title, double value, double step, double min = double.MinValue, double max = double.MaxValue, Type converter = default) : base(name, title)
         {
             Min = min;
             Max = max;
@@ -194,11 +198,11 @@ namespace Flux.ViewModels
         }
     }
 
-    public class ProgressBar : DialogOption<ProgressBar>, IDialogOption<double>
+    public class ProgressBar : DialogOption<ProgressBar, double>
     {
         private double _Value;
         [RemoteOutput(true)]
-        public double Value
+        public override double Value
         {
             get => _Value;
             set => this.RaiseAndSetIfChanged(ref _Value, value);
@@ -209,34 +213,36 @@ namespace Flux.ViewModels
         }
     }
 
-    public class TextBlock : RemoteControl<TextBlock>
+    public class TextBlock : DialogOption<TextBlock, string>
     {
         [RemoteOutput(false)]
-        public string Text { get; set; }
-
-        public TextBlock(string name, string text) : base($"textBlock??{name}")
+        public override string Value 
         {
-            Text = text;
+            get => Title;
+            set => throw new Exception();
+        }
+
+        public TextBlock(string name, string text) : base(name, text)
+        {
         }
     }
 
-    public class TextBox : RemoteControl<TextBox>
+    public class TextBox : DialogOption<TextBox, string>
     {
-        [RemoteOutput(false)]
-        public string Title { get; }
-
-        private string _Text;
+        private string _Value;
         [RemoteInput]
-        public string Text 
+        public override string Value 
         {
-            get => _Text;
-            set => this.RaiseAndSetIfChanged(ref _Text, value);
+            get => _Value;
+            set => this.RaiseAndSetIfChanged(ref _Value, value);
         }
+        [RemoteOutput(false)]
+        public bool Multiline { get; }
 
-        public TextBox(string name, string title, string text) : base($"textBox??{name}")
+        public TextBox(string name, string title, string text, bool multiline = false) : base(name, title)
         {
-            Title = title;
-            Text = text;
+            Value = text;
+            Multiline = multiline;
         }
     }
 

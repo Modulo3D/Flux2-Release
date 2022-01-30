@@ -45,7 +45,8 @@ namespace Flux.ViewModels
                     return false;
                 if (!await Flux.ConnectionProvider.WriteVariableAsync(m => m.TEMP_TOOL, unit.Value, 0))
                     return false;
-                return Flux.Navigator.NavigateBack();
+                Flux.Navigator.NavigateBack();
+                return true;
             }
             catch (Exception ex)
             {
@@ -172,15 +173,32 @@ namespace Flux.ViewModels
                 yield return Flux.StatusProvider.ChamberLockClosed;
             }
 
-            yield return ConditionViewModel.Create("materialKnown?0",
-                Feeder.Material.WhenAnyValue(m => m.Document).Select(d => d.ToOptional()),
-                m => m.HasValue,
-                (value, valid) => valid ? Feeder.Material.Document.ConvertOr(d => $"MATERIALE LETTO: {d.Name}", () => "LEGGI UN MATERIALE") : "LEGGI UN MATERIALE");
+            yield return ConditionViewModel.Create("materialKnown??0",
+                Feeder.Material.WhenAnyValue(m => m.Document).Select(d => d.ToOptional()), m => m.HasValue,
+                (m, valid) => m.Convert(m => m.Convert(m => $"MATERIALE LETTO: {m.Name}")).ValueOr(() => "LEGGI UN MATERIALE"));
 
-            yield return ConditionViewModel.Create("materialReady?1",
-                Feeder.Material.WhenAnyValue(f => f.State).Select(s => s.ToOptional()),
-                state => state.Locked,
+            yield return ConditionViewModel.Create("materialReady??1",
+                Feeder.Material.WhenAnyValue(f => f.State).Select(s => s.ToOptional()), state => state.Locked,
                 (value, valid) => valid ? "MATERIALE PRONTO AL CARICAMENTO" : "BLOCCA IL MATERIALE");
+
+            yield return ConditionViewModel.Create("toolMaterialCompatible??2",
+                Feeder.ToolMaterial.WhenAnyValue(m => m.State).Select(d => d.ToOptional()),
+                m =>
+                {
+                    return m.KnownNozzle && m.KnownMaterial && m.Compatible;
+                },
+                (s, valid) => 
+                {
+                    if (!s.HasValue)
+                        return "";
+                    if (!s.Value.KnownNozzle)
+                        return "LEGGERE UN UTENSILE";
+                    if (!s.Value.KnownMaterial)
+                        return "LEGGERE UN MATERIALE";
+                    if (!s.Value.Compatible)
+                        return "MATERIALE NON COMPATIBILE";
+                    return "MATERIALE COMPATIBILE";
+                });
         }
 
         public override async Task UpdateNFCAsync()
@@ -270,13 +288,11 @@ namespace Flux.ViewModels
                 yield return Flux.StatusProvider.ChamberLockClosed;
             }
 
-            yield return ConditionViewModel.Create("materialKnown?0",
-                Feeder.Material.WhenAnyValue(m => m.Document).Select(d => d.ToOptional()),
-                m => m.HasValue,
-                (value, valid) => valid ? Feeder.Material.Document.ConvertOr(d => $"MATERIALE LETTO: {d.Name}", () => "LEGGI UN MATERIALE") : "LEGGI UN MATERIALE");
+            yield return ConditionViewModel.Create("materialKnown??0",
+                Feeder.Material.WhenAnyValue(m => m.Document).Select(d => d.ToOptional()), m => m.HasValue,
+                (m, valid) => m.Convert(m => m.Convert(m => $"MATERIALE LETTO: {m.Name}")).ValueOr(() => "LEGGI UN MATERIALE"));
 
-
-            yield return ConditionViewModel.Create("materialReady?1",
+            yield return ConditionViewModel.Create("materialReady??1",
                 Feeder.Material.WhenAnyValue(f => f.State).Select(s => s.ToOptional()),
                 s =>
                 {
@@ -288,7 +304,34 @@ namespace Flux.ViewModels
                         return true;
                     return false;
                 },
-                (value, valid) => value.ConvertOr(v => v.Loaded ? (valid ? "MATERIALE PRONTO ALLO SCARICAMENTO" : "BLOCCA IL MATERIALE") : (valid ?  "MATERIALE SCARICATO" : "SBLOCCA IL MATERALE"), () => "IMPOSSIBILE BLOCCARE IL MATERIALE"));
+                (value, valid) => 
+                {
+                    if (!value.HasValue)
+                        return "IMPOSSIBILE BLOCCARE IL MATERIALE";
+                    if (value.Value.Loaded)
+                        return valid ? "MATERIALE PRONTO ALLO SCARICAMENTO" : "BLOCCA IL MATERIALE";
+                    else
+                        return valid ? "MATERIALE SCARICATO" : "SBLOCCA IL MATERALE";
+                });
+
+                yield return ConditionViewModel.Create("toolMaterialCompatible??2",
+                    Feeder.ToolMaterial.WhenAnyValue(m => m.State).Select(d => d.ToOptional()),
+                    m =>
+                    {
+                        return m.KnownNozzle && m.KnownMaterial && m.Compatible;
+                    },
+                    (s, valid) =>
+                    {
+                        if (!s.HasValue)
+                            return "";
+                        if (!s.Value.KnownNozzle)
+                            return "LEGGERE UN UTENSILE";
+                        if (!s.Value.KnownMaterial)
+                            return "LEGGERE UN MATERIALE";
+                        if (!s.Value.Compatible)
+                            return "MATERIALE NON COMPATIBILE";
+                        return "MATERIALE COMPATIBILE";
+                    });
         }
         public override async Task UpdateNFCAsync()
         {

@@ -28,10 +28,10 @@ namespace Flux.ViewModels
         public double TemperaturePercentage => _TemperaturePercentage.Value;
 
         [RemoteContent(true)]
-        public ISourceList<BaseButton> MoveButtons { get; }
+        public ISourceList<CmdButton> MoveButtons { get; }
 
         [RemoteContent(true)]
-        public IObservableList<BaseButton> ToolButtons { get; }
+        public IObservableList<CmdButton> ToolButtons { get; }
 
         [RemoteCommand]
         public ReactiveCommand<Unit, Unit> ExitCommand { get; }
@@ -96,7 +96,7 @@ namespace Flux.ViewModels
             var can_execute = Flux.StatusProvider.IsIdle
                 .ValueOrDefault();
 
-            MoveButtons = new SourceList<BaseButton>();
+            MoveButtons = new SourceList<CmdButton>();
             MoveButtons.Add(move_tool_button(1));
             MoveButtons.Add(move_tool_button(0.05));
             MoveButtons.Add(move_tool_button(-0.05));
@@ -121,7 +121,7 @@ namespace Flux.ViewModels
                         if (!z.HasValue)
                             return;
 
-                        offset.Value.ModifyProbeOffset(p => new ProbeOffset(p.Key, p.X, p.Y, -z.Value + 0.3));
+                        offset.Value.ModifyProbeOffset(p => new ProbeOffset(p.Key, p.X, p.Y, z.Value - 0.3));
                         Flux.SettingsProvider.UserSettings.PersistLocalSettings();
                     }
                 })
@@ -136,12 +136,10 @@ namespace Flux.ViewModels
                     this.WhenAnyValue(v => v.SelectedTool),
                     this.WhenAnyValue(v => v.TemperaturePercentage),
                     Flux.StatusProvider.IsIdle.ValueOrDefault(),
-                    (tool, temp, idle) => tool.HasValue && Math.Abs(temp) > 95 && idle);
+                    (tool, temp, idle) => tool.HasValue && Math.Abs(temp) > 95 && idle)
+                    .ToOptional();
 
-                var command = ReactiveCommand.CreateFromTask(() => move_tool(distance), can_execute);
-
-                var button = new CmdButton($"Z??{(distance > 0 ? $"+{distance:0.00mm}" : $"{distance:0.00}")}", command);
-                button.Initialize();
+                var button = new CmdButton($"Z??{(distance > 0 ? $"+{distance:0.00mm}" : $"{distance:0.00}")}", () => move_tool(distance), can_execute);
                 button.InitializeRemoteView();
                 button.DisposeWith(Disposables);
                 return button;
@@ -168,7 +166,7 @@ namespace Flux.ViewModels
             Flux.Navigator.NavigateBack();
         }
 
-        private IEnumerable<BaseButton> FindToolButtons(Optional<ushort> extruders)
+        private IEnumerable<CmdButton> FindToolButtons(Optional<ushort> extruders)
         {
             if (!extruders.HasValue)
                 yield break;
@@ -185,12 +183,10 @@ namespace Flux.ViewModels
                     print_temp,
                     this.WhenAnyValue(v => v.SelectedTool),
                     Flux.StatusProvider.IsIdle.ValueOrDefault(),
-                    (temp, tool, idle) => temp.HasValue && idle && tool != e);
+                    (temp, tool, idle) => temp.HasValue && idle && tool != e)
+                    .ToOptional();
 
-                var command = ReactiveCommand.CreateFromTask(select_tool, can_execute);
-
-                var button = new CmdButton($"selectExtruder??{e}", command);
-                button.Initialize();
+                var button = new CmdButton($"selectExtruder??{e}", select_tool, can_execute);
                 button.InitializeRemoteView();
                 yield return button;
 

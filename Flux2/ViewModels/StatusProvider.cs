@@ -29,8 +29,8 @@ namespace Flux.ViewModels
         public FluxViewModel Flux { get; }
 
         public IObservableCache<FeederEvaluator, ushort> FeederEvaluators { get; private set; }
-        public IObservableList<Material> ExpectedMaterials { get; private set; }
-        public IObservableList<Nozzle> ExpectedNozzles { get; private set; }
+        public IObservableList<Dictionary<ushort, Material>> ExpectedMaterialsQueue { get; private set; }
+        public IObservableList<Dictionary<ushort, Nozzle>> ExpectedNozzlesQueue { get; private set; }
 
         private bool _StartWithLowMaterials;
         public bool StartWithLowMaterials
@@ -196,12 +196,12 @@ namespace Flux.ViewModels
             var material_comparer = SortExpressionComparer<MaterialEvaluator>
                 .Descending(p => p.FeederEvaluator.Feeder.Position);
 
-            ExpectedMaterials = FeederEvaluators.Connect()
+            ExpectedMaterialsQueue = FeederEvaluators.Connect()
                 .RemoveKey()
                 .Transform(f => f.Material)
                 .Sort(material_comparer)
-                .AutoRefresh(f => f.ExpectedDocument)
-                .Transform(f => f.ExpectedDocument, true)
+                .AutoRefresh(f => f.ExpectedDocumentQueue)
+                .Transform(f => f.ExpectedDocumentQueue, true)
                 .Filter(m => m.HasValue)
                 .Transform(m => m.Value)
                 .AsObservableList();
@@ -209,12 +209,12 @@ namespace Flux.ViewModels
             var nozzle_comparer = SortExpressionComparer<ToolNozzleEvaluator>
                 .Descending(p => p.FeederEvaluator.Feeder.Position);
 
-            ExpectedNozzles = FeederEvaluators.Connect()
+            ExpectedNozzlesQueue = FeederEvaluators.Connect()
                 .RemoveKey()
                 .Transform(f => f.ToolNozzle)
                 .Sort(nozzle_comparer)
-                .AutoRefresh(f => f.ExpectedDocument)
-                .Transform(f => f.ExpectedDocument, true)
+                .AutoRefresh(f => f.ExpectedDocumentQueue)
+                .Transform(f => f.ExpectedDocumentQueue, true)
                 .Filter(m => m.HasValue)
                 .Transform(m => m.Value)
                 .AsObservableList();
@@ -253,13 +253,11 @@ namespace Flux.ViewModels
 
             var selected_part_program = Flux.ConnectionProvider.ObserveVariable(m => m.PART_PROGRAM)
                 .DistinctUntilChanged()
-                .StartWithEmpty()
-                .DistinctUntilChanged();
+                .StartWithEmpty();
 
             var selected_guid = selected_part_program.Convert(pp => pp.MCodeGuid)
                 .DistinctUntilChanged()
-                .StartWithEmpty()
-                .DistinctUntilChanged();
+                .StartWithEmpty();
 
             var selected_mcode = Observable.CombineLatest(
                 Flux.ConnectionProvider.ObserveVariable(m => m.ENABLE_VACUUM),
@@ -343,9 +341,26 @@ namespace Flux.ViewModels
                 .StartWith(false)
                 .DistinctUntilChanged();
 
-            var extrusion_set = Observable.CombineLatest(
-                selected_mcode, selected_part_program,
-                GetExtrusionSet)
+            var queue_pos = Flux.ConnectionProvider
+                .ObserveVariable(c => c.QUEUE_POS)
+                .StartWithEmpty()
+                .DistinctUntilChanged();
+
+            var mcode_queue = Flux.ConnectionProvider
+                .ObserveVariable(c => c.QUEUE)
+                .StartWithEmpty()
+                .DistinctUntilChanged();
+
+            var mcodes = Flux.MCodes.AvaiableMCodes
+                .Connect()
+                .QueryWhenChanged();
+
+            var extrusion_set_queue = Observable.CombineLatest(
+                queue_pos,
+                mcode_queue, 
+                selected_part_program,
+                mcodes,
+                GetExtrusionSetQueue)
                 .StartWithEmpty()
                 .DistinctUntilChanged();
 
@@ -364,10 +379,10 @@ namespace Flux.ViewModels
             _PrintingEvaluation = Observable.CombineLatest(
                 is_waiting_for_resume,
                 selected_mcode,
-                extrusion_set,
                 avaiable_recovery,
                 selected_recovery,
                 selected_part_program,
+                extrusion_set_queue,
                 PrintingEvaluation.Create)
                 .DistinctUntilChanged()
                 .ToProperty(this, v => v.PrintingEvaluation);
@@ -715,17 +730,32 @@ namespace Flux.ViewModels
                 yield return evaluator;
             }
         }
-        private Optional<ExtrusionSet> GetExtrusionSet(Optional<MCode> mcode, Optional<MCodePartProgram> part_program)
+        private Optional<Dictionary<ushort, ExtrusionSet>> GetExtrusionSetQueue(Optional<short> queue_pos, Optional<Dictionary<ushort, Guid>> queue, Optional<MCodePartProgram> part_program, IQuery<IFluxMCodeStorageViewModel, Guid> mcodes)
         {
-            if (!mcode.HasValue)
+            if (!queue_pos.HasValue)
+                return default;
+            if (!queue.HasValue)
                 return default;
             if (!part_program.HasValue)
                 return default;
-            var mcode_vm = Flux.MCodes.AvaiableMCodes.Lookup(mcode.Value.MCodeGuid);
-            if (!mcode_vm.HasValue)
-                return default;
-            var mcode_reader = mcode_vm.Value.Analyzer.MCodeReader;
-            return mcode_reader.GetFilamentExtrusionSet(part_program.Value.StartBlock, mcode.Value.BlockCount);
+
+            var extrusion_set_queue = new Dictionary<ushort, ExtrusionSet>();
+            foreach (var mcode_queue in queue.Value)
+            {
+                if (mcode_queue.Key < queue_pos.Value)
+                    continue;
+                var mcode_vm = mcodes.Lookup(mcode_queue.Value);
+                if (!mcode_vm.HasValue)
+                    continue;
+
+                var start_block = queue_pos.Value == mcode_queue.Key ? part_program.Value.StartBlock : 0;
+
+                var mcode_analyzer = mcode_vm.Value.Analyzer;
+                var extrusion_set = mcode_analyzer.MCodeReader.GetFilamentExtrusionSet(start_block, mcode_analyzer.MCode.BlockCount);
+
+                extrusion_set_queue.Add(mcode_queue.Key, extrusion_set);    
+            }
+            return extrusion_set_queue;
         }
         private Optional<MCode> FindSelectedMCode(Optional<bool> enabled_vacuum, Optional<IFluxMCodeStorageViewModel> mcode_vm)
         {

@@ -126,14 +126,16 @@ namespace Flux.ViewModels
 
     public class ManageViewModel : NavPanelViewModel<ManageViewModel>
     {
-        public MoveViewModel Movement { get; private set; }
-        public MemoryViewModel Memory { get; private set; }
-        public TemperaturesViewModel Temperatures { get; private set; }
+        public MoveViewModel Movement { get; }
+        public MemoryViewModel Memory { get; }
+        public FilesViewModel Files { get; }
+        public TemperaturesViewModel Temperatures { get; }
 
         public ManageViewModel(FluxViewModel flux) : base(flux)
         {
             Movement = new MoveViewModel(Flux);
             Memory = new MemoryViewModel(Flux);
+            Files = new FilesViewModel(Flux);
             Temperatures = new TemperaturesViewModel(Flux);
 
             var status = Flux.StatusProvider
@@ -174,8 +176,12 @@ namespace Flux.ViewModels
             var normal_mode = Observable.Return(true);
             var navigate_back = Observable.Return(true);
 
-            var advanced_mode = Flux.MCodes.WhenAnyValue(s => s.OperatorUSB)
-                .ConvertOr(o => o.AdvancedSettings, () => false)
+            var advanced_mode_source = Flux.MCodes.WhenAnyValue(s => s.OperatorUSB)
+                .Convert(o => o.AdvancedSettings)
+                .Select(o => o.ValueOrDefault().ToOptional());
+
+            var advanced_mode = advanced_mode_source
+                .ValueOr(() => false)
                 .ToOptional();
 
             var can_naviagate_back = Flux.StatusProvider.ClampClosed.IsValidChanged
@@ -198,19 +204,17 @@ namespace Flux.ViewModels
             AddCommand(
                 new ToggleButton(
                     "deleteUsb",
-                    Flux,
                     () =>
                     {
                         var delete = !user_settings.Local.DeleteFromUSB.ValueOr(() => false);
                         user_settings.Local.DeleteFromUSB = delete;
                         user_settings.PersistLocalSettings();
                     },
-                    user_settings.Local.WhenAnyValue(s => s.DeleteFromUSB).ValueOr(() => false)));
+                    user_settings.Local.WhenAnyValue(s => s.DeleteFromUSB)));
 
             AddCommand(
                 new ToggleButton(
                     "debug",
-                    Flux,
                     () =>
                     {
                         var operator_usb = Flux.MCodes.OperatorUSB;
@@ -229,7 +233,7 @@ namespace Flux.ViewModels
                         }
                         user_settings.PersistLocalSettings();
                     },
-                    advanced_mode.ValueOr(() => Observable.Return(false))));
+                    advanced_mode_source));
 
             AddModal(Temperatures);
             AddCommand("reloadDatabase", () => Flux.DatabaseProvider.Initialize(), can_execute: IS_IDLE, visible: advanced_mode);
@@ -240,6 +244,7 @@ namespace Flux.ViewModels
 
             AddModal(Movement, visible: advanced_mode);
             AddModal(Memory, visible: advanced_mode);
+            AddModal(Files, visible: advanced_mode);
         }
 
         //private byte[] array { get; set; }

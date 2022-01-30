@@ -3,6 +3,7 @@ using Modulo3DDatabase;
 using Modulo3DStandard;
 using ReactiveUI;
 using System.Linq;
+using System.Reactive.Disposables;
 using System.Reactive.Linq;
 
 namespace Flux.ViewModels
@@ -21,6 +22,9 @@ namespace Flux.ViewModels
         private ObservableAsPropertyHelper<Optional<double>> _BreakTemp;
         public Optional<double> BreakTemp => _BreakTemp.Value;
 
+        private ObservableAsPropertyHelper<ToolMaterialState> _State;
+        public ToolMaterialState State => _State.Value;
+
         public ToolMaterialViewModel(FeederViewModel feeder)
         {
             Feeder = feeder;
@@ -34,15 +38,26 @@ namespace Flux.ViewModels
                 Feeder.ToolNozzle.WhenAnyValue(v => v.Document),
                 Flux.DatabaseProvider.WhenAnyValue(v => v.Database),
                 FindToolMaterial)
-                .ToProperty(this, v => v.Document);
+                .ToProperty(this, v => v.Document)
+                .DisposeWith(Feeder.Disposables);
+
+            _State = Observable.CombineLatest(
+                Feeder.Material.WhenAnyValue(v => v.Document),
+                Feeder.ToolNozzle.WhenAnyValue(v => v.Document), 
+                this.WhenAnyValue(v => v.Document),
+                (m, tn, tm) => new ToolMaterialState(tn.tool.HasValue && tn.nozzle.HasValue, m.HasValue, tm.HasValue))
+                .ToProperty(this, v => v.State)
+                .DisposeWith(Feeder.Disposables);
 
             _ExtrusionTemp = this.WhenAnyValue(f => f.Document)
                 .Select(d => d.Convert(d => d.PrintTemperature).ToOptional(t => t > 150))
-                .ToProperty(this, v => v.ExtrusionTemp);
+                .ToProperty(this, v => v.ExtrusionTemp)
+                .DisposeWith(Feeder.Disposables);
 
             _BreakTemp = this.WhenAnyValue(f => f.Document)
                 .Select(d => d.Convert(d => d.BreakTemperature).ToOptional(t => t > 150))
-                .ToProperty(this, v => v.BreakTemp);
+                .ToProperty(this, v => v.BreakTemp)
+                .DisposeWith(Feeder.Disposables);
         }
 
         public Optional<ToolMaterial> FindToolMaterial(Optional<Material> material, (Optional<Tool> tool, Optional<Nozzle> nozzle) feeder, Optional<ILocalDatabase> database)
