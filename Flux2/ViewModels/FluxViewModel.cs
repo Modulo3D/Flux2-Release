@@ -164,90 +164,96 @@ namespace Flux.ViewModels
 
             DatabaseProvider.Initialize(db =>
             {
-                var printer_id = SettingsProvider.CoreSettings.Local.PrinterID;
-                var printer_result = db.FindById<Printer>(printer_id.ValueOr(() => 0));
-                var printer = printer_result.Documents.FirstOrDefault().ToOptional();
-                ConnectionProvider = printer.Convert(p => p.MachineGCodeFlavor).ValueOr(() => "") switch
+                try
                 {
-                    "Modulo3D (Duet)" => new RRF_ConnectionProvider(this),
-                    "Modulo3D (Osai)" => new OSAI_ConnectionProvider(this),
-                    _ => new Dummy_ConnectionProvider(this)
-                };
-
-                Messages = new MessagesViewModel(this);
-                NetProvider = new NetProvider(this);
-                NFCProvider = new NFCProvider(this);
-                Feeders = new FeedersViewModel(this);
-                MCodes = new MCodesViewModel(this);
-                StatusProvider = new StatusProvider(this);
-                Calibration = new CalibrationViewModel(this);
-                Startup = new StartupViewModel(this);
-                Webcam = new WebcamViewModel(this);
-                StatsProvider = new StatsProvider(this);
-                Magazine = new MagazineViewModel(this);
-                Home = new HomeViewModel(this);
-                StatusBar = new StatusBarViewModel(this);
-                Functionality = new FunctionalityViewModel(this);
-                Navigator = new FluxNavigatorViewModel(this);
-
-                _LeftIconForeground = ConnectionProvider.ObserveVariable(m => m.OPEN_LOCK, "chamber")
-                    .Convert(l => l ? FluxColors.Active : FluxColors.Inactive)
-                    .ValueOr(() => FluxColors.Empty)
-                    .ToProperty(this, v => v.LeftIconForeground);
-
-                _RightIconForeground = ConnectionProvider.ObserveVariable(m => m.CHAMBER_LIGHT)
-                    .Convert(l => l ? FluxColors.Active : FluxColors.Inactive)
-                    .ValueOr(() => FluxColors.Empty)
-                    .ToProperty(this, v => v.RightIconForeground);
-
-                var is_idle = StatusProvider.IsIdle
-                    .ValueOrDefault();
-
-                // COMMANDS
-                if (ConnectionProvider.VariableStore.HasVariable(s => s.CHAMBER_LIGHT))
-                    RightButtonCommand = ReactiveCommand.CreateFromTask(async () => { await ConnectionProvider.ToggleVariableAsync(m => m.CHAMBER_LIGHT); });
-
-                if (ConnectionProvider.VariableStore.HasVariable(s => s.OPEN_LOCK, "chamber"))
-                    LeftButtonCommand = ReactiveCommand.CreateFromTask(async () => { await ConnectionProvider.ToggleVariableAsync(m => m.OPEN_LOCK, "chamber"); }, is_idle);
-
-                var status_bar_nav = new NavModalViewModel(this, StatusBar);
-                OpenStatusBarCommand = ReactiveCommand.Create(() => { Navigator.Navigate(status_bar_nav); });
-
-                ConnectionProvider.Initialize();
-                StatusProvider.Initialize();
-                NetProvider.Initialize();
-                MCodes.Initialize();
-
-                _StatusText = Observable.CombineLatest(
-                    StatusProvider.WhenAnyValue(v => v.FluxStatus),
-                    ConnectionProvider.ObserveVariable(m => m.RUNNING_MACRO),
-                    ConnectionProvider.ObserveVariable(m => m.RUNNING_MCODE),
-                    ConnectionProvider.ObserveVariable(m => m.RUNNING_GCODE),
-                    GetStatusText)
-                    .ToProperty(this, v => v.StatusText);
-
-                var offlineBrush = "#999999";
-                var idleBrush = "#00B189";
-                var cycleBrush = "#1ab324";
-                var erroBrush = "#fec02f";
-                var emergBrush = "#f75a5c";
-                var waitBrush = "#275ac3";
-
-                _StatusBrush = StatusProvider.WhenAnyValue(v => v.FluxStatus)
-                    .Select(status =>
+                    var printer_id = SettingsProvider.CoreSettings.Local.PrinterID;
+                    var printer_result = db.FindById<Printer>(printer_id.ValueOr(() => 0));
+                    var printer = printer_result.Documents.FirstOrDefault().ToOptional();
+                    ConnectionProvider = printer.Convert(p => p.MachineGCodeFlavor).ValueOr(() => "") switch
                     {
-                        return status switch
+                        "Modulo3D (Duet)" => new RRF_ConnectionProvider(this),
+                        "Modulo3D (Osai)" => new OSAI_ConnectionProvider(this),
+                        _ => new Dummy_ConnectionProvider(this)
+                    };
+
+                    Messages = new MessagesViewModel(this);
+                    NetProvider = new NetProvider(this);
+                    NFCProvider = new NFCProvider(this);
+                    Feeders = new FeedersViewModel(this);
+                    MCodes = new MCodesViewModel(this);
+                    StatusProvider = new StatusProvider(this);
+                    Calibration = new CalibrationViewModel(this);
+                    Startup = new StartupViewModel(this);
+                    Webcam = new WebcamViewModel(this);
+                    StatsProvider = new StatsProvider(this);
+                    Magazine = new MagazineViewModel(this);
+                    Home = new HomeViewModel(this);
+                    StatusBar = new StatusBarViewModel(this);
+                    Functionality = new FunctionalityViewModel(this);
+                    Navigator = new FluxNavigatorViewModel(this);
+
+                    _LeftIconForeground = ConnectionProvider.ObserveVariable(m => m.OPEN_LOCK, "chamber")
+                        .Convert(l => l ? FluxColors.Active : FluxColors.Inactive)
+                        .ValueOr(() => FluxColors.Empty)
+                        .ToProperty(this, v => v.LeftIconForeground);
+
+                    _RightIconForeground = ConnectionProvider.ObserveVariable(m => m.CHAMBER_LIGHT)
+                        .Convert(l => l ? FluxColors.Active : FluxColors.Inactive)
+                        .ValueOr(() => FluxColors.Empty)
+                        .ToProperty(this, v => v.RightIconForeground);
+
+                    var is_idle = StatusProvider.IsIdle
+                        .ValueOrDefault();
+
+                    // COMMANDS
+                    if (ConnectionProvider.VariableStore.HasVariable(s => s.CHAMBER_LIGHT))
+                        RightButtonCommand = ReactiveCommand.CreateFromTask(async () => { await ConnectionProvider.ToggleVariableAsync(m => m.CHAMBER_LIGHT); });
+
+                    if (ConnectionProvider.VariableStore.HasVariable(s => s.OPEN_LOCK, "chamber"))
+                        LeftButtonCommand = ReactiveCommand.CreateFromTask(async () => { await ConnectionProvider.ToggleVariableAsync(m => m.OPEN_LOCK, "chamber"); }, is_idle);
+
+                    var status_bar_nav = new NavModalViewModel(this, StatusBar);
+                    OpenStatusBarCommand = ReactiveCommand.Create(() => { Navigator.Navigate(status_bar_nav); });
+
+                    ConnectionProvider.Initialize();
+                    StatusProvider.Initialize();
+                    NetProvider.Initialize();
+                    MCodes.Initialize();
+
+                    _StatusText = Observable.CombineLatest(
+                        StatusProvider.WhenAnyValue(v => v.FluxStatus),
+                        ConnectionProvider.ObserveVariable(m => m.RUNNING_MACRO),
+                        ConnectionProvider.ObserveVariable(m => m.RUNNING_MCODE),
+                        ConnectionProvider.ObserveVariable(m => m.RUNNING_GCODE),
+                        GetStatusText)
+                        .ToProperty(this, v => v.StatusText);
+
+                    var offlineBrush = "#999999";
+                    var idleBrush = "#00B189";
+                    var cycleBrush = "#1ab324";
+                    var erroBrush = "#fec02f";
+                    var emergBrush = "#f75a5c";
+                    var waitBrush = "#275ac3";
+
+                    _StatusBrush = StatusProvider.WhenAnyValue(v => v.FluxStatus)
+                        .Select(status =>
                         {
-                            FLUX_ProcessStatus.IDLE => idleBrush,
-                            FLUX_ProcessStatus.WAIT => waitBrush,
-                            FLUX_ProcessStatus.NONE => offlineBrush,
-                            FLUX_ProcessStatus.CYCLE => cycleBrush,
-                            FLUX_ProcessStatus.ERROR => erroBrush,
-                            FLUX_ProcessStatus.EMERG => emergBrush,
-                            _ => idleBrush
-                        };
-                    })
-                    .ToProperty(this, v => v.StatusBrush);
+                            return status switch
+                            {
+                                FLUX_ProcessStatus.IDLE => idleBrush,
+                                FLUX_ProcessStatus.WAIT => waitBrush,
+                                FLUX_ProcessStatus.NONE => offlineBrush,
+                                FLUX_ProcessStatus.CYCLE => cycleBrush,
+                                FLUX_ProcessStatus.ERROR => erroBrush,
+                                FLUX_ProcessStatus.EMERG => emergBrush,
+                                _ => idleBrush
+                            };
+                        })
+                        .ToProperty(this, v => v.StatusBrush);
+                }
+                catch (Exception ex)
+                { 
+                }
             });
 
             Task.Run(async () =>
@@ -284,7 +290,6 @@ namespace Flux.ViewModels
         }
         public Task StartAsync(CancellationToken cancellationToken)
         {
-            InitializeRemoteView();
             return Task.CompletedTask;
         }
         private string GetStatusText(FLUX_ProcessStatus status, Optional<OSAI_Macro> macro, Optional<OSAI_MCode> mcode, Optional<OSAI_GCode> gcode)

@@ -186,7 +186,7 @@ namespace Flux.ViewModels
                     (temp, tool, idle) => temp.HasValue && idle && tool != e)
                     .ToOptional();
 
-                var button = new CmdButton($"selectExtruder??{e}", select_tool, can_execute);
+                var button = new CmdButton($"selectExtruder??{e + 1}", select_tool, can_execute);
                 button.InitializeRemoteView();
                 yield return button;
 

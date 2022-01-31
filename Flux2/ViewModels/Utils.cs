@@ -41,9 +41,9 @@ namespace Flux.ViewModels
                 .DisposeWith(Disposables);
 
             if (key.HasValue)
-                Items.AutoSelect = q => q.KeyValues.FirstOrOptional(kvp => kvp.Key.Equals(key.Value)).Convert(kvp => kvp.Key);
+                Items.StartAutoSelect(q => q.KeyValues.FirstOrOptional(kvp => kvp.Key.Equals(key.Value)).Convert(kvp => kvp.Key));
             else
-                Items.AutoSelect = q => q.KeyValues.FirstOrOptional(kvp => kvp.Value.HasValue).Convert(kvp => kvp.Key);
+                Items.StartAutoSelect(q => q.KeyValues.FirstOrOptional(kvp => kvp.Value.HasValue).Convert(kvp => kvp.Key));
 
             Items.SelectedKeyChanged
                 .Subscribe(v => selection_changed?.Invoke(v))

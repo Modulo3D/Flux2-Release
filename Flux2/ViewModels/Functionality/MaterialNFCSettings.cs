@@ -28,8 +28,11 @@ namespace Flux.ViewModels
                 .Transform(reader => Optional<NFCReaderHandle>.Create(reader));
 
             NFCReaders = new SelectableCache<NFCReaderHandle, string>(cache);
-            NFCReaders.AutoSelect = q => q.KeyValues.FirstOrOptional(kvp => kvp.Value.HasValue)
-            .Convert(kvp => kvp.Key);
+            NFCReaders.StartAutoSelect(q =>
+            {
+                return q.KeyValues.FirstOrOptional(kvp => kvp.Value.HasValue)
+                    .Convert(kvp => kvp.Key);
+            });
 
             var can_tween = NFCReaders.SelectedValueChanged
                 .Select(nfc => nfc.HasValue);
@@ -53,6 +56,11 @@ namespace Flux.ViewModels
         public MaterialNFCSettings(FluxViewModel flux, ushort position) : base(flux, $"materialNFCSettings??{position}")
         {
             Position = position;
+            var settings = flux.SettingsProvider.CoreSettings.Local;
+            settings.Feeders.Connect()
+                .WatchOptional(position)
+                .Convert(t => t.SerialDescription)
+                .BindTo(this, v => v.NFCReaders.SelectedKey);
         }
     }
 
@@ -60,6 +68,10 @@ namespace Flux.ViewModels
     {
         public ToolNozzleNFCSettings(FluxViewModel flux) : base(flux, "toolNozzleNFCSettings")
         {
+            var settings = flux.SettingsProvider.CoreSettings.Local;
+            settings.WhenAnyValue(v => v.Tool)
+                .Convert(t => t.SerialDescription)
+                .BindTo(this, v => v.NFCReaders.SelectedKey);
         }
     }
 }

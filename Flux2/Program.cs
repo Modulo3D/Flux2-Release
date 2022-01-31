@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using System;
 
 namespace Flux.ViewModels
 {
@@ -16,7 +17,12 @@ namespace Flux.ViewModels
                 .UseSystemd()
                 .ConfigureServices((hostContext, services) =>
                 {
-                    services.AddHostedService<FluxViewModel>();
+                    services.AddHostedService(p => 
+                    {
+                        var flux_viewmodel = new FluxViewModel();
+                        flux_viewmodel.InitializeRemoteView();
+                        return flux_viewmodel;
+                    });
                 });
         }
     }

@@ -47,13 +47,24 @@ namespace Flux.ViewModels
             _Printer = Observable.CombineLatest(
                 Flux.DatabaseProvider.WhenAnyValue(v => v.Database),
                 CoreSettings.Local.WhenAnyValue(s => s.PrinterID),
-                (db, id) => db.Convert(db => id.Convert(id => db.FindById<Printer>(id))))
-                .Convert(r => r.Documents.FirstOrOptional(_ => true))
+                FindPrinter)
                 .ToProperty(this, v => v.Printer);
 
             _ExtrudersCount = this.WhenAnyValue(v => v.Printer)
                 .Select(GetExtruderCount)
                 .ToProperty(this, v => v.ExtrudersCount);
+        }
+
+        private Optional<Printer> FindPrinter(Optional<ILocalDatabase> database, Optional<int> printer_id)
+        {
+            if (!database.HasValue)
+                return default;
+            if (!printer_id.HasValue)
+                return default;
+            var printers = database.Value.FindById<Printer>(printer_id.Value);
+            if (!printers.HasDocuments)
+                return default;
+            return printers.Documents.FirstOrDefault();
         }
 
         public async Task<bool> ResetMagazineAsync()

@@ -57,8 +57,6 @@ namespace Flux.ViewModels
         [RemoteCommand]
         public ReactiveCommand<Unit, Unit> SaveSettingsCommand { get; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> LoadSettingsCommand { get; }
-        [RemoteCommand]
         public ReactiveCommand<Unit, Unit> UpdateNFCReadersCommand { get; }
 
         public SettingsViewModel(FluxViewModel flux) : base(flux)
@@ -70,26 +68,6 @@ namespace Flux.ViewModels
 
             Printers = new SelectableCache<Printer, int>(cache);
 
-            ToolNozzleNFCSettings = FindToolLoaderSettings();
-            MaterialNFCSettings = Printers.SelectedValueChanged.Select(FindFeederSettings)
-                .ToObservableChangeSet(selector => selector.Position)
-                .AsObservableCache();
-
-            LoadSettings();
-
-            var canSave = Printers.SelectedValueChanged.Convert(p => p.Id).ConvertOr(id => id > 0, () => false);
-            LoadSettingsCommand = ReactiveCommand.Create(LoadSettings);
-            UpdateNFCReadersCommand = ReactiveCommand.CreateFromTask(UpdateNFCReadersAsync);
-            SaveSettingsCommand = ReactiveCommand.Create(SaveSettings, canSave);
-        }
-
-        private async Task UpdateNFCReadersAsync()
-        {
-            await Flux.NFCProvider.UpdateReadersAsync();
-        }
-
-        public void LoadSettings()
-        {
             var user_settings = Flux.SettingsProvider.UserSettings.Local;
             var core_settings = Flux.SettingsProvider.CoreSettings.Local;
 
@@ -108,23 +86,26 @@ namespace Flux.ViewModels
             user_settings.WhenAnyValue(s => s.CostHour)
                 .BindTo(this, v => v.CostHour);
 
-            if (core_settings.Tool.HasValue)
-            {
-                core_settings.WhenAnyValue(s => s.Tool)
-                    .Where(t => t.HasValue)
-                    .Select(t => t.Value.SerialDescription)
-                    .Throttle(TimeSpan.FromSeconds(0.5))
-                    .BindTo(this, v => v.ToolNozzleNFCSettings.NFCReaders.SelectedKey);
-            }
-            foreach (var feeder_settings_vm in MaterialNFCSettings.Items)
-            {
-                core_settings.Feeders.Connect()
-                    .WatchOptional(feeder_settings_vm.Position)
-                    .Where(f => f.HasValue)
-                    .Select(f => f.Value.SerialDescription)
-                    .BindTo(feeder_settings_vm, v => v.NFCReaders.SelectedKey);
-            }
+            ToolNozzleNFCSettings = new ToolNozzleNFCSettings(Flux);
+
+            MaterialNFCSettings = Printers.SelectedValueChanged
+                .Select(FindFeederSettings)
+                .ToObservableChangeSet(selector => selector.Position)
+                .AsObservableCache();
+
+            UpdateNFCReadersCommand = ReactiveCommand.CreateFromTask(UpdateNFCReadersAsync);
+
+            var canSave = Printers.SelectedValueChanged
+                .Select(p => p.HasValue);
+
+            SaveSettingsCommand = ReactiveCommand.Create(SaveSettings, canSave);
         }
+
+        private async Task UpdateNFCReadersAsync()
+        {
+            await Flux.NFCProvider.UpdateReadersAsync();
+        }
+
         public void SaveSettings()
         {
             try
@@ -170,18 +151,6 @@ namespace Flux.ViewModels
             }
         }
 
-        private ToolNozzleNFCSettings FindToolLoaderSettings()
-        {
-            var tool_setting_vm = new ToolNozzleNFCSettings(Flux);
-            var tool_setting = Flux.SettingsProvider.CoreSettings.Local.Tool;
-            if (tool_setting.HasValue)
-            {
-                var tool_reader = tool_setting.Value.SerialDescription;
-                if (tool_reader.HasValue)
-                    tool_setting_vm.NFCReaders.SelectedKey = tool_reader.Value;
-            }
-            return tool_setting_vm;
-        }
         private IEnumerable<Optional<Printer>> FindPrinters(Optional<ILocalDatabase> database)
         {
             var printers = database.Convert(db => db.FindAll<Printer>());
@@ -193,30 +162,15 @@ namespace Flux.ViewModels
         }
         private IEnumerable<MaterialNFCSettings> FindFeederSettings(Optional<Printer> printer)
         {
-            var feeder_settings_list = new List<MaterialNFCSettings>();
             if (!printer.HasValue)
-                return feeder_settings_list;
+                yield break;
 
             var machine_extruder_count = printer.Value["machine_extruder_count"].TryGetValue<ushort>();
             if (!machine_extruder_count.HasValue)
-                return feeder_settings_list;
+                yield break;
 
             for (ushort extruder = 0; extruder < machine_extruder_count.Value; extruder++)
-            {
-                var feeders_settings_cache = Flux.SettingsProvider.CoreSettings.Local.Feeders;
-                var feeder_settings_vm = new MaterialNFCSettings(Flux, extruder);
-                var feeder_settings_lookup = feeders_settings_cache.Lookup(extruder);
-                if (feeder_settings_lookup.HasValue)
-                {
-                    var feeder_reader = feeder_settings_lookup.Value.SerialDescription;
-                    if (feeder_reader.HasValue)
-                        feeder_settings_vm.NFCReaders.SelectedKey = feeder_reader.Value;
-                }
-
-                feeder_settings_list.Add(feeder_settings_vm);
-            }
-
-            return feeder_settings_list;
+                yield return new MaterialNFCSettings(Flux, extruder);
         }
     }
 }
