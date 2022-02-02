@@ -286,13 +286,9 @@ namespace Flux.ViewModels
                     return false;
 
                 var evaluation = Flux.StatusProvider.PrintingEvaluation;
-                var recovery = evaluation.SelectedRecovery;
-                if (!recovery.HasValue)
-                    recovery = evaluation.AvaiableRecovery;
-
                 var put_ctk = new CancellationTokenSource(TimeSpan.FromMinutes(10));
                 var result = await Flux.ConnectionProvider.PreparePartProgramAsync(
-                    mcode_vm.Value.Analyzer, recovery, select, put_ctk.Token,
+                    mcode_vm.Value.Analyzer, evaluation.Recovery, select, put_ctk.Token,
                     report_progress_internal);
 
                 if (!result)
@@ -436,7 +432,7 @@ namespace Flux.ViewModels
                 cts.Token))
                 return false;
 
-            if (queue_size == 1)
+            if (queue_size <= 1)
                 Flux.Navigator.NavigateHome();
 
             return true;

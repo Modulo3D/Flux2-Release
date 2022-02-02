@@ -265,37 +265,41 @@ namespace Flux.ViewModels
                 .StartWithEmpty()
                 .DistinctUntilChanged();
 
-            var is_waiting_for_resume = Observable.CombineLatest(
-                Flux.ConnectionProvider.ObserveVariable(m => m.IS_HOLD),
-                Flux.ConnectionProvider.ObserveVariable(m => m.REQ_HOLD),
-                (is_hold, req_hold) => is_hold.HasValue && is_hold.Value || req_hold.HasValue && req_hold.Value)
-                .StartWith(false)
-                .DistinctUntilChanged();
+            var hold_tool = Flux.ConnectionProvider
+                 .ObserveVariable(m => m.HOLD_TOOL)
+                 .DistinctUntilChanged()
+                 .StartWithEmpty();
 
-            var avaiable_recovery = Observable.CombineLatest(
-                Flux.ConnectionProvider.ObserveVariable(m => m.ENABLE_VACUUM),
-                Flux.ConnectionProvider.ObserveVariable(m => m.IS_HOLD),
-                Flux.ConnectionProvider.ObserveVariable(m => m.REQ_HOLD),
-                Flux.ConnectionProvider.ObserveVariable(m => m.HOLD_BLK_NUM),
-                Flux.ConnectionProvider.ObserveVariable(m => m.HOLD_TOOL),
-                Flux.ConnectionProvider.ObserveVariable(m => m.HOLD_PP),
-                Flux.ConnectionProvider.ObserveVariable(m => m.HOLD_POS)
-                    .QueryWhenChanged(q => q.Items.Select(p => p.ValueOr(() => 0)).ToArray())
-                    .DistinctUntilChanged(new ArrayComparer<double>())
-                    .StartWith(new double[0]),
-                Flux.ConnectionProvider.ObserveVariable(m => m.HOLD_TEMP)
-                    .QueryWhenChanged(q => q.Items.Select(p => p.ValueOr(() => 0)).ToArray())
-                    .DistinctUntilChanged(new ArrayComparer<double>())
-                    .StartWith(new double[0]),
-                FindAvaiableRecovery)
-                .StartWithEmpty()
-                .DistinctUntilChanged();
+            var hold_blk_num = Flux.ConnectionProvider
+                 .ObserveVariable(m => m.HOLD_BLK_NUM)
+                 .DistinctUntilChanged()
+                 .StartWithEmpty();
 
-            var selected_recovery = Observable.CombineLatest(
-                Flux.ConnectionProvider.ObserveVariable(m => m.ENABLE_VACUUM),
-                avaiable_recovery,
+            var hold_pp = Flux.ConnectionProvider
+                 .ObserveVariable(m => m.HOLD_PP)
+                 .DistinctUntilChanged()
+                 .StartWithEmpty();
+
+            var hold_temperature = Flux.ConnectionProvider
+                .ObserveVariable(m => m.HOLD_TEMP)
+                .Filter(t => t.HasValue)
+                .Transform(t => t.Value)
+                .QueryWhenChanged();
+
+            var hold_position = Flux.ConnectionProvider
+                .ObserveVariable(m => m.HOLD_TEMP)
+                .Filter(t => t.HasValue)
+                .Transform(t => t.Value)
+                .QueryWhenChanged();
+
+            var recovery = Observable.CombineLatest(
+                hold_tool,
+                hold_blk_num,
+                hold_pp,
+                hold_temperature,
+                hold_position,
                 selected_part_program,
-                FindSelectedRecovery)
+                FindRecovery)
                 .StartWithEmpty()
                 .DistinctUntilChanged();
 
@@ -376,10 +380,8 @@ namespace Flux.ViewModels
                 .ToProperty(this, v => v.StartEvaluation);
 
             _PrintingEvaluation = Observable.CombineLatest(
-                is_waiting_for_resume,
                 selected_mcode,
-                avaiable_recovery,
-                selected_recovery,
+                recovery,
                 selected_part_program,
                 extrusion_set_queue,
                 PrintingEvaluation.Create)
@@ -427,113 +429,57 @@ namespace Flux.ViewModels
                 .ToProperty(this, s => s.FluxStatus);
         }
 
-        // Recovery
-        private Optional<MCodeRecovery> FindSelectedRecovery(
-            Optional<bool> enabled_vacuum,
-            Optional<MCodeRecovery> avaiable_recovery,
+        private Optional<MCodeRecovery> FindRecovery(
+            Optional<short> hold_tool,
+            Optional<double> hold_blk_num,
+            Optional<string> hold_part_program, 
+            IQuery<double, VariableUnit> hold_temp,
+            IQuery<double, VariableUnit> hold_pos,
             Optional<MCodePartProgram> selected_pp)
         {
             try
             {
-                if (enabled_vacuum.HasValue && !enabled_vacuum.Value)
+                if (!hold_tool.HasValue)
                     return default;
 
-                if (!selected_pp.HasValue)
+                if (!hold_blk_num.HasValue)
                     return default;
 
-                if (!selected_pp.Value.IsRecovery)
+                if (hold_temp.Count < 1)
                     return default;
 
-                if (!avaiable_recovery.HasValue)
+                if (!hold_part_program.HasValue)
                     return default;
 
-                if (avaiable_recovery.Value.MCodeGuid != selected_pp.Value.MCodeGuid)
+                if (string.IsNullOrEmpty(hold_part_program.Value))
                     return default;
 
-                if (avaiable_recovery.Value.BlockNumber != selected_pp.Value.StartBlock)
-                    return default;
-
-                if (avaiable_recovery.Value.RecoveryDate > selected_pp.Value.UploadDate)
-                    return default;
-
-                return avaiable_recovery.Value;
-            }
-            catch (Exception ex)
-            {
-                Flux.Messages.LogException(this, ex);
-                return default;
-            }
-        }
-        private Optional<MCodeRecovery> FindAvaiableRecovery(
-            Optional<bool> enabled_vacuum,
-            Optional<bool> is_hold,
-            Optional<bool> req_hold,
-            Optional<double> hold_num,
-            Optional<short> hold_tool,
-            Optional<string> part_program,
-            IEnumerable<double> hold_pos,
-            IEnumerable<double> hold_temp)
-        {
-            try
-            {
-                if (enabled_vacuum.HasValue && !enabled_vacuum.Value)
-                    return default;
-
-                if (is_hold.HasValue && !is_hold.Value)
-                    return default;
-
-                if (is_hold.HasValue && req_hold.Value)
-                    return default;
-
-                if (!part_program.HasValue)
-                    return default;
-
-                if (string.IsNullOrEmpty(part_program.Value))
-                    return default;
-
-                if (!Guid.TryParse(part_program.Value, out var mcode_guid))
+                if (!Guid.TryParse(hold_part_program.Value, out var mcode_guid))
                     return default;
 
                 var mcode_lookup = Flux.MCodes.AvaiableMCodes.Lookup(mcode_guid);
                 if (!mcode_lookup.HasValue)
                     return default;
 
-                if (hold_tool.HasValue && hold_tool.Value < 0)
-                    return default;
-
-                if (hold_pos.Count() < 1)
-                    return default;
-
-                if (!hold_pos.Any(p => p != 0))
-                    return default;
-
-                if (hold_temp.Count() < 1)
-                    return default;
-
-                var core_x_pos = hold_pos.ElementAt(0);
-                var core_y_pos = hold_pos.ElementAt(1);
-                var z_pos = hold_pos.ElementAt(2);
-                if (core_x_pos == 0) return default;
-                if (core_y_pos == 0) return default;
-                if (z_pos == 0) return default;
-
-                var x_pos = (core_x_pos + core_y_pos) / 2;
-                var y_pos = (core_x_pos - core_y_pos) / 2;
-                if (x_pos < 0) return default;
-                if (y_pos < 0) return default;
-                if (z_pos < 0) return default;
-
                 var analyzer = mcode_lookup.Value.Analyzer;
-                if (hold_num.HasValue && hold_tool.HasValue)
+                var is_selected = selected_pp.ConvertOr(pp =>
                 {
-                    return new MCodeRecovery(
-                        analyzer.MCode,
-                        (uint)hold_num.Value,
-                        (ushort)hold_tool.Value,
-                        hold_pos.ToArray(),
-                        hold_temp.ToArray());
-                }
-                return default;
+                    if (!pp.IsRecovery)
+                        return false;
+                    if (pp.MCodeGuid != analyzer.MCode.MCodeGuid)
+                        return false;
+                    if (pp.StartBlock != hold_blk_num.Value)
+                        return false;
+                    return true;
+                }, () => false);
+
+                return new MCodeRecovery(
+                    analyzer.MCode.MCodeGuid,
+                    is_selected,
+                    (uint)hold_blk_num.Value,
+                    (ushort)hold_tool.Value,
+                    hold_temp.KeyValues.ToDictionary(),
+                    hold_pos.KeyValues.ToDictionary());
             }
             catch (Exception ex)
             {
@@ -640,9 +586,7 @@ namespace Flux.ViewModels
                 case FLUX_ProcessStatus.IDLE:
                     if (current_vm.HasValue && current_vm.Value is IOperationViewModel)
                         return FLUX_ProcessStatus.WAIT;
-                    if (printing_eval.SelectedRecovery.HasValue)
-                        return FLUX_ProcessStatus.WAIT;
-                    if (printing_eval.AvaiableRecovery.HasValue)
+                    if (printing_eval.Recovery.HasValue)
                         return FLUX_ProcessStatus.WAIT;
                     if (printing_eval.SelectedMCode.HasValue)
                         return FLUX_ProcessStatus.WAIT;

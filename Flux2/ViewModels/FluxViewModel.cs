@@ -148,6 +148,14 @@ namespace Flux.ViewModels
         IFluxNavigatorViewModel IFlux.Navigator => Navigator;
         IFluxCalibrationViewModel IFlux.Calibration => Calibration;
 
+        private Optional<ContentDialog> _ContentDialog;
+        [RemoteContent(true, "dialog")]
+        public Optional<ContentDialog> ContentDialog 
+        { 
+            get => _ContentDialog;
+            set => this.RaiseAndSetIfChanged(ref _ContentDialog, value);
+        }
+
         public FluxViewModel() : base("flux")
         {
             ServicePointManager.UseNagleAlgorithm = false;
@@ -271,7 +279,7 @@ namespace Flux.ViewModels
                         .AsObservableChangeSet(m => m.Id)
                         .AsObservableCache();
 
-                    var printer_option = ComboOption.Create("printer", "Stampante:", printers);
+                    var printer_option = ComboOption.Create($"printer", "Stampante:", printers);
                     var result = await ShowSelectionAsync("Seleziona un modello di stampante", false, printer_option);
                     if (result != ContentDialogResult.Primary)
                         Environment.Exit(2);
@@ -279,7 +287,6 @@ namespace Flux.ViewModels
                     var printer_id = printer_option.Items.SelectedKey;
                     SettingsProvider.CoreSettings.Local.PrinterID = printer_id;
                     SettingsProvider.CoreSettings.PersistLocalSettings();
-                    Environment.Exit(0);
                 }
             });
         }

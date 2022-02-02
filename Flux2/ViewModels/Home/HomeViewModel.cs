@@ -1,4 +1,5 @@
-﻿using Modulo3DStandard;
+﻿using DynamicData.Kernel;
+using Modulo3DStandard;
 using ReactiveUI;
 using System;
 using System.Reactive;
@@ -78,34 +79,41 @@ namespace Flux.ViewModels
 
         private IHomePhaseViewModel GetHomeViewModel(StatusEvaluation status_eval, StartEvaluation start_eval, PrintingEvaluation printing_eval)
         {
-            if (printing_eval.IsWaitingForResume &&
-                !printing_eval.SelectedRecovery.HasValue)
-                return RecoveryPhase;
+            if (printing_eval.Recovery.HasValue)
+                if(!printing_eval.Recovery.Value.IsSelected)
+                    return RecoveryPhase;
 
-            if (!printing_eval.SelectedMCode.HasValue ||
-                !status_eval.IsCycle.HasValue)
+            if (!printing_eval.SelectedMCode.HasValue)
+                return WelcomePhase;
+
+            if (!status_eval.IsCycle.HasValue)
                 return WelcomePhase;
 
             if (start_eval.HasInvalidTools)
                 return InvalidToolsPhase;
+
             if (start_eval.HasInvalidMaterials)
                 return InvalidMaterialsPhase;
+
             if (start_eval.HasInvalidProbes)
                 return InvalidProbesPhase;
 
             if (!status_eval.IsCycle.Value)
             {
-                if (start_eval.HasLowMaterials &&
-                    !start_eval.StartWithLowMaterials)
-                    return LowMaterialsPhase;
+                if (start_eval.HasLowMaterials)
+                    if(!start_eval.StartWithLowMaterials)
+                        return LowMaterialsPhase;
+                
                 if (start_eval.HasLowNozzles)
                     return LowMaterialsPhase;
+                
                 if (!status_eval.CanSafePrint)
                     return PreparePrintPhase;
             }
 
-            if (start_eval.HasColdNozzles)
-                return ColdNozzlesPhase;
+            if (printing_eval.Recovery.HasValue)
+                if (start_eval.HasColdNozzles)
+                    return ColdNozzlesPhase;
 
             return PrintingPhase;
         }

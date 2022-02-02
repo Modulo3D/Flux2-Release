@@ -39,7 +39,10 @@ namespace Flux.ViewModels
         public Optional<UserOffset> UserOffset => _UserOffset.Value;
 
         private ObservableAsPropertyHelper<Optional<ProbeOffset>> _ProbeOffset;
-        public Optional<ProbeOffset> ProbeOffset => _ProbeOffset.Value;
+        public Optional<ProbeOffset> ProbeOffset => _ProbeOffset.Value; 
+
+        private ObservableAsPropertyHelper<Optional<FluxOffset>> _FluxOffset;
+        public Optional<FluxOffset> FluxOffset => _FluxOffset.Value;
 
         private ObservableAsPropertyHelper<bool> _IsOffsetRoot;
         [RemoteOutput(true)]
@@ -329,11 +332,15 @@ namespace Flux.ViewModels
                 .ToProperty(this, v => v.ProbeStateBrush)
                 .DisposeWith(Disposables);
 
-            Observable.CombineLatest(
+            _FluxOffset = Observable.CombineLatest(
                 Calibration.WhenAnyValue(v => v.GlobalZOffset),
                 this.WhenAnyValue(v => v.ProbeOffset),
                 this.WhenAnyValue(v => v.UserOffset),
                 GetOffset)
+                .ToProperty(this, v => v.FluxOffset)
+                .DisposeWith(Disposables);
+
+            this.WhenAnyValue(v => v.FluxOffset)
                 .Throttle(TimeSpan.FromSeconds(1))
                 .Where(o => o.HasValue)
                 .Subscribe(async o => await Flux.ConnectionProvider.SetToolOffsetsAsync(o.Value))

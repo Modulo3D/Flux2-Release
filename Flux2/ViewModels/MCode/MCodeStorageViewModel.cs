@@ -149,12 +149,9 @@ namespace Flux.ViewModels
         {
             if (selecting)
                 return false;
-            if (!printing_eval.SelectedMCode.HasValue &&
-                !printing_eval.SelectedRecovery.HasValue)
+            if (!printing_eval.SelectedMCode.HasValue && !printing_eval.Recovery.HasValue)
                 return true;
-            if (!status.HasValue)
-                return false;
-            if (status.Value != FLUX_ProcessStatus.IDLE)
+            if (!status.ConvertOr(s => s == FLUX_ProcessStatus.IDLE, () => false))
                 return false;
             return true;
         }

@@ -34,11 +34,11 @@ namespace Flux.ViewModels
                 (connecting, not_found, low) => (connecting, not_found, low))
                 .DistinctUntilChanged();
 
-            pressure.Throttle(TimeSpan.FromSeconds(1))
+            pressure.Throttle(TimeSpan.FromSeconds(5))
                 .Where(p => p.connecting.HasValue && !p.connecting.Value && p.not_found.HasValue && p.not_found.Value)
                 .Subscribe(_ => Flux.Messages.LogMessage("Pressione", "Sensore della pressione non trovato", MessageLevel.EMERG, 28001));
 
-            pressure.Throttle(TimeSpan.FromSeconds(1))
+            pressure.Throttle(TimeSpan.FromSeconds(5))
                 .Where(p => p.connecting.HasValue && !p.connecting.Value && p.low.HasValue && p.low.Value)
                 .Subscribe(_ => Flux.Messages.LogMessage("Pressione", "Livello di pressione troppo basso", MessageLevel.EMERG, 28002));
 

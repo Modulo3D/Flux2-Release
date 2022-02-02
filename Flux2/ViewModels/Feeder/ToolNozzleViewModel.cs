@@ -44,11 +44,8 @@ namespace Flux.ViewModels
             Odometer = new OdometerViewModel<NFCToolNozzle>(this, multiplier);
 
             var tool_key = Flux.ConnectionProvider.VariableStore.GetArrayUnit(m => m.TEMP_TOOL, Feeder.Position);
-            if (!tool_key.HasValue)
-                return;
-
             _Temperature = Flux.ConnectionProvider
-                .ObserveVariable(m => m.TEMP_TOOL, tool_key.Value)
+                .ObserveVariable(m => m.TEMP_TOOL, tool_key.ValueOr(() => ""))
                 .ToProperty(this, v => v.Temperature);
         }
 

@@ -42,7 +42,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="DynamicData" Version="7.4.9" />
+    <PackageReference Include="DynamicData" Version="7.4.11" />
     <PackageReference Include="EmbedIO" Version="3.4.3" />
     <PackageReference Include="HttpMultipartParser" Version="5.0.1" />
     <PackageReference Include="LiteDB" Version="4.1.4" />

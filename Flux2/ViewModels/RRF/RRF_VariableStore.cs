@@ -43,6 +43,10 @@ namespace Flux.ViewModels
                 m => Observable.CombineLatest(global.GetState(m), storage.GetState(m), queue.GetState(m),
                 (g, s, q) => g.Convert(g => s.Convert(s => q.Convert(q => (g, s, q))))));
 
+            HOLD_TOOL = RegisterVariable(new RRF_VariableGlobalModel<short>(connection, "hold_tool", true));
+            HOLD_TEMP = RegisterVariable(new RRF_ArrayGlobalModel<double>(connection, "hold_temp", 4, true));
+            HOLD_BLK_NUM = RegisterVariable(new RRF_VariableGlobalModel<double>(connection, "hold_blk_num", true));
+
             QUEUE = RegisterVariable(queue.CreateVariable<Dictionary<ushort, Guid>, Unit>("QUEUE", (c, m) => m.GetGuidDictionaryFromQueue()));
             STORAGE = RegisterVariable(queue.CreateVariable<Dictionary<Guid, MCodePartProgram>, Unit>("STORAGE", (c, m) => m.GetPartProgramDictionaryFromStorage()));
             PROCESS_STATUS = RegisterVariable(state.CreateVariable<FLUX_ProcessStatus, Unit>("PROCESS STATUS", (c, m) => m.GetProcessStatus()));

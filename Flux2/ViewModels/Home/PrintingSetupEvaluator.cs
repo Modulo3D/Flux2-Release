@@ -315,10 +315,10 @@ namespace Flux.ViewModels
 
         private Optional<bool> HotNozzle(PrintingEvaluation evaluation, Optional<FLUX_Temp> plc_temp, Optional<double> extrusion_temp)
         {
-            if (!evaluation.SelectedRecovery.HasValue)
-                return default;
-            if (evaluation.SelectedRecovery.Value.ToolNumber != Feeder.Position)
-                return default;
+            if (!evaluation.Recovery.ConvertOr(r => r.IsSelected, () => false))
+                return false;
+            if (!evaluation.Recovery.ConvertOr(r =>  r.ToolNumber == Feeder.Position, () => false))
+                return false;
             if (!extrusion_temp.HasValue)
                 return false;
             if (!plc_temp.HasValue)

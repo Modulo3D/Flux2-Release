@@ -44,11 +44,11 @@ namespace Flux.ViewModels
                 (connecting, watch, not_found, enabled, low) => (connecting, watch, not_found, enabled, low))
                 .DistinctUntilChanged();
 
-            vacuum.Throttle(TimeSpan.FromSeconds(1))
+            vacuum.Throttle(TimeSpan.FromSeconds(5))
                 .Where(v => v.connecting.HasValue && !v.connecting.Value && v.not_found.HasValue && v.not_found.Value)
                 .Subscribe(_ => Flux.Messages.LogMessage("Vuoto", "Sensore del vuoto non trovato", MessageLevel.EMERG, 32001));
 
-            vacuum.Throttle(TimeSpan.FromSeconds(1))
+            vacuum.Throttle(TimeSpan.FromSeconds(5))
                .Where(v => v.connecting.HasValue && !v.connecting.Value && v.low.HasValue && v.low.Value && v.watch.HasValue && v.watch.Value)
                .Subscribe(_ => Flux.Messages.LogMessage("Vuoto", "Vuoto perso durante la lavorazione", MessageLevel.EMERG, 32002));
 

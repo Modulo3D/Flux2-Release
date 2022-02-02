@@ -27,7 +27,7 @@ namespace Flux.ViewModels
 
             var has_recovery = Flux.StatusProvider
                 .WhenAnyValue(v => v.PrintingEvaluation)
-                .Select(e => e.AvaiableRecovery.HasValue);
+                .Select(e => e.Recovery.HasValue);
 
             var can_recovery = Observable.CombineLatest(has_recovery, is_idle, (r, i) => r && i);
 
@@ -36,7 +36,7 @@ namespace Flux.ViewModels
 
         public async Task LoadRecoveryAsync()
         {
-            var recovery = Flux.StatusProvider.PrintingEvaluation.AvaiableRecovery;
+            var recovery = Flux.StatusProvider.PrintingEvaluation.Recovery;
             if (!recovery.HasValue)
                 return;
 

@@ -26,7 +26,7 @@ namespace Flux.ViewModels
             var driver = Observable.CombineLatest(
                 connecting, emergency, (connecting, emergency) => (connecting, emergency));
 
-            driver.Throttle(TimeSpan.FromSeconds(1))
+            driver.Throttle(TimeSpan.FromSeconds(5))
                 .Where(p => p.connecting.HasValue && !p.connecting.Value && p.emergency)
                 .Subscribe(_ => Flux.Messages.LogMessage("Driver assi", "Assi in emergenza", MessageLevel.EMERG, 38001));
 

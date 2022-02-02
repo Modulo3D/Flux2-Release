@@ -7,6 +7,7 @@ using EmbedIO.WebSockets;
 using HttpMultipartParser;
 using Modulo3DStandard;
 using ReactiveUI;
+using RestSharp;
 using Swan.Logging;
 using System;
 using System.IO;
@@ -18,6 +19,7 @@ using System.Net.Sockets;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
@@ -178,6 +180,7 @@ namespace Flux.ViewModels
         public const int WebServerPort = 8080;
 
         public Ping Pinger { get; }
+        public RestClient Client { get; }
         public FluxViewModel Flux { get; }
         public UdpDiscovery UdpDiscovery { get; }
 
@@ -199,6 +202,7 @@ namespace Flux.ViewModels
         {
             Flux = main;
             Pinger = new Ping();
+            Client = new RestClient();
             UdpDiscovery = new UdpDiscovery();
         }
 
@@ -212,13 +216,13 @@ namespace Flux.ViewModels
         {
             var core_settings = Flux.SettingsProvider.CoreSettings.Local;
 
-            PLCNetworkConnectivity = await PingAsync(
+            PLCNetworkConnectivity = await OptionsAsync(
                 core_settings.PLCAddress,
-                TimeSpan.FromSeconds(1));
+                TimeSpan.FromSeconds(5));
 
             InterNetworkConnectivity = await PingAsync(
                 "8.8.8.8",
-                TimeSpan.FromSeconds(5));
+                TimeSpan.FromSeconds(10));
         }
 
         public async Task<bool> PingAsync(Optional<string> address, TimeSpan timeout)
@@ -234,6 +238,27 @@ namespace Flux.ViewModels
                 var result = await Pinger.SendPingAsync(address.Value, (int)timeout.TotalMilliseconds);
 
                 return result.Status == IPStatus.Success;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        public async Task<bool> OptionsAsync(Optional<string> address, TimeSpan timeout)
+        {
+            try
+            {
+                if (!address.HasValue)
+                    return false;
+
+                var request = new RestRequest($"http://{address}", Method.Options);
+
+                var cts = new CancellationTokenSource(timeout);
+                var response = await Client.ExecuteAsync(request, cts.Token);
+
+                return response.StatusCode == HttpStatusCode.OK || 
+                       response.StatusCode == HttpStatusCode.NoContent;
             }
             catch (Exception)
             {

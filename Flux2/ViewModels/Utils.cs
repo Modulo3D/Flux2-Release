@@ -176,7 +176,7 @@ namespace Flux.ViewModels
 
         public async Task<ContentDialogResult> ShowAsync()
         {
-            Flux.AddContent(this);
+            Flux.ContentDialog = this;
             var result = await ShowAsyncSource.Task;
             await Observable.CombineLatest(
                 CloseCommand.ConvertOr(c => c.IsExecuting, () => Observable.Return(false)),
@@ -189,8 +189,18 @@ namespace Flux.ViewModels
 
         public void Hide()
         {
-            ShowAsyncSource.SetResult(Result);
-            Flux.RemoteContents.RemoveKey(Name);
+            try
+            {
+                ShowAsyncSource.SetResult(Result);
+            }
+            catch (Exception ex)
+            { }
+        }
+
+        public override void Dispose()
+        {
+            base.Dispose();
+            Flux.ContentDialog = default;
         }
     }
 

@@ -351,7 +351,22 @@ namespace Flux.ViewModels
                 // Write preprocess gcode
                 yield return "(GTO, end_preprocess)";
 
-                var def_recovery = new MCodeRecovery(mcode, 0, 0, new[] { 0.0, 0.0, 0.0, 0.0 }, new[] { 200.0 });
+                var def_recovery = new MCodeRecovery(mcode.MCodeGuid, false, 0, 0,
+                    new Dictionary<VariableUnit, double>()
+                    {
+                        { "0", 0 },
+                        { "1", 0 },
+                        { "2", 0 },
+                        { "3", 0 },
+                    },
+                    new Dictionary<VariableUnit, double>() 
+                    {
+                        { "X", 0 },
+                        { "Y", 0 },
+                        { "Z", 0 },
+                        { "E", 0 },
+                    });
+
                 var recovery_mcode = GenerateRecoveryMCodeLines(def_recovery);
                 if (recovery_mcode.HasValue)
                 {
@@ -384,24 +399,26 @@ namespace Flux.ViewModels
                 yield return $"G500 T{recovery.ToolNumber + 1}";
                 yield return $"M4999 [{{WIRE_ENDSTOP_1_RESET}}, {recovery.ToolNumber + 1}, 0, 1]";
 
-                for (int tool = 0; tool < recovery.Temperatures.Length; tool++)
+                for (int tool = 0; tool < recovery.Temperatures.Count; tool++)
                 {
-                    if (recovery.Temperatures[tool] > 50)
+                    var tool_unit = $"{tool}";
+                    if (recovery.Temperatures[tool_unit] > 50)
                     {
-                        var hold_temp = $"{recovery.Temperatures[tool]:0}".Replace(",", ".");
+                        var hold_temp = $"{recovery.Temperatures[tool_unit]:0}".Replace(",", ".");
                         yield return $"M4104 [{tool + 1}, {hold_temp}, 0]";
                     }
                 }
 
-                if (recovery.Temperatures[recovery.ToolNumber] > 50)
+                var tool_number_unit = $"{recovery.ToolNumber}";
+                if (recovery.Temperatures[tool_number_unit] > 50)
                 {
-                    var hold_temp_t = $"{recovery.Temperatures[recovery.ToolNumber]:0}".Replace(",", ".");
+                    var hold_temp_t = $"{recovery.Temperatures[tool_number_unit]:0}".Replace(",", ".");
                     yield return $"M4104 [{recovery.ToolNumber + 1}, {hold_temp_t}, 1]";
                 }
 
-                var x_pos = $"{recovery.Positions[0]:0.000}".Replace(",", ".");
-                var y_pos = $"{recovery.Positions[1]:0.000}".Replace(",", ".");
-                var z_pos = $"{recovery.Positions[2]:0.000}".Replace(",", ".");
+                var x_pos = $"{recovery.Positions["X"]:0.000}".Replace(",", ".");
+                var y_pos = $"{recovery.Positions["Y"]:0.000}".Replace(",", ".");
+                var z_pos = $"{recovery.Positions["Z"]:0.000}".Replace(",", ".");
 
                 yield return $"G1 X{x_pos} Y{y_pos} F15000";
                 yield return $"G1 Z{z_pos} F5000";
@@ -409,7 +426,7 @@ namespace Flux.ViewModels
                 yield return $"G92 A0";
                 yield return $"G1 A1 F2000";
 
-                var a_pos = $"{recovery.Positions[3]:0.000}".Replace(",", ".");
+                var a_pos = $"{recovery.Positions["E"]:0.000}".Replace(",", ".");
                 yield return $"G92 A{a_pos}";
             }
         }

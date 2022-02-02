@@ -45,7 +45,7 @@ namespace Flux.ViewModels
                 (connecting, in_mateinance, cycle, top, chamber, debug) => (connecting, in_mateinance, cycle, top, chamber, debug))
                 .DistinctUntilChanged();
 
-            locks.Throttle(TimeSpan.FromSeconds(1))
+            locks.Throttle(TimeSpan.FromSeconds(5))
                 .Where(l => l.connecting.HasValue && !l.connecting.Value && l.cycle.HasValue && l.cycle.Value && !l.debug && (l.top.HasValue && !l.top.Value.@in || l.chamber.HasValue && !l.chamber.Value.@in))
                 .Subscribe(_ => Flux.Messages.LogMessage("Portella", "Portella aperta durante operazione", MessageLevel.EMERG, 31001));
 

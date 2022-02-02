@@ -33,11 +33,11 @@ namespace Flux.ViewModels
                 (connecting, temp, open) => (connecting, temp, open))
                 .DistinctUntilChanged();
 
-            chamber.Throttle(TimeSpan.FromSeconds(1))
+            chamber.Throttle(TimeSpan.FromSeconds(5))
                 .Where(c => c.connecting.HasValue && !c.connecting.Value && c.temp.HasValue && c.temp.Value.IsDisconnected)
                 .Subscribe(_ => Flux.Messages.LogMessage("Camera calda", "Sensore di temperatura non trovato", MessageLevel.EMERG, 29001));
 
-            chamber.Throttle(TimeSpan.FromSeconds(1))
+            chamber.Throttle(TimeSpan.FromSeconds(5))
                 .Where(c => c.connecting.HasValue && !c.connecting.Value && c.temp.HasValue && c.temp.Value.IsHot && c.open)
                 .Subscribe(_ => Flux.Messages.LogMessage("Camera calda", "Temperatura della camera elevata", MessageLevel.WARNING, 29002));
 

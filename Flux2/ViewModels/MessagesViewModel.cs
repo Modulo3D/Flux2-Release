@@ -321,7 +321,7 @@ namespace Flux.ViewModels
         {
             var error_code = reading ? 17001 : 17002;
             var title = $"Errore di {(reading ? "lettura" : "scrittura")} variabile";
-            LogMessage(title, plc_var.Name, MessageLevel.EMERG, error_code);
+            LogMessage(title, plc_var.Name, MessageLevel.ERROR, error_code);
         }
         public void LogMessage<TRData, TWData>(Func<IFLUX_VariableStore, IFLUX_Variable<TRData, TWData>> get_plc_var, bool reading)
         {
@@ -332,7 +332,7 @@ namespace Flux.ViewModels
         {
             var error_code = reading ? 17001 : 17002;
             var title = $"Errore di {(reading ? "lettura" : "scrittura")} variabile";
-            LogMessage(title, $"{plc_array.Name}, pos: {position}", MessageLevel.EMERG, error_code);
+            LogMessage(title, $"{plc_array.Name}, pos: {position}", MessageLevel.ERROR, error_code);
         }
         public void LogMessage<TRData, TWData>(Func<IFLUX_VariableStore, IFLUX_Array<TRData, TWData>> get_plc_array, ushort position, bool reading)
         {
@@ -554,13 +554,13 @@ namespace Flux.ViewModels
             switch (hold_result)
             {
                 case PLCHoldResult.NONE:
-                    LogMessage(title, "Risultato nullo", MessageLevel.EMERG, 20001);
+                    LogMessage(title, "Risultato nullo", MessageLevel.ERROR, 20001);
                     break;
                 case PLCHoldResult.WAIT_ERROR:
-                    LogMessage(title, "Errore di attesa", MessageLevel.EMERG, 20002);
+                    LogMessage(title, "Errore di attesa", MessageLevel.ERROR, 20002);
                     break;
                 case PLCHoldResult.HOLD_ERROR:
-                    LogMessage(title, "Errore di pausa", MessageLevel.EMERG, 20003);
+                    LogMessage(title, "Errore di pausa", MessageLevel.ERROR, 20003);
                     break;
                 case PLCHoldResult.HOLD_CANCELED:
                     LogMessage(title, "Pausa cancellata", MessageLevel.INFO, 20004);
@@ -580,19 +580,19 @@ namespace Flux.ViewModels
                     LogMessage(title, "Homing annullato", MessageLevel.INFO, 18001);
                     break;
                 case HomeResponse.HOME_ERROR_PLC_REFUSED:
-                    LogMessage(title, "Impossibile ottenere il consenso del PLC", MessageLevel.EMERG, 18002);
+                    LogMessage(title, "Impossibile ottenere il consenso del PLC", MessageLevel.ERROR, 18002);
                     break;
                 case HomeResponse.HOME_ERROR_DRIVE_DISABLED:
-                    LogMessage(title, "Impossibile abilitare i motori", MessageLevel.EMERG, 18003);
+                    LogMessage(title, "Impossibile abilitare i motori", MessageLevel.ERROR, 18003);
                     break;
                 case HomeResponse.HOME_ERROR_EXEC_FAULT:
-                    LogMessage(title, "Stringa mdi non eseguita", MessageLevel.EMERG, 18004);
+                    LogMessage(title, "Stringa mdi non eseguita", MessageLevel.ERROR, 18004);
                     break;
                 case HomeResponse.HOME_ERROR_NOT_HOMED:
-                    LogMessage(title, "Stampante non azzerata", MessageLevel.EMERG, 18005);
+                    LogMessage(title, "Stampante non azzerata", MessageLevel.ERROR, 18005);
                     break;
                 case HomeResponse.HOME_ERROR_NOT_FINALIZED:
-                    LogMessage(title, "Finalizzazione non avvenuta", MessageLevel.EMERG, 18006);
+                    LogMessage(title, "Finalizzazione non avvenuta", MessageLevel.ERROR, 18006);
                     break;
                 case HomeResponse.HOME_SUCCESS:
                     LogMessage(title, "Homing eseguito", MessageLevel.DEBUG, 18000);
@@ -606,16 +606,16 @@ namespace Flux.ViewModels
             switch (reset_result)
             {
                 case PLCResetResponse.NONE:
-                    LogMessage(title, "Risultato nullo", MessageLevel.EMERG, 10001);
+                    LogMessage(title, "Risultato nullo", MessageLevel.ERROR, 10001);
                     break;
                 case PLCResetResponse.WAIT_ERROR:
-                    LogMessage(title, "Errore di attesa", MessageLevel.EMERG, 10002);
+                    LogMessage(title, "Errore di attesa", MessageLevel.ERROR, 10002);
                     break;
                 case PLCResetResponse.RESET_ERROR:
-                    LogMessage(title, "Errore di reset", MessageLevel.EMERG, 10003);
+                    LogMessage(title, "Errore di reset", MessageLevel.ERROR, 10003);
                     break;
                 case PLCResetResponse.LOWER_PLATE_ERROR:
-                    LogMessage(title, "Errore di abbassa piatto", MessageLevel.EMERG, 10004);
+                    LogMessage(title, "Errore di abbassa piatto", MessageLevel.ERROR, 10004);
                     break;
                 case PLCResetResponse.RESET_CANCELED:
                     LogMessage(title, "Hold cancellato", MessageLevel.INFO, 10005);
@@ -632,34 +632,34 @@ namespace Flux.ViewModels
             switch (start_result)
             {
                 case PLCStartResult.NONE:
-                    LogMessage(title, "Risultato nullo", MessageLevel.EMERG, 30001);
+                    LogMessage(title, "Risultato nullo", MessageLevel.ERROR, 30001);
                     break;
                 case PLCStartResult.PROCESS_PLC_STATUS_ERROR:
-                    LogMessage(title, "Errore di status", MessageLevel.EMERG, 30002);
+                    LogMessage(title, "Errore di status", MessageLevel.ERROR, 30002);
                     break;
                 case PLCStartResult.HRUN_ERROR:
-                    LogMessage(title, "Errore di hrun", MessageLevel.EMERG, 30003);
+                    LogMessage(title, "Errore di hrun", MessageLevel.ERROR, 30003);
                     break;
                 case PLCStartResult.RESET_ERROR:
-                    LogMessage(title, "Errore di reset", MessageLevel.EMERG, 30004);
+                    LogMessage(title, "Errore di reset", MessageLevel.ERROR, 30004);
                     break;
                 case PLCStartResult.CYCLE_ERROR:
-                    LogMessage(title, "Errore di cycle", MessageLevel.EMERG, 30005);
+                    LogMessage(title, "Errore di cycle", MessageLevel.ERROR, 30005);
                     break;
                 case PLCStartResult.PROCESS_MODE_ERROR:
-                    LogMessage(title, "Errore di modalità del processo", MessageLevel.EMERG, 30006);
+                    LogMessage(title, "Errore di modalità del processo", MessageLevel.ERROR, 30006);
                     break;
                 case PLCStartResult.PROCESS_START_STATUS_ERROR:
-                    LogMessage(title, "Errore di stato iniziale", MessageLevel.EMERG, 30007);
+                    LogMessage(title, "Errore di stato iniziale", MessageLevel.ERROR, 30007);
                     break;
                 case PLCStartResult.PART_PROGRAM_NOT_FOUND_ERROR:
-                    LogMessage(title, "Part program non trovato", MessageLevel.EMERG, 30008);
+                    LogMessage(title, "Part program non trovato", MessageLevel.ERROR, 30008);
                     break;
                 case PLCStartResult.INVALID_START_EVALUATION:
                     LogMessage(title, "Valutazione di stampa non valida", MessageLevel.ERROR, 30009);
                     break;
                 case PLCStartResult.INVALID_MCODE_ERROR:
-                    LogMessage(title, "Programma non selezionato", MessageLevel.EMERG, 300010);
+                    LogMessage(title, "Programma non selezionato", MessageLevel.ERROR, 300010);
                     break;
                 case PLCStartResult.SUCCESS:
                     LogMessage(title, "Cycle eseguito", MessageLevel.DEBUG, 30000);
@@ -673,10 +673,10 @@ namespace Flux.ViewModels
             switch (response)
             {
                 case OSAI_CloseResponse.CLOSE_INVALID_STATE:
-                    LogMessage(title, "Stato non valido", MessageLevel.EMERG, 40001);
+                    LogMessage(title, "Stato non valido", MessageLevel.ERROR, 40001);
                     break;
                 case OSAI_CloseResponse.CLOSE_EXCEPTION:
-                    LogMessage(title, "Stato non valido", MessageLevel.EMERG, 40002);
+                    LogMessage(title, "Stato non valido", MessageLevel.ERROR, 40002);
                     break;
                 case OSAI_CloseResponse.CLOSE_SUCCESS:
                     LogMessage(title, "Successo", MessageLevel.DEBUG, 40000);
@@ -690,31 +690,31 @@ namespace Flux.ViewModels
             switch (setup_result)
             {
                 case OSAI_SetupResponse.SETUP_RESET_ERROR:
-                    LogMessage(title, "Errore durante il reset", MessageLevel.EMERG, 60001);
+                    LogMessage(title, "Errore durante il reset", MessageLevel.ERROR, 60001);
                     break;
                 case OSAI_SetupResponse.SETUP_RUN_ERROR:
-                    LogMessage(title, "Errore durante la fase di RUN", MessageLevel.EMERG, 60002);
+                    LogMessage(title, "Errore durante la fase di RUN", MessageLevel.ERROR, 60002);
                     break;
                 case OSAI_SetupResponse.SETUP_IDLE_WAIT_ERROR:
-                    LogMessage(title, "Errore durante la fase di idle", MessageLevel.EMERG, 60003);
+                    LogMessage(title, "Errore durante la fase di idle", MessageLevel.ERROR, 60003);
                     break;
                 case OSAI_SetupResponse.SETUP_STATUS_ERROR:
-                    LogMessage(title, "Errore durante la richiesta di status", MessageLevel.EMERG, 60004);
+                    LogMessage(title, "Errore durante la richiesta di status", MessageLevel.ERROR, 60004);
                     break;
                 case OSAI_SetupResponse.SETUP_REF_ERROR:
-                    LogMessage(title, "Errore durante il riferimento assi", MessageLevel.EMERG, 60005);
+                    LogMessage(title, "Errore durante il riferimento assi", MessageLevel.ERROR, 60005);
                     break;
                 case OSAI_SetupResponse.SETUP_AUX_ERROR:
-                    LogMessage(title, "Errore durante la abilitazione aux", MessageLevel.EMERG, 60006);
+                    LogMessage(title, "Errore durante la abilitazione aux", MessageLevel.ERROR, 60006);
                     break;
                 case OSAI_SetupResponse.SETUP_RUN_WAIT_ERROR:
-                    LogMessage(title, "Errore durante il reset", MessageLevel.EMERG, 60007);
+                    LogMessage(title, "Errore durante il reset", MessageLevel.ERROR, 60007);
                     break;
                 case OSAI_SetupResponse.SETUP_AUTO_ERROR:
-                    LogMessage(title, "Errore durante la richiesta di AUTO", MessageLevel.EMERG, 60008);
+                    LogMessage(title, "Errore durante la richiesta di AUTO", MessageLevel.ERROR, 60008);
                     break;
                 case OSAI_SetupResponse.SETUP_AUTO_WAIT_ERROR:
-                    LogMessage(title, "Errore durante la fase di AUTO", MessageLevel.EMERG, 60009);
+                    LogMessage(title, "Errore durante la fase di AUTO", MessageLevel.ERROR, 60009);
                     break;
                 case OSAI_SetupResponse.SETUP_SUCCESS:
                     LogMessage(title, "PLC Inizializzato", MessageLevel.DEBUG, 60000);
@@ -728,13 +728,13 @@ namespace Flux.ViewModels
             switch (connect_result)
             {
                 case OSAI_ConnectResponse.CONNECT_EXCEPTION:
-                    LogMessage(title, "Errore durante la connessione", MessageLevel.EMERG, 70001);
+                    LogMessage(title, "Errore durante la connessione", MessageLevel.ERROR, 70001);
                     break;
                 case OSAI_ConnectResponse.CONNECT_INVALID_ADDRESS:
-                    LogMessage(title, "Indirizzo non valido", MessageLevel.EMERG, 70002);
+                    LogMessage(title, "Indirizzo non valido", MessageLevel.ERROR, 70002);
                     break;
                 case OSAI_ConnectResponse.CONNECT_INVALID_STATE:
-                    LogMessage(title, "Stato non valido", MessageLevel.EMERG, 70003);
+                    LogMessage(title, "Stato non valido", MessageLevel.ERROR, 70003);
                     break;
                 case OSAI_ConnectResponse.CONNECT_SUCCESS:
                     LogMessage(title, "PLC Connesso", MessageLevel.DEBUG, 70000);
@@ -746,24 +746,24 @@ namespace Flux.ViewModels
         {
             var title = "Connessione WebService PLC";
             if (!state.HasValue)
-                LogMessage(title, "OPENClient non aperto", MessageLevel.EMERG, 50001);
+                LogMessage(title, "OPENClient non aperto", MessageLevel.ERROR, 50001);
 
             switch (state.Value)
             {
                 case CommunicationState.Closed:
-                    LogMessage(title, "OPENClient chiuso", MessageLevel.EMERG, 50002);
+                    LogMessage(title, "OPENClient chiuso", MessageLevel.ERROR, 50002);
                     break;
                 case CommunicationState.Closing:
-                    LogMessage(title, "OPENClient in chiusura", MessageLevel.EMERG, 50003);
+                    LogMessage(title, "OPENClient in chiusura", MessageLevel.ERROR, 50003);
                     break;
                 case CommunicationState.Faulted:
-                    LogMessage(title, "OPENClient in errore", MessageLevel.EMERG, 50004);
+                    LogMessage(title, "OPENClient in errore", MessageLevel.ERROR, 50004);
                     break;
                 case CommunicationState.Opening:
-                    LogMessage(title, "OPENClient in apertura", MessageLevel.EMERG, 50005);
+                    LogMessage(title, "OPENClient in apertura", MessageLevel.ERROR, 50005);
                     break;
                 case CommunicationState.Created:
-                    LogMessage(title, "OPENClient in creazione", MessageLevel.EMERG, 50006);
+                    LogMessage(title, "OPENClient in creazione", MessageLevel.ERROR, 50006);
                     break;
                 case CommunicationState.Opened:
                     LogMessage(title, "OPENClient connesso", MessageLevel.DEBUG, 50000);
@@ -778,22 +778,22 @@ namespace Flux.ViewModels
             switch (mdi_result)
             {
                 case OSAI_ExecuteMDIResponse.EXEC_MDI_STATUS_ERROR:
-                    LogMessage(title, $"Errore di stato PLC", MessageLevel.EMERG, 80001);
+                    LogMessage(title, $"Errore di stato PLC", MessageLevel.ERROR, 80001);
                     break;
                 case OSAI_ExecuteMDIResponse.EXEC_MDI_MODE_ERROR:
-                    LogMessage(title, $"Impossibile impostare il PLC su MDI", MessageLevel.EMERG, 80002);
+                    LogMessage(title, $"Impossibile impostare il PLC su MDI", MessageLevel.ERROR, 80002);
                     break;
                 case OSAI_ExecuteMDIResponse.EXEC_MDI_STRING_ERROR:
-                    LogMessage(title, $"Impossibile impostare la stringa MDI", MessageLevel.EMERG, 80003);
+                    LogMessage(title, $"Impossibile impostare la stringa MDI", MessageLevel.ERROR, 80003);
                     break;
                 case OSAI_ExecuteMDIResponse.EXEC_MDI_CYCLE_ERROR:
-                    LogMessage(title, $"Impossibile impostare il PLC su Cycle", MessageLevel.EMERG, 80004);
+                    LogMessage(title, $"Impossibile impostare il PLC su Cycle", MessageLevel.ERROR, 80004);
                     break;
                 case OSAI_ExecuteMDIResponse.EXEC_MDI_WAIT_MODE_ERROR:
-                    LogMessage(title, $"Timeout modalità PLC", MessageLevel.EMERG, 80005);
+                    LogMessage(title, $"Timeout modalità PLC", MessageLevel.ERROR, 80005);
                     break;
                 case OSAI_ExecuteMDIResponse.EXEC_MDI_WAIT_STATUS_ERROR:
-                    LogMessage(title, $"Timeout stato PLC", MessageLevel.EMERG, 80006);
+                    LogMessage(title, $"Timeout stato PLC", MessageLevel.ERROR, 80006);
                     break;
                 case OSAI_ExecuteMDIResponse.EXEC_MDI_SUCCESS:
                     LogMessage(title, $"Stringa MDI eseguita", MessageLevel.DEBUG, 80000);
@@ -815,10 +815,10 @@ namespace Flux.ViewModels
             switch (mode_result)
             {
                 case PLCModeResult.NONE:
-                    LogMessage(title, $"Risultato nullo", MessageLevel.EMERG, 90001);
+                    LogMessage(title, $"Risultato nullo", MessageLevel.ERROR, 90001);
                     break;
                 case PLCModeResult.ERROR:
-                    LogMessage(title, $"Impossibile selezionare la modalità \"{mode}\"", MessageLevel.EMERG, 90002);
+                    LogMessage(title, $"Impossibile selezionare la modalità \"{mode}\"", MessageLevel.ERROR, 90002);
                     break;
                 case PLCModeResult.SUCCESS:
                     LogMessage(title, $"Selezionata la modalità \"{mode}\"", MessageLevel.DEBUG, 90000);
@@ -833,23 +833,23 @@ namespace Flux.ViewModels
             switch (filament_response)
             {
                 case MaterialChangeResult.MATERIAL_CHANGE_ERROR_INVALID_TOOL_MATERIAL:
-                    LogMessage(title, "Profilo di stampa non valido", MessageLevel.EMERG, 14001);
+                    LogMessage(title, "Profilo di stampa non valido", MessageLevel.ERROR, 14001);
                     break;
                 case MaterialChangeResult.MATERIAL_CHANGE_ERROR_INVALID_BREAK_TEMP:
                 case MaterialChangeResult.MATERIAL_CHANGE_ERROR_INVALID_EXTRUSION_TEMP:
-                    LogMessage(title, "Temperatura di estrusione non valida", MessageLevel.EMERG, 14002);
+                    LogMessage(title, "Temperatura di estrusione non valida", MessageLevel.ERROR, 14002);
                     break;
                 case MaterialChangeResult.MATERIAL_CHANGE_ERROR_PARAMACRO:
-                    LogMessage(title, "Errore paramacro", MessageLevel.EMERG, 14003);
+                    LogMessage(title, "Errore paramacro", MessageLevel.ERROR, 14003);
                     break;
                 case MaterialChangeResult.MATERIAL_CHANGE_ERROR_INVALID_STATUS:
-                    LogMessage(title, "Stato non valido", MessageLevel.EMERG, 14004);
+                    LogMessage(title, "Stato non valido", MessageLevel.ERROR, 14004);
                     break;
                 case MaterialChangeResult.MATERIAL_CHANGE_ERROR:
-                    LogMessage(title, "Errore di cambio", MessageLevel.EMERG, 14005);
+                    LogMessage(title, "Errore di cambio", MessageLevel.ERROR, 14005);
                     break;
                 case MaterialChangeResult.MATERIAL_CHANGE_ERROR_INVALID_NOZZLE:
-                    LogMessage(title, "Estrusore non valido", MessageLevel.EMERG, 14006);
+                    LogMessage(title, "Estrusore non valido", MessageLevel.ERROR, 14006);
                     break;
                 case MaterialChangeResult.MATERIAL_CHANGE_SUCCESS:
                     LogMessage(title, "Operazione terminata", MessageLevel.DEBUG, 14000);
@@ -866,13 +866,13 @@ namespace Flux.ViewModels
             switch (tool_response)
             {
                 case ToolManteinanceResult.TOOL_MAINTENANCE_ERROR_PARAMACRO:
-                    LogMessage(title, "Errore paramacro", MessageLevel.EMERG, 28001);
+                    LogMessage(title, "Errore paramacro", MessageLevel.ERROR, 28001);
                     break;
                 case ToolManteinanceResult.TOOL_MAINTENANCE_ERROR_INVALID_NOZZLE:
-                    LogMessage(title, "Errore paramacro", MessageLevel.EMERG, 28002);
+                    LogMessage(title, "Errore paramacro", MessageLevel.ERROR, 28002);
                     break;
                 case ToolManteinanceResult.TOOL_MAINTENANCE_ERROR_INVALID_STATUS:
-                    LogMessage(title, "Stato non valido", MessageLevel.EMERG, 28003);
+                    LogMessage(title, "Stato non valido", MessageLevel.ERROR, 28003);
                     break;
                 case ToolManteinanceResult.TOOL_MAINTENANCE_SUCCESS:
                     LogMessage(title, "Operazione terminata", MessageLevel.DEBUG, 28000);
@@ -894,10 +894,10 @@ namespace Flux.ViewModels
             switch (process_result)
             {
                 case PLCProcessDataResult.NONE:
-                    LogMessage(title, "Risultato nullo", MessageLevel.EMERG, 15001);
+                    LogMessage(title, "Risultato nullo", MessageLevel.ERROR, 15001);
                     break;
                 case PLCProcessDataResult.ERROR:
-                    LogMessage(title, "Errore lettura dati processo PLC", MessageLevel.EMERG, 15002);
+                    LogMessage(title, "Errore lettura dati processo PLC", MessageLevel.ERROR, 15002);
                     break;
                 case PLCProcessDataResult.SUCCESS:
                     LogMessage(title, "Dati di processo letti", MessageLevel.DEBUG, 15003);
@@ -912,16 +912,16 @@ namespace Flux.ViewModels
             switch (plc_update)
             {
                 case PLCUpdateResponse.PLC_UPDATE_STATUS_ERROR:
-                    LogMessage(title, "Impossibile aggiornare lo stato", MessageLevel.EMERG, 20001);
+                    LogMessage(title, "Impossibile aggiornare lo stato", MessageLevel.ERROR, 20001);
                     break;
                 case PLCUpdateResponse.PLC_UPDATE_AXIS_ERROR:
-                    LogMessage(title, "Impossibile leggere gli assi", MessageLevel.EMERG, 20002);
+                    LogMessage(title, "Impossibile leggere gli assi", MessageLevel.ERROR, 20002);
                     break;
                 case PLCUpdateResponse.PLC_UPDATE_MARKER_ERROR:
-                    LogMessage(title, "Impossibile leggere il marker", MessageLevel.EMERG, 20003);
+                    LogMessage(title, "Impossibile leggere il marker", MessageLevel.ERROR, 20003);
                     break;
                 case PLCUpdateResponse.PLC_UPDATE_EXCEPTION:
-                    LogMessage(title, $"Eccezione: {(ex.HasValue ? ex.Value.Message : "")}", MessageLevel.EMERG, 20004);
+                    LogMessage(title, $"Eccezione: {(ex.HasValue ? ex.Value.Message : "")}", MessageLevel.ERROR, 20004);
                     break;
             }
             return plc_update;
@@ -941,7 +941,7 @@ namespace Flux.ViewModels
                     LogMessage(title, $"Attenzione: {title}", MessageLevel.WARNING, error + 2);
                     break;
                 case StatusBarState.Error:
-                    LogMessage(title, $"{title} in errore", MessageLevel.EMERG, error + 3);
+                    LogMessage(title, $"{title} in errore", MessageLevel.ERROR, error + 3);
                     break;
             }
             return status;
