@@ -152,36 +152,36 @@ namespace Flux.ViewModels
             RRFObjectModel = new RRF_ObjectModel();
             GlobalChanged = RRFObjectModel.WhenAnyValue(m => m.Global);
 
-            var ultra_fast = TimeSpan.FromMilliseconds(350);
+            var ultra_fast = TimeSpan.FromMilliseconds(500);
             var fast = TimeSpan.FromMilliseconds(750);
             var medium = TimeSpan.FromMilliseconds(1000);
             var slow = TimeSpan.FromMilliseconds(1500);
-            var timeout = TimeSpan.FromMilliseconds(500);
+            var timeout = TimeSpan.FromMilliseconds(2000);
 
             MemoryReaders = new SourceCache<IRRF_MemoryReader, string>(f => f.Name);
 
             // Model
-            AddModelReader<RRF_ObjectModelState>("state", ultra_fast, timeout, IRRF_RequestPriority.Medium, s => RRFObjectModel.State = s);
+            AddModelReader<RRF_ObjectModelState>("state", ultra_fast, timeout, IRRF_RequestPriority.High, s => RRFObjectModel.State = s);
 
+            AddModelReader<RRF_ObjectModelJob>("job", fast, timeout, IRRF_RequestPriority.High, j => RRFObjectModel.Job = j);
             AddModelReader<List<RRF_ObjectModelTool>>("tools", fast, timeout, IRRF_RequestPriority.High, s => RRFObjectModel.Tools = s);
             AddModelReader<RRF_ObjectModelSensors>("sensors", fast, timeout, IRRF_RequestPriority.High, s => RRFObjectModel.Sensors = s);
             AddModelReader<JObject>("global", fast, timeout, IRRF_RequestPriority.High, g => RRFObjectModel.Global = g.ToObject<Dictionary<string, object>>());
-            AddModelReader<JObject>("queue", medium, timeout, IRRF_RequestPriority.High, g => RRFObjectModel.Global = g.ToObject<Dictionary<string, object>>());
+            AddModelReader<JObject>("queue", fast, timeout, IRRF_RequestPriority.High, g => RRFObjectModel.Global = g.ToObject<Dictionary<string, object>>());
 
-            AddModelReader<RRF_ObjectModelMove>("move", medium, timeout, IRRF_RequestPriority.High, m => RRFObjectModel.Move = m);
-            AddModelReader<List<RRF_ObjectModelInput>>("inputs", medium, timeout, IRRF_RequestPriority.High, i => RRFObjectModel.Inputs = i);
+            AddModelReader<RRF_ObjectModelMove>("move", medium, timeout, IRRF_RequestPriority.Medium, m => RRFObjectModel.Move = m);
+            AddModelReader<List<RRF_ObjectModelInput>>("inputs", medium, timeout, IRRF_RequestPriority.Medium, i => RRFObjectModel.Inputs = i);
 
-            AddModelReader<RRF_ObjectModelSeqs>("seqs", slow, timeout, IRRF_RequestPriority.High, s => RRFObjectModel.Seqs = s);
-            AddModelReader<RRF_ObjectModelHeat>("heat", slow, timeout, IRRF_RequestPriority.High, h => RRFObjectModel.Heat = h);
-            AddModelReader<List<RRF_ObjectModelFan>>("fans", slow, timeout, IRRF_RequestPriority.High, f => RRFObjectModel.Fans = f);
-            AddModelReader<List<RRF_ObjectModelBoard>>("boards", slow, timeout, IRRF_RequestPriority.High, b => RRFObjectModel.Boards = b);
+            AddModelReader<RRF_ObjectModelSeqs>("seqs", slow, timeout, IRRF_RequestPriority.Medium, s => RRFObjectModel.Seqs = s);
+            AddModelReader<RRF_ObjectModelHeat>("heat", slow, timeout, IRRF_RequestPriority.Medium, h => RRFObjectModel.Heat = h);
+            AddModelReader<List<RRF_ObjectModelFan>>("fans", slow, timeout, IRRF_RequestPriority.Medium, f => RRFObjectModel.Fans = f);
+            AddModelReader<List<RRF_ObjectModelBoard>>("boards", slow, timeout, IRRF_RequestPriority.Medium, b => RRFObjectModel.Boards = b);
 
-            //AddModelReader<RRF_ObjectModelJob>("job", medium, timeout, IRRF_RequestPriority.High, j => RRFObjectModel.Job = j);
             //AddModelReader<List<RRF_ObjectModelSpindle>>("spindles", slow, timeout, IRRF_RequestPriority.High, s => RRFObjectModel.Spindles = s);
 
             // File System
-            AddFileSytemReader("gcodes/queue", medium, timeout, IRRF_RequestPriority.High, f => RRFObjectModel.Queue = f);
-            AddFileSytemReader("gcodes/storage", medium, timeout, IRRF_RequestPriority.High, f => RRFObjectModel.Storage = f);
+            AddFileSytemReader("gcodes/queue", medium, timeout, IRRF_RequestPriority.Medium, f => RRFObjectModel.Queue = f);
+            AddFileSytemReader("gcodes/storage", medium, timeout, IRRF_RequestPriority.Medium, f => RRFObjectModel.Storage = f);
 
             _HasFullMemoryRead = MemoryReaders.Connect()
                 .TrueForAll(f => f.WhenAnyValue(f => f.HasMemoryRead), r => r)

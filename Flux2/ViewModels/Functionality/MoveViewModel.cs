@@ -13,7 +13,7 @@ namespace Flux.ViewModels
     public class MoveViewModel : FluxRoutableViewModel<MoveViewModel>
     {
         private double _MovePrinterExponent = 1;
-        [RemoteInput(1, -2, 3)]
+        [RemoteInput(step: 1, min: -2, max: 3)]
         public double MovePrinterExponent
         {
             get => _MovePrinterExponent;
@@ -25,7 +25,7 @@ namespace Flux.ViewModels
         public double MovePrinterDistance => _MovePrinterDistance.Value;
 
         private double _MovePrinterFeedrate = 1000;
-        [RemoteInput(100, 0)]
+        [RemoteInput(step: 100, min: 0)]
         public double MovePrinterFeedrate
         {
             get => _MovePrinterFeedrate;
@@ -82,7 +82,7 @@ namespace Flux.ViewModels
 
             async Task moveAsync(Func<IFLUX_Connection, string[]> func)
             {
-                await Flux.ConnectionProvider.ExecuteParamacroAsync(func);
+                await Flux.ConnectionProvider.ExecuteParamacroAsync(func, false);
             }
 
             MovePrinterLeftCommand = ReactiveCommand.CreateFromTask(() => moveAsync(c => c.GetRelativeXMovementGCode(-MovePrinterDistance, MovePrinterFeedrate)), can_move);

@@ -60,7 +60,7 @@ namespace Flux.ViewModels
             MemoryBuffer = new Dummy_MemoryBuffer(this);
         }
 
-        public override Task<bool> ClearFolderAsync(string folder, CancellationToken ct)
+        public override Task<bool> ClearFolderAsync(string folder, bool wait, CancellationToken ct = default)
         {
             throw new NotImplementedException();
         }
@@ -75,12 +75,12 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override Task<bool> DeleteFileAsync(string folder, string filename, CancellationToken ct)
+        public override Task<bool> DeleteFileAsync(string folder, string filename, bool wait, CancellationToken ct)
         {
             throw new NotImplementedException();
         }
 
-        public override Task<bool> DeselectPartProgramAsync(bool from_drive, CancellationToken ct)
+        public override Task<bool> DeselectPartProgramAsync(bool from_drive, bool wait, CancellationToken ct)
         {
             throw new NotImplementedException();
         }
@@ -195,7 +195,7 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override Task<bool> SelectPartProgramAsync(string filename, bool from_drive, CancellationToken ct)
+        public override Task<bool> SelectPartProgramAsync(string filename, bool from_drive, bool wait, CancellationToken ct)
         {
             throw new NotImplementedException();
         }
@@ -206,6 +206,11 @@ namespace Flux.ViewModels
         }
 
         public override Task<bool> CreateFolderAsync(string folder, string name, CancellationToken ct)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override Task<bool> HoldAsync()
         {
             throw new NotImplementedException();
         }

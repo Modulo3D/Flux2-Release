@@ -75,7 +75,8 @@ namespace Flux.ViewModels
               .AsObservableCache()
               .DisposeWith(Disposables);
 
-            var selected_extruder = Flux.ConnectionProvider.ObserveVariable(m => m.TOOL_ON_TRAILER)
+            var selected_extruder = Flux.ConnectionProvider
+                .ObserveVariable(m => m.TOOL_ON_TRAILER)
                 .QueryWhenChanged(q => (short)q.Items.IndexOf(true));
 
             _SelectedExtruder = selected_extruder

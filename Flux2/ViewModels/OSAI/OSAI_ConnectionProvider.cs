@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reactive.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
@@ -332,7 +333,8 @@ namespace Flux.ViewModels
             if (!await MGuard_MagazinePositionAsync((ushort)(position.Value - 1)))
                 return false;
 
-            return await ExecuteParamacroAsync(c => c.GetParkToolGCode());
+            var park_tool_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            return await ExecuteParamacroAsync(c => c.GetParkToolGCode(), true, park_tool_ctk.Token);
         }
         public override async Task<bool> ResetClampAsync()
         {

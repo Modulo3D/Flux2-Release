@@ -195,7 +195,7 @@ namespace Flux.ViewModels
         }
         public override async Task<bool> WriteAsync(double temp)
         {
-            return await Connection.ConvertOrAsync(c => c.ExecuteParamacroAsync(new[] { WriteTemp(temp) }), () => false);
+            return await Connection.ConvertOrAsync(c => c.ExecuteParamacroAsync(new[] { WriteTemp(temp) }, false), () => false);
         }
     }
 

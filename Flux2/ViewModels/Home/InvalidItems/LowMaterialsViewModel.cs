@@ -67,8 +67,8 @@ namespace Flux.ViewModels
         {
             base.Initialize();
             InvalidValues = Flux.StatusProvider.FeederEvaluators.Connect().RemoveKey()
-                .AutoRefresh(line => line.Material.HasEnoughWeight)
-                .Filter(line => !line.Material.HasEnoughWeight)
+                .AutoRefresh(line => line.Material.HasLowWeight)
+                .Filter(line => line.Material.HasLowWeight)
                 .Transform(line => (IInvalidValueViewModel)new LowMaterialViewModel(line))
                 .Sort(EvaluationComparer)
                 .AsObservableList();

@@ -730,7 +730,7 @@ namespace Flux.ViewModels
             }
         }
 
-        public override async Task<bool> DeselectPartProgramAsync(bool from_drive, CancellationToken ct = default)
+        public override async Task<bool> DeselectPartProgramAsync(bool from_drive, bool wait, CancellationToken ct = default)
         {
             try
             {
@@ -768,7 +768,11 @@ namespace Flux.ViewModels
                 return false;
             }
         }
-        public override async Task<bool> SelectPartProgramAsync(string filename, bool from_drive, CancellationToken ct = default)
+        public override async Task<bool> HoldAsync()
+        {
+            return await WriteVariableAsync(VariableStore.REQ_HOLD, true);
+        }
+        public override async Task<bool> SelectPartProgramAsync(string filename, bool from_drive, bool wait, CancellationToken ct = default)
         {
             try
             {
@@ -808,7 +812,7 @@ namespace Flux.ViewModels
         }
 
         // FILES
-        public override async Task<bool> DeleteFileAsync(string folder, string filename, CancellationToken ct = default)
+        public override async Task<bool> DeleteFileAsync(string folder, string filename, bool wait, CancellationToken ct = default)
         {
             try
             {
@@ -1134,7 +1138,7 @@ namespace Flux.ViewModels
                 return false;
             }
         }
-        public override Task<bool> ClearFolderAsync(string folder, CancellationToken ct = default) => DeleteFileAsync(folder, "*", ct);
+        public override Task<bool> ClearFolderAsync(string folder, bool wait, CancellationToken ct = default) => DeleteFileAsync(folder, "*", wait, ct);
 
         public override string[] GetHomingGCode()
         {

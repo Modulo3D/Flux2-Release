@@ -54,7 +54,7 @@ namespace Flux.ViewModels
         public ReactiveCommand<Unit, Unit> ResetProbeOffsetCommand { get; }
 
         private double _XUserOffset;
-        [RemoteInput(0.05, converter: typeof(MillimeterConverter))]
+        [RemoteInput(step: 0.05, converter: typeof(MillimeterConverter))]
         public double XUserOffset
         {
             get => _XUserOffset;
@@ -62,7 +62,7 @@ namespace Flux.ViewModels
         }
 
         private double _YUserOffset;
-        [RemoteInput(0.05, converter: typeof(MillimeterConverter))]
+        [RemoteInput(step: 0.05, converter: typeof(MillimeterConverter))]
         public double YUserOffset
         {
             get => _YUserOffset;
@@ -70,7 +70,7 @@ namespace Flux.ViewModels
         }
 
         private double _ZUserOffset;
-        [RemoteInput(0.01, converter: typeof(MillimeterConverter))]
+        [RemoteInput(step: 0.01, converter: typeof(MillimeterConverter))]
         public double ZUserOffset
         {
             get => _ZUserOffset;
@@ -120,6 +120,7 @@ namespace Flux.ViewModels
                     var tool_card = nfc.CardId.Value;
                     return new ToolId(Feeder.Position, tool_card, tool_nfc);
                 })
+                .DistinctUntilChanged()
                 .ToProperty(this, v => v.ToolId)
                 .DisposeWith(Disposables);
 
@@ -140,6 +141,7 @@ namespace Flux.ViewModels
                     var z = tool.Value.ToolZOffset.ValueOr(() => 0);
                     return new ToolOffset(x, y, z);
                 })
+                .DistinctUntilChanged()
                 .ToProperty(this, v => v.ToolOffset)
                 .DisposeWith(Disposables);
 
@@ -159,8 +161,16 @@ namespace Flux.ViewModels
                     var tool_card = tool_reading.CardId.Value;
                     var relative_id = new ToolId(Feeder.Position, tool_card, tool_nfc);
 
-                    return new UserOffsetKey(group_id.Value, relative_id);
+                    var user_offset_key = new UserOffsetKey(group_id.Value, relative_id);
+                    var user_offset_lookup = user_settings.Local.UserOffsets.Lookup(user_offset_key);
+                    if (!user_offset_lookup.HasValue)
+                    {
+                        var user_offset = new UserOffset(user_offset_key, 0, 0, 0);
+                        user_settings.Local.UserOffsets.AddOrUpdate(user_offset);
+                    }
+                    return user_offset_key;
                 })
+                .DistinctUntilChanged()
                 .ToProperty(this, v => v.UserOffsetKey)
                 .DisposeWith(Disposables);
 
@@ -200,15 +210,19 @@ namespace Flux.ViewModels
                     }
                     return probe_offset_key;
                 })
+                .DistinctUntilChanged()
                 .ToProperty(this, v => v.ProbeOffsetKey)
                 .DisposeWith(Disposables);
 
             _UserOffset = user_settings.Local.UserOffsets.Connect()
                 .WatchOptional(this.WhenAnyValue(v => v.UserOffsetKey))
-                .ToProperty(this, v => v.UserOffset);
+                .DistinctUntilChanged()
+                .ToProperty(this, v => v.UserOffset)
+                .DisposeWith(Disposables);
 
             _ProbeOffset = user_settings.Local.ProbeOffsets.Connect()
                 .WatchOptional(this.WhenAnyValue(v => v.ProbeOffsetKey))
+                .DistinctUntilChanged()
                 .ToProperty(this, v => v.ProbeOffset)
                 .DisposeWith(Disposables);
 
@@ -240,19 +254,16 @@ namespace Flux.ViewModels
 
                     return FluxProbeState.VALID_PROBE;
                 })
+                .DistinctUntilChanged()
                 .ToProperty(this, v => v.ProbeState)
                 .DisposeWith(Disposables);
 
             _IsOffsetRoot = this.WhenAnyValue(v => v.UserOffsetKey)
                 .Convert(o => o.RelativeTool.Position == o.GroupTool.Position)
                 .ValueOr(() => false)
+                .DistinctUntilChanged()
                 .ToProperty(this, v => v.IsOffsetRoot)
                 .DisposeWith(Disposables);
-
-            var has_user_offset_key = Observable.CombineLatest(
-                Flux.StatusProvider.IsIdle.ValueOrDefault(),
-                this.WhenAnyValue(v => v.UserOffsetKey),
-                (i, p) => i && p.HasValue);
 
             Observable.CombineLatest(
                 this.WhenAnyValue(v => v.ProbeOffset),
@@ -278,9 +289,11 @@ namespace Flux.ViewModels
 
             userOffset
                 .ConvertOr(o => o.X, () => 0)
+                .DistinctUntilChanged()
                 .BindTo(this, v => v.XUserOffset)
                 .DisposeWith(Disposables);
             this.WhenAnyValue(v => v.XUserOffset)
+                .DistinctUntilChanged()
                 .Subscribe(x => ModifyUserOffset(o => new UserOffset(o.Key, x, o.Y, o.Z)))
                 .DisposeWith(Disposables);
 
@@ -337,13 +350,16 @@ namespace Flux.ViewModels
                 this.WhenAnyValue(v => v.ProbeOffset),
                 this.WhenAnyValue(v => v.UserOffset),
                 GetOffset)
+                .DistinctUntilChanged()
                 .ToProperty(this, v => v.FluxOffset)
                 .DisposeWith(Disposables);
 
-            this.WhenAnyValue(v => v.FluxOffset)
-                .Throttle(TimeSpan.FromSeconds(1))
-                .Where(o => o.HasValue)
-                .Subscribe(async o => await Flux.ConnectionProvider.SetToolOffsetsAsync(o.Value))
+            Observable.CombineLatest(
+                Flux.StatusProvider.IsCycle.ValueOr(() => true),
+                this.WhenAnyValue(v => v.FluxOffset),
+                (cycle, offset) => (cycle, offset))
+                .Where(t => !t.cycle && t.offset.HasValue)
+                .Subscribe(async t => await Flux.ConnectionProvider.SetToolOffsetsAsync(t.offset.Value))
                 .DisposeWith(Disposables);
 
             _DebugOffsets = Flux.MCodes
@@ -364,7 +380,9 @@ namespace Flux.ViewModels
             if (!ProbeOffsetKey.HasValue)
                 return;
 
-            using var dialog = new ContentDialog(Flux, "IMPOSTA OFFSET", confirm: () => { }, cancel: () => { });
+            using var dialog = new ContentDialog(Flux, "IMPOSTA OFFSET",
+                confirm: () => Task.CompletedTask, 
+                cancel: () => Task.CompletedTask);
 
             var offset_x = new NumericOption("offset_x", "OFFSET X", 0, 0.05);
             var offset_y = new NumericOption("offset_y", "OFFSET Y", 0, 0.05);

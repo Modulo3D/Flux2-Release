@@ -331,7 +331,7 @@ namespace Flux.ViewModels
 
                     AddCommand(
                         "setMagazineLimits",
-                        () => Flux.ConnectionProvider.ExecuteParamacroAsync(m => new[] { "M98 P\"/sys/MagazineLimits\"" }),
+                        () => Flux.ConnectionProvider.ExecuteParamacroAsync(m => new[] { "M98 P\"/sys/MagazineLimits\"" }, false),
                         can_execute: IS_IEHS,
                         visible: advanced_mode);
 

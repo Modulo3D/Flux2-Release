@@ -75,13 +75,11 @@ namespace Flux.ViewModels
             {
                 public RRF_ArrayBuilder(
                     IObservable<Optional<RRF_Connection>> connection,
-                    string name,
                     ushort start,
                     ushort count,
                     Func<RRF_ObjectModel, IObservable<Optional<TState>>> get_state,
                     Func<TState, Optional<List<TList>>> get_list)
                 {
-                    Name = name;
                     Start = start;
                     Count = count;
                     GetList = get_list;
@@ -89,7 +87,6 @@ namespace Flux.ViewModels
                     Connection = connection;
                 }
 
-                public string Name { get; }
                 public ushort Start { get; }
                 public ushort Count { get; }
                 public Func<TState, Optional<List<TList>>> GetList { get; }
@@ -97,10 +94,11 @@ namespace Flux.ViewModels
                 public Func<RRF_ObjectModel, IObservable<Optional<TState>>> GetState { get; }
 
                 public RRF_ArrayObjectModel<TState, TRData, TWData> Create<TRData, TWData>(
+                    string name,
                     Func<RRF_Connection, TList, Optional<TRData>> read_data,
                     Optional<IEnumerable<VariableUnit>> custom_unit = default)
                 {
-                    return new RRF_ArrayObjectModel<TState, TRData, TWData>(Name, Start, Count, t => create_variable(t), custom_unit);
+                    return new RRF_ArrayObjectModel<TState, TRData, TWData>(name, Start, Count, t => create_variable(t), custom_unit);
                     RRF_VariableObjectModel<TState, TRData, TWData> create_variable((string name, VariableUnit unit, ushort position) t)
                     {
                         Optional<TRData> get_data(RRF_Connection c, TState m) => GetList(m).Convert(l => read_data(c, l[t.position]));
@@ -108,11 +106,12 @@ namespace Flux.ViewModels
                     }
                 }
                 public RRF_ArrayObjectModel<TState, TRData, TWData> Create<TRData, TWData>(
+                    string name,
                     Func<RRF_Connection, TList, Optional<TRData>> read_data,
                     Func<RRF_Connection, TWData, bool> write_data,
                     Optional<IEnumerable<VariableUnit>> custom_unit = default)
                 {
-                    return new RRF_ArrayObjectModel<TState, TRData, TWData>(Name, Start, Count, t => create_variable(t), custom_unit);
+                    return new RRF_ArrayObjectModel<TState, TRData, TWData>(name, Start, Count, t => create_variable(t), custom_unit);
                     RRF_VariableObjectModel<TState, TRData, TWData> create_variable((string name, VariableUnit unit, ushort position) t)
                     {
                         Optional<TRData> get_data(RRF_Connection c, TState m) => GetList(m).Convert(l => read_data(c, l[t.position]));
@@ -120,11 +119,12 @@ namespace Flux.ViewModels
                     }
                 }
                 public RRF_ArrayObjectModel<TState, TRData, TWData> Create<TRData, TWData>(
+                    string name,
                     Func<RRF_Connection, TList, Optional<TRData>> read_data,
                     Func<RRF_Connection, TWData, (string name, VariableUnit unit, ushort position), bool> write_data,
                     Optional<IEnumerable<VariableUnit>> custom_unit = default)
                 {
-                    return new RRF_ArrayObjectModel<TState, TRData, TWData>(Name, Start, Count, t => create_variable(t), custom_unit);
+                    return new RRF_ArrayObjectModel<TState, TRData, TWData>(name, Start, Count, t => create_variable(t), custom_unit);
                     RRF_VariableObjectModel<TState, TRData, TWData> create_variable((string name, VariableUnit unit, ushort position) t)
                     {
                         Optional<TRData> get_data(RRF_Connection c, TState m) => GetList(m).Convert(l => read_data(c, l[t.position]));
@@ -132,11 +132,12 @@ namespace Flux.ViewModels
                     }
                 }
                 public RRF_ArrayObjectModel<TState, TRData, TWData> Create<TRData, TWData>(
+                    string name,
                     Func<RRF_Connection, TList, Optional<TRData>> read_data,
                     Func<RRF_Connection, TWData, Task<bool>> write_data,
                     Optional<IEnumerable<VariableUnit>> custom_unit = default)
                 {
-                    return new RRF_ArrayObjectModel<TState, TRData, TWData>(Name, Start, Count, t => create_variable(t), custom_unit);
+                    return new RRF_ArrayObjectModel<TState, TRData, TWData>(name, Start, Count, t => create_variable(t), custom_unit);
                     RRF_VariableObjectModel<TState, TRData, TWData> create_variable((string name, VariableUnit unit, ushort position) t)
                     {
                         Optional<TRData> get_data(RRF_Connection c, TState m) => GetList(m).Convert(l => read_data(c, l[t.position]));
@@ -144,11 +145,12 @@ namespace Flux.ViewModels
                     }
                 }
                 public RRF_ArrayObjectModel<TState, TRData, TWData> Create<TRData, TWData>(
+                    string name,
                     Func<RRF_Connection, TList, Optional<TRData>> read_data,
                     Func<RRF_Connection, TWData, (string name, VariableUnit unit, ushort position), Task<bool>> write_data,
                     Optional<IEnumerable<VariableUnit>> custom_unit = default)
                 {
-                    return new RRF_ArrayObjectModel<TState, TRData, TWData>(Name, Start, Count, t => create_variable(t), custom_unit);
+                    return new RRF_ArrayObjectModel<TState, TRData, TWData>(name, Start, Count, t => create_variable(t), custom_unit);
                     RRF_VariableObjectModel<TState, TRData, TWData> create_variable((string name, VariableUnit unit, ushort position) t)
                     {
                         Optional<TRData> get_data(RRF_Connection c, TState m) => GetList(m).Convert(l => read_data(c, l[t.position]));
@@ -156,8 +158,8 @@ namespace Flux.ViewModels
                     }
                 }
             }
-            public RRF_ArrayBuilder<TList> CreateArray<TList>(string name, ushort start, ushort count, Func<TState, Optional<List<TList>>> get_list)
-                => new RRF_ArrayBuilder<TList>(Connection, name, start, count, GetState, get_list);
+            public RRF_ArrayBuilder<TList> CreateArray<TList>(ushort start, ushort count, Func<TState, Optional<List<TList>>> get_list)
+                => new RRF_ArrayBuilder<TList>(Connection, start, count, GetState, get_list);
         }
 
         public static RRF_InnerStateBuilder<TState> Create<TState>(IObservable<Optional<RRF_Connection>> connection, Func<RRF_ObjectModel, IObservable<Optional<TState>>> get_state)
@@ -306,7 +308,7 @@ namespace Flux.ViewModels
 
                 yield return "";
                 yield return "; Get variable";
-                yield return $"var {Variable} = exists(param.S) ? param.S : (exists(global.{Variable}) ? global.{Variable} : {sanitize_value(default(TData))})";
+                yield return $"var {Variable} = exists(param.S) ? param.S : (exists(global.{Variable}) ? global.{Variable} : {(typeof(TData) == typeof(string ) ? "\"\"" : sanitize_value(default(TData)))})";
 
                 yield return "";
                 yield return "; Set variable";
@@ -322,9 +324,9 @@ namespace Flux.ViewModels
                     yield return "; Store variable";
 
                     yield return $"echo >\"/sys/global/read_{Variable}.g\" \"if (!exists(global.{Variable}))\"";
-                    yield return $"echo >>\"/sys/global/read_{Variable}.g\" \"  global {Variable} = \"^var.{Variable}";
+                    yield return $"echo >>\"/sys/global/read_{Variable}.g\" \"  global {Variable} = \"^{(typeof(TData) == typeof(string) ? "\"\"\"\"^" : "")}var.{Variable}{(typeof(TData) == typeof(string) ? "^\"\"\"\"" : "")}";
                     yield return $"echo >>\"/sys/global/read_{Variable}.g\" \"else\"";
-                    yield return $"echo >>\"/sys/global/read_{Variable}.g\" \" set global.{Variable} = \"^var.{Variable}";
+                    yield return $"echo >>\"/sys/global/read_{Variable}.g\" \" set global.{Variable} = \"^{(typeof(TData) == typeof(string) ? "\"\"\"\"^" : "")}var.{Variable}{(typeof(TData) == typeof(string) ? "^\"\"\"\"" : "")}";
                     yield return $"echo >>\"/sys/global/read_{Variable}.g\" \"\"";
                     yield return $"";
                 }
@@ -333,10 +335,10 @@ namespace Flux.ViewModels
         public string CreateVariableName => $"write_{Variable}.g";
         public string InitializeVariableString => $"M98 P\"/sys/global/write_{Variable}.g\"";
 
-        public RRF_VariableGlobalModel(IObservable<Optional<RRF_Connection>> connection, string variable, bool stored, Optional<string> unit = default)
+        public RRF_VariableGlobalModel(IObservable<Optional<RRF_Connection>> connection, string variable, bool stored)
             : base(connection, variable, FluxMemReadPriority.DISABLED, write_func: async (c, v) =>
             {
-                var gcode = $"M98 P\"/sys/global/write_{variable}.g\"{(unit.HasValue ? $" T\"{unit}\" " : " ")}S{sanitize_value(v)}";
+                var gcode = $"M98 P\"/sys/global/write_{variable}.g\" S{(typeof(TData) == typeof(string) ? $"\"{sanitize_value(v)}\"" : sanitize_value(v))}";
                 var result = await c.PostGCodeAsync(gcode, false, TimeSpan.FromSeconds(5));
                 return result;
             })
@@ -362,7 +364,7 @@ namespace Flux.ViewModels
                   FluxMemReadPriority.DISABLED,
                   write_func: async (c, v) =>
                   {
-                      var gcode = $"M98 P\"/sys/global/write_{array.Variable}.g\" T\"{unit.Value.ToUpper()}\" S{sanitize_value(v)}";
+                      var gcode = $"M98 P\"/sys/global/write_{array.Variable}.g\" T\"{unit.Value.ToUpper()}\" S{(typeof(TData) == typeof(string) ? $"\"{sanitize_value(v)}\"" : sanitize_value(v))}";
                       var result = await c.PostGCodeAsync(gcode, false, TimeSpan.FromSeconds(5));
                       return result;
                   },
@@ -404,7 +406,7 @@ namespace Flux.ViewModels
                     var unit = GetArrayUnit(position);
                     var lower_unit = unit.Value.ToLower();
                     var upper_unit = unit.Value.ToUpper();
-                    yield return $"var {Variable}_{lower_unit} = (exists(param.T) && param.T == \"{upper_unit}\" && exists(param.S)) ? param.S : (exists(global.{Variable}_{lower_unit}) ? global.{Variable}_{lower_unit} : {sanitize_value(default(TData))})";
+                    yield return $"var {Variable}_{lower_unit} = (exists(param.T) && param.T == \"{upper_unit}\" && exists(param.S)) ? param.S : (exists(global.{Variable}_{lower_unit}) ? global.{Variable}_{lower_unit} : {(typeof(TData) == typeof(string) ? "\"\"" : sanitize_value(default(TData)))})";
                 }
 
                 yield return "";
@@ -430,9 +432,9 @@ namespace Flux.ViewModels
                         var unit = GetArrayUnit(position);
                         var lower_unit = unit.Value.ToLower();
                         yield return $"echo {(position == 0 ? ">" : ">>")}\"/sys/global/read_{Variable}.g\" \"if (!exists(global.{Variable}_{lower_unit}))\"";
-                        yield return $"echo >>\"/sys/global/read_{Variable}.g\" \" global {Variable}_{lower_unit} = \"^var.{Variable}_{lower_unit}";
+                        yield return $"echo >>\"/sys/global/read_{Variable}.g\" \" global {Variable}_{lower_unit} = \"^{(typeof(TData) == typeof(string) ? "\"\"\"\"^" : "")}var.{Variable}_{lower_unit}{(typeof(TData) == typeof(string) ? "^\"\"\"\"" : "")}";
                         yield return $"echo >>\"/sys/global/read_{Variable}.g\" \"else\"";
-                        yield return $"echo >>\"/sys/global/read_{Variable}.g\" \" set global.{Variable}_{lower_unit} = \"^var.{Variable}_{lower_unit}";
+                        yield return $"echo >>\"/sys/global/read_{Variable}.g\" \" set global.{Variable}_{lower_unit} = \"^{(typeof(TData) == typeof(string) ? "\"\"\"\"^" : "")}var.{Variable}_{lower_unit}{(typeof(TData) == typeof(string) ? "^\"\"\"\"" : "")}";
                         yield return $"echo >>\"/sys/global/read_{Variable}.g\" \"\"";
                         yield return $"";
                     }

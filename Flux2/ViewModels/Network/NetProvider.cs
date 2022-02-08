@@ -319,45 +319,11 @@ namespace Flux.ViewModels
             {
                 UdpDiscovery.StartSending(() =>
                 {
-                    if (GetLocalIPAddress(out var address))
-                        return new IPEndPoint(address, WebServerPort);
+                    var address = Flux.SettingsProvider.HostAddress;
+                    if (address.HasValue)
+                        return new IPEndPoint(address.Value, WebServerPort);
                     return new IPEndPoint(IPAddress.Loopback, WebServerPort);
                 }, TimeSpan.FromSeconds(5));
-
-                bool GetLocalIPAddress(out IPAddress address)
-                {
-                    address = IPAddress.Loopback;
-
-                    var settings = Flux.SettingsProvider.CoreSettings.Local;
-                    var plc_address = settings.PLCAddress.Convert(ip =>
-                    {
-                        ip = ip.Split(":", StringSplitOptions.RemoveEmptyEntries)
-                            .FirstOrDefault();
-
-                        if (IPAddress.TryParse(ip, out var plc_address))
-                            return plc_address;
-                        return default;
-                    });
-
-                    var host = Dns.GetHostEntry(Dns.GetHostName());
-                    if (host.AddressList.Length == 1)
-                    {
-                        address = host.AddressList.FirstOrDefault();
-                        return true;
-                    }
-
-                    var subnet_mask = IPAddress.Parse("255.255.255.0");
-                    for (int pos = host.AddressList.Count() - 1; pos >= 0; pos--)
-                    {
-                        address = host.AddressList.ElementAt(pos);
-                        if (address.AddressFamily != AddressFamily.InterNetwork)
-                            continue;
-                        if (plc_address.HasValue && IPAddressUtils.IsInSameSubnet(address, plc_address.Value, subnet_mask))
-                            continue;
-                        return true;
-                    }
-                    return false;
-                }
             }
             catch (Exception ex)
             {

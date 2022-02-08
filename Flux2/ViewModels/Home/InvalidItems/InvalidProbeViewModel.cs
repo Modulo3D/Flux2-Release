@@ -58,8 +58,8 @@ namespace Flux.ViewModels
         {
             base.Initialize();
             InvalidValues = Flux.StatusProvider.FeederEvaluators.Connect().RemoveKey()
-                .AutoRefresh(line => line.IsValidProbe)
-                .Filter(line => !line.IsValidProbe)
+                .AutoRefresh(line => line.IsInvalidProbe)
+                .Filter(line => line.IsInvalidProbe)
                 .Transform(line => (IInvalidValueViewModel)new InvalidProbeViewModel(line))
                 .Sort(EvaluationComparer)
                 .AsObservableList();

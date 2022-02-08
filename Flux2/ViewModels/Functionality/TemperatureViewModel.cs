@@ -27,7 +27,7 @@ namespace Flux.ViewModels
         public ReactiveCommand<Unit, Unit> SelectTargetCommand { get; }
 
         private double _TargetTemperature = 0;
-        [RemoteInput(10)]
+        [RemoteInput(step: 10)]
         public double TargetTemperature
         {
             get => _TargetTemperature;

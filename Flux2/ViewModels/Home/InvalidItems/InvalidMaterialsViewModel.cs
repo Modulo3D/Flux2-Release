@@ -63,8 +63,8 @@ namespace Flux.ViewModels
         public override void Initialize()
         {
             InvalidItems = Flux.StatusProvider.FeederEvaluators.Connect().RemoveKey()
-               .AutoRefresh(line => line.Material.IsValid)
-               .Filter(line => !line.Material.IsValid)
+               .AutoRefresh(line => line.Material.IsInvalid)
+               .Filter(line => line.Material.IsInvalid)
                .Transform(line => (IInvalidItemViewModel)new InvalidMaterialViewModel(line))
                .Sort(EvaluationComparer)
                .AsObservableList();

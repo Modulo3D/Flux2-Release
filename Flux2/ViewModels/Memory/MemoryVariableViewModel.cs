@@ -150,7 +150,9 @@ namespace Flux.ViewModels
         {
             try
             {
-                using var dialog = new ContentDialog(Flux, Variable.Name, default, () => { }, () => { });
+                using var dialog = new ContentDialog(Flux, Variable.Name, default,
+                    () => Task.CompletedTask,
+                    () => Task.CompletedTask);
 
                 var cb_virtual_memory = ComboOption.Create("cbVirtual", "MEMORIA VIRTUALE?", Enum.GetValues<BoolSelection>(), b => (uint)b);
                 dialog.AddContent(cb_virtual_memory);

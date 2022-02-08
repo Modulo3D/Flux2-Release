@@ -15,8 +15,8 @@ namespace Flux.ViewModels
         public FeederEvaluator FeederEvaluator { get; }
         public Optional<double> ExpectedWeight { get; }
         public Optional<double> CurrentWeight { get; }
-        public bool HasEnoughWeight { get; }
-        public bool IsValid { get; }
+        public bool HasLowWeight { get; }
+        public bool IsInvalid { get; }
     }
 
     public abstract class TagViewModelEvaluator<TNFCTag, TTagDocument, TDocument, TState> : ReactiveObject, ITagViewModelEvaluator
@@ -32,8 +32,8 @@ namespace Flux.ViewModels
         private ObservableAsPropertyHelper<Optional<TDocument>> _CurrentDocument;
         public Optional<TDocument> CurrentDocument => _CurrentDocument.Value;
 
-        private ObservableAsPropertyHelper<bool> _IsValid;
-        public bool IsValid => _IsValid.Value;
+        private ObservableAsPropertyHelper<bool> _IsInvalid;
+        public bool IsInvalid => _IsInvalid.Value;
 
         private ObservableAsPropertyHelper<Optional<double>> _ExpectedWeight;
         public Optional<double> ExpectedWeight => _ExpectedWeight.Value;
@@ -41,8 +41,8 @@ namespace Flux.ViewModels
         private ObservableAsPropertyHelper<Optional<double>> _CurrentWeight;
         public Optional<double> CurrentWeight => _CurrentWeight.Value;
 
-        private ObservableAsPropertyHelper<bool> _HasEnoughWeight;
-        public bool HasEnoughWeight => _HasEnoughWeight.Value;
+        private ObservableAsPropertyHelper<bool> _HasLowWeight;
+        public bool HasLowWeight => _HasLowWeight.Value;
 
         public TagViewModelEvaluator(FeederEvaluator feeder_eval)
         {
@@ -66,12 +66,12 @@ namespace Flux.ViewModels
                 .Select(GetCurrentDocument)
                 .ToProperty(this, v => v.CurrentDocument);
 
-            _IsValid = Observable.CombineLatest(
+            _IsInvalid = Observable.CombineLatest(
                 TagViewModel.WhenAnyValue(f => f.Document),
                 TagViewModel.WhenAnyValue(f => f.State),
                 eval_changed,
-                GetValid)
-                .ToProperty(this, e => e.IsValid);
+                GetInvalid)
+                .ToProperty(this, e => e.IsInvalid);
 
             _ExpectedWeight = FeederEvaluator.WhenAnyValue(f => f.ExtrusionQueue)
                 .Convert(e => e.Values.Sum(e => e.ConvertOr(e => (double)e.WeightG, () => 0)))
@@ -80,17 +80,17 @@ namespace Flux.ViewModels
             _CurrentWeight = TagViewModel.Odometer.WhenAnyValue(v => v.Value)
                 .ToProperty(this, v => v.CurrentWeight);
 
-            _HasEnoughWeight = Observable.CombineLatest(
+            _HasLowWeight = Observable.CombineLatest(
                 this.WhenAnyValue(v => v.ExpectedWeight),
                 this.WhenAnyValue(v => v.CurrentWeight),
                 eval_changed,
-                GetEnoughWeight)
-                .ToProperty(this, v => v.HasEnoughWeight);
+                LowWeight)
+                .ToProperty(this, v => v.HasLowWeight);
         }
 
         public abstract int GetDocumentId(FeederReport feeder_report);
         public abstract Optional<TDocument> GetCurrentDocument(TTagDocument tag_document);
-        public abstract bool GetValid(TTagDocument document, TState state, Optional<Dictionary<ushort, FeederReport>> report);
+        public abstract bool GetInvalid(TTagDocument document, TState state, Optional<Dictionary<ushort, FeederReport>> report);
 
         private Optional<Dictionary<ushort, TDocument>> GetExpectedDocumentQueue(Optional<short> queue_pos, Optional<ILocalDatabase> database, Optional<Dictionary<ushort, FeederReport>> feered_queue, Func<FeederReport, int> get_id)
         {
@@ -120,17 +120,17 @@ namespace Flux.ViewModels
             }
             return document_queue;
         }
-        private bool GetEnoughWeight(Optional<double> expected, Optional<double> current, Optional<Dictionary<ushort, FeederReport>> feeder_queue)
+        private bool LowWeight(Optional<double> expected, Optional<double> current, Optional<Dictionary<ushort, FeederReport>> feeder_queue)
         {
             if (!feeder_queue.HasValue)
-                return false;
-            if (feeder_queue.Value.Count == 0)
                 return true;
+            if (feeder_queue.Value.Count == 0)
+                return false;
             if (!expected.HasValue)
-                return false;
+                return true;
             if (!current.HasValue)
-                return false;
-            return current.Value >= expected.Value;
+                return true;
+            return current.Value < expected.Value;
         }
     }
 
@@ -148,25 +148,25 @@ namespace Flux.ViewModels
         {
             return feeder_report.MaterialId;
         }
-        public override bool GetValid(Optional<Material> document, MaterialState state, Optional<Dictionary<ushort, FeederReport>> report_queue)
+        public override bool GetInvalid(Optional<Material> document, MaterialState state, Optional<Dictionary<ushort, FeederReport>> report_queue)
         {
             if (!report_queue.HasValue)
-                return false;
-
-            if (report_queue.Value.Count == 0)
                 return true;
 
-            if (!document.HasValue)
+            if (report_queue.Value.Count == 0)
                 return false;
 
+            if (!document.HasValue)
+                return true;
+
             if (!state.IsLoaded())
-                return false;
+                return true;
 
             foreach (var report in report_queue.Value)
                 if (report.Value.MaterialId != document.Value.Id)
-                    return false;
+                    return true;
 
-            return true;
+            return false;
         }
     }
 
@@ -184,28 +184,28 @@ namespace Flux.ViewModels
         {
             return tag_document.nozzle;
         }
-        public override bool GetValid((Optional<Tool> tool, Optional<Nozzle> nozzle) document, ToolNozzleState state, Optional<Dictionary<ushort, FeederReport>> report_queue)
+        public override bool GetInvalid((Optional<Tool> tool, Optional<Nozzle> nozzle) document, ToolNozzleState state, Optional<Dictionary<ushort, FeederReport>> report_queue)
         {
             if (!report_queue.HasValue)
-                return false;
-
-            if (report_queue.Value.Count == 0)
                 return true;
 
-            if (!document.tool.HasValue)
+            if (report_queue.Value.Count == 0)
                 return false;
+
+            if (!document.tool.HasValue)
+                return true;
 
             if (!document.nozzle.HasValue)
-                return false;
+                return true;
 
             if (!state.IsLoaded())
-                return false;
+                return true;
 
             foreach (var report in report_queue.Value)
                 if (report.Value.NozzleId != document.nozzle.Value.Id)
-                    return false;
+                    return true;
 
-            return true;
+            return false;
         }
     }
 
@@ -223,11 +223,11 @@ namespace Flux.ViewModels
         private ObservableAsPropertyHelper<Optional<IFluxOffsetViewModel>> _Offset;
         public Optional<IFluxOffsetViewModel> Offset => _Offset.Value;
 
-        private ObservableAsPropertyHelper<bool> _IsValidProbe;
-        public bool IsValidProbe => _IsValidProbe.Value;
+        private ObservableAsPropertyHelper<bool> _IsInvalidProbe;
+        public bool IsInvalidProbe => _IsInvalidProbe.Value;
 
-        private ObservableAsPropertyHelper<Optional<bool>> _HasHotNozzle;
-        public Optional<bool> HasHotNozzle => _HasHotNozzle.Value;
+        private ObservableAsPropertyHelper<bool> _HasColdNozzle;
+        public bool HasColdNozzle => _HasColdNozzle.Value;
 
         private ObservableAsPropertyHelper<Optional<Dictionary<ushort, Optional<Extrusion>>>> _ExtrusionQueue;
         public Optional<Dictionary<ushort, Optional<Extrusion>>> ExtrusionQueue => _ExtrusionQueue.Value;
@@ -296,24 +296,24 @@ namespace Flux.ViewModels
                 .ConvertMany(o => o.WhenAnyValue(o => o.ProbeState)
                 .Select(state => state == FluxProbeState.VALID_PROBE));
 
-            _IsValidProbe = Observable.CombineLatest(
+            _IsInvalidProbe = Observable.CombineLatest(
                 valid_probe,
                 eval_changed,
-                ValidProbe)
-                .ToProperty(this, e => e.IsValidProbe);
+                InvalidProbe)
+                .ToProperty(this, e => e.IsInvalidProbe);
 
-            _HasHotNozzle = Observable.CombineLatest(
+            _HasColdNozzle = Observable.CombineLatest(
                 Status.WhenAnyValue(s => s.PrintingEvaluation),
                 Feeder.ToolNozzle.WhenAnyValue(t => t.Temperature),
                 Feeder.ToolMaterial.WhenAnyValue(t => t.ExtrusionTemp),
-                HotNozzle)
-                .ToProperty(this, e => e.HasHotNozzle);
+                ColdNozzle)
+                .ToProperty(this, e => e.HasColdNozzle);
 
             Material.Initialize();
             ToolNozzle.Initialize();
         }
 
-        private Optional<bool> HotNozzle(PrintingEvaluation evaluation, Optional<FLUX_Temp> plc_temp, Optional<double> extrusion_temp)
+        private bool ColdNozzle(PrintingEvaluation evaluation, Optional<FLUX_Temp> plc_temp, Optional<double> extrusion_temp)
         {
             if (!evaluation.Recovery.ConvertOr(r => r.IsSelected, () => false))
                 return false;
@@ -334,18 +334,18 @@ namespace Flux.ViewModels
             return offsets.LookupOptional(Feeder.Position);
         }
 
-        private bool ValidProbe(Optional<bool> is_probed, Optional<Dictionary<ushort, FeederReport>> report_queue)
+        private bool InvalidProbe(Optional<bool> is_probed, Optional<Dictionary<ushort, FeederReport>> report_queue)
         {
             if (!report_queue.HasValue)
-                return false;
-
-            if (report_queue.Value.Count == 0)
                 return true;
 
-            if (!is_probed.HasValue)
+            if (report_queue.Value.Count == 0)
                 return false;
 
-            return is_probed.Value;
+            if (!is_probed.HasValue)
+                return true;
+
+            return !is_probed.Value;
         }
 
         private Optional<Dictionary<ushort, FeederReport>> GetFeederReportQueue(Optional<short> queue_pos, Optional<Dictionary<ushort, Guid>> queue, IQuery<IFluxMCodeStorageViewModel, Guid> mcodes)

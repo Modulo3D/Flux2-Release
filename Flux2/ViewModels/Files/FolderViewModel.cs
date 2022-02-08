@@ -29,8 +29,8 @@ namespace Flux.ViewModels
                 if (dialog_result != ContentDialogResult.Primary)
                     return;
 
-                var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                var delete_result = await Files.Flux.ConnectionProvider.DeleteFileAsync(FSPath, FSName, cts.Token);
+                var delete_folder_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                var delete_result = await Files.Flux.ConnectionProvider.DeleteFileAsync(FSPath, FSName, true, delete_folder_cts.Token);
 
                 if (delete_result)
                     Files.UpdateFolder.OnNext(Unit.Default);

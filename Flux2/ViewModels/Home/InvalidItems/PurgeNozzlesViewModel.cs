@@ -68,7 +68,7 @@ namespace Flux.ViewModels
         public override string Title => "UTENSILI DA SPURGARE";
         public override string ChangeName => "SPURGA";
 
-        public PurgeNozzlesViewModel(FluxViewModel flux) : base(flux, "purge_nozzles")
+        public PurgeNozzlesViewModel(FluxViewModel flux) : base(flux)
         {
         }
 
@@ -76,8 +76,8 @@ namespace Flux.ViewModels
         {
             base.Initialize();
             InvalidValues = Flux.StatusProvider.FeederEvaluators.Connect().RemoveKey()
-                .AutoRefresh(line => line.HasHotNozzle)
-                .Filter(line => line.HasHotNozzle.ConvertOr(h => !h, () => false))
+                .AutoRefresh(line => line.HasColdNozzle)
+                .Filter(line => line.HasColdNozzle)
                 .Transform(line => (IInvalidValueViewModel)new PurgeNozzleViewModel(line))
                 .Sort(EvaluationComparer)
                 .AsObservableList();

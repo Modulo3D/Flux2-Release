@@ -62,8 +62,8 @@ namespace Flux.ViewModels
         public override void Initialize()
         {
             InvalidItems = Flux.StatusProvider.FeederEvaluators.Connect().RemoveKey()
-                .AutoRefresh(line => line.ToolNozzle.IsValid)
-                .Filter(line => !line.ToolNozzle.IsValid)
+                .AutoRefresh(line => line.ToolNozzle.IsInvalid)
+                .Filter(line => line.ToolNozzle.IsInvalid)
                 .Transform(line => (IInvalidItemViewModel)new InvalidToolViewModel(line))
                 .Sort(EvaluationComparer)
                 .AsObservableList();

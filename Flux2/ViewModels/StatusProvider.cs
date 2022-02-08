@@ -221,40 +221,42 @@ namespace Flux.ViewModels
             var start_with_low_materials = this.WhenAnyValue(s => s.StartWithLowMaterials);
 
             var has_invalid_materials = FeederEvaluators.Connect()
-                .TrueForAny(line => line.WhenAnyValue(l => l.Material.IsValid), valid => !valid)
+                .TrueForAny(line => line.WhenAnyValue(l => l.Material.IsInvalid), invalid => invalid)
                 .StartWith(false)
                 .DistinctUntilChanged();
 
             var has_invalid_tools = FeederEvaluators.Connect()
-                .TrueForAny(line => line.WhenAnyValue(l => l.ToolNozzle.IsValid), valid => !valid)
+                .TrueForAny(line => line.WhenAnyValue(l => l.ToolNozzle.IsInvalid), invalid => invalid)
                 .StartWith(false)
                 .DistinctUntilChanged();
 
             var has_invalid_probes = FeederEvaluators.Connect()
-                .TrueForAny(line => line.WhenAnyValue(l => l.IsValidProbe), valid => !valid)
+                .TrueForAny(line => line.WhenAnyValue(l => l.IsInvalidProbe), invalid => invalid)
                 .StartWith(false)
                 .DistinctUntilChanged();
 
             var has_low_materials = FeederEvaluators.Connect()
-                .TrueForAny(line => line.WhenAnyValue(l => l.Material.HasEnoughWeight), enough => !enough)
+                .TrueForAny(line => line.WhenAnyValue(l => l.Material.HasLowWeight), low => low)
                 .StartWith(false)
                 .DistinctUntilChanged();
 
             var has_low_nozzles = FeederEvaluators.Connect()
-                .TrueForAny(line => line.WhenAnyValue(l => l.ToolNozzle.HasEnoughWeight), enough => !enough)
+                .TrueForAny(line => line.WhenAnyValue(l => l.ToolNozzle.HasLowWeight), low => low)
                 .StartWith(false)
                 .DistinctUntilChanged();
 
             var has_cold_nozzles = FeederEvaluators.Connect()
-                .TrueForAny(line => line.WhenAnyValue(l => l.HasHotNozzle), hot => hot.ConvertOr(h => !h, () => false))
+                .TrueForAny(line => line.WhenAnyValue(l => l.HasColdNozzle), cold => cold)
                 .StartWith(false)
                 .DistinctUntilChanged();
 
-            var selected_part_program = Flux.ConnectionProvider.ObserveVariable(m => m.PART_PROGRAM)
+            var selected_part_program = Flux.ConnectionProvider
+                .ObserveVariable(m => m.PART_PROGRAM)
                 .DistinctUntilChanged()
                 .StartWithEmpty();
 
-            var selected_guid = selected_part_program.Convert(pp => pp.MCodeGuid)
+            var selected_guid = selected_part_program
+                .Convert(pp => pp.MCodeGuid)
                 .DistinctUntilChanged()
                 .StartWithEmpty();
 
@@ -277,6 +279,7 @@ namespace Flux.ViewModels
 
             var hold_pp = Flux.ConnectionProvider
                  .ObserveVariable(m => m.HOLD_PP)
+                 .Convert(pp => MCodePartProgram.Parse(pp))
                  .DistinctUntilChanged()
                  .StartWithEmpty();
 
@@ -330,6 +333,7 @@ namespace Flux.ViewModels
                 .StartWith(false)
                 .DistinctUntilChanged();
 
+            // TODO
             var is_safe_hold = Observable.CombineLatest(
                 Flux.ConnectionProvider.ObserveVariable(m => m.RUNNING_MACRO),
                 Flux.ConnectionProvider.ObserveVariable(m => m.RUNNING_GCODE),
@@ -339,8 +343,8 @@ namespace Flux.ViewModels
             CanSafeHold = Observable.CombineLatest(
                 IsCycle,
                 has_safe_state,
-                is_safe_hold,
-                (cycle, safe, pause) => cycle.ValueOrDefault() && safe && pause)
+                /*is_safe_hold,*/
+                (cycle, safe/*, pause*/) => cycle.ValueOrDefault() && safe/* && pause*/)
                 .StartWith(false)
                 .DistinctUntilChanged();
 
@@ -401,10 +405,17 @@ namespace Flux.ViewModels
                 .DistinctUntilChanged()
                 .ToProperty(this, v => v.StatusEvaluation);
 
+            var block_nr = Flux.ConnectionProvider
+                .ObserveVariable(m => m.BLOCK_NUM)
+                .ValueOr(() => 0U)
+                .DistinctUntilChanged()
+                .PairWithPreviousValue()
+                .Where(b => b.NewValue == 0 || b.NewValue > b.OldValue)
+                .Select(b => b.NewValue);
 
             _PrintProgress = Observable.CombineLatest(
                 this.WhenAnyValue(v => v.PrintingEvaluation),
-                Flux.ConnectionProvider.ObserveVariable(m => m.BLOCK_NUM),
+                block_nr,
                 GetPrintProgress)
                 .DistinctUntilChanged()
                 .ToProperty(this, v => v.PrintProgress);
@@ -432,7 +443,7 @@ namespace Flux.ViewModels
         private Optional<MCodeRecovery> FindRecovery(
             Optional<short> hold_tool,
             Optional<double> hold_blk_num,
-            Optional<string> hold_part_program, 
+            Optional<MCodePartProgram> hold_part_program, 
             IQuery<double, VariableUnit> hold_temp,
             IQuery<double, VariableUnit> hold_pos,
             Optional<MCodePartProgram> selected_pp)
@@ -451,22 +462,16 @@ namespace Flux.ViewModels
                 if (!hold_part_program.HasValue)
                     return default;
 
-                if (string.IsNullOrEmpty(hold_part_program.Value))
+                var hold_mcode_lookup = Flux.MCodes.AvaiableMCodes.Lookup(hold_part_program.Value.MCodeGuid);
+                if (!hold_mcode_lookup.HasValue)
                     return default;
 
-                if (!Guid.TryParse(hold_part_program.Value, out var mcode_guid))
-                    return default;
-
-                var mcode_lookup = Flux.MCodes.AvaiableMCodes.Lookup(mcode_guid);
-                if (!mcode_lookup.HasValue)
-                    return default;
-
-                var analyzer = mcode_lookup.Value.Analyzer;
+                var hold_analyzer = hold_mcode_lookup.Value.Analyzer;
                 var is_selected = selected_pp.ConvertOr(pp =>
                 {
                     if (!pp.IsRecovery)
                         return false;
-                    if (pp.MCodeGuid != analyzer.MCode.MCodeGuid)
+                    if (pp.MCodeGuid != hold_analyzer.MCode.MCodeGuid)
                         return false;
                     if (pp.StartBlock != hold_blk_num.Value)
                         return false;
@@ -474,10 +479,10 @@ namespace Flux.ViewModels
                 }, () => false);
 
                 return new MCodeRecovery(
-                    analyzer.MCode.MCodeGuid,
+                    hold_analyzer.MCode.MCodeGuid,
                     is_selected,
                     (uint)hold_blk_num.Value,
-                    (ushort)hold_tool.Value,
+                    hold_tool.Value,
                     hold_temp.KeyValues.ToDictionary(),
                     hold_pos.KeyValues.ToDictionary());
             }
@@ -641,11 +646,8 @@ namespace Flux.ViewModels
         }
 
         // Progress and extrusion
-        private PrintProgress GetPrintProgress(PrintingEvaluation evaluation, Optional<uint> block_nr)
+        private PrintProgress GetPrintProgress(PrintingEvaluation evaluation, uint block_nr)
         {
-            if (!block_nr.HasValue)
-                return new PrintProgress(0, TimeSpan.Zero);
-
             var selected_mcode = evaluation.SelectedMCode;
 
             // update job remaining time
@@ -653,8 +655,7 @@ namespace Flux.ViewModels
                 return new PrintProgress(0, TimeSpan.Zero);
 
             var blocks = selected_mcode.Value.BlockCount;
-            var block_number = block_nr.ValueOr(() => 0U);
-            var progress = Math.Max(0, Math.Min(1, (float)block_number / blocks));
+            var progress = Math.Max(0, Math.Min(1, (float)block_nr / blocks));
 
             if (float.IsNaN(progress))
                 progress = 0;

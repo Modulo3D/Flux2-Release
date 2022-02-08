@@ -66,8 +66,8 @@ namespace Flux.ViewModels
         public override void Initialize()
         {
             InvalidValues = Flux.StatusProvider.FeederEvaluators.Connect().RemoveKey()
-                .AutoRefresh(line => line.ToolNozzle.HasEnoughWeight)
-                .Filter(line => !line.ToolNozzle.HasEnoughWeight)
+                .AutoRefresh(line => line.ToolNozzle.HasLowWeight)
+                .Filter(line => line.ToolNozzle.HasLowWeight)
                 .Transform(line => (IInvalidValueViewModel)new LowMaterialViewModel(line))
                 .Sort(EvaluationComparer)
                 .AsObservableList();

@@ -375,7 +375,10 @@ namespace Flux.ViewModels
 
         public async Task<ContentDialogResult> ShowConfirmDialogAsync(string title, string content)
         {
-            using var dialog = new ContentDialog(this, title, confirm: () => { }, cancel: () => { });
+            using var dialog = new ContentDialog(this, title,
+                confirm: () => Task.CompletedTask, 
+                cancel: () => Task.CompletedTask);
+
             dialog.AddContent(new TextBlock("content", content));
             return await dialog.ShowAsync();
         }
@@ -401,7 +404,10 @@ namespace Flux.ViewModels
         }
         public async Task<ContentDialogResult> ShowSelectionAsync(string title, bool can_cancel, params IDialogOption[] options)
         {
-            using var dialog = new ContentDialog(this, title, confirm: () => { }, cancel: can_cancel ? () => { } : default);
+            using var dialog = new ContentDialog(this, title, 
+                confirm: () => Task.CompletedTask, 
+                cancel: can_cancel ? () => Task.CompletedTask : default);
+
             dialog.AddContent("options", options);
             return await dialog.ShowAsync();
         }

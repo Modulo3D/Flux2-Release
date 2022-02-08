@@ -78,8 +78,8 @@ namespace Flux.ViewModels
                 .ObserveOn(RxApp.MainThreadScheduler)
                 .Subscribe(_ => Flux.Navigator.NavigateHome());
 
-            var is_idle = Flux.StatusProvider.IsIdle
-                .ValueOrDefault();
+            var can_reset = Flux.StatusProvider.IsIdle
+                .ValueOr(() => true);
 
             var can_home = Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation)
                 .Select(s => s.CanSafeCycle && s.IsHomed.HasValue && !s.IsHomed.Value);
@@ -87,7 +87,7 @@ namespace Flux.ViewModels
             _ConnectionProgress = Flux.ConnectionProvider.WhenAnyValue(v => v.ConnectionProgress)
                 .ToProperty(this, v => v.ConnectionProgress);
 
-            ResetPrinterCommand = ReactiveCommand.Create(ResetPrinter, is_idle);
+            ResetPrinterCommand = ReactiveCommand.Create(ResetPrinter, can_reset);
             StartupCommand = ReactiveCommand.CreateFromTask(StartupAsync, can_home);
             MagazineCommand = ReactiveCommand.Create(MagazineAsync);
             SettingsCommand = ReactiveCommand.Create(SettingsAsync);

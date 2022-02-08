@@ -3,6 +3,7 @@ using DynamicData.Kernel;
 using Modulo3DStandard;
 using ReactiveUI;
 using System.Linq;
+using System.Net;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
 
@@ -14,6 +15,9 @@ namespace Flux.ViewModels
 
         private ObservableAsPropertyHelper<Optional<Printer>> _Printer;
         public Optional<Printer> Printer => _Printer.Value;
+
+        private ObservableAsPropertyHelper<Optional<IPAddress>> _HostAddress;
+        public Optional<IPAddress> HostAddress => _HostAddress.Value;
 
         private LocalSettingsProvider<FluxCoreSettings> _CoreSettings;
         public LocalSettingsProvider<FluxCoreSettings> CoreSettings
@@ -49,6 +53,11 @@ namespace Flux.ViewModels
                 CoreSettings.Local.WhenAnyValue(s => s.PrinterID),
                 FindPrinter)
                 .ToProperty(this, v => v.Printer);
+
+            var host = Dns.GetHostEntry(Dns.GetHostName());
+            _HostAddress = CoreSettings.Local.WhenAnyValue(s => s.HostID)
+                .Convert(id => host.AddressList.ElementAtOrDefault(id))
+                .ToProperty(this, v => v.HostAddress);
 
             _ExtrudersCount = this.WhenAnyValue(v => v.Printer)
                 .Select(GetExtruderCount)

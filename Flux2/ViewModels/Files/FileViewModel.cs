@@ -7,6 +7,7 @@ using System.IO;
 using System.Reactive;
 using System.Reactive.Disposables;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
@@ -41,6 +42,12 @@ namespace Flux.ViewModels
         public override string ToString() => $"{FSPath}/{FSName}";
     }
 
+    public enum FLUX_FileAccess : uint
+    {
+        ReadOnly = 0,
+        ReadWrite = 1,
+    }
+
     public class FileViewModel : FSViewModel<FileViewModel>
     {
         [RemoteCommand]
@@ -52,20 +59,35 @@ namespace Flux.ViewModels
         {
             EditFileCommand = ReactiveCommand.CreateFromTask(async () =>
             {
-                var download_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                var download_cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
                 var file = await Files.Flux.ConnectionProvider.DownloadFileAsync(FSPath, FSName, download_cts.Token);
                 if (!file.HasValue)
                     return;
 
                 var textbox = new TextBox("source", FSName, file.Value, multiline: true);
-                var result = await Files.Flux.ShowSelectionAsync("Modifica File", true, textbox);
+                var combo = ComboOption.Create("file_access", "Accesso al file", 
+                    Enum.GetValues<FLUX_FileAccess>(), f => (uint)f,
+                    (uint)FLUX_FileAccess.ReadOnly, f =>
+                    {
+                        var textbox_value = textbox.RemoteInputs.Lookup("value");
+                        if (!textbox_value.HasValue)
+                            return;
+
+                        var enabled = f.HasValue && ((FLUX_FileAccess)f.Value) == FLUX_FileAccess.ReadWrite;
+                        textbox_value.Value.IsEnabled = enabled;
+                    });
+
+                textbox.InitializeRemoteView();
+                combo.InitializeRemoteView();
+
+                var result = await Files.Flux.ShowSelectionAsync("Modifica File", true, combo, textbox);
                 if (result != ContentDialogResult.Primary)
                     return;
 
                 var source = read_source(file.Value)
                     .ToOptional();
 
-                var upload_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                var upload_cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
                 await Files.Flux.ConnectionProvider.PutFileAsync(FSPath, FSName, upload_cts.Token, source);
 
                 IEnumerable<string> read_source(string source)
@@ -84,8 +106,8 @@ namespace Flux.ViewModels
                 if (dialog_result != ContentDialogResult.Primary)
                     return;
 
-                var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                var delete_result = await Files.Flux.ConnectionProvider.DeleteFileAsync(FSPath, FSName, cts.Token);
+                var delete_file_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                var delete_result = await Files.Flux.ConnectionProvider.DeleteFileAsync(FSPath, FSName, true, delete_file_cts.Token);
 
                 if (delete_result)
                     Files.UpdateFolder.OnNext(Unit.Default);

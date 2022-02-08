@@ -9,6 +9,7 @@ using System.Reactive;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
@@ -146,13 +147,14 @@ namespace Flux.ViewModels
 
                 async Task move_tool(double d)
                 {
-                    await Flux.ConnectionProvider.ExecuteParamacroAsync(c => c.GetRelativeZMovementGCode(d, 500));
+                    await Flux.ConnectionProvider.ExecuteParamacroAsync(c => c.GetRelativeZMovementGCode(d, 500), false);
                 }
             }
         }
 
         private async Task ExitAsync()
         {
+            var exit_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             await Flux.ConnectionProvider.ExecuteParamacroAsync(c =>
             {
                 var gcode = new List<string>();
@@ -161,7 +163,7 @@ namespace Flux.ViewModels
                 gcode.AddRange(c.GetLowerPlateGCode());
                 gcode.AddRange(c.GetParkToolGCode());
                 return gcode;
-            });
+            }, true, exit_ctk.Token);
 
             Flux.Navigator.NavigateBack();
         }
@@ -192,6 +194,7 @@ namespace Flux.ViewModels
 
                 async Task select_tool()
                 {
+                    var select_tool_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(30));
                     await Flux.ConnectionProvider.ExecuteParamacroAsync(c =>
                     {
                         var gcode = new List<string>();
@@ -205,7 +208,7 @@ namespace Flux.ViewModels
 
                         gcode.AddRange(c.GetRaisePlateGCode());
                         return gcode;
-                    });
+                    }, true, select_tool_ctk.Token);
                 }
             }
         }

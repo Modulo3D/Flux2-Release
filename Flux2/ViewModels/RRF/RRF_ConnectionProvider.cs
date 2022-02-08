@@ -104,7 +104,7 @@ namespace Flux.ViewModels
                         network_t = DateTime.Now;
                     }
 
-                    if (DateTime.Now - debug_t >= TimeSpan.FromSeconds(5))
+                    /*if (DateTime.Now - debug_t >= TimeSpan.FromSeconds(5))
                     {
                         Flux.MCodes.FindDrive();
                         var debug = Flux.MCodes.OperatorUSB.ConvertOr(o => o.AdvancedSettings, () => false);
@@ -112,7 +112,7 @@ namespace Flux.ViewModels
                         if (debug_plc.HasValue && debug != debug_plc)
                             await WriteVariableAsync(m => m.DEBUG, debug);
                         debug_t = DateTime.Now;
-                    }
+                    }*/
 
                     if (Connection.HasValue && ConnectionPhase.HasValue && ConnectionPhase.Value > RRF_ConnectionPhase.INITIALIZING_VARIABLES)
                         Connection.Value.MemoryBuffer.UpdateBuffer();
@@ -291,7 +291,7 @@ namespace Flux.ViewModels
         public override Optional<IEnumerable<string>> GenerateEndMCodeLines(MCode mcode, Optional<ushort> queue_size)
         {
             if (!queue_size.HasValue || queue_size.Value <= 1)
-                return new[] { "set global.queue_pos = -1" };
+                return new[] { "M98 P\"/sys/global/write_queue_pos.g\" S-1" };
 
             return new List<string>
             {
@@ -302,7 +302,7 @@ namespace Flux.ViewModels
                 $"G1 U300 F1500",
                 $"G28 U0",
                 $"G1 Z280 F1000",
-                $"set global.queue_pos = global.queue_pos + 1",
+                $"M98 P\"/sys/global/write_queue_pos.g\" S{{global.queue_pos + 1}}",
                 $"if (!exists(var.next_job))",
                 $"    var next_job = \"queue/inner/start_\"^floor(global.queue_pos)^\".g\"",
                 $"    M32 {{var.next_job}}",
@@ -328,7 +328,8 @@ namespace Flux.ViewModels
             if (!await MGuard_MagazinePositionAsync((ushort)position.Value))
                 return false;
 
-            return await ExecuteParamacroAsync(c => c.GetParkToolGCode());
+            var park_tool_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            return await ExecuteParamacroAsync(c => c.GetParkToolGCode(), true, park_tool_ctk.Token);
         }
     }
 }

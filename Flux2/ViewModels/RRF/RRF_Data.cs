@@ -960,7 +960,7 @@ namespace Flux.ViewModels
         //public object Beep { get; set; }
 
         [JsonProperty("currentTool")]
-        public Optional<double> CurrentTool { get; set; }
+        public Optional<short> CurrentTool { get; set; }
 
         //[JsonProperty("displayMessage")]
         //public Optional<string> DisplayMessage { get; set; }
@@ -1113,8 +1113,8 @@ namespace Flux.ViewModels
         private Optional<List<RRF_ObjectModelInput>> _Inputs;
         public Optional<List<RRF_ObjectModelInput>> Inputs { get => _Inputs; set => this.RaiseAndSetIfChanged(ref _Inputs, value); }
 
-        /*private Optional<RRF_ObjectModelJob> _Job;
-        public Optional<RRF_ObjectModelJob> Job { get => _Job; set => this.RaiseAndSetIfChanged(ref _Job, value); }*/
+        private Optional<RRF_ObjectModelJob> _Job;
+        public Optional<RRF_ObjectModelJob> Job { get => _Job; set => this.RaiseAndSetIfChanged(ref _Job, value); }
 
         private Optional<RRF_ObjectModelMove> _Move;
         public Optional<RRF_ObjectModelMove> Move { get => _Move; set => this.RaiseAndSetIfChanged(ref _Move, value); }
@@ -1191,7 +1191,7 @@ namespace Flux.ViewModels
             }
         }
 
-        public static Optional<MCodePartProgram> GetPartProgram(this (Dictionary<string, object> global, FLUX_FileList storage, FLUX_FileList queue) data)
+        public static Optional<MCodePartProgram> GetPartProgram(this (RRF_ObjectModelJob job, Dictionary<string, object> global, FLUX_FileList storage, FLUX_FileList queue) data)
         {
             try
             {
@@ -1212,6 +1212,15 @@ namespace Flux.ViewModels
                 var storage_dict = data.storage.GetPartProgramDictionaryFromStorage();
                 if (!storage_dict.TryGetValue(current_job, out var part_program))
                     return default;
+
+                var filename = data.job.File.Convert(f => f.FileName)
+                    .ValueOr(() => data.job.LastFileName.ValueOrDefault());
+                
+                // Full part program from filename
+                if (!string.IsNullOrEmpty(filename))
+                    if (MCodePartProgram.TryParse(filename, out var full_part_program))
+                        if (full_part_program.MCodeGuid == part_program.MCodeGuid)
+                            return full_part_program;
 
                 return part_program;
             }

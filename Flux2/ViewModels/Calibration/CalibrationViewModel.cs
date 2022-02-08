@@ -31,7 +31,7 @@ namespace Flux.ViewModels
         public ReactiveCommand<Unit, Unit> DecreaseGlobalZOffsetCommand { get; private set; }
 
         private Optional<double> _GlobalZOffset;
-        [RemoteInput(0.01, converter: typeof(MillimeterConverter))]
+        [RemoteInput(step: 0.01, converter: typeof(MillimeterConverter))]
         public Optional<double> GlobalZOffset
         {
             get => _GlobalZOffset;
@@ -49,8 +49,7 @@ namespace Flux.ViewModels
                 .Transform(f => f.ToolNozzle.State, true)
                 .QueryWhenChanged();
 
-            _GroupId = Flux.Feeders.Feeders.Connect()
-                .WatchOptional(tool_states.Select(ts =>
+            var group_tool = tool_states.Select(ts =>
                 {
                     foreach (var kvp in ts.KeyValues.OrderBy(kvp => kvp.Key))
                     {
@@ -59,8 +58,16 @@ namespace Flux.ViewModels
                         return kvp.Key;
                     }
                     return Optional<ushort>.None;
-                }))
-                .ConvertMany(f => f.ToolNozzle.WhenAnyValue(n => n.Nfc).Select(nfc => (f.Position, nfc)))
+                })
+                .Throttle(TimeSpan.FromSeconds(1));
+
+            _GroupId = Flux.Feeders.Feeders.Connect()
+                .WatchOptional(group_tool)
+                .ConvertMany(f =>
+                {
+                    return f.ToolNozzle.WhenAnyValue(n => n.Nfc)
+                        .Select(nfc => (f.Position, nfc));
+                })
                 .Convert(f =>
                 {
                     if (!f.nfc.CardId.HasValue)

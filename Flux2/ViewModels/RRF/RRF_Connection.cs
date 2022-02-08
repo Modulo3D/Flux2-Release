@@ -446,9 +446,8 @@ namespace Flux.ViewModels
 
         public override async Task<bool> ResetAsync()
         {
-            if (!await PostGCodeAsync("M108%0AM25", false, TimeSpan.FromSeconds(5)))
-                return false;
-            return await PostGCodeAsync("M0", false, TimeSpan.FromSeconds(5));
+            var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            return await ExecuteParamacroAsync(new[] { "M108", "M25", "M0" }, true, cts.Token);
         }
         private int GetGCodeLenght(IEnumerable<string> paramacro)
         {
@@ -487,21 +486,23 @@ namespace Flux.ViewModels
                 return await base.ExecuteParamacroAsync(paramacro, wait, ct);
         }
 
-        public override async Task<bool> DeselectPartProgramAsync(bool from_drive, CancellationToken ct)
+        public override async Task<bool> DeselectPartProgramAsync(bool from_drive, bool wait, CancellationToken ct = default)
         {
             try
             {
                 if (ct.IsCancellationRequested)
                     return false;
 
-                var files = await ListFilesAsync(StoragePath, ct);
+                var file_list_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                var files = await ListFilesAsync(StoragePath, file_list_ctk.Token);
                 if (!files.HasValue)
                     return false;
 
+                var put_file_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 if (!files.Value.Files.Any(f => f.Name == "deselected.mcode"))
-                    await PutFileAsync(StoragePath, "deselected.mcode", ct);
+                    await PutFileAsync(StoragePath, "deselected.mcode", put_file_ctk.Token);
 
-                if (!await SelectPartProgramAsync("deselected.mcode", true, ct))
+                if (!await SelectPartProgramAsync("deselected.mcode", true, wait, ct))
                     return false;
 
                 return true;
@@ -511,7 +512,7 @@ namespace Flux.ViewModels
                 return false;
             }
         }
-        public override async Task<bool> DeleteFileAsync(string folder, string filename, CancellationToken ct)
+        public override async Task<bool> DeleteFileAsync(string folder, string filename, bool wait, CancellationToken ct = default)
         {
             try
             {
@@ -522,7 +523,8 @@ namespace Flux.ViewModels
                     return false;
 
                 var path = $"{folder}/{filename}".TrimStart('/');
-                if (!await ClearFolderAsync(path))
+                var clear_folder_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                if (!await ClearFolderAsync(path, true, clear_folder_ctk.Token))
                     return false;
 
                 var request = new RestRequest($"rr_delete?name=0:/{path}");
@@ -533,6 +535,11 @@ namespace Flux.ViewModels
             {
                 return false;
             }
+        }
+        public override async Task<bool> HoldAsync()
+        {
+            var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            return await ExecuteParamacroAsync(new[] { "M108", "M25", "M0" }, true, cts.Token);
         }
         public override async Task<Optional<string>> DownloadFileAsync(string folder, string filename, CancellationToken ct)
         {
@@ -555,7 +562,7 @@ namespace Flux.ViewModels
                 return default;
             }
         }
-        public override async Task<bool> SelectPartProgramAsync(string filename, bool from_drive, CancellationToken ct)
+        public override async Task<bool> SelectPartProgramAsync(string filename, bool from_drive, bool wait, CancellationToken ct = default)
         {
             try
             {
@@ -689,7 +696,7 @@ namespace Flux.ViewModels
                 return false;
             }
         }
-        public override async Task<bool> ClearFolderAsync(string folder, CancellationToken ct = default)
+        public override async Task<bool> ClearFolderAsync(string folder, bool wait, CancellationToken ct = default)
         {
             try
             {
@@ -787,9 +794,18 @@ namespace Flux.ViewModels
         }
         public override string[] GetResetPrinterGCode()
         {
+            // TODO
             return new[]
             {
-                "M98 P\"/macros/Lower Plate\""
+                "M98 P\"/macros/Lower Plate\"",
+                "M98 P\"/sys/global/write_queue_pos.g\" S-1",
+                "M98 P\"/sys/global/write_hold_pp.g\" S\"\"",
+                "M98 P\"/sys/global/write_hold_tool.g\" S-1",
+                "M98 P\"/sys/global/write_hold_blk_num.g\" S0",
+                "M98 P\"/sys/global/write_hold_temp.g\" T0 S0",
+                "M98 P\"/sys/global/write_hold_temp.g\" T1 S0",
+                "M98 P\"/sys/global/write_hold_temp.g\" T2 S0",
+                "M98 P\"/sys/global/write_hold_temp.g\" T3 S0",
             };
         }
         public override string[] GetSelectToolGCode(ushort position)

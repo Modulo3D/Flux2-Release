@@ -5,6 +5,7 @@ using ReactiveUI;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Reactive;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
@@ -21,6 +22,9 @@ namespace Flux.ViewModels
 
         [RemoteInput]
         public SelectableCache<Printer, int> Printers { get; }
+
+        [RemoteInput]
+        public SelectableCache<(IPAddress address, int id), int> HostAddress { get; }
 
         private Optional<string> _PlcAddress = "";
         [RemoteInput]
@@ -63,10 +67,14 @@ namespace Flux.ViewModels
         {
             var database_changed = flux.DatabaseProvider.WhenAnyValue(v => v.Database);
 
-            var cache = database_changed.Select(FindPrinters)
+            var printer_cache = database_changed.Select(FindPrinters)
                 .ToObservableChangeSet(p => p.ConvertOr(p => p.Id, () => 0));
+            Printers = new SelectableCache<Printer, int>(printer_cache);
 
-            Printers = new SelectableCache<Printer, int>(cache);
+            var host = Dns.GetHostEntry(Dns.GetHostName());
+            var host_address_cache = host.AddressList.Select((ip, id) => (ip, id).ToOptional())
+                .AsObservableChangeSet(t => t.ConvertOr(t => t.id, () => -1));
+            HostAddress = new SelectableCache<(IPAddress address, int id), int>(host_address_cache);
 
             var user_settings = Flux.SettingsProvider.UserSettings.Local;
             var core_settings = Flux.SettingsProvider.CoreSettings.Local;
@@ -114,6 +122,7 @@ namespace Flux.ViewModels
                 var core_settings = Flux.SettingsProvider.CoreSettings.Local;
 
                 core_settings.PrinterID = Printers.SelectedValue.ConvertOr(p => p.Id, () => 0);
+                core_settings.HostID = HostAddress.SelectedValue.ConvertOr(p => p.id, () => 0);
                 user_settings.CostHour = CostHour;
                 core_settings.PLCAddress = PlcAddress;
                 user_settings.PrinterName = PrinterName;

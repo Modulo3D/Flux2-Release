@@ -49,7 +49,7 @@ namespace Flux.ViewModels
                 .Subscribe(v => selection_changed?.Invoke(v))
                 .DisposeWith(Disposables);
 
-            AddInput("items", Items, converter);
+            AddInput("items", Items, converter: converter);
         }
     }
 
@@ -62,10 +62,6 @@ namespace Flux.ViewModels
         public static ComboOption<TValue, TKey> Create<TValue, TKey>(string name, string title, IEnumerable<TValue> items_source, Func<TValue, TKey> add_key, Optional<TKey> key = default, Action<Optional<TKey>> selection_changed = default, Type converter = default)
         {
             return new ComboOption<TValue, TKey>(name, title, items_source.AsObservableChangeSet().AddKey(add_key).AsObservableCache(), key, selection_changed, converter: converter);
-        }
-        public static ComboOption<T, T> Create<T>(string name, string title, IEnumerable<T> items_source, Optional<T> key = default, Action<Optional<T>> selection_changed = default, Type converter = default)
-        {
-            return new ComboOption<T, T>(name, title, items_source.AsObservableChangeSet(p => p).AsObservableCache(), key, selection_changed, converter: converter);
         }
     }
 
@@ -103,7 +99,7 @@ namespace Flux.ViewModels
             Max = max;
             Step = step;
             Value = value;
-            AddInput("value", this.WhenAnyValue(v => v.Value), SetValue, Observable.Return(new List<InputOption>()), step, converter: converter);
+            AddInput("value", this.WhenAnyValue(v => v.Value), SetValue, step: step, converter: converter);
         }
         void SetValue(double value) => Value = value;
     }
@@ -130,37 +126,37 @@ namespace Flux.ViewModels
         public ContentDialogResult Result { get; private set; }
         public TaskCompletionSource<ContentDialogResult> ShowAsyncSource { get; private set; }
 
-        public ContentDialog(FluxViewModel flux, string title, Action close = default, Action confirm = default, Action cancel = default) : base("dialog")
+        public ContentDialog(FluxViewModel flux, string title, Func<Task> close = default, Func<Task> confirm = default, Func<Task> cancel = default) : base("dialog")
         {
             Flux = flux;
             Title = title;
 
             if (close != null)
             {
-                CloseCommand = ReactiveCommand.Create(() =>
+                CloseCommand = ReactiveCommand.CreateFromTask(async () =>
                 {
                     Result = ContentDialogResult.None;
-                    close();
+                    await close();
                     Hide();
                 }).DisposeWith(Disposables);
             }
 
             if (confirm != null)
             {
-                ConfirmCommand = ReactiveCommand.Create(() =>
+                ConfirmCommand = ReactiveCommand.CreateFromTask(async () =>
                 {
                     Result = ContentDialogResult.Primary;
-                    confirm();
+                    await confirm();
                     Hide();
                 }).DisposeWith(Disposables);
             }
 
             if (cancel != null)
             {
-                CancelCommand = ReactiveCommand.Create(() =>
+                CancelCommand = ReactiveCommand.CreateFromTask(async () =>
                 {
                     Result = ContentDialogResult.Secondary;
-                    cancel();
+                    await cancel();
                     Hide();
                 }).DisposeWith(Disposables);
             }

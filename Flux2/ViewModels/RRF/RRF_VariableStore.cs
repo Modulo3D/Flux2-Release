@@ -4,6 +4,7 @@ using Modulo3DStandard;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reactive;
 using System.Reactive.Linq;
 using System.Text;
@@ -30,6 +31,7 @@ namespace Flux.ViewModels
             var global = RRF_StateBuilder.Create(connection, m => m.WhenAnyValue(m => m.Global));
             var storage = RRF_StateBuilder.Create(connection, m => m.WhenAnyValue(m => m.Storage));
             var queue = RRF_StateBuilder.Create(connection, m => m.WhenAnyValue(m => m.Queue));
+            var job = RRF_StateBuilder.Create(connection, m => m.WhenAnyValue(m => m.Job));
 
             var state_input = RRF_StateBuilder.Create(connection,
                 m => Observable.CombineLatest(state.GetState(m), input.GetState(m),
@@ -39,24 +41,25 @@ namespace Flux.ViewModels
                 m => Observable.CombineLatest(storage.GetState(m), queue.GetState(m),
                 (s, q) => s.Convert(s => q.Convert(q => (s, q)))));
 
-            var global_storage_queue = RRF_StateBuilder.Create(connection,
-                m => Observable.CombineLatest(global.GetState(m), storage.GetState(m), queue.GetState(m),
-                (g, s, q) => g.Convert(g => s.Convert(s => q.Convert(q => (g, s, q))))));
+            var job_global_storage_queue = RRF_StateBuilder.Create(connection,
+                m => Observable.CombineLatest(job.GetState(m), global.GetState(m), storage.GetState(m), queue.GetState(m),
+                (job, global, storage, queue) => job.Convert(job => global.Convert(global => storage.Convert(storage => queue.Convert(queue => (job, global, storage, queue)))))));
 
+            HOLD_PP = RegisterVariable(new RRF_VariableGlobalModel<string>(connection, "hold_pp", true));
             HOLD_TOOL = RegisterVariable(new RRF_VariableGlobalModel<short>(connection, "hold_tool", true));
             HOLD_TEMP = RegisterVariable(new RRF_ArrayGlobalModel<double>(connection, "hold_temp", 4, true));
             HOLD_BLK_NUM = RegisterVariable(new RRF_VariableGlobalModel<double>(connection, "hold_blk_num", true));
 
             QUEUE = RegisterVariable(queue.CreateVariable<Dictionary<ushort, Guid>, Unit>("QUEUE", (c, m) => m.GetGuidDictionaryFromQueue()));
-            STORAGE = RegisterVariable(queue.CreateVariable<Dictionary<Guid, MCodePartProgram>, Unit>("STORAGE", (c, m) => m.GetPartProgramDictionaryFromStorage()));
+            STORAGE = RegisterVariable(storage.CreateVariable<Dictionary<Guid, MCodePartProgram>, Unit>("STORAGE", (c, m) => m.GetPartProgramDictionaryFromStorage()));
             PROCESS_STATUS = RegisterVariable(state.CreateVariable<FLUX_ProcessStatus, Unit>("PROCESS STATUS", (c, m) => m.GetProcessStatus()));
 
-            PART_PROGRAM = RegisterVariable(global_storage_queue.CreateVariable<MCodePartProgram, Unit>("PART PROGRAM", (c, m) => m.GetPartProgram()));
+            PART_PROGRAM = RegisterVariable(job_global_storage_queue.CreateVariable<MCodePartProgram, Unit>("PART PROGRAM", (c, m) => m.GetPartProgram()));
             BLOCK_NUM = RegisterVariable(state_input.CreateVariable<uint, Unit>("BLOCK NUM", (c, m) => m.GetBlocNum()));
             IS_HOMED = RegisterVariable(move.CreateVariable<bool, bool>("IS HOMED", (c, m) => m.IsHomed()));
 
-            var axes = move.CreateArray("AXIS_POSITION", 0, 4, m => m.Axes);
-            AXIS_POSITION = RegisterVariable(axes.Create<double, Unit>((c, a) => a.MachinePosition, axes_unit));
+            var axes = move.CreateArray(0, 4, m => m.Axes);
+            AXIS_POSITION = RegisterVariable(axes.Create<double, Unit>("AXIS_POSITION", (c, a) => a.MachinePosition, axes_unit));
 
             QUEUE_SIZE = RegisterVariable(new RRF_VariableGlobalModel<ushort>(connection, "queue_size", true));
             QUEUE_POS = RegisterVariable(new RRF_VariableGlobalModel<short>(connection, "queue_pos", true));
@@ -69,7 +72,7 @@ namespace Flux.ViewModels
             Y_PROBE_OFFSET_T = RegisterVariable(new RRF_ArrayGlobalModel<double>(connection, "y_probe_offset", 4, false));
             Z_PROBE_OFFSET_T = RegisterVariable(new RRF_ArrayGlobalModel<double>(connection, "z_probe_offset", 4, false));
 
-            TOOL_CUR = RegisterVariable(state.CreateVariable<short, short>("TOOL CUR", (c, s) => s.CurrentTool.Convert(t => (short)t)));
+            TOOL_CUR = RegisterVariable(state.CreateVariable<short, short>("TOOL CUR", (c, s) => s.CurrentTool));
             TOOL_NUM = RegisterVariable(tools.CreateVariable<ushort, ushort>("TOOL NUM", (c, t) => (ushort)t.Count));
             DEBUG = RegisterVariable(new RRF_VariableGlobalModel<bool>(connection, "debug", true));
             KEEP_CHAMBER = RegisterVariable(new RRF_VariableGlobalModel<bool>(connection, "keep_chamber", true));
@@ -77,8 +80,21 @@ namespace Flux.ViewModels
             HAS_PLATE = RegisterVariable(new RRF_VariableGlobalModel<bool>(connection, "has_plate", true));
             AUTO_FAN = RegisterVariable(new RRF_VariableGlobalModel<bool>(connection, "auto_fan", true));
 
-            MEM_TOOL_ON_TRAILER = RegisterVariable(new RRF_ArrayGlobalModel<bool>(connection, "tool_on_trailer", 4, true));
-            MEM_TOOL_IN_MAGAZINE = RegisterVariable(new RRF_ArrayGlobalModel<bool>(connection, "tool_in_magazine", 4, true));
+            var tool_array = state.CreateArray(0, 4, s => 
+            {
+                if (!s.CurrentTool.HasValue)
+                    return default;
+                var tool_list = new List<bool>();
+                for (ushort i = 0; i < 4; i++)
+                    tool_list.Add(s.CurrentTool.Value == i);
+                return tool_list.ToOptional();
+            });
+
+            MEM_TOOL_ON_TRAILER = RegisterVariable(tool_array.Create<bool, bool>("TOOL ON TRAILER", (c, m) => m));
+            MEM_TOOL_IN_MAGAZINE = RegisterVariable(tool_array.Create<bool, bool>("TOOL IN MAGAZINE", (c, m) => !m));
+
+            //MEM_TOOL_ON_TRAILER = RegisterVariable(new RRF_ArrayGlobalModel<bool>(connection, "tool_on_trailer", 4, true));
+            //MEM_TOOL_IN_MAGAZINE = RegisterVariable(new RRF_ArrayGlobalModel<bool>(connection, "tool_in_magazine", 4, true));
 
             PURGE_POSITION = RegisterVariable(new RRF_ArrayGlobalModel<double>(connection, "purge_position", 2, true, positions_unit));
             HOME_BUMP = RegisterVariable(new RRF_ArrayGlobalModel<double>(connection, "home_bump", 3, true, positions_unit));
@@ -89,18 +105,18 @@ namespace Flux.ViewModels
 
             TEMP_PLATE = RegisterVariable(heat.CreateVariable<FLUX_Temp, double>("TEMP PLATE", (c, m) => m.GetPlateTemperature(), SetPlateTemperature));
 
-            var heaters = heat.CreateArray("TEMP_TOOL", 1, 4, h => h.Heaters);
-            TEMP_TOOL = RegisterVariable(heaters.Create<FLUX_Temp, double>((c, m) => m.GetTemperature(), SetToolTemperatureAsync));
+            var heaters = heat.CreateArray(1, 4, h => h.Heaters);
+            TEMP_TOOL = RegisterVariable(heaters.Create<FLUX_Temp, double>("TEMP_TOOL", (c, m) => m.GetTemperature(), SetToolTemperatureAsync));
 
-            var endstops = sensors.CreateArray("AXIS ENDSTOP", 0, 2, s => s.Endstops);
-            AXIS_ENDSTOP = RegisterVariable(endstops.Create<bool, bool>((c, e) => e.Triggered, custom_unit: endstops_unit));
+            var endstops = sensors.CreateArray(0, 2, s => s.Endstops);
+            AXIS_ENDSTOP = RegisterVariable(endstops.Create<bool, bool>("AXIS ENDSTOP", (c, e) => e.Triggered, custom_unit: endstops_unit));
             if (AXIS_ENDSTOP.HasValue && AXIS_ENDSTOP.Value is RRF_ArrayObjectModel<RRF_ObjectModelSensors, bool, bool> axis_endstop)
             {
                 var z_probe = sensors.CreateVariable<bool, bool>("AXIS_ENDSTOP Z", (c, s) => s.GetProbeLevels(0).Convert(l => l[0] > 0));
                 axis_endstop.Variables.AddOrUpdate(z_probe);
             }
 
-            ENABLE_DRIVERS = RegisterVariable(axes.Create<bool, bool>((c, m) => m.IsEnabledDriver(), EnableDriverAsync, drivers_unit));
+            ENABLE_DRIVERS = RegisterVariable(axes.Create<bool, bool>("ENABLE DRIVERS", (c, m) => m.IsEnabledDriver(), EnableDriverAsync, drivers_unit));
         }
 
         public Task<bool> SetPlateTemperature(RRF_Connection connection, double temperature)
