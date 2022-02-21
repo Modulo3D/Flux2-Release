@@ -906,13 +906,9 @@ namespace Flux.ViewModels
             string filename,
             CancellationToken ct,
             Optional<IEnumerable<string>> source,
-            Optional<IEnumerable<string>> start,
-            Optional<IEnumerable<string>> recovery = default,
             Optional<IEnumerable<string>> end = default,
-            Optional<uint> recovery_block = default,
             Optional<uint> source_blocks = default,
-            Action<double> report_progress = default,
-            bool debug_chunks = false)
+            Action<double> report_progress = default)
         {
             if (!Client.HasValue)
                 return false;
@@ -946,46 +942,16 @@ namespace Flux.ViewModels
                     return false;
                 file_id = open_file_response.FileID;
 
-                // Write start
-                if (start.HasValue)
-                {
-                    using (var start_writer = new StringWriter())
-                    {
-                        start_writer.WriteLine("; preprocessing");
-                        foreach (var line in start.Value)
-                            start_writer.WriteLine(line);
-                        start_writer.WriteLine("");
-
-                        var byte_data = Encoding.UTF8.GetBytes(start_writer.ToString());
-                        var write_record_request = new LogFSWriteRecordRequest(file_id, transaction++, (uint)byte_data.Length, byte_data);
-                        var write_record_response = await Client.Value.LogFSWriteRecordAsync(write_record_request);
-
-                        if (!ProcessResponse(
-                            write_record_response.retval,
-                            write_record_response.ErrClass,
-                            write_record_response.ErrNum))
-                        {
-                            var close_file_request = new LogFSCloseFileRequest(file_id, (ushort)(transaction - 1));
-                            var close_file_response = await Client.Value.LogFSCloseFileAsync(close_file_request);
-
-                            ProcessResponse(
-                                close_file_response.retval,
-                                close_file_response.ErrClass,
-                                close_file_response.ErrNum);
-
-                            return false;
-                        }
-                    }
-                }
 
                 // Write recovery
-                if (recovery.HasValue && recovery_block.HasValue)
+                var recovery = await ReadVariableAsync(c => c.MCODE_RECOVERY);
+                if (recovery.HasValue)
                 {
-                    skipped_blocks = recovery_block.Value;
+                    skipped_blocks = ((OSAI_MCodeRecovery)recovery.Value).BlockNumber;
                     using (var recovery_writer = new StringWriter())
                     {
                         recovery_writer.WriteLine("; recovery");
-                        foreach (var line in recovery.Value)
+                        foreach (var line in GenerateRecoveryLines((OSAI_MCodeRecovery)recovery.Value))
                             recovery_writer.WriteLine(line);
                         recovery_writer.WriteLine("");
 
@@ -1021,8 +987,6 @@ namespace Flux.ViewModels
                     {
                         using (var gcode_writer = new StringWriter())
                         {
-                            if (debug_chunks)
-                                gcode_writer.WriteLine($"; gcode chunk {chunk_counter}");
                             foreach (var line in chunk)
                             {
                                 gcode_writer.WriteLine($"N{skipped_blocks + block_number} {line}");
@@ -1113,6 +1077,50 @@ namespace Flux.ViewModels
             }
         }
 
+        public IEnumerable<string> GenerateRecoveryLines(OSAI_MCodeRecovery recovery)
+        {
+            yield return $"#!REQ_HOLD = 0.0";
+            yield return $"#!IS_HOLD = 0.0";
+            yield return $"G500 T{recovery.ToolNumber + 1}";
+            yield return $"M4999 [{{WIRE_ENDSTOP_1_RESET}}, {recovery.ToolNumber + 1}, 0, 1]";
+
+            for (int tool = 0; tool < recovery.Temperatures.Count; tool++)
+            {
+                var current_tool_temp = recovery.Temperatures
+                    .Lookup($"{tool}")
+                    .ValueOr(() => 0);
+
+                if (current_tool_temp > 50)
+                {
+                    var hold_temp = $"{current_tool_temp:0}".Replace(",", ".");
+                    yield return $"M4104 [{tool + 1}, {hold_temp}, 0]";
+                }
+            }
+
+            var recovery_tool_temp = recovery.Temperatures
+                .Lookup($"{recovery.ToolNumber}")
+                .ValueOr(() => 0);
+
+            if (recovery_tool_temp > 50)
+            {
+                var hold_temp_t = $"{recovery_tool_temp:0}".Replace(",", ".");
+                yield return $"M4104 [{recovery.ToolNumber + 1}, {hold_temp_t}, 1]";
+            }
+
+            var x_pos = $"{recovery.Positions.Lookup("X").ValueOr(() => 0):0.000}".Replace(",", ".");
+            var y_pos = $"{recovery.Positions.Lookup("Y").ValueOr(() => 0):0.000}".Replace(",", ".");
+            var z_pos = $"{recovery.Positions.Lookup("Z").ValueOr(() => 0):0.000}".Replace(",", ".");
+            var e_pos = $"{recovery.Positions.Lookup("E").ValueOr(() => 0):0.000}".Replace(",", ".");
+
+            yield return $"G1 X{x_pos} Y{y_pos} F15000";
+            yield return $"G1 Z{z_pos} F5000";
+
+            yield return $"G92 A0";
+            yield return $"G1 A1 F2000";
+
+            yield return $"G92 A{e_pos}";
+        }
+
         // AXIS MANAGEMENT
         public async Task<bool> AxesRefAsync(params char[] axes)
         {
@@ -1164,10 +1172,6 @@ namespace Flux.ViewModels
         public override string[] GetRaisePlateGCode()
         {
             throw new NotImplementedException();
-        }
-        public override string[] GetResetPrinterGCode()
-        {
-            return new[] { "G508" };
         }
         public override string[] GetGotoReaderGCode(ushort position)
         {
@@ -1223,6 +1227,17 @@ namespace Flux.ViewModels
         public override Task<bool> CreateFolderAsync(string folder, string name, CancellationToken ct)
         {
             throw new NotImplementedException();
+        }
+
+        public override string[] GetSetToolOffsetGCode(ushort position, double x, double y, double z)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override async Task<bool> CancelPrintAsync(bool hard_cancel)
+        {
+            var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            return await ExecuteParamacroAsync(new[] { "G508" }, true, cts.Token);
         }
     }
 }

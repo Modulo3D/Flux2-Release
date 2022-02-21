@@ -27,8 +27,6 @@ namespace Flux.ViewModels
 
     public class RRF_ConnectionProvider : FLUX_ConnectionProvider<RRF_Connection, RRF_VariableStore>
     {
-        public override OffsetKind OffsetKind => OffsetKind.ToolOrigin;
-
         public CancellationTokenSource CTS { get; private set; }
 
         private ObservableAsPropertyHelper<Optional<bool>> _IsConnecting;
@@ -49,6 +47,13 @@ namespace Flux.ViewModels
 
         public FluxViewModel Flux { get; }
         public override IFlux IFlux => Flux;
+
+        private int _ResponseTimeout;
+        public int ResponseTimeout 
+        {
+            get => _ResponseTimeout; 
+            set => this.RaiseAndSetIfChanged(ref _ResponseTimeout, value);
+        }
 
         public RRF_ConnectionProvider(FluxViewModel flux)
         {
@@ -138,6 +143,7 @@ namespace Flux.ViewModels
                 {
 
                     CTS?.Dispose();
+                    ResponseTimeout = 0;
                     ConnectionPhase = RRF_ConnectionPhase.START_PHASE;
                 }
                 catch
@@ -149,8 +155,11 @@ namespace Flux.ViewModels
         {
             try
             {
-                if (!ConnectionPhase.HasValue)
+                if (!ConnectionPhase.HasValue || ResponseTimeout > 10)
+                {
+                    ResponseTimeout = 0;
                     ConnectionPhase = RRF_ConnectionPhase.START_PHASE;
+                }
 
                 switch (ConnectionPhase.Value)
                 {
@@ -197,7 +206,7 @@ namespace Flux.ViewModels
                     case RRF_ConnectionPhase.CONNECTING_CLIENT:
                         await CreateTimeoutAsync(TimeSpan.FromSeconds(5), async ct =>
                         {
-                            var connected = await Connection.Value.PutRequestAsync(new RestRequest("rr_connect?password=\"\"", Method.Get), IRRF_RequestPriority.Immediate, ct: ct);
+                            var connected = await Connection.Value.PutRequestAsync(new RestRequest($"rr_connect?password=\"\"&time={DateTime.UtcNow:O}", Method.Get), IRRF_RequestPriority.Immediate, ct: ct);
                             ConnectionPhase = connected ? RRF_ConnectionPhase.READING_STATUS : RRF_ConnectionPhase.START_PHASE;
                         });
                         break;
@@ -284,14 +293,11 @@ namespace Flux.ViewModels
                 }
             }
         }
-        public override Optional<IEnumerable<string>> GenerateStartMCodeLines(MCode mcode)
-        {
-            return default;
-        }
+
         public override Optional<IEnumerable<string>> GenerateEndMCodeLines(MCode mcode, Optional<ushort> queue_size)
         {
             if (!queue_size.HasValue || queue_size.Value <= 1)
-                return new[] { "M98 P\"/sys/global/write_queue_pos.g\" S-1" };
+                return new[] { "M98 P\"/macros/cancel_print\"" };
 
             return new List<string>
             {
@@ -310,10 +316,6 @@ namespace Flux.ViewModels
                 $"    set var.next_job = \"queue/inner/start_\"^floor(global.queue_pos)^\".g\"",
                 $"    M32 {{var.next_job}}"
             };
-        }
-        public override Optional<IEnumerable<string>> GenerateRecoveryMCodeLines(MCodeRecovery recovery)
-        {
-            return default;
         }
 
         public override async Task<bool> ParkToolAsync()

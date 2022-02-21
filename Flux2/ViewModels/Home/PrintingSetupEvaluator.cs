@@ -26,8 +26,8 @@ namespace Flux.ViewModels
         public FeederEvaluator FeederEvaluator { get; }
         public abstract IFluxTagViewModel<TNFCTag, TTagDocument, TState> TagViewModel { get; }
 
-        private ObservableAsPropertyHelper<Optional<Dictionary<ushort, TDocument>>> _ExpectedDocumentQueue;
-        public Optional<Dictionary<ushort, TDocument>> ExpectedDocumentQueue => _ExpectedDocumentQueue.Value;
+        private ObservableAsPropertyHelper<Optional<Dictionary<QueueKey, TDocument>>> _ExpectedDocumentQueue;
+        public Optional<Dictionary<QueueKey, TDocument>> ExpectedDocumentQueue => _ExpectedDocumentQueue.Value;
 
         private ObservableAsPropertyHelper<Optional<TDocument>> _CurrentDocument;
         public Optional<TDocument> CurrentDocument => _CurrentDocument.Value;
@@ -51,12 +51,17 @@ namespace Flux.ViewModels
 
         public void Initialize()
         {
+            var partprogram = FeederEvaluator.Feeder.Flux.ConnectionProvider.ObserveVariable(c => c.PART_PROGRAM);
             var queue_pos = FeederEvaluator.Feeder.Flux.ConnectionProvider.ObserveVariable(c => c.QUEUE_POS);
+
+            var queue_key = Observable.CombineLatest(partprogram, queue_pos, (pp, q) => 
+                pp.Convert(pp => q.Convert(q => new QueueKey(pp.MCodeGuid, q))));
+
             var db_changed = FeederEvaluator.Feeder.Flux.DatabaseProvider.WhenAnyValue(v => v.Database);
             var eval_changed = FeederEvaluator.WhenAnyValue(e => e.FeederReportQueue);
 
             _ExpectedDocumentQueue = Observable.CombineLatest(
-                queue_pos,
+                queue_key,
                 db_changed,
                 eval_changed,
                 (p, db, f) => GetExpectedDocumentQueue(p, db, f, GetDocumentId))
@@ -90,47 +95,64 @@ namespace Flux.ViewModels
 
         public abstract int GetDocumentId(FeederReport feeder_report);
         public abstract Optional<TDocument> GetCurrentDocument(TTagDocument tag_document);
-        public abstract bool GetInvalid(TTagDocument document, TState state, Optional<Dictionary<ushort, FeederReport>> report);
+        public abstract bool GetInvalid(TTagDocument document, TState state, Optional<Dictionary<QueueKey, FeederReport>> report);
 
-        private Optional<Dictionary<ushort, TDocument>> GetExpectedDocumentQueue(Optional<short> queue_pos, Optional<ILocalDatabase> database, Optional<Dictionary<ushort, FeederReport>> feered_queue, Func<FeederReport, int> get_id)
+        private Optional<Dictionary<QueueKey, TDocument>> GetExpectedDocumentQueue(Optional<QueueKey> queue_key, Optional<ILocalDatabase> database, Optional<Dictionary<QueueKey, FeederReport>> feered_queue, Func<FeederReport, int> get_id)
         {
-            if (!queue_pos.HasValue)
-                return default;
-            if (!database.HasValue)
-                return default;
-            if (!feered_queue.HasValue)
-                return default;
-
-            var document_queue = new Dictionary<ushort, TDocument>();
-            foreach (var feeder_queue in feered_queue.Value)
+            try
             {
-                if (feeder_queue.Key < queue_pos.Value)
-                    continue;
+                if (!queue_key.HasValue)
+                    return default;
+                if (!database.HasValue)
+                    return default;
+                if (!feered_queue.HasValue)
+                    return default;
 
-                var feeder_report = feered_queue.Value.Lookup(feeder_queue.Key);
-                if (!feeder_report.HasValue)
-                    continue;
+                var document_queue = new Dictionary<QueueKey, TDocument>();
+                foreach (var feeder_queue in feered_queue.Value)
+                {
+                    if (feeder_queue.Key.MCodeGuid != queue_key.Value.MCodeGuid)
+                        continue;
 
-                var document_id = get_id(feeder_report.Value);
-                var result = database.Value.FindById<TDocument>(document_id);
-                if (!result.HasDocuments)
-                    continue;
+                    if (feeder_queue.Key.QueuePosition < queue_key.Value.QueuePosition)
+                        continue;
 
-                document_queue.Add(feeder_queue.Key, result.Documents.First());
+                    var feeder_report = feered_queue.Value.Lookup(feeder_queue.Key);
+                    if (!feeder_report.HasValue)
+                        continue;
+
+                    var document_id = get_id(feeder_report.Value);
+                    var result = database.Value.FindById<TDocument>(document_id);
+                    if (!result.HasDocuments)
+                        continue;
+
+                    document_queue.Add(feeder_queue.Key, result.Documents.First());
+                }
+                return document_queue;
             }
-            return document_queue;
+            catch (Exception ex)
+            {
+                return default;
+            }
         }
-        private bool LowWeight(Optional<double> expected, Optional<double> current, Optional<Dictionary<ushort, FeederReport>> feeder_queue)
+        private bool LowWeight(Optional<double> expected, Optional<double> current, Optional<Dictionary<QueueKey, FeederReport>> feeder_queue)
         {
-            if (!feeder_queue.HasValue)
-                return true;
-            if (feeder_queue.Value.Count == 0)
+            try
+            {
+                if (!feeder_queue.HasValue)
+                    return true;
+                if (feeder_queue.Value.Count == 0)
+                    return false;
+                if (!expected.HasValue)
+                    return true;
+                if (!current.HasValue)
+                    return true;
+                return current.Value < expected.Value;
+            }
+            catch (Exception ex)
+            {
                 return false;
-            if (!expected.HasValue)
-                return true;
-            if (!current.HasValue)
-                return true;
-            return current.Value < expected.Value;
+            }
         }
     }
 
@@ -148,7 +170,7 @@ namespace Flux.ViewModels
         {
             return feeder_report.MaterialId;
         }
-        public override bool GetInvalid(Optional<Material> document, MaterialState state, Optional<Dictionary<ushort, FeederReport>> report_queue)
+        public override bool GetInvalid(Optional<Material> document, MaterialState state, Optional<Dictionary<QueueKey, FeederReport>> report_queue)
         {
             if (!report_queue.HasValue)
                 return true;
@@ -184,7 +206,7 @@ namespace Flux.ViewModels
         {
             return tag_document.nozzle;
         }
-        public override bool GetInvalid((Optional<Tool> tool, Optional<Nozzle> nozzle) document, ToolNozzleState state, Optional<Dictionary<ushort, FeederReport>> report_queue)
+        public override bool GetInvalid((Optional<Tool> tool, Optional<Nozzle> nozzle) document, ToolNozzleState state, Optional<Dictionary<QueueKey, FeederReport>> report_queue)
         {
             if (!report_queue.HasValue)
                 return true;
@@ -214,8 +236,8 @@ namespace Flux.ViewModels
         public StatusProvider Status { get; }
         public IFluxFeederViewModel Feeder { get; }
 
-        private ObservableAsPropertyHelper<Optional<Dictionary<ushort, FeederReport>>> _FeederReportQueue;
-        public Optional<Dictionary<ushort, FeederReport>> FeederReportQueue => _FeederReportQueue.Value;
+        private ObservableAsPropertyHelper<Optional<Dictionary<QueueKey, FeederReport>>> _FeederReportQueue;
+        public Optional<Dictionary<QueueKey, FeederReport>> FeederReportQueue => _FeederReportQueue.Value;
 
         public MaterialEvaluator Material { get; }
         public ToolNozzleEvaluator ToolNozzle { get; }
@@ -229,8 +251,8 @@ namespace Flux.ViewModels
         private ObservableAsPropertyHelper<bool> _HasColdNozzle;
         public bool HasColdNozzle => _HasColdNozzle.Value;
 
-        private ObservableAsPropertyHelper<Optional<Dictionary<ushort, Optional<Extrusion>>>> _ExtrusionQueue;
-        public Optional<Dictionary<ushort, Optional<Extrusion>>> ExtrusionQueue => _ExtrusionQueue.Value;
+        private ObservableAsPropertyHelper<Optional<Dictionary<QueueKey, Optional<Extrusion>>>> _ExtrusionQueue;
+        public Optional<Dictionary<QueueKey, Optional<Extrusion>>> ExtrusionQueue => _ExtrusionQueue.Value;
 
         public FeederEvaluator(StatusProvider status, IFluxFeederViewModel feeder)
         {
@@ -247,22 +269,29 @@ namespace Flux.ViewModels
                 .StartWithEmpty()
                 .DistinctUntilChanged();
 
-            bool compare_queue(Optional<Dictionary<ushort, Guid>> q1, Optional<Dictionary<ushort, Guid>> q2)
+            bool compare_queue(Optional<Dictionary<QueuePosition, Guid>> q1, Optional<Dictionary<QueuePosition, Guid>> q2)
             {
-                if (q1.HasValue != q2.HasValue)
-                    return false;
-                if (q1.HasValue && q2.HasValue)
+                try
                 {
-                    foreach (var qi in q2.Value)
+                    if (q1.HasValue != q2.HasValue)
+                        return false;
+                    if (q1.HasValue && q2.HasValue)
                     {
-                        if (!q1.Value.TryGetValue(qi.Key, out var guid))
-                            return false;
-                        if (qi.Value != guid)
-                            return false;
+                        foreach (var qi in q2.Value)
+                        {
+                            if (!q1.Value.TryGetValue(qi.Key, out var guid))
+                                return false;
+                            if (qi.Value != guid)
+                                return false;
+                        }
+                        return true;
                     }
-                    return true;
+                    return false;
                 }
-                return false;
+                catch (Exception ex)
+                {
+                    return false;
+                }
             }
 
             var queue = Feeder.Flux.ConnectionProvider
@@ -320,13 +349,12 @@ namespace Flux.ViewModels
             if (!evaluation.Recovery.ConvertOr(r =>  r.ToolNumber == Feeder.Position, () => false))
                 return false;
             if (!extrusion_temp.HasValue)
-                return false;
+                return true;
             if (!plc_temp.HasValue)
-                return false;
-            // TODO
-            if (plc_temp.Value.Target > 150 && Math.Abs(plc_temp.Value.Current - plc_temp.Value.Target) > 5)
-                return false;
-            return extrusion_temp.Value - plc_temp.Value.Current < 10;
+                return true;
+            if (plc_temp.Value.Target > 150)
+                return Math.Abs(plc_temp.Value.Current - plc_temp.Value.Target) > 10;
+            return Math.Abs(plc_temp.Value.Current - extrusion_temp.Value) > 15;
         }
 
         private Optional<IFluxOffsetViewModel> FindOffset(IQuery<IFluxOffsetViewModel, ushort> offsets)
@@ -334,7 +362,7 @@ namespace Flux.ViewModels
             return offsets.LookupOptional(Feeder.Position);
         }
 
-        private bool InvalidProbe(Optional<bool> is_probed, Optional<Dictionary<ushort, FeederReport>> report_queue)
+        private bool InvalidProbe(Optional<bool> is_probed, Optional<Dictionary<QueueKey, FeederReport>> report_queue)
         {
             if (!report_queue.HasValue)
                 return true;
@@ -348,31 +376,39 @@ namespace Flux.ViewModels
             return !is_probed.Value;
         }
 
-        private Optional<Dictionary<ushort, FeederReport>> GetFeederReportQueue(Optional<short> queue_pos, Optional<Dictionary<ushort, Guid>> queue, IQuery<IFluxMCodeStorageViewModel, Guid> mcodes)
+        private Optional<Dictionary<QueueKey, FeederReport>> GetFeederReportQueue(Optional<QueuePosition> queue_pos, Optional<Dictionary<QueuePosition, Guid>> queue, IQuery<IFluxMCodeStorageViewModel, Guid> mcodes)
         {
-            if (!queue_pos.HasValue)
-                return default;
-            if (!queue.HasValue)
-                return default;
-
-            var feeder_report_queue = new Dictionary<ushort, FeederReport>();
-            foreach (var mcode_queue in queue.Value)
+            try
             {
-                if (mcode_queue.Key < queue_pos.Value)
-                    continue;
+                if (!queue_pos.HasValue)
+                    return default;
+                if (!queue.HasValue)
+                    return default;
 
-                var mcode_vm = mcodes.Lookup(mcode_queue.Value);
-                if (!mcode_vm.HasValue)
-                    continue;
+                var feeder_report_queue = new Dictionary<QueueKey, FeederReport>();
+                foreach (var mcode_queue in queue.Value)
+                {
+                    if (mcode_queue.Key < queue_pos.Value)
+                        continue;
 
-                var analyzer = mcode_vm.Value.Analyzer;
-                var feeder_report = analyzer.MCode.Feeders.Lookup(Feeder.Position);
-                if (!feeder_report.HasValue)
-                    continue;
+                    var mcode_vm = mcodes.Lookup(mcode_queue.Value);
+                    if (!mcode_vm.HasValue)
+                        continue;
 
-                feeder_report_queue.Add(mcode_queue.Key, feeder_report.Value);
+                    var analyzer = mcode_vm.Value.Analyzer;
+                    var feeder_report = analyzer.MCode.Feeders.Lookup(Feeder.Position);
+                    if (!feeder_report.HasValue)
+                        continue;
+
+                    var queue_key = new QueueKey(analyzer.MCode.MCodeGuid, mcode_queue.Key);
+                    feeder_report_queue.Add(queue_key, feeder_report.Value);
+                }
+                return feeder_report_queue;
             }
-            return feeder_report_queue;
+            catch (Exception ex)
+            {
+                return default;
+            }
         }
     }
 }

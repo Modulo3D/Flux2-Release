@@ -180,9 +180,11 @@ namespace Flux.ViewModels
     public class RRF_ObjectModelHeater
     {
         [JsonProperty("active")]
+        [JsonConverter(typeof(JsonConverters.OptionalConverter<double>))]
         public Optional<double> Active { get; set; }
 
         [JsonProperty("current")]
+        [JsonConverter(typeof(JsonConverters.OptionalConverter<double>))]
         public Optional<double> Current { get; set; }
 
         //[JsonProperty("max")]
@@ -197,8 +199,9 @@ namespace Flux.ViewModels
         //[JsonProperty("monitors")]
         //public Optional<List<RRF_ObjectModelMonitor>> Monitors { get; set; }
 
-        //[JsonProperty("sensor")]
-        //public Optional<double> Sensor { get; set; }
+        [JsonProperty("sensor")]
+        [JsonConverter(typeof(JsonConverters.OptionalConverter<short>))]
+        public Optional<short> Sensor { get; set; }
 
         //[JsonProperty("standby")]
         //public Optional<double> Standby { get; set; }
@@ -229,6 +232,7 @@ namespace Flux.ViewModels
         //public Optional<double> ColdRetractTemperature { get; set; }
 
         [JsonProperty("heaters")]
+        [JsonConverter(typeof(JsonConverters.OptionalConverter<List<RRF_ObjectModelHeater>>))]
         public Optional<List<RRF_ObjectModelHeater>> Heaters { get; set; }
 
         public Optional<FLUX_Temp> GetPlateTemperature()
@@ -261,6 +265,7 @@ namespace Flux.ViewModels
         //public Optional<bool> InMacro { get; set; }
 
         [JsonProperty("lineNumber")]
+        [JsonConverter(typeof(JsonConverters.OptionalConverter<double>))]
         public Optional<double> LineNumber { get; set; }
 
         //[JsonProperty("name")]
@@ -312,6 +317,7 @@ namespace Flux.ViewModels
         //public Optional<List<double>> Filament { get; set; }
 
         [JsonProperty("fileName")]
+        [JsonConverter(typeof(JsonConverters.OptionalConverter<string>))]
         public Optional<string> FileName { get; set; }
 
         //[JsonProperty("firstLayerHeight")]
@@ -422,8 +428,9 @@ namespace Flux.ViewModels
         //[JsonProperty("jerk")]
         //public Optional<double> Jerk { get; set; }
 
-        //[JsonProperty("letter")]
-        //public Optional<string> Letter { get; set; }
+        [JsonProperty("letter")]
+        [JsonConverter(typeof(JsonConverters.OptionalConverter<string>))]
+        public Optional<string> Letter { get; set; }
 
         [JsonProperty("machinePosition")]
         public Optional<double> MachinePosition { get; set; }
@@ -838,6 +845,7 @@ namespace Flux.ViewModels
         //public Optional<List<RRF_ObjectModelAnalog>> Analog { get; set; }
 
         [JsonProperty("endstops")]
+        [JsonConverter(typeof(JsonConverters.OptionalConverter<List<RRF_ObjectModelEndstop>>))]
         public Optional<List<RRF_ObjectModelEndstop>> Endstops { get; set; }
 
         //[JsonProperty("filamentMonitors")]
@@ -960,6 +968,7 @@ namespace Flux.ViewModels
         //public object Beep { get; set; }
 
         [JsonProperty("currentTool")]
+        [JsonConverter(typeof(JsonConverters.OptionalConverter<short>))]
         public Optional<short> CurrentTool { get; set; }
 
         //[JsonProperty("displayMessage")]
@@ -999,6 +1008,7 @@ namespace Flux.ViewModels
         //public Optional<List<RRF_ObjectModelRestorePodouble>> RestorePodoubles { get; set; }
 
         [JsonProperty("status")]
+        [JsonConverter(typeof(JsonConverters.OptionalConverter<string>))]
         public Optional<string> Status { get; set; }
 
         //[JsonProperty("time")]
@@ -1158,31 +1168,18 @@ namespace Flux.ViewModels
 
     public static class RRF_DataUtils
     {
-        public static Optional<uint> GetBlocNum(this (RRF_ObjectModelState state, List<RRF_ObjectModelInput> input) data)
+        public static Optional<LineNumber> GetBlockNum(this (RRF_ObjectModelState state, List<RRF_ObjectModelInput> input) data)
         {
             try
             {
                 return data.state.Status.Convert(s =>
                 {
-                    switch (s)
+                    return s switch
                     {
-                        case "idle":
-                        case "paused":
-                        case "halted":
-                            return (uint)0;
-
-                        case "busy":
-                        case "pausing":
-                        case "resuming":
-                        case "simulating":
-                        case "processing":
-                        case "changingTool":
-                            return data.input[2].LineNumber
-                                .Convert(l => (uint)(l / 2));
-
-                        default:
-                            return (uint)0;
-                    }
+                        "idle" or "paused" or "halted" => (LineNumber)0,
+                        "busy" or "pausing" or "resuming" or "simulating" or "processing" or "changingTool" => data.input[2].LineNumber.Convert(l => (LineNumber)(l / 2)),
+                        _ => (LineNumber)0,
+                    };
                 });
             }
             catch
@@ -1206,23 +1203,30 @@ namespace Flux.ViewModels
                     return default;
 
                 var queue_dict = data.queue.GetGuidDictionaryFromQueue();
-                if (!queue_dict.TryGetValue((ushort)queue_pos.Value, out var current_job))
+                if (!queue_dict.TryGetValue(queue_pos.Value, out var current_guid))
                     return default;
 
                 var storage_dict = data.storage.GetPartProgramDictionaryFromStorage();
-                if (!storage_dict.TryGetValue(current_job, out var part_program))
+                if (!storage_dict.ContainsKey(current_guid))
                     return default;
 
+                // Full part program from filename
                 var filename = data.job.File.Convert(f => f.FileName)
                     .ValueOr(() => data.job.LastFileName.ValueOrDefault());
-                
-                // Full part program from filename
                 if (!string.IsNullOrEmpty(filename))
+                {
                     if (MCodePartProgram.TryParse(filename, out var full_part_program))
-                        if (full_part_program.MCodeGuid == part_program.MCodeGuid)
-                            return full_part_program;
+                    { 
+                        if (storage_dict.TryGetValue(full_part_program.MCodeGuid, out var part_programs))
+                        { 
+                            if (part_programs.TryGetValue(full_part_program.StartBlock, out var part_program))
+                                return part_program;
+                        }
+                    }
+                }
 
-                return part_program;
+                return storage_dict.FirstOrOptional(kvp => kvp.Key == current_guid)
+                    .Convert(p => p.Value.Values.FirstOrDefault());
             }
             catch
             {
@@ -1241,22 +1245,21 @@ namespace Flux.ViewModels
                 yield return part_program;
             }
         }
-        public static Dictionary<Guid, MCodePartProgram> GetPartProgramDictionaryFromStorage(this FLUX_FileList storage)
+        public static Dictionary<Guid, Dictionary<BlockNumber, MCodePartProgram>> GetPartProgramDictionaryFromStorage(this FLUX_FileList storage)
         {
             return storage.GetPartProgramFromStorage()
                 .GroupBy(s => s.MCodeGuid)
-                .Select(s => s.First())
-                .ToDictionary(s => s.MCodeGuid);
+                .ToDictionary(g => g.Key, g => g.ToDictionary(m => m.StartBlock));
         }
 
-        public static Dictionary<ushort, Guid> GetGuidDictionaryFromQueue(this FLUX_FileList queue)
+        public static Dictionary<QueuePosition, Guid> GetGuidDictionaryFromQueue(this FLUX_FileList queue)
         {
             return queue.GetGuidFromQueue()
                 .GroupBy(s => s.queue_pos)
                 .Select(s => s.First())
-                .ToDictionary(s => s.queue_pos, s => s.queue_guid);
+                .ToDictionary(s => s.queue_pos, s => s.mcode_guid);
         }
-        public static IEnumerable<(ushort queue_pos, Guid queue_guid)> GetGuidFromQueue(this FLUX_FileList queue)
+        public static IEnumerable<(QueuePosition queue_pos, Guid mcode_guid)> GetGuidFromQueue(this FLUX_FileList queue)
         {
             foreach (var file in queue.Files)
             {
@@ -1266,12 +1269,28 @@ namespace Flux.ViewModels
                     StringSplitOptions.RemoveEmptyEntries);
                 if (parts.Length != 2)
                     continue;
-                if (!ushort.TryParse(parts[0], out var queue_pos))
+                if (!short.TryParse(parts[0], out var queue_pos))
                     continue;
                 if (!Guid.TryParse(parts[1], out var queue_guid))
                     continue;
                 yield return (queue_pos, queue_guid);
             }
+        }
+    }
+
+    public class RRF_MCodeRecovery : IFLUX_MCodeRecovery
+    {
+        public bool IsSelected => true;
+        public Guid MCodeGuid { get; }
+        public short ToolNumber { get; }
+        public BlockNumber StartBlock { get; }
+        public string FileName => $"{MCodeGuid}.{StartBlock.Value}";
+
+        public RRF_MCodeRecovery(Guid mcode_guid, BlockNumber start_block, short tool_number)
+        {
+            MCodeGuid = mcode_guid;
+            StartBlock = start_block;
+            ToolNumber = tool_number;
         }
     }
 }

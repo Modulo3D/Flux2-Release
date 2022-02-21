@@ -28,8 +28,8 @@ namespace Flux.ViewModels
         public FluxViewModel Flux { get; }
 
         public IObservableCache<FeederEvaluator, ushort> FeederEvaluators { get; private set; }
-        public IObservableList<Dictionary<ushort, Material>> ExpectedMaterialsQueue { get; private set; }
-        public IObservableList<Dictionary<ushort, Nozzle>> ExpectedNozzlesQueue { get; private set; }
+        public IObservableList<Dictionary<QueueKey, Material>> ExpectedMaterialsQueue { get; private set; }
+        public IObservableList<Dictionary<QueueKey, Nozzle>> ExpectedNozzlesQueue { get; private set; }
 
         private bool _StartWithLowMaterials;
         public bool StartWithLowMaterials
@@ -267,45 +267,6 @@ namespace Flux.ViewModels
                 .StartWithEmpty()
                 .DistinctUntilChanged();
 
-            var hold_tool = Flux.ConnectionProvider
-                 .ObserveVariable(m => m.HOLD_TOOL)
-                 .DistinctUntilChanged()
-                 .StartWithEmpty();
-
-            var hold_blk_num = Flux.ConnectionProvider
-                 .ObserveVariable(m => m.HOLD_BLK_NUM)
-                 .DistinctUntilChanged()
-                 .StartWithEmpty();
-
-            var hold_pp = Flux.ConnectionProvider
-                 .ObserveVariable(m => m.HOLD_PP)
-                 .Convert(pp => MCodePartProgram.Parse(pp))
-                 .DistinctUntilChanged()
-                 .StartWithEmpty();
-
-            var hold_temperature = Flux.ConnectionProvider
-                .ObserveVariable(m => m.HOLD_TEMP)
-                .Filter(t => t.HasValue)
-                .Transform(t => t.Value)
-                .QueryWhenChanged();
-
-            var hold_position = Flux.ConnectionProvider
-                .ObserveVariable(m => m.HOLD_TEMP)
-                .Filter(t => t.HasValue)
-                .Transform(t => t.Value)
-                .QueryWhenChanged();
-
-            var recovery = Observable.CombineLatest(
-                hold_tool,
-                hold_blk_num,
-                hold_pp,
-                hold_temperature,
-                hold_position,
-                selected_part_program,
-                FindRecovery)
-                .StartWithEmpty()
-                .DistinctUntilChanged();
-
             CanSafeCycle = Observable.CombineLatest(
                 IsIdle,
                 has_safe_state,
@@ -362,10 +323,14 @@ namespace Flux.ViewModels
                 .Connect()
                 .QueryWhenChanged();
 
+            var odometer_readings = Flux.Feeders.OdometerManager.Readings.Connect()
+                .QueryWhenChanged(q => q.Items.ToDictionary(i => i.Key))
+                .StartWith(new Dictionary<QueueKey, OdometerReading>());
+
             var extrusion_set_queue = Observable.CombineLatest(
                 queue_pos,
                 mcode_queue,
-                selected_part_program,
+                odometer_readings,
                 mcodes,
                 GetExtrusionSetQueue)
                 .StartWithEmpty()
@@ -382,6 +347,11 @@ namespace Flux.ViewModels
                 StartEvaluation.Create)
                 .DistinctUntilChanged()
                 .ToProperty(this, v => v.StartEvaluation);
+
+            var recovery = Flux.ConnectionProvider
+                .ObserveVariable(c => c.MCODE_RECOVERY)
+                .StartWithEmpty()
+                .DistinctUntilChanged();
 
             _PrintingEvaluation = Observable.CombineLatest(
                 selected_mcode,
@@ -414,8 +384,11 @@ namespace Flux.ViewModels
                 .Select(b => b.NewValue);
 
             _PrintProgress = Observable.CombineLatest(
+                queue_pos,
+                mcode_queue,
                 this.WhenAnyValue(v => v.PrintingEvaluation),
                 block_nr,
+                odometer_readings,
                 GetPrintProgress)
                 .DistinctUntilChanged()
                 .ToProperty(this, v => v.PrintProgress);
@@ -438,59 +411,6 @@ namespace Flux.ViewModels
                 FindFluxStatus)
                 .DistinctUntilChanged()
                 .ToProperty(this, s => s.FluxStatus);
-        }
-
-        private Optional<MCodeRecovery> FindRecovery(
-            Optional<short> hold_tool,
-            Optional<double> hold_blk_num,
-            Optional<MCodePartProgram> hold_part_program, 
-            IQuery<double, VariableUnit> hold_temp,
-            IQuery<double, VariableUnit> hold_pos,
-            Optional<MCodePartProgram> selected_pp)
-        {
-            try
-            {
-                if (!hold_tool.HasValue)
-                    return default;
-
-                if (!hold_blk_num.HasValue)
-                    return default;
-
-                if (hold_temp.Count < 1)
-                    return default;
-
-                if (!hold_part_program.HasValue)
-                    return default;
-
-                var hold_mcode_lookup = Flux.MCodes.AvaiableMCodes.Lookup(hold_part_program.Value.MCodeGuid);
-                if (!hold_mcode_lookup.HasValue)
-                    return default;
-
-                var hold_analyzer = hold_mcode_lookup.Value.Analyzer;
-                var is_selected = selected_pp.ConvertOr(pp =>
-                {
-                    if (!pp.IsRecovery)
-                        return false;
-                    if (pp.MCodeGuid != hold_analyzer.MCode.MCodeGuid)
-                        return false;
-                    if (pp.StartBlock != hold_blk_num.Value)
-                        return false;
-                    return true;
-                }, () => false);
-
-                return new MCodeRecovery(
-                    hold_analyzer.MCode.MCodeGuid,
-                    is_selected,
-                    (uint)hold_blk_num.Value,
-                    hold_tool.Value,
-                    hold_temp.KeyValues.ToDictionary(),
-                    hold_pos.KeyValues.ToDictionary());
-            }
-            catch (Exception ex)
-            {
-                Flux.Messages.LogException(this, ex);
-                return default;
-            }
         }
 
         // Status
@@ -646,16 +566,34 @@ namespace Flux.ViewModels
         }
 
         // Progress and extrusion
-        private PrintProgress GetPrintProgress(PrintingEvaluation evaluation, uint block_nr)
+        private PrintProgress GetPrintProgress(Optional<QueuePosition> queue_pos, Optional<Dictionary<QueuePosition, Guid>> queue, PrintingEvaluation evaluation, LineNumber line_nr, Dictionary<QueueKey, OdometerReading> odometer_readings)
         {
             var selected_mcode = evaluation.SelectedMCode;
-
             // update job remaining time
             if (!selected_mcode.HasValue)
                 return new PrintProgress(0, TimeSpan.Zero);
+            var default_value = new PrintProgress(0, selected_mcode.Value.Duration);
 
+            float progress;
             var blocks = selected_mcode.Value.BlockCount;
-            var progress = Math.Max(0, Math.Min(1, (float)block_nr / blocks));
+            if (line_nr != 0)
+            {
+                progress = Math.Max(0, Math.Min(1, (float)line_nr / blocks));
+            }
+            else 
+            {
+                if (!queue_pos.HasValue)
+                    return default_value;
+                if (!queue.HasValue)
+                    return default_value;
+
+                var queue_key = new QueueKey(selected_mcode.Value.MCodeGuid, queue_pos.Value);
+                var odometer_reading = odometer_readings.Lookup(queue_key);
+                if (!odometer_reading.HasValue)
+                    return default_value;
+
+                progress = Math.Max(0, Math.Min(1, (float)odometer_reading.Value.Line / blocks));
+            }
 
             if (float.IsNaN(progress))
                 progress = 0;
@@ -674,32 +612,47 @@ namespace Flux.ViewModels
                 yield return evaluator;
             }
         }
-        private Optional<Dictionary<ushort, ExtrusionSet>> GetExtrusionSetQueue(Optional<short> queue_pos, Optional<Dictionary<ushort, Guid>> queue, Optional<MCodePartProgram> part_program, IQuery<IFluxMCodeStorageViewModel, Guid> mcodes)
+        private Optional<Dictionary<QueueKey, ExtrusionSet>> GetExtrusionSetQueue(Optional<QueuePosition> queue_pos, Optional<Dictionary<QueuePosition, Guid>> queue, Dictionary<QueueKey, OdometerReading> odometer_readings, IQuery<IFluxMCodeStorageViewModel, Guid> mcodes)
         {
-            if (!queue_pos.HasValue)
-                return default;
-            if (!queue.HasValue)
-                return default;
-            if (!part_program.HasValue)
-                return default;
-
-            var extrusion_set_queue = new Dictionary<ushort, ExtrusionSet>();
-            foreach (var mcode_queue in queue.Value)
+            try
             {
-                if (mcode_queue.Key < queue_pos.Value)
-                    continue;
-                var mcode_vm = mcodes.Lookup(mcode_queue.Value);
-                if (!mcode_vm.HasValue)
-                    continue;
+                if (!queue_pos.HasValue)
+                    return default;
+                if (!queue.HasValue)
+                    return default;
 
-                var start_block = queue_pos.Value == mcode_queue.Key ? part_program.Value.StartBlock : 0;
+                var extrusion_set_queue = new Dictionary<QueueKey, ExtrusionSet>();
+                foreach (var mcode_queue in queue.Value)
+                {
+                    var queue_key = new QueueKey(mcode_queue.Value, mcode_queue.Key);
+                    if (mcode_queue.Key < queue_pos.Value)
+                        continue;
 
-                var mcode_analyzer = mcode_vm.Value.Analyzer;
-                var extrusion_set = mcode_analyzer.MCodeReader.GetFilamentExtrusionSet(start_block, mcode_analyzer.MCode.BlockCount);
+                    var mcode_vm = mcodes.Lookup(mcode_queue.Value);
+                    if (!mcode_vm.HasValue)
+                        continue;
 
-                extrusion_set_queue.Add(mcode_queue.Key, extrusion_set);
+                    var mcode_analyzer = mcode_vm.Value.Analyzer;
+
+                    uint start_line = 0;
+                    if (queue_pos.Value == mcode_queue.Key)
+                    {
+                        var odometer_reading = odometer_readings.Lookup(queue_key);
+                        if (odometer_reading.HasValue)
+                            start_line = odometer_reading.Value.Line;
+                    }
+
+                    var extrusion_set_span = new LineSpan(start_line, mcode_analyzer.MCode.BlockCount);
+                    var extrusion_set = mcode_analyzer.MCodeReader.GetFilamentExtrusionSet(extrusion_set_span);
+                    extrusion_set_queue.Add(queue_key, extrusion_set);
+                }
+                return extrusion_set_queue;
             }
-            return extrusion_set_queue;
+            catch(Exception ex)
+            {
+                Flux.Messages.LogException(this, ex);
+                return default;
+            }
         }
         private Optional<MCode> FindSelectedMCode(Optional<bool> enabled_vacuum, Optional<IFluxMCodeStorageViewModel> mcode_vm)
         {

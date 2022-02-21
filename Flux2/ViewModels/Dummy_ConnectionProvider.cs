@@ -15,8 +15,6 @@ namespace Flux.ViewModels
         public override double ConnectionProgress => 0;
         public override Optional<bool> IsConnecting => true;
         public override Optional<bool> IsInitializing => true;
-        public override OffsetKind OffsetKind => OffsetKind.ToolOffset;
-
         public Dummy_ConnectionProvider(FluxViewModel flux)
         {
             Flux = flux;
@@ -32,8 +30,6 @@ namespace Flux.ViewModels
         protected override Task RollConnectionAsync() => Task.CompletedTask;
         public override Task<bool> ParkToolAsync() => Task.FromResult(false);
         public override Task<bool> ResetClampAsync() => Task.FromResult(false);
-        public override Optional<IEnumerable<string>> GenerateStartMCodeLines(MCode mcode) => default;
-        public override Optional<IEnumerable<string>> GenerateRecoveryMCodeLines(MCodeRecovery recovery) => default;
         public override Optional<IEnumerable<string>> GenerateEndMCodeLines(MCode mcode, Optional<ushort> queue_size) => default;
     }
 
@@ -155,11 +151,6 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override string[] GetResetPrinterGCode()
-        {
-            throw new NotImplementedException();
-        }
-
         public override string[] GetSelectToolGCode(ushort position)
         {
             throw new NotImplementedException();
@@ -185,11 +176,6 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override Task<bool> PutFileAsync(string folder, string filename, CancellationToken ct, Optional<IEnumerable<string>> source = default, Optional<IEnumerable<string>> start = default, Optional<IEnumerable<string>> recovery = default, Optional<IEnumerable<string>> end = default, Optional<uint> recovery_block = default, Optional<uint> source_blocks = default, Action<double> report_progress = null, bool debug_chunks = false)
-        {
-            throw new NotImplementedException();
-        }
-
         public override Task<bool> ResetAsync()
         {
             throw new NotImplementedException();
@@ -211,6 +197,21 @@ namespace Flux.ViewModels
         }
 
         public override Task<bool> HoldAsync()
+        {
+            throw new NotImplementedException();
+        }
+
+        public override string[] GetSetToolOffsetGCode(ushort position, double x, double y, double z)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override Task<bool> CancelPrintAsync(bool hard_cancel)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override Task<bool> PutFileAsync(string folder, string filename, CancellationToken ct, Optional<IEnumerable<string>> source = default, Optional<IEnumerable<string>> end = default, Optional<uint> source_blocks = default, Action<double> report_progress = null)
         {
             throw new NotImplementedException();
         }

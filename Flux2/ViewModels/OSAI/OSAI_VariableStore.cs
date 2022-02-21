@@ -1,4 +1,5 @@
-﻿using DynamicData.Kernel;
+﻿using DynamicData;
+using DynamicData.Kernel;
 using Modulo3DStandard;
 using OSAI;
 using ReactiveUI;
@@ -6,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Reactive;
+using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -20,6 +22,15 @@ namespace Flux.ViewModels
         public Optional<IFLUX_Variable<double, double>> FEEDRATE { get; }
         public Optional<IFLUX_Variable<bool, bool>> AUX_ON { get; }
 
+        // HOLD
+        public Optional<IFLUX_Variable<bool, bool>> REQ_HOLD { get; }
+        public Optional<IFLUX_Variable<bool, bool>> IS_HOLD { get; }
+        public Optional<IFLUX_Array<double, double>> HOLD_POS { get; }
+        public Optional<IFLUX_Array<double, double>> HOLD_TEMP { get; }
+        public Optional<IFLUX_Variable<string, string>> HOLD_PP { get; }
+        public Optional<IFLUX_Variable<short, short>> HOLD_TOOL { get; }
+        public Optional<IFLUX_Variable<double, double>> HOLD_BLK_NUM { get; }
+
         public OSAI_VariableStore(OSAI_ConnectionProvider connection_provider)
         {
             var bump_unit = new VariableUnit[] { "x", "z" };
@@ -31,8 +42,8 @@ namespace Flux.ViewModels
 
             var connection = connection_provider.WhenAnyValue(v => v.Connection);
 
-            QUEUE = RegisterVariable(new FLUX_VariableGP<OSAI_Connection, Dictionary<ushort, Guid>, Unit>(connection, "QUEUE", FluxMemReadPriority.MEDIUM, GetQueueAsync));
-            STORAGE = RegisterVariable(new FLUX_VariableGP<OSAI_Connection, Dictionary<Guid, MCodePartProgram>, Unit>(connection, "STORAGE", FluxMemReadPriority.MEDIUM, GetStorageAsync));
+            QUEUE = RegisterVariable(new FLUX_VariableGP<OSAI_Connection, Dictionary<QueuePosition, Guid>, Unit>(connection, "QUEUE", FluxMemReadPriority.MEDIUM, GetQueueAsync));
+            STORAGE = RegisterVariable(new FLUX_VariableGP<OSAI_Connection, Dictionary<Guid, Dictionary<BlockNumber, MCodePartProgram>>, Unit>(connection, "STORAGE", FluxMemReadPriority.MEDIUM, GetStorageAsync));
 
             PROCESS_STATUS = RegisterVariable(new FLUX_VariableGP<OSAI_Connection, FLUX_ProcessStatus, Unit>(connection, "PROCESS_STATUS", FluxMemReadPriority.ULTRAHIGH, GetProcessStatusAsync));
             PROCESS_MODE = RegisterVariable(new FLUX_VariableGP<OSAI_Connection, OSAI_ProcessMode, OSAI_ProcessMode>(connection, "PROCESS_MODE", FluxMemReadPriority.ULTRAHIGH, GetProcessModeAsync, SetProcessModeAsync));
@@ -41,17 +52,133 @@ namespace Flux.ViewModels
 
             BOOT_MODE = RegisterVariable(new FLUX_VariableGP<OSAI_Connection, OSAI_BootMode, OSAI_BootMode>(connection, "BOOT_MODE", FluxMemReadPriority.ULTRAHIGH, write_func: SetBootModeAsync));
             PART_PROGRAM = RegisterVariable(new FLUX_VariableGP<OSAI_Connection, MCodePartProgram, Unit>(connection, "PART_PROGRAM", FluxMemReadPriority.ULTRAHIGH, GetPartProgramAsync));
-            BLOCK_NUM = RegisterVariable(new FLUX_VariableGP<OSAI_Connection, uint, Unit>(connection, "BLOCK_NUM", FluxMemReadPriority.ULTRAHIGH, GetBlockNumAsync));
+            BLOCK_NUM = RegisterVariable(new FLUX_VariableGP<OSAI_Connection, LineNumber, Unit>(connection, "BLOCK_NUM", FluxMemReadPriority.ULTRAHIGH, GetBlockNumAsync));
+
+            USER_INPUT = RegisterVariable(new OSAI_VariableNamedShort(connection, "USER INPUT", new OSAI_NamedAddress("!USER_INPUT"), FluxMemReadPriority.ULTRAHIGH));
 
             IS_HOLD = RegisterVariable(new OSAI_VariableNamedBool(connection, "IS HOLD", new OSAI_NamedAddress("!IS_HOLD"), FluxMemReadPriority.ULTRAHIGH));
             REQ_HOLD = RegisterVariable(new OSAI_VariableNamedBool(connection, "REQ HOLD", new OSAI_NamedAddress("!REQ_HOLD"), FluxMemReadPriority.ULTRAHIGH));
-            USER_INPUT = RegisterVariable(new OSAI_VariableNamedShort(connection, "USER INPUT", new OSAI_NamedAddress("!USER_INPUT"), FluxMemReadPriority.ULTRAHIGH));
-
             HOLD_TOOL = RegisterVariable(new OSAI_VariableNamedShort(connection, "HOLD TOOL", new OSAI_NamedAddress("!HOLD_TOOL"), FluxMemReadPriority.MEDIUM));
             HOLD_PP = RegisterVariable(new OSAI_VariableNamedString(connection, "HOLD PART PROGRAM", new OSAI_NamedAddress("!HOLD_PP"), FluxMemReadPriority.MEDIUM, 36)); // max len is 64, skip after guid for now                                                                                                                                           
             HOLD_BLK_NUM = RegisterVariable(new OSAI_VariableNamedDouble(connection, "HOLD BLOCK NUMBER", new OSAI_NamedAddress("!HOLD_BLK"), FluxMemReadPriority.MEDIUM));
             HOLD_POS = RegisterVariable(new OSAI_ArrayNamedDouble(connection, "HOLD POSITION", 4, new OSAI_NamedAddress("!HOLD_POS"), FluxMemReadPriority.MEDIUM, axis_unit));
             HOLD_TEMP = RegisterVariable(new OSAI_ArrayNamedDouble(connection, "HOLD TEMPERATURE", 4, new OSAI_NamedAddress("!HOLD_TEMP"), FluxMemReadPriority.MEDIUM));
+
+            MCODE_RECOVERY = RegisterVariable(new FLUX_VariableGP<OSAI_Connection, IFLUX_MCodeRecovery, Unit>(connection, "MCODE_RECOVERY", c =>
+            {
+                var req_hold = c.ObserveVariable(c => c.REQ_HOLD)
+                    .DistinctUntilChanged()
+                    .ValueOr(() => false)
+                    .StartWith(false);
+
+                var is_hold = c.ObserveVariable(c => c.IS_HOLD)
+                    .DistinctUntilChanged()
+                    .ValueOr(() => false)
+                    .StartWith(false);
+
+                var hold_tool = c.ObserveVariable(m => m.HOLD_TOOL)
+                     .DistinctUntilChanged()
+                     .StartWithEmpty();
+
+                var hold_blk_num = c.ObserveVariable(m => m.HOLD_BLK_NUM)
+                     .DistinctUntilChanged()
+                     .StartWithEmpty();
+
+                var hold_pp = c.ObserveVariable(m => m.HOLD_PP)
+                     .Convert(pp => MCodePartProgram.Parse(pp))
+                     .DistinctUntilChanged()
+                     .StartWithEmpty();
+
+                var hold_temperature = c.ObserveVariable(m => m.HOLD_TEMP)
+                    .Filter(t => t.HasValue)
+                    .Transform(t => t.Value)
+                    .QueryWhenChanged();
+
+                var hold_position = c.ObserveVariable(m => m.HOLD_POS)
+                    .Filter(t => t.HasValue)
+                    .Transform(t => t.Value)
+                    .QueryWhenChanged();
+
+                var selected_part_program = c.ObserveVariable(m => m.PART_PROGRAM)
+                    .DistinctUntilChanged()
+                    .StartWithEmpty();
+
+                return Observable.CombineLatest(
+                    req_hold,
+                    is_hold,
+                    hold_tool,
+                    hold_blk_num,
+                    hold_pp,
+                    hold_temperature,
+                    hold_position,
+                    selected_part_program,
+                    FindRecovery)
+                    .StartWithEmpty()
+                    .DistinctUntilChanged();
+
+                Optional<IFLUX_MCodeRecovery> FindRecovery(
+                    bool req_hold,
+                    bool is_hold,
+                    Optional<short> hold_tool,
+                    Optional<double> hold_blk_num,
+                    Optional<MCodePartProgram> hold_part_program,
+                    IQuery<double, VariableUnit> hold_temp,
+                    IQuery<double, VariableUnit> hold_pos,
+                    Optional<MCodePartProgram> selected_pp)
+                {
+                    try
+                    {
+                        if (!req_hold && !is_hold)
+                            return default;
+
+                        if (!hold_tool.HasValue)
+                            return default;
+
+                        if (!hold_blk_num.HasValue)
+                            return default;
+
+                        if (!hold_part_program.HasValue)
+                            return default;
+
+                        if (hold_temp.Count < 1)
+                            return default;
+
+                        if (hold_pos.Count < 1)
+                            return default;
+
+                        var hold_mcode_lookup = connection_provider.Flux.MCodes.AvaiableMCodes.Lookup(hold_part_program.Value.MCodeGuid);
+                        if (!hold_mcode_lookup.HasValue)
+                            return default;
+
+                        var hold_analyzer = hold_mcode_lookup.Value.Analyzer;
+                        var is_selected = selected_pp.ConvertOr(pp =>
+                        {
+                            if (!is_hold)
+                                return false;
+                            if (!pp.IsRecovery)
+                                return false;
+                            if (pp.MCodeGuid != hold_analyzer.MCode.MCodeGuid)
+                                return false;
+                            if (pp.StartBlock != hold_blk_num.Value)
+                                return false;
+                            return true;
+                        }, () => false);
+
+                        return new OSAI_MCodeRecovery(
+                            hold_part_program.Value.MCodeGuid,
+                            hold_part_program.Value.StartBlock,
+                            is_selected,
+                            (uint)hold_blk_num.Value,
+                            hold_tool.Value,
+                            hold_temp.KeyValues.ToDictionary(),
+                            hold_pos.KeyValues.ToDictionary());
+                    }
+                    catch (Exception ex)
+                    {
+                        return default;
+                    }
+                }
+            }));
 
             IS_HOMED = RegisterVariable(new OSAI_VariableNamedBool(connection, "IS HOMED", new OSAI_NamedAddress("!IS_HOMED"), FluxMemReadPriority.HIGH));
             IS_HOMING = RegisterVariable(new OSAI_VariableNamedBool(connection, "IS HOMING", new OSAI_NamedAddress("!IS_HOMING"), FluxMemReadPriority.HIGH));
@@ -76,7 +203,8 @@ namespace Flux.ViewModels
             KEEP_TOOL = RegisterVariable(new OSAI_VariableBool(connection, "KEEP TOOL WARM", new OSAI_BitIndexAddress(OSAI_VARCODE.GW_CODE, 4, 0), FluxMemReadPriority.HIGH));
             HAS_PLATE = RegisterVariable(new OSAI_VariableBool(connection, "HAS PLATE", new OSAI_BitIndexAddress(OSAI_VARCODE.GW_CODE, 5, 0), FluxMemReadPriority.ULTRALOW));
             AUTO_FAN = RegisterVariable(new OSAI_VariableBool(connection, "AUTO FAN", new OSAI_BitIndexAddress(OSAI_VARCODE.GW_CODE, 6, 0), FluxMemReadPriority.ULTRALOW));
-            QUEUE_POS = RegisterVariable(new OSAI_VariableShort(connection, "QUEUE POS", new OSAI_IndexAddress(OSAI_VARCODE.GW_CODE, 7), FluxMemReadPriority.ULTRAHIGH));
+            // TODO
+            //QUEUE_POS = RegisterVariable(new OSAI_VariableShort(connection, "QUEUE POS", new OSAI_IndexAddress(OSAI_VARCODE.GW_CODE, 7), FluxMemReadPriority.ULTRAHIGH));
 
             MEM_TOOL_ON_TRAILER = RegisterVariable(new OSAI_ArrayBool(connection, "TOOL ON TRAILER", 4, new OSAI_BitIndexAddress(OSAI_VARCODE.GW_CODE, 100, 0), FluxMemReadPriority.HIGH));
             MEM_TOOL_IN_MAGAZINE = RegisterVariable(new OSAI_ArrayBool(connection, "TOOL IN MAGAZINE", 4, new OSAI_BitIndexAddress(OSAI_VARCODE.GW_CODE, 101, 0), FluxMemReadPriority.HIGH));
@@ -161,7 +289,7 @@ namespace Flux.ViewModels
 
         }
 
-        private async Task<Optional<Dictionary<Guid, MCodePartProgram>>> GetStorageAsync(OSAI_Connection connection)
+        private static async Task<Optional<Dictionary<Guid, Dictionary<BlockNumber, MCodePartProgram>>>> GetStorageAsync(OSAI_Connection connection)
         {
             var qctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             var storage = await connection.ListFilesAsync(
@@ -172,7 +300,7 @@ namespace Flux.ViewModels
             return storage.Value.GetPartProgramDictionaryFromStorage();
         }
 
-        private async Task<Optional<Dictionary<ushort, Guid>>> GetQueueAsync(OSAI_Connection connection)
+        private static async Task<Optional<Dictionary<QueuePosition, Guid>>> GetQueueAsync(OSAI_Connection connection)
         {
             var qctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             var queue = await connection.ListFilesAsync(
@@ -183,7 +311,7 @@ namespace Flux.ViewModels
             return queue.Value.GetGuidDictionaryFromQueue();
         }
 
-        private async Task<Optional<uint>> GetBlockNumAsync(OSAI_Connection connection)
+        private static async Task<Optional<LineNumber>> GetBlockNumAsync(OSAI_Connection connection)
         {
             try
             {
@@ -198,7 +326,7 @@ namespace Flux.ViewModels
                     get_blk_num_response.Body.ErrNum))
                     return default;
 
-                return get_blk_num_response.Body.GetBlkNum.MainActBlk;
+                return (LineNumber)get_blk_num_response.Body.GetBlkNum.MainActBlk;
             }
             catch (Exception ex)
             {
@@ -206,7 +334,7 @@ namespace Flux.ViewModels
                 return default;
             }
         }
-        private async Task<Optional<OSAI_BootPhase>> GetBootPhaseAsync(OSAI_Connection connection)
+        private static async Task<Optional<OSAI_BootPhase>> GetBootPhaseAsync(OSAI_Connection connection)
         {
             try
             {
@@ -230,7 +358,7 @@ namespace Flux.ViewModels
                 return default;
             }
         }
-        private async Task<bool> SetBootModeAsync(OSAI_Connection connection, OSAI_BootMode boot_mode)
+        private static async Task<bool> SetBootModeAsync(OSAI_Connection connection, OSAI_BootMode boot_mode)
         {
             try
             {
@@ -254,7 +382,7 @@ namespace Flux.ViewModels
                 return false;
             }
         }
-        private async Task<Optional<MCodePartProgram>> GetPartProgramAsync(OSAI_Connection connection)
+        private static async Task<Optional<MCodePartProgram>> GetPartProgramAsync(OSAI_Connection connection)
         {
             try
             {
@@ -266,21 +394,22 @@ namespace Flux.ViewModels
                     return default;
 
                 var queue_dict = await connection.ReadVariableAsync(c => c.QUEUE);
-                if (!queue_dict.HasValue || !queue_dict.Value.TryGetValue((ushort)queue_pos.Value, out var current_job))
+                if (!queue_dict.HasValue || !queue_dict.Value.TryGetValue(queue_pos.Value, out var current_job))
                     return default;
 
                 var storage_dict = await connection.ReadVariableAsync(c => c.STORAGE);
                 if (!storage_dict.HasValue || !storage_dict.Value.TryGetValue(current_job, out var part_program))
                     return default;
 
-                return part_program;
+                // TODO
+                return default; // part_program;
             }
             catch
             {
                 return default;
             }
         }
-        private async Task<Optional<OSAI_ProcessMode>> GetProcessModeAsync(OSAI_Connection connection)
+        private static async Task<Optional<OSAI_ProcessMode>> GetProcessModeAsync(OSAI_Connection connection)
         {
             try
             {
@@ -303,7 +432,7 @@ namespace Flux.ViewModels
                 return default;
             }
         }
-        private async Task<Optional<FLUX_ProcessStatus>> GetProcessStatusAsync(OSAI_Connection connection)
+        private static async Task<Optional<FLUX_ProcessStatus>> GetProcessStatusAsync(OSAI_Connection connection)
         {
             try
             {
@@ -352,7 +481,7 @@ namespace Flux.ViewModels
                 return default;
             }
         }
-        private async Task<bool> SetProcessModeAsync(OSAI_Connection connection, OSAI_ProcessMode process_mode)
+        private static async Task<bool> SetProcessModeAsync(OSAI_Connection connection, OSAI_ProcessMode process_mode)
         {
             try
             {

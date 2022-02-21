@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reactive.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
@@ -71,95 +72,75 @@ namespace Flux.ViewModels
                 return new RRF_VariableObjectModel<TState, TRData, TWData>(Connection, name, GetState, get_data, write_data, unit);
             }
 
-            public class RRF_ArrayBuilder<TList>
+            public class RRF_ArrayBuilder<TVariable>
             {
                 public RRF_ArrayBuilder(
                     IObservable<Optional<RRF_Connection>> connection,
-                    ushort start,
-                    ushort count,
                     Func<RRF_ObjectModel, IObservable<Optional<TState>>> get_state,
-                    Func<TState, Optional<List<TList>>> get_list)
+                    Func<TState, Optional<Dictionary<VariableUnit, TVariable>>> get_variables)
                 {
-                    Start = start;
-                    Count = count;
-                    GetList = get_list;
+                    GetVariables = get_variables;
                     GetState = get_state;
                     Connection = connection;
                 }
 
-                public ushort Start { get; }
-                public ushort Count { get; }
-                public Func<TState, Optional<List<TList>>> GetList { get; }
                 public IObservable<Optional<RRF_Connection>> Connection { get; }
                 public Func<RRF_ObjectModel, IObservable<Optional<TState>>> GetState { get; }
+                public Func<TState, Optional<Dictionary<VariableUnit, TVariable>>> GetVariables { get; }
 
                 public RRF_ArrayObjectModel<TState, TRData, TWData> Create<TRData, TWData>(
                     string name,
-                    Func<RRF_Connection, TList, Optional<TRData>> read_data,
-                    Optional<IEnumerable<VariableUnit>> custom_unit = default)
+                    IEnumerable<VariableUnit> variable_units,
+                    Func<RRF_Connection, TVariable, Optional<TRData>> read_data)
                 {
-                    return new RRF_ArrayObjectModel<TState, TRData, TWData>(name, Start, Count, t => create_variable(t), custom_unit);
-                    RRF_VariableObjectModel<TState, TRData, TWData> create_variable((string name, VariableUnit unit, ushort position) t)
+                    RRF_VariableObjectModel<TVariable, TRData, TWData> get_variable(VariableUnit unit)
                     {
-                        Optional<TRData> get_data(RRF_Connection c, TState m) => GetList(m).Convert(l => read_data(c, l[t.position]));
-                        return new RRF_VariableObjectModel<TState, TRData, TWData>(Connection, t.name, GetState, get_data, unit: t.unit);
+                        IObservable<Optional<TVariable>> get_variable_state(RRF_ObjectModel m) => GetState(m).Convert(GetVariables).Convert(v => v.Lookup(unit));
+                        return new RRF_VariableObjectModel<TVariable, TRData, TWData>(Connection, $"{name} {unit}", get_variable_state, read_data, unit: unit);
                     }
+
+                    return new RRF_ArrayObjectModel<TState, TRData, TWData>(name, variable_units, get_variable);
                 }
                 public RRF_ArrayObjectModel<TState, TRData, TWData> Create<TRData, TWData>(
                     string name,
-                    Func<RRF_Connection, TList, Optional<TRData>> read_data,
-                    Func<RRF_Connection, TWData, bool> write_data,
-                    Optional<IEnumerable<VariableUnit>> custom_unit = default)
+                    IEnumerable<VariableUnit> variable_units,
+                    Func<RRF_Connection, TVariable, Optional<TRData>> read_data,
+                    Func<RRF_Connection, TWData, VariableUnit, bool> write_data)
                 {
-                    return new RRF_ArrayObjectModel<TState, TRData, TWData>(name, Start, Count, t => create_variable(t), custom_unit);
-                    RRF_VariableObjectModel<TState, TRData, TWData> create_variable((string name, VariableUnit unit, ushort position) t)
+                    RRF_VariableObjectModel<TVariable, TRData, TWData> get_variable(VariableUnit unit)
                     {
-                        Optional<TRData> get_data(RRF_Connection c, TState m) => GetList(m).Convert(l => read_data(c, l[t.position]));
-                        return new RRF_VariableObjectModel<TState, TRData, TWData>(Connection, t.name, GetState, get_data, (c, d) => write_data?.Invoke(c, d) ?? false, t.unit);
+                        bool write_unit_data(RRF_Connection c, TWData d) => write_data(c, d, unit);
+                        IObservable<Optional<TVariable>> get_variable_state(RRF_ObjectModel m) => GetState(m).Convert(GetVariables).Convert(v => v.Lookup(unit));
+                        return new RRF_VariableObjectModel<TVariable, TRData, TWData>(Connection, $"{name} {unit}", get_variable_state, read_data, write_unit_data, unit);
                     }
+
+                    return new RRF_ArrayObjectModel<TState, TRData, TWData>(name, variable_units, get_variable);
                 }
                 public RRF_ArrayObjectModel<TState, TRData, TWData> Create<TRData, TWData>(
                     string name,
-                    Func<RRF_Connection, TList, Optional<TRData>> read_data,
-                    Func<RRF_Connection, TWData, (string name, VariableUnit unit, ushort position), bool> write_data,
-                    Optional<IEnumerable<VariableUnit>> custom_unit = default)
+                    IEnumerable<VariableUnit> variable_units,
+                    Func<RRF_Connection, TVariable, Optional<TRData>> read_data,
+                    Func<RRF_Connection, TWData, VariableUnit, Task<bool>> write_data)
                 {
-                    return new RRF_ArrayObjectModel<TState, TRData, TWData>(name, Start, Count, t => create_variable(t), custom_unit);
-                    RRF_VariableObjectModel<TState, TRData, TWData> create_variable((string name, VariableUnit unit, ushort position) t)
+                    RRF_VariableObjectModel<TVariable, TRData, TWData> get_variable(VariableUnit unit)
                     {
-                        Optional<TRData> get_data(RRF_Connection c, TState m) => GetList(m).Convert(l => read_data(c, l[t.position]));
-                        return new RRF_VariableObjectModel<TState, TRData, TWData>(Connection, t.name, GetState, get_data, (c, d) => write_data?.Invoke(c, d, t) ?? false, t.unit);
+                        Task<bool> write_unit_data(RRF_Connection c, TWData d) => write_data(c, d, unit);
+                        IObservable<Optional<TVariable>> get_variable_state(RRF_ObjectModel m) => GetState(m).Convert(GetVariables).Convert(v => v.Lookup(unit));
+                        return new RRF_VariableObjectModel<TVariable, TRData, TWData>(Connection, $"{name} {unit}", get_variable_state, read_data, write_unit_data, unit);
                     }
-                }
-                public RRF_ArrayObjectModel<TState, TRData, TWData> Create<TRData, TWData>(
-                    string name,
-                    Func<RRF_Connection, TList, Optional<TRData>> read_data,
-                    Func<RRF_Connection, TWData, Task<bool>> write_data,
-                    Optional<IEnumerable<VariableUnit>> custom_unit = default)
-                {
-                    return new RRF_ArrayObjectModel<TState, TRData, TWData>(name, Start, Count, t => create_variable(t), custom_unit);
-                    RRF_VariableObjectModel<TState, TRData, TWData> create_variable((string name, VariableUnit unit, ushort position) t)
-                    {
-                        Optional<TRData> get_data(RRF_Connection c, TState m) => GetList(m).Convert(l => read_data(c, l[t.position]));
-                        return new RRF_VariableObjectModel<TState, TRData, TWData>(Connection, t.name, GetState, get_data, (c, d) => write_data?.Invoke(c, d), t.unit);
-                    }
-                }
-                public RRF_ArrayObjectModel<TState, TRData, TWData> Create<TRData, TWData>(
-                    string name,
-                    Func<RRF_Connection, TList, Optional<TRData>> read_data,
-                    Func<RRF_Connection, TWData, (string name, VariableUnit unit, ushort position), Task<bool>> write_data,
-                    Optional<IEnumerable<VariableUnit>> custom_unit = default)
-                {
-                    return new RRF_ArrayObjectModel<TState, TRData, TWData>(name, Start, Count, t => create_variable(t), custom_unit);
-                    RRF_VariableObjectModel<TState, TRData, TWData> create_variable((string name, VariableUnit unit, ushort position) t)
-                    {
-                        Optional<TRData> get_data(RRF_Connection c, TState m) => GetList(m).Convert(l => read_data(c, l[t.position]));
-                        return new RRF_VariableObjectModel<TState, TRData, TWData>(Connection, t.name, GetState, get_data, (c, d) => write_data?.Invoke(c, d, t), t.unit);
-                    }
+
+                    return new RRF_ArrayObjectModel<TState, TRData, TWData>(name, variable_units, get_variable);
                 }
             }
-            public RRF_ArrayBuilder<TList> CreateArray<TList>(ushort start, ushort count, Func<TState, Optional<List<TList>>> get_list)
-                => new RRF_ArrayBuilder<TList>(Connection, start, count, GetState, get_list);
+
+            public RRF_ArrayBuilder<TList> CreateArray<TList>(Func<TState, Optional<Dictionary<VariableUnit, TList>>> get_list)
+                => new RRF_ArrayBuilder<TList>(Connection, GetState, get_list);
+            public RRF_ArrayBuilder<TList> CreateArray<TList>(Func<TState, Optional<Dictionary<Optional<VariableUnit>, TList>>> get_list)
+                => new RRF_ArrayBuilder<TList>(Connection, GetState, s => get_list(s).Convert(d => d.ToDictionary(kvp => kvp.Key.ValueOr(() => ""), kvp => kvp.Value)));
+            public RRF_ArrayBuilder<TList> CreateArray<TList, TKey>(Func<TState, Optional<Dictionary<TKey, TList>>> get_list)
+                => new RRF_ArrayBuilder<TList>(Connection, GetState, s => get_list(s).Convert(d => d.ToDictionary(kvp => (VariableUnit)$"{kvp.Key}", kvp => kvp.Value)));
+            public RRF_ArrayBuilder<TList> CreateArray<TList, TKey>(Func<TState, Optional<Dictionary<Optional<TKey>, TList>>> get_list)
+                => new RRF_ArrayBuilder<TList>(Connection, GetState, s => get_list(s).Convert(d => d.ToDictionary(kvp => (VariableUnit)kvp.Key.ConvertOr(k => $"{k}", () => ""), kvp => kvp.Value)));
         }
 
         public static RRF_InnerStateBuilder<TState> Create<TState>(IObservable<Optional<RRF_Connection>> connection, Func<RRF_ObjectModel, IObservable<Optional<TState>>> get_state)
@@ -249,34 +230,27 @@ namespace Flux.ViewModels
         }
     }
 
-    public class RRF_ArrayObjectModel<TState, TRData, TWData> : FLUX_Array<TRData, TWData>
+    public class RRF_ArrayObjectModel<TVariable, TRData, TWData> : FLUX_Array<TRData, TWData>
     {
         public override string Group => "ObjectModel";
-        public ushort Start { get; }
-        new public ISourceCache<IFLUX_Variable<TRData, TWData>, VariableUnit> Variables { get; }
-        public RRF_ArrayObjectModel(string name, ushort start, ushort count, Func<(string name, VariableUnit unit, ushort position), RRF_VariableObjectModel<TState, TRData, TWData>> get_variables, Optional<IEnumerable<VariableUnit>> custom_unit = default)
-            : base(name, count, FluxMemReadPriority.DISABLED, custom_unit)
+        public new ISourceCache<IFLUX_Variable<TRData, TWData>, VariableUnit> Variables { get; }
+        public RRF_ArrayObjectModel(string name, IEnumerable<VariableUnit> variable_units, Func<VariableUnit, IFLUX_Variable<TRData, TWData>> get_variable)
+            : base(name, FluxMemReadPriority.DISABLED)
         {
-            Variables = new SourceCache<IFLUX_Variable<TRData, TWData>, VariableUnit>(k => k.Unit.ValueOr(() => ""));
+            Variables = new SourceCache<IFLUX_Variable<TRData, TWData>, VariableUnit>(v => v.Unit.ValueOr(() => ""));
             base.Variables = Variables;
-            Start = start;
 
-            ushort unit_pos = 0;
-            for (ushort position = Start; position < Start + count; position++)
-            {
-                var unit = GetArrayUnit(unit_pos++);
-                Variables.AddOrUpdate(get_variables(($"{name} {unit}", unit, position)));
-            }
+            foreach (var unit in variable_units)
+                Variables.AddOrUpdate(get_variable(unit));
         }
+
         public override VariableUnit GetArrayUnit(ushort position)
         {
-            if (CustomUnit.HasValue)
-            {
-                var unit = CustomUnit.Value.ElementAtOrDefault(position);
-                if (unit != null)
-                    return unit;
-            }
-            return $"{position}";
+            return Variables.Items
+                .ElementAtOrDefault(position)
+                .ToOptional(v => v != null)
+                .Convert(v => v.Unit)
+                .ValueOr(() => $"{position}");
         }
     }
 
@@ -335,29 +309,33 @@ namespace Flux.ViewModels
         public string CreateVariableName => $"write_{Variable}.g";
         public string InitializeVariableString => $"M98 P\"/sys/global/write_{Variable}.g\"";
 
-        public RRF_VariableGlobalModel(IObservable<Optional<RRF_Connection>> connection, string variable, bool stored)
+        public RRF_VariableGlobalModel(IObservable<Optional<RRF_Connection>> connection, string variable, bool stored, Func<object, TData> convert_data = default)
             : base(connection, variable, FluxMemReadPriority.DISABLED, write_func: async (c, v) =>
             {
                 var gcode = $"M98 P\"/sys/global/write_{variable}.g\" S{(typeof(TData) == typeof(string) ? $"\"{sanitize_value(v)}\"" : sanitize_value(v))}";
-                var result = await c.PostGCodeAsync(gcode, false, TimeSpan.FromSeconds(5));
+
+                var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                var result = await c.PostGCodeAsync(gcode, cts.Token);
+
                 return result;
             })
         {
             Stored = stored;
             Variable = variable;
             connection.Convert(c => c.MemoryBuffer)
-                .ConvertMany(c => c.ObserveGlobalState(m => get_data(m, variable)))
+                .ConvertMany(c => c.ObserveGlobalState(m => get_data(m, variable, convert_data)))
                 .BindTo(this, v => v.Value);
         }
 
         static string sanitize_value(TData value) => $"{value:0.00}".ToLower().Replace(',', '.');
-        static Optional<TData> get_data(Optional<Dictionary<string, object>> global, string variable) => global.Convert(g => g.Lookup(variable)).Convert(v => (TData)Convert.ChangeType(v, typeof(TData)));
+        Optional<TData> get_data(Optional<Dictionary<string, object>> global, string variable, Func<object, TData> convert_data) => 
+            global.Convert(g => g.Lookup(variable)).Convert(v => convert_data != null ? convert_data(v) : (TData)Convert.ChangeType(v, typeof(TData)));
     }
 
     public class RRF_ArrayVariableGlobalModel<TData> : FLUX_VariableGP<RRF_Connection, TData, TData>
     {
         public override string Group => "Global";
-        public RRF_ArrayVariableGlobalModel(RRF_ArrayGlobalModel<TData> array, VariableUnit unit)
+        public RRF_ArrayVariableGlobalModel(RRF_ArrayGlobalModel<TData> array, VariableUnit unit, Func<object, TData> convert_data = default)
             : base(
                   array.WhenAnyValue(a => a.Connection),
                   $"{array.Name} {unit.Value}",
@@ -365,7 +343,10 @@ namespace Flux.ViewModels
                   write_func: async (c, v) =>
                   {
                       var gcode = $"M98 P\"/sys/global/write_{array.Variable}.g\" T\"{unit.Value.ToUpper()}\" S{(typeof(TData) == typeof(string) ? $"\"{sanitize_value(v)}\"" : sanitize_value(v))}";
-                      var result = await c.PostGCodeAsync(gcode, false, TimeSpan.FromSeconds(5));
+
+                      var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                      var result = await c.PostGCodeAsync(gcode, cts.Token);
+
                       return result;
                   },
                   unit: unit)
@@ -373,12 +354,13 @@ namespace Flux.ViewModels
             var lower_unit = unit.Value.ToLower();
             array.WhenAnyValue(a => a.Connection)
                 .Convert(c => c.MemoryBuffer)
-                .ConvertMany(c => c.ObserveGlobalState(m => get_data(m, $"{array.Variable}_{lower_unit}")))
+                .ConvertMany(c => c.ObserveGlobalState(m => get_data(m, $"{array.Variable}_{lower_unit}", convert_data)))
                 .BindTo(this, v => v.Value);
         }
 
         static string sanitize_value(TData value) => $"{value:0.00}".ToLower().Replace(',', '.');
-        static Optional<TData> get_data(Optional<Dictionary<string, object>> global, string variable) => global.Convert(g => g.Lookup(variable)).Convert(v => (TData)Convert.ChangeType(v, typeof(TData)));
+        static Optional<TData> get_data(Optional<Dictionary<string, object>> global, string variable, Func<object, TData> convert_data) 
+            => global.Convert(g => g.Lookup(variable)).Convert(v => convert_data != null ? convert_data(v) : (TData)Convert.ChangeType(v, typeof(TData)));
     }
 
     public class RRF_ArrayGlobalModel<TData> : FLUX_Array<TData, TData>, IRRF_VariableBaseGlobalModel
@@ -401,7 +383,7 @@ namespace Flux.ViewModels
                 }
 
                 yield return "; Get variables";
-                for (ushort position = 0; position < Count; position++)
+                for (ushort position = 0; position < Variables.Count; position++)
                 {
                     var unit = GetArrayUnit(position);
                     var lower_unit = unit.Value.ToLower();
@@ -412,7 +394,7 @@ namespace Flux.ViewModels
                 yield return "";
                 yield return "; Set variables";
 
-                for (ushort position = 0; position < Count; position++)
+                for (ushort position = 0; position < Variables.Count; position++)
                 {
                     var unit = GetArrayUnit(position);
                     var lower_unit = unit.Value.ToLower();
@@ -427,7 +409,7 @@ namespace Flux.ViewModels
                     yield return "";
                     yield return "; Store variables";
 
-                    for (ushort position = 0; position < Count; position++)
+                    for (ushort position = 0; position < Variables.Count; position++)
                     {
                         var unit = GetArrayUnit(position);
                         var lower_unit = unit.Value.ToLower();
@@ -445,31 +427,29 @@ namespace Flux.ViewModels
         public string CreateVariableName => $"write_{Variable}.g";
         public string InitializeVariableString => $"M98 P\"/sys/global/write_{Variable}.g\"";
 
-        public RRF_ArrayGlobalModel(IObservable<Optional<RRF_Connection>> connection, string variable, ushort count, bool stored, Optional<IEnumerable<VariableUnit>> custom_unit = default)
-            : base(variable, count, FluxMemReadPriority.DISABLED, custom_unit)
+        public RRF_ArrayGlobalModel(IObservable<Optional<RRF_Connection>> connection, string variable, IEnumerable<VariableUnit> variable_units, bool stored, Func<object, TData> convert_data = default)
+            : base(variable, FluxMemReadPriority.DISABLED)
         {
             Stored = stored;
             Variable = variable;
             _Connection = connection
                 .ToProperty(this, v => v.Connection);
             Variables = new SourceCache<IFLUX_Variable<TData, TData>, VariableUnit>(k => k.Unit.ValueOr(() => ""));
-            for (ushort position = 0; position < count; position++)
+            for (ushort position = 0; position < variable_units.Count(); position++)
             {
-                var unit = GetArrayUnit(position);
+                var unit = variable_units.ElementAt(position);
                 var variables = ((ISourceCache<IFLUX_Variable<TData, TData>, VariableUnit>)Variables);
-                variables.AddOrUpdate(new RRF_ArrayVariableGlobalModel<TData>(this, unit));
+                variables.AddOrUpdate(new RRF_ArrayVariableGlobalModel<TData>(this, unit, convert_data));
             }
         }
 
         public override VariableUnit GetArrayUnit(ushort position)
         {
-            if (CustomUnit.HasValue)
-            {
-                var unit = CustomUnit.Value.ElementAtOrDefault(position);
-                if (unit != default)
-                    return unit;
-            }
-            return $"{position}";
+            return Variables.Items
+                .ElementAtOrDefault(position)
+                .ToOptional(v => v != null)
+                .Convert(v => v.Unit)
+                .ValueOr(() => $"{position}");
         }
 
         static string sanitize_value(TData value) => $"{value:0.00}".ToLower().Replace(',', '.');

@@ -37,6 +37,10 @@ namespace Flux.ViewModels
         [RemoteCommand]
         public ReactiveCommand<Unit, Unit> ExitCommand { get; }
 
+        private ObservableAsPropertyHelper<string> _AxisPosition;
+        [RemoteOutput(true)]
+        public string AxisPosition => _AxisPosition.Value;
+
         public CalibrationViewModel Calibration { get; }
 
         public ManualCalibrationViewModel(CalibrationViewModel calibration) : base(calibration.Flux)
@@ -128,6 +132,10 @@ namespace Flux.ViewModels
                 })
                 .DisposeWith(Disposables);
 
+            _AxisPosition = Flux.ConnectionProvider.ObserveVariable(m => m.AXIS_POSITION)
+                .QueryWhenChanged(p => string.Join(" ", p.KeyValues.Select(v => $"{v.Key}{v.Value:0.00}")))
+                .ToProperty(this, v => v.AxisPosition);
+
             ExitCommand = ReactiveCommand.CreateFromTask(ExitAsync, can_execute)
                 .DisposeWith(Disposables);
 
@@ -136,8 +144,7 @@ namespace Flux.ViewModels
                 var can_execute = Observable.CombineLatest(
                     this.WhenAnyValue(v => v.SelectedTool),
                     this.WhenAnyValue(v => v.TemperaturePercentage),
-                    Flux.StatusProvider.IsIdle.ValueOrDefault(),
-                    (tool, temp, idle) => tool.HasValue && Math.Abs(temp) > 95 && idle)
+                    (tool, temp) => tool.HasValue && Math.Abs(temp) > 85)
                     .ToOptional();
 
                 var button = new CmdButton($"Z??{(distance > 0 ? $"+{distance:0.00mm}" : $"{distance:0.00}")}", () => move_tool(distance), can_execute);
@@ -177,15 +184,21 @@ namespace Flux.ViewModels
             {
                 var e = extruder;
 
-                var print_temp = Flux.Feeders.Feeders.Connect().WatchOptional(e)
+                var print_temp = Flux.Feeders.Feeders.Connect()
+                    .WatchOptional(e)
                     .ConvertMany(f => f.ToolMaterial.WhenAnyValue(tm => tm.Document))
                     .Convert(tm => tm.PrintTemperature);
 
+                var tool_offset = Flux.Calibration.Offsets.Connect()
+                    .WatchOptional(e)
+                    .ConvertMany(o => o.WhenAnyValue(o => o.FluxOffset));
+
                 var can_execute = Observable.CombineLatest(
                     print_temp,
+                    tool_offset,
                     this.WhenAnyValue(v => v.SelectedTool),
                     Flux.StatusProvider.IsIdle.ValueOrDefault(),
-                    (temp, tool, idle) => temp.HasValue && idle && tool != e)
+                    (temp, offset, tool, idle) => temp.HasValue && offset.HasValue && idle && tool != e)
                     .ToOptional();
 
                 var button = new CmdButton($"selectExtruder??{e + 1}", select_tool, can_execute);
@@ -194,18 +207,24 @@ namespace Flux.ViewModels
 
                 async Task select_tool()
                 {
+                    var feeder = Flux.Feeders.Feeders.Lookup(e);
+                    var tool_material = feeder.Convert(f => f.ToolMaterial.Document);
+                    var print_temperature = tool_material.Convert(tm => tm.PrintTemperature);
+                    if (!print_temperature.HasValue)
+                        return;
+
+                    var offset = Flux.Calibration.Offsets.Lookup(e);
+                    var tool_offset = offset.Convert(o => o.ToolOffset);
+                    if (!tool_offset.HasValue)
+                        return;
+
                     var select_tool_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(30));
                     await Flux.ConnectionProvider.ExecuteParamacroAsync(c =>
                     {
                         var gcode = new List<string>();
                         gcode.AddRange(c.GetSelectToolGCode(e));
-
-                        var feeder = Flux.Feeders.Feeders.Lookup(e);
-                        var tool_material = feeder.Convert(f => f.ToolMaterial.Document);
-                        var print_temperature = tool_material.Convert(tm => tm.PrintTemperature);
-                        if (print_temperature.HasValue)
-                            gcode.AddRange(c.GetSetToolTemperatureGCode(e, print_temperature.Value));
-
+                        gcode.AddRange(c.GetSetToolTemperatureGCode(e, print_temperature.Value));
+                        gcode.AddRange(c.GetSetToolOffsetGCode(e, tool_offset.Value.X, tool_offset.Value.Y, 0));
                         gcode.AddRange(c.GetRaisePlateGCode());
                         return gcode;
                     }, true, select_tool_ctk.Token);

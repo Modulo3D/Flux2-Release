@@ -354,12 +354,9 @@ namespace Flux.ViewModels
                 .ToProperty(this, v => v.FluxOffset)
                 .DisposeWith(Disposables);
 
-            Observable.CombineLatest(
-                Flux.StatusProvider.IsCycle.ValueOr(() => true),
-                this.WhenAnyValue(v => v.FluxOffset),
-                (cycle, offset) => (cycle, offset))
-                .Where(t => !t.cycle && t.offset.HasValue)
-                .Subscribe(async t => await Flux.ConnectionProvider.SetToolOffsetsAsync(t.offset.Value))
+            this.WhenAnyValue(v => v.FluxOffset)
+                .Where(o => o.HasValue)
+                .Subscribe(async offset => await Flux.ConnectionProvider.SetToolOffsetsAsync(offset.Value))
                 .DisposeWith(Disposables);
 
             _DebugOffsets = Flux.MCodes

@@ -22,8 +22,8 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public Optional<string> MCodeName => _MCodeName.Value;
 
-        [RemoteOutput(false)]
-        public ushort QueueIndex { get; }
+        [RemoteOutput(false, typeof(ImplicitTypeConverter<short>))]
+        public QueuePosition QueueIndex { get; }
 
         private ObservableAsPropertyHelper<short> _FileNumber;
         [RemoteOutput(true)]
@@ -48,7 +48,7 @@ namespace Flux.ViewModels
         [RemoteOutput(true, typeof(DateTimeConverter<DateTimeFormat>))]
         public DateTime EndTime => _EndTime.Value;
 
-        public MCodeQueueViewModel(MCodesViewModel mcodes, ushort queue_index, Guid queue_guid) : base($"{typeof(MCodeQueueViewModel).GetRemoteControlName()}??{queue_index}")
+        public MCodeQueueViewModel(MCodesViewModel mcodes, QueuePosition queue_index, Guid queue_guid) : base($"{typeof(MCodeQueueViewModel).GetRemoteControlName()}??{queue_index}")
         {
             MCodes = mcodes;
             MCodeGuid = queue_guid;
@@ -94,7 +94,7 @@ namespace Flux.ViewModels
 
             var can_move_down = mcodes.Flux.ConnectionProvider
                 .ObserveVariable(c => c.QUEUE)
-                .Convert(q => q.Count)
+                .Convert(q => q?.Count ?? 0)
                 .ValueOr(() => 0)
                 .Select(c => queue_index < c - 1);
 
@@ -103,12 +103,19 @@ namespace Flux.ViewModels
             MoveDownMCodeQueueCommand = ReactiveCommand.CreateFromTask(async () => { await MCodes.MoveInQueueAsync(this, i => (short)(i + 1)); }, can_move_down);
         }
 
-        private DateTime FindEndTime(DateTime start_time, IQuery<Optional<IFluxMCodeStorageViewModel>, ushort> queue)
+        private DateTime FindEndTime(DateTime start_time, IQuery<Optional<IFluxMCodeStorageViewModel>, QueuePosition> queue)
         {
-            return start_time + queue.KeyValues
-                .Where(kvp => kvp.Key <= QueueIndex)
-                .Where(kvp => kvp.Value.HasValue)
-                .Aggregate(TimeSpan.Zero, (acc, kvp) => acc + kvp.Value.Value.Analyzer.MCode.Duration);
+            try
+            {
+                return start_time + queue.KeyValues
+                    .Where(kvp => kvp.Key <= QueueIndex)
+                    .Where(kvp => kvp.Value.HasValue)
+                    .Aggregate(TimeSpan.Zero, (acc, kvp) => acc + kvp.Value.Value.Analyzer.MCode.Duration);
+            }
+            catch(Exception ex)
+            {
+                return start_time;
+            }
         }
     }
 }

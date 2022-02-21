@@ -26,8 +26,6 @@ namespace Flux.ViewModels
 
     public class OSAI_ConnectionProvider : FLUX_ConnectionProvider<OSAI_Connection, OSAI_VariableStore>
     {
-        public override OffsetKind OffsetKind => OffsetKind.ToolOffset;
-
         private ObservableAsPropertyHelper<Optional<bool>> _IsInitializing;
         public override Optional<bool> IsInitializing => _IsInitializing.Value;
 
@@ -345,7 +343,8 @@ namespace Flux.ViewModels
             return true;
         }
 
-        public override Optional<IEnumerable<string>> GenerateStartMCodeLines(MCode mcode)
+        // TODO
+        /*public override Optional<IEnumerable<string>> GenerateStartMCodeLines(MCode mcode)
         {
             return generate_start_mcode().ToOptional();
             IEnumerable<string> generate_start_mcode()
@@ -353,7 +352,7 @@ namespace Flux.ViewModels
                 // Write preprocess gcode
                 yield return "(GTO, end_preprocess)";
 
-                var def_recovery = new MCodeRecovery(mcode.MCodeGuid, false, 0, 0,
+                var def_recovery = new OSAI_MCodeRecovery(mcode.MCodeGuid, false, 0, 0,
                     new Dictionary<VariableUnit, double>()
                     {
                         { "0", 0 },
@@ -369,7 +368,7 @@ namespace Flux.ViewModels
                         { "E", 0 },
                     });
 
-                var recovery_mcode = GenerateRecoveryMCodeLines(def_recovery);
+                var recovery_mcode = Connection.Convert(c => c.GenerateRecoveryLines(def_recovery));
                 if (recovery_mcode.HasValue)
                 {
                     foreach (var recovery_move in recovery_mcode.Value)
@@ -390,48 +389,7 @@ namespace Flux.ViewModels
                 yield return "\"end_preprocess\"";
                 yield return "(PAS)";
             }
-        }
-        public override Optional<IEnumerable<string>> GenerateRecoveryMCodeLines(MCodeRecovery recovery)
-        {
-            return generate_start_mcode().ToOptional();
-            IEnumerable<string> generate_start_mcode()
-            {
-                yield return $"#!REQ_HOLD = 0.0";
-                yield return $"#!IS_HOLD = 0.0";
-                yield return $"G500 T{recovery.ToolNumber + 1}";
-                yield return $"M4999 [{{WIRE_ENDSTOP_1_RESET}}, {recovery.ToolNumber + 1}, 0, 1]";
-
-                for (int tool = 0; tool < recovery.Temperatures.Count; tool++)
-                {
-                    var tool_unit = $"{tool}";
-                    if (recovery.Temperatures[tool_unit] > 50)
-                    {
-                        var hold_temp = $"{recovery.Temperatures[tool_unit]:0}".Replace(",", ".");
-                        yield return $"M4104 [{tool + 1}, {hold_temp}, 0]";
-                    }
-                }
-
-                var tool_number_unit = $"{recovery.ToolNumber}";
-                if (recovery.Temperatures[tool_number_unit] > 50)
-                {
-                    var hold_temp_t = $"{recovery.Temperatures[tool_number_unit]:0}".Replace(",", ".");
-                    yield return $"M4104 [{recovery.ToolNumber + 1}, {hold_temp_t}, 1]";
-                }
-
-                var x_pos = $"{recovery.Positions["X"]:0.000}".Replace(",", ".");
-                var y_pos = $"{recovery.Positions["Y"]:0.000}".Replace(",", ".");
-                var z_pos = $"{recovery.Positions["Z"]:0.000}".Replace(",", ".");
-
-                yield return $"G1 X{x_pos} Y{y_pos} F15000";
-                yield return $"G1 Z{z_pos} F5000";
-
-                yield return $"G92 A0";
-                yield return $"G1 A1 F2000";
-
-                var a_pos = $"{recovery.Positions["E"]:0.000}".Replace(",", ".");
-                yield return $"G92 A{a_pos}";
-            }
-        }
+        }*/
         public override Optional<IEnumerable<string>> GenerateEndMCodeLines(MCode mcode, Optional<ushort> queue_size)
         {
             return default;

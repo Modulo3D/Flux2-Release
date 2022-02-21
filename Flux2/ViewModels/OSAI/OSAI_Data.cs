@@ -268,6 +268,29 @@ namespace Flux.ViewModels
 
     }
 
+    public class OSAI_MCodeRecovery : IFLUX_MCodeRecovery
+    {
+        public Guid MCodeGuid { get; }
+        public bool IsSelected { get; }
+        public uint BlockNumber { get; }
+        public short ToolNumber { get; }
+        public BlockNumber StartBlock { get; }
+        public string FileName => $"{MCodeGuid}.{StartBlock}";
+        public Dictionary<VariableUnit, double> Positions { get; }
+        public Dictionary<VariableUnit, double> Temperatures { get; }
+
+        public OSAI_MCodeRecovery(Guid mcode_guid, BlockNumber start_block, bool is_selected, uint hold_block, short hold_tool, Dictionary<VariableUnit, double> hold_temp, Dictionary<VariableUnit, double> hold_pos)
+        {
+            BlockNumber = hold_block;
+            Temperatures = hold_temp;
+            IsSelected = is_selected;
+            StartBlock = start_block;
+            MCodeGuid = mcode_guid;
+            ToolNumber = hold_tool;
+            Positions = hold_pos;
+        }
+    }
+
     // MSGERROR 
     // uint     -> uint/uint    | 1508600 -> 23/1272 Asse %2 (Id %1) non sul profilo
     // uint     -> hex          | 1508600 -> 1704F8

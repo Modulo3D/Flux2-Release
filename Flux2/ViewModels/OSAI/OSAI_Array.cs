@@ -71,7 +71,7 @@ namespace Flux.ViewModels
             Func<string, TAddress, FluxMemReadPriority, VariableUnit, ushort, Optional<TAddress>, TVariable> create_var,
             Optional<TAddress> s_physical_address = default,
             Optional<IEnumerable<VariableUnit>> custom_unit = default)
-            : base(name, count, priority, custom_unit)
+            : base(name, priority)
         {
 
             Connection = connection;
@@ -106,13 +106,11 @@ namespace Flux.ViewModels
 
         public override VariableUnit GetArrayUnit(ushort position)
         {
-            if (CustomUnit.HasValue)
-            {
-                var unit = CustomUnit.Value.ElementAtOrDefault(position);
-                if (unit != default)
-                    return unit;
-            }
-            return $"{position + 1}";
+            return Variables.Items
+                .ElementAtOrDefault(position)
+                .ToOptional(v => v != null)
+                .Convert(v => v.Unit)
+                .ValueOr(() => $"{position + 1}");
         }
     }
 

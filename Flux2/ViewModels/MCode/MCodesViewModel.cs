@@ -22,7 +22,7 @@ namespace Flux.ViewModels
         public ISourceCache<IFluxMCodeStorageViewModel, Guid> AvaiableMCodes { get; }
 
         [RemoteContent(true)]
-        public IObservableCache<IFluxMCodeQueueViewModel, ushort> QueuedMCodes { get; }
+        public IObservableCache<IFluxMCodeQueueViewModel, QueuePosition> QueuedMCodes { get; }
 
         [RemoteCommand]
         public ReactiveCommand<Unit, Unit> DeleteAllCommand { get; }
@@ -48,36 +48,43 @@ namespace Flux.ViewModels
             set => this.RaiseAndSetIfChanged(ref _IsPreparingFile, value);
         }
 
-        private ObservableAsPropertyHelper<short> _QueuePosition;
+        private ObservableAsPropertyHelper<QueuePosition> _QueuePosition;
         [RemoteOutput(true)]
-        public short QueuePosition => _QueuePosition.Value;
+        public QueuePosition QueuePosition => _QueuePosition.Value;
 
         public MCodesViewModel(FluxViewModel flux) : base(flux)
         {
             _QueuePosition = Flux.ConnectionProvider
                 .ObserveVariable(c => c.QUEUE_POS)
-                .ValueOr(() => (short)-1)
+                .ValueOr(() => new QueuePosition(-1))
                 .ToProperty(this, v => v.QueuePosition);
 
             var filter_queue = this.WhenAnyValue(v => v.QueuePosition)
                 .Select(p =>
                 {
-                    return (Func<(IFluxMCodeQueueViewModel queue_mcode, ushort queue_pos), bool>)filter_queue_func;
-                    bool filter_queue_func((IFluxMCodeQueueViewModel queue_mcode, ushort queue_pos) queue)
+                    return (Func<(IFluxMCodeQueueViewModel queue_mcode, QueuePosition queue_pos), bool>)filter_queue_func;
+                    bool filter_queue_func((IFluxMCodeQueueViewModel queue_mcode, QueuePosition queue_pos) queue)
                     {
                         return p > -1 && queue.queue_pos >= p;
                     }
                 });
 
-            bool distinct_queue(Dictionary<ushort, Guid> d1, Dictionary<ushort, Guid> d2)
+            bool distinct_queue(Dictionary<QueuePosition, Guid> d1, Dictionary<QueuePosition, Guid> d2)
             {
-                return string.Join(";", d1.Select(kvp => $"{kvp.Key}:{kvp.Value}")) ==
-                    string.Join(";", d2.Select(kvp => $"{kvp.Key}:{kvp.Value}"));
+                try
+                {
+                    return string.Join(";", d1.Select(kvp => $"{kvp.Key}:{kvp.Value}")) ==
+                        string.Join(";", d2.Select(kvp => $"{kvp.Key}:{kvp.Value}"));
+                }
+                catch (Exception ex)
+                {
+                    return false;
+                }
             }
 
             AvaiableMCodes = new SourceCache<IFluxMCodeStorageViewModel, Guid>(f => f.Analyzer.MCode.MCodeGuid);
             QueuedMCodes = Flux.ConnectionProvider.ObserveVariable(c => c.QUEUE)
-                .ValueOr(() => new Dictionary<ushort, Guid>())
+                .ValueOr(() => new Dictionary<QueuePosition, Guid>())
                 .DistinctUntilChanged(distinct_queue)
                 .Select(CreateMCodeQueue)
                 .ToObservableChangeSet(kvp => kvp.queue_pos)
@@ -246,7 +253,7 @@ namespace Flux.ViewModels
         }
 
         // STORAGE
-        private async Task<Optional<Dictionary<Guid, MCodePartProgram>>> ReadMCodeStorageAsync()
+        private async Task<Optional<Dictionary<Guid, Dictionary<BlockNumber, MCodePartProgram>>>> ReadMCodeStorageAsync()
         {
             var qctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             var queue = await Flux.ConnectionProvider.ListFilesAsync(
@@ -339,11 +346,14 @@ namespace Flux.ViewModels
                 if (!files.HasValue)
                     return false;
 
-                if (files.Value.TryGetValue(file.Analyzer.MCode.MCodeGuid, out var mcode))
+                if (files.Value.TryGetValue(file.Analyzer.MCode.MCodeGuid, out var mcodes))
                 {
-                    var delete_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                    if (!await Flux.ConnectionProvider.DeleteFileAsync(c => c.StoragePath, $"{mcode}", true, delete_cts.Token))
-                        return false;
+                    foreach (var mcode in mcodes)
+                    { 
+                        var delete_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                        if (!await Flux.ConnectionProvider.DeleteFileAsync(c => c.StoragePath, $"{mcode}", true, delete_cts.Token))
+                            return false;
+                    }
                 }
 
                 Flux.Messages.LogMessage(FileResponse.FILE_DELETED, file);
@@ -406,14 +416,14 @@ namespace Flux.ViewModels
             var queue_size = optional_queue_size
                 .ValueOr(() => (ushort)1);
 
-            var current_index = queue.Value.Keys.Count > 0 ? (short)queue.Value.Keys.Max() : (short)-1;
+            var current_index = queue.Value.Keys.Count > 0 ? queue.Value.Keys.Max() : new QueuePosition(-1);
             if (current_index > -1)
             {
                 if (queue.Value.Count >= queue_size)
                 {
                     if (queue.Value.Count < 1)
                         return false;
-                    var last_mcode = QueuedMCodes.Lookup((ushort)current_index);
+                    var last_mcode = QueuedMCodes.Lookup(current_index);
                     if (!last_mcode.HasValue)
                         return false;
                     if (!await DeleteFromQueueAsync(last_mcode.Value))
@@ -452,11 +462,11 @@ namespace Flux.ViewModels
             if (queue.Value.Keys.Count <= 0)
                 return false;
 
-            var queue_count = queue.Value.Keys.Max() + 1;
-            for (ushort position = mcode.QueueIndex; position < queue_count; position++)
+            var queue_count = queue.Value.Keys.Max();
+            for (var position = mcode.QueueIndex; position < queue_count + 1; position++)
             {
                 var current_position = position;
-                var next_position = (ushort)(position + 1);
+                var next_position = new QueuePosition((short)(position.Value + 1));
 
                 if (!queue.Value.TryGetValue(current_position, out var current_queue_guid))
                     continue;
@@ -480,9 +490,20 @@ namespace Flux.ViewModels
                     return false;
             }
 
+            var queue_pos = await Flux.ConnectionProvider.ReadVariableAsync(c => c.QUEUE_POS);
+            if (!queue_pos.HasValue)
+                return false;
+
+            if (queue_pos.Value >= queue_count)
+            {
+                var new_queue_pos = (short)(queue_pos.Value - 1);
+                if (!await Flux.ConnectionProvider.WriteVariableAsync(c => c.QUEUE_POS, new_queue_pos))
+                    return false;
+            }
+
             return true;
         }
-        public async Task<bool> MoveInQueueAsync(IFluxMCodeQueueViewModel mcode, Func<ushort, short> move)
+        public async Task<bool> MoveInQueueAsync(IFluxMCodeQueueViewModel mcode, Func<QueuePosition, QueuePosition> move)
         {
             var queue = await ReadMCodeQueueAsync();
             if (!queue.HasValue)
@@ -501,7 +522,7 @@ namespace Flux.ViewModels
             if (!current_guid.HasValue)
                 return false;
 
-            var other_guid = queue.Value.Lookup((ushort)other_index);
+            var other_guid = queue.Value.Lookup(other_index);
             if (!other_guid.HasValue)
                 return false;
 
@@ -536,7 +557,7 @@ namespace Flux.ViewModels
             return true;
         }
 
-        private async Task<Optional<Dictionary<ushort, Guid>>> ReadMCodeQueueAsync()
+        private async Task<Optional<Dictionary<QueuePosition, Guid>>> ReadMCodeQueueAsync()
         {
             var qctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             var queue = await Flux.ConnectionProvider.ListFilesAsync(
@@ -548,7 +569,7 @@ namespace Flux.ViewModels
 
             return queue.Value.GetGuidDictionaryFromQueue();
         }
-        private IEnumerable<(IFluxMCodeQueueViewModel queue_mcode, ushort queue_pos)> CreateMCodeQueue(Dictionary<ushort, Guid> queue)
+        private IEnumerable<(IFluxMCodeQueueViewModel queue_mcode, QueuePosition queue_pos)> CreateMCodeQueue(Dictionary<QueuePosition, Guid> queue)
         {
             foreach (var kvp in queue)
             {

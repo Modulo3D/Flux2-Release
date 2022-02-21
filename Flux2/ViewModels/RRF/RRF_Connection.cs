@@ -14,6 +14,7 @@ using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -40,6 +41,7 @@ namespace Flux.ViewModels
             Request = request;
             CancellationToken = ct;
         }
+        public override string ToString() => $"{Id} - {Request.Method}:{Request.Resource}/{string.Join("?", Request.Parameters.Select(p => $"{p.Name}={p.Value}"))}";
     }
 
     public struct RRF_Response
@@ -122,34 +124,33 @@ namespace Flux.ViewModels
                 .MergeWithLowPriorityStream(FastRequestSubject)
                 .MergeWithLowPriorityStream(MediumRequestSubject)
                 .MergeWithLowPriorityStream(SlowRequestSubject)
-                .Select(r =>
-                {
-                    return Observable.FromAsync(async () =>
-                    {
-                        Optional<RRF_Response> rrf_response = default;
-                        try
-                        {
-                            if (Client.HasValue && !r.CancellationToken.IsCancellationRequested)
-                            {
-                                var response = await Client.Value.ExecuteAsync(
-                                    r.Request,
-                                    r.CancellationToken);
-                                rrf_response = new RRF_Response(r.Id, response);
-                            }
-                        }
-                        catch (Exception)
-                        {
-                        }
-                        finally
-                        {
-                            r.Action?.Invoke(rrf_response);
-                        }
-                        return rrf_response;
-                    });
-                })
+                .Select(r => Observable.FromAsync(() => ProcessRequestAsync(r)))
                 .Merge(1)
                 .ToProperty(this, v => v.ProcessedRequest)
                 .DisposeWith(Disposables);
+        }
+
+        private async Task<Optional<RRF_Response>> ProcessRequestAsync(RRF_Request request)
+        {
+            Optional<RRF_Response> rrf_response = default;
+            try
+            {
+                if (Client.HasValue && !request.CancellationToken.IsCancellationRequested)
+                {
+                    var response = await Client.Value.ExecuteAsync(
+                        request.Request,
+                        request.CancellationToken);
+                    rrf_response = new RRF_Response(request.Id, response);
+                }
+            }
+            catch (Exception)
+            {
+            }
+            finally
+            {
+                request.Action?.Invoke(rrf_response);
+            }
+            return rrf_response;
         }
 
         public override Task<bool> CreateClientAsync(string address)
@@ -188,43 +189,23 @@ namespace Flux.ViewModels
             return true;
         }
 
-        public async Task<bool> WaitResponseAsync(int id, CancellationToken ct)
+        public Optional<Task<Optional<RRF_Response>>> WaitResponse(int id, CancellationToken ct)
         {
             try
             {
+                if (ct == CancellationToken.None)
+                    return Optional<Task<Optional<RRF_Response>>>.None;
+
                 if (ct.IsCancellationRequested)
-                    return default;
+                    return Task.FromResult(Optional<RRF_Response>.None);
 
-                return await WaitUtils.WaitForOptionalAsync(
-                    this.WhenAnyValue(c => c.ProcessedRequest),
-                    is_valid, ct);
-            }
-            catch
-            {
-                return default;
-            }
-
-            bool is_valid(RRF_Response response)
-            {
-                if (id != response.Id)
-                    return false;
-                return true;
-            }
-        }
-        public async Task<Optional<RRF_Response>> WaitResponseValueAsync(int id, CancellationToken ct)
-        {
-            try
-            {
-                if (ct.IsCancellationRequested)
-                    return default;
-
-                return await WaitUtils.WaitForOptionalAsync(
+                return WaitUtils.WaitForOptionalAsync(
                     this.WhenAnyValue(c => c.ProcessedRequest),
                     is_valid, r => r, ct);
             }
             catch
             {
-                return default;
+                return Optional<Task<Optional<RRF_Response>>>.None;
             }
 
             bool is_valid(RRF_Response response)
@@ -236,12 +217,7 @@ namespace Flux.ViewModels
         }
 
         // GCODE
-        public async Task<bool> PostGCodeAsync(string paramacro, bool wait = false, TimeSpan timeout = default)
-        {
-            using var cts = new CancellationTokenSource(timeout);
-            return await PostGCodeAsync(paramacro, wait, cts.Token);
-        }
-        public async Task<bool> PostGCodeAsync(string paramacro, bool wait = false, CancellationToken ct = default)
+        public async Task<bool> PostGCodeAsync(string paramacro, CancellationToken ct, bool wait = false, CancellationToken gcode_ct = default)
         {
             try
             {
@@ -260,20 +236,14 @@ namespace Flux.ViewModels
 
                 var resource = $"rr_gcode?gcode={paramacro}";
                 var request = new RestRequest(resource);
-                return await PostGCodeAsync(request, wait, ct);
+                return await PostGCodeAsync(request, ct, wait, gcode_ct);
             }
             catch
             {
                 return false;
             }
         }
-
-        public async Task<bool> PostGCodeAsync(RestRequest request, bool wait = false, TimeSpan timeout = default)
-        {
-            using var cts = new CancellationTokenSource(timeout);
-            return await PostGCodeAsync(request, wait, cts.Token);
-        }
-        public async Task<bool> PostGCodeAsync(RestRequest request, bool wait = false, CancellationToken ct = default)
+        public async Task<bool> PostGCodeAsync(RestRequest request, CancellationToken ct, bool wait = false, CancellationToken gcode_ct = default)
         {
             try
             {
@@ -281,20 +251,26 @@ namespace Flux.ViewModels
                     return default;
 
                 var id = Random.Next();
-                var wait_response = WaitResponseAsync(id, ct);
+                var wait_response = WaitResponse(id, ct);
 
                 var rrf_request = new RRF_Request(request, id, ct: ct);
                 GCodeRequestSubject.OnNext(rrf_request);
 
-                var response = await wait_response;
-                if (!response)
-                    return false;
+                if (wait_response.HasValue)
+                { 
+                    var response = await wait_response.Value;
+                    if (!response.HasValue)
+                    {
+                        ((RRF_ConnectionProvider)Flux.ConnectionProvider).ResponseTimeout++;
+                        return false;
+                    }
+                }
 
-                if (wait && ct != CancellationToken.None && !await WaitProcessStatusAsync(
+                if (wait && gcode_ct != CancellationToken.None && !await WaitProcessStatusAsync(
                     status => status == FLUX_ProcessStatus.IDLE,
                     TimeSpan.FromSeconds(0.5),
                     TimeSpan.FromSeconds(0.1),
-                    ct))
+                    gcode_ct))
                     return false;
 
                 return true;
@@ -305,7 +281,7 @@ namespace Flux.ViewModels
             }
         }
 
-        public Optional<RRF_Request> PostGCode(string paramacro, Action<Optional<RRF_Response>> action = default, CancellationToken ct = default)
+        public Optional<RRF_Request> PostGCode(string paramacro, CancellationToken ct, Action<Optional<RRF_Response>> action = default)
         {
             try
             {
@@ -324,14 +300,14 @@ namespace Flux.ViewModels
 
                 var resource = $"rr_gcode?gcode={paramacro}";
                 var request = new RestRequest(resource);
-                return PostGCode(request, action, ct);
+                return PostGCode(request, ct, action);
             }
             catch
             {
                 return default;
             }
         }
-        public Optional<RRF_Request> PostGCode(RestRequest request, Action<Optional<RRF_Response>> action = default, CancellationToken ct = default)
+        public Optional<RRF_Request> PostGCode(RestRequest request, CancellationToken ct, Action<Optional<RRF_Response>> action = default)
         {
             try
             {
@@ -352,12 +328,7 @@ namespace Flux.ViewModels
         }
 
         // REQUEST
-        public async Task<Optional<RRF_Response>> PostRequestAsync(RestRequest request, IRRF_RequestPriority priority, TimeSpan timeout = default)
-        {
-            using var cts = new CancellationTokenSource(timeout);
-            return await PostRequestAsync(request, priority, cts.Token);
-        }
-        public async Task<Optional<RRF_Response>> PostRequestAsync(RestRequest request, IRRF_RequestPriority priority, CancellationToken ct = default)
+        public async Task<Optional<RRF_Response>> PostRequestAsync(RestRequest request, IRRF_RequestPriority priority, CancellationToken ct)
         {
             try
             {
@@ -365,7 +336,7 @@ namespace Flux.ViewModels
                     return default;
 
                 var id = Random.Next();
-                var wait_response = WaitResponseValueAsync(id, ct);
+                var wait_response = WaitResponse(id, ct);
                 var rrf_request = new RRF_Request(request, id, ct: ct);
                 switch (priority)
                 {
@@ -384,7 +355,14 @@ namespace Flux.ViewModels
                     default:
                         return default;
                 }
-                return await wait_response;
+                if (wait_response.HasValue)
+                { 
+                    var response = await wait_response.Value;
+                    if(!response.HasValue)
+                        ((RRF_ConnectionProvider)Flux.ConnectionProvider).ResponseTimeout++;
+                    return response;
+                }
+                return default;
             }
             catch
             {
@@ -392,7 +370,7 @@ namespace Flux.ViewModels
             }
         }
 
-        public Optional<RRF_Request> PostRequest(RestRequest request, IRRF_RequestPriority priority, Action<Optional<RRF_Response>> action = default, CancellationToken ct = default)
+        public Optional<RRF_Request> PostRequest(RestRequest request, IRRF_RequestPriority priority, CancellationToken ct, Action<Optional<RRF_Response>> action = default)
         {
             try
             {
@@ -426,17 +404,12 @@ namespace Flux.ViewModels
             }
         }
 
-        public Optional<bool> PutRequest(RestRequest request, IRRF_RequestPriority priority, Action<Optional<RRF_Response>> action = default, CancellationToken ct = default)
+        public Optional<bool> PutRequest(RestRequest request, IRRF_RequestPriority priority, CancellationToken ct, Action<Optional<RRF_Response>> action = default)
         {
-            var rrf_request = PostRequest(request, priority, action, ct);
+            var rrf_request = PostRequest(request, priority, ct, action);
             return rrf_request.HasValue;
         }
-        public async Task<bool> PutRequestAsync(RestRequest request, IRRF_RequestPriority priority, TimeSpan timeout = default)
-        {
-            using var cts = new CancellationTokenSource(timeout);
-            return await PutRequestAsync(request, priority, cts.Token);
-        }
-        public async Task<bool> PutRequestAsync(RestRequest request, IRRF_RequestPriority priority, CancellationToken ct = default)
+        public async Task<bool> PutRequestAsync(RestRequest request, IRRF_RequestPriority priority, CancellationToken ct)
         {
             var response = await PostRequestAsync(request, priority, ct);
             if (!response.HasValue)
@@ -455,35 +428,22 @@ namespace Flux.ViewModels
         }
         public override async Task<bool> CycleAsync(bool start, bool wait, CancellationToken ct = default)
         {
-            try
-            {
-                if (ct.IsCancellationRequested)
-                    return default;
-
-                if (!await PostGCodeAsync("M24", false, ct))
-                    return false;
-
-                if (wait && ct != CancellationToken.None && !await WaitProcessStatusAsync(
-                    status => status == FLUX_ProcessStatus.IDLE,
-                    TimeSpan.FromSeconds(0.5),
-                    TimeSpan.FromSeconds(0.1),
-                    ct))
-                    return false;
-
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
+            return await ExecuteParamacroAsync(new[] { "M24" }, wait, ct);
         }
         public override async Task<bool> ExecuteParamacroAsync(IEnumerable<string> paramacro, bool wait = false, CancellationToken ct = default)
         {
+            paramacro = paramacro.Select(line => Regex.Replace(line, "M98 P\"(.*)\"", m => $"M98 P\"{m.Groups[1].Value.ToLower().Replace(" ", "_")}\""));
+
             var lenght = GetGCodeLenght(paramacro);
             if (lenght < 160)
-                return await PostGCodeAsync(string.Join("%0A", paramacro), wait, ct);
+            {
+                var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                return await PostGCodeAsync(string.Join("%0A", paramacro), cts.Token, wait, ct);
+            }
             else
+            { 
                 return await base.ExecuteParamacroAsync(paramacro, wait, ct);
+            }
         }
 
         public override async Task<bool> DeselectPartProgramAsync(bool from_drive, bool wait, CancellationToken ct = default)
@@ -539,7 +499,7 @@ namespace Flux.ViewModels
         public override async Task<bool> HoldAsync()
         {
             var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            return await ExecuteParamacroAsync(new[] { "M108", "M25", "M0" }, true, cts.Token);
+            return await ExecuteParamacroAsync(new[] { "M98 P\"/sys/global/write_req_hold.g\" Strue", "M108", "M25", "M0" }, true, cts.Token);
         }
         public override async Task<Optional<string>> DownloadFileAsync(string folder, string filename, CancellationToken ct)
         {
@@ -569,7 +529,8 @@ namespace Flux.ViewModels
                 if (ct.IsCancellationRequested)
                     return false;
 
-                if (!await PostGCodeAsync($"M23 storage/{filename}", false, ct))
+                var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                if (!await PostGCodeAsync($"M23 storage/{filename}", cts.Token))
                     return false;
 
                 var selected_pp = Observable.Timer(TimeSpan.Zero, TimeSpan.FromSeconds(5))
@@ -607,13 +568,9 @@ namespace Flux.ViewModels
             string filename,
             CancellationToken ct,
             Optional<IEnumerable<string>> source = default,
-            Optional<IEnumerable<string>> start = default,
-            Optional<IEnumerable<string>> recovery = default,
             Optional<IEnumerable<string>> end = default,
-            Optional<uint> recovery_block = default,
             Optional<uint> source_blocks = default,
-            Action<double> report_progress = null,
-            bool debug_chunks = false)
+            Action<double> report_progress = null)
         {
             try
             {
@@ -622,15 +579,6 @@ namespace Flux.ViewModels
 
                 if (!Client.HasValue)
                     return false;
-
-                long actual_start_block = 0;
-                if (recovery_block.HasValue)
-                    actual_start_block = recovery_block.Value;
-
-                long actual_source_blocks = 0;
-                if (source_blocks.HasValue)
-                    actual_source_blocks = source_blocks.Value;
-                actual_source_blocks -= actual_start_block;
 
                 // Write content
                 using var lines_stream = new GCodeStream(get_full_source());
@@ -649,35 +597,23 @@ namespace Flux.ViewModels
 
                 IEnumerable<string> get_full_source()
                 {
-                    if (start.HasValue)
-                    {
-                        yield return "; preprocessing";
-                        foreach (var line in start.Value)
-                            yield return line;
-                        yield return "";
-                    }
-
-                    if (recovery.HasValue)
-                    {
-                        yield return "; recovery";
-                        foreach (var line in recovery.Value)
-                            yield return line;
-                        yield return "";
-                    }
-
                     long current_block = 0;
                     if (source.HasValue)
                     {
-                        foreach (var line in source.Value)
+                        if (source_blocks.HasValue && source_blocks.Value > 0)
                         {
-                            if (current_block++ < actual_start_block)
-                                continue;
-                            if (actual_source_blocks > 0)
+                            foreach (var line in source.Value)
                             {
-                                var progress = (double)current_block / actual_source_blocks * 100;
-                                report_progress(Math.Ceiling(progress));
+                                var progress = (double)current_block++ / source_blocks.Value * 100;
+                                if (progress - (int)progress < 0.001)
+                                    report_progress((int)progress);
+                                yield return line;
                             }
-                            yield return line;
+                        }
+                        else
+                        {
+                            foreach (var line in source.Value)
+                                yield return line;
                         }
                     }
 
@@ -786,27 +722,11 @@ namespace Flux.ViewModels
         }
         public override string[] GetLowerPlateGCode()
         {
-            return new[] { "M98 P\"/macros/Lower Plate\"" };
+            return new[] { "M98 P\"/macros/lower_plate\"" };
         }
         public override string[] GetRaisePlateGCode()
         {
-            return new[] { "M98 P\"/macros/Raise Plate\"" };
-        }
-        public override string[] GetResetPrinterGCode()
-        {
-            // TODO
-            return new[]
-            {
-                "M98 P\"/macros/Lower Plate\"",
-                "M98 P\"/sys/global/write_queue_pos.g\" S-1",
-                "M98 P\"/sys/global/write_hold_pp.g\" S\"\"",
-                "M98 P\"/sys/global/write_hold_tool.g\" S-1",
-                "M98 P\"/sys/global/write_hold_blk_num.g\" S0",
-                "M98 P\"/sys/global/write_hold_temp.g\" T0 S0",
-                "M98 P\"/sys/global/write_hold_temp.g\" T1 S0",
-                "M98 P\"/sys/global/write_hold_temp.g\" T2 S0",
-                "M98 P\"/sys/global/write_hold_temp.g\" T3 S0",
-            };
+            return new[] { "M98 P\"/macros/raise_plate\"" };
         }
         public override string[] GetSelectToolGCode(ushort position)
         {
@@ -877,6 +797,27 @@ namespace Flux.ViewModels
             {
                 return false;
             }
+        }
+
+        public override string[] GetSetToolOffsetGCode(ushort position, double x, double y, double z)
+        {
+            return new[]
+            {
+                $"G10 P{position} X{{{x * -1}}}",
+                $"G10 P{position} Y{{{y * -1}}}",
+                $"G10 P{position} Z{{{z * -1}}}",
+            };
+        }
+
+        public override async Task<bool> CancelPrintAsync(bool hard_cancel)
+        {
+            // TODO
+            var cts = new CancellationTokenSource(TimeSpan.FromMinutes(1));
+            return await ExecuteParamacroAsync(new []
+            {
+                "M108", "M25", "M0",
+                "M98 P\"/macros/cancel_print\"",
+            }, true, cts.Token);
         }
     }
 }

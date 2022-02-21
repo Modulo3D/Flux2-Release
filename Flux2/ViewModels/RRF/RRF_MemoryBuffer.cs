@@ -6,6 +6,7 @@ using ReactiveUI;
 using RestSharp;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
@@ -18,11 +19,9 @@ namespace Flux.ViewModels
     public interface IRRF_MemoryReader : IReactiveObject, IDisposable
     {
         string Name { get; }
-        bool Processed { get; }
         TimeSpan Period { get; }
         TimeSpan Timeout { get; }
         bool HasMemoryRead { get; }
-        DateTime Scheduled { get; }
         RRF_Connection Connection { get; }
         IRRF_RequestPriority Priority { get; }
 
@@ -36,26 +35,14 @@ namespace Flux.ViewModels
         public string Request { get; }
         public TimeSpan Period { get; }
         public TimeSpan Timeout { get; }
-        public Action<RRF_Response> MemoryRead { get; }
+        public Stopwatch Stopwatch { get; }
         public IRRF_RequestPriority Priority { get; }
+        public Action<RRF_Response> MemoryRead { get; }
+        public bool Scheduled { get; private set; }
         public CancellationTokenSource CTS { get; private set; }
         public CancellationTokenRegistration CTR { get; private set; }
 
-        private bool _Processed;
-        public bool Processed
-        {
-            get => _Processed;
-            private set => this.RaiseAndSetIfChanged(ref _Processed, value);
-        }
-
-        private DateTime _Scheduled;
-
         public RRF_Connection Connection { get; }
-        public DateTime Scheduled
-        {
-            get => _Scheduled;
-            private set => this.RaiseAndSetIfChanged(ref _Scheduled, value);
-        }
 
         private bool _HasMemoryRead;
         public bool HasMemoryRead
@@ -68,40 +55,46 @@ namespace Flux.ViewModels
         {
             Name = name;
             Period = period;
-            Processed = true;
             Timeout = timeout;
             Request = request;
+            Scheduled = false;
             Priority = priority;
             Connection = connection;
             MemoryRead = memory_read;
-            Scheduled = DateTime.MinValue;
+            Stopwatch = Stopwatch.StartNew();
         }
 
         public void TrySchedule()
         {
-            if (!Processed)
-                return;
-            if (DateTime.Now - Scheduled < Period)
+            if (Scheduled || Stopwatch.Elapsed < Period)
                 return;
 
-            Processed = false;
-            Scheduled = DateTime.Now;
+            Scheduled = true;
 
             CTR.Dispose();
             CTS?.Dispose();
             CTS = new CancellationTokenSource(Timeout);
-            CTR = CTS.Token.Register(() => Processed = true);
+            CTR = CTS.Token.Register(() =>
+            {
+                Scheduled = false;
+                Stopwatch.Restart();
+            });
 
             Connection.PostRequest(
                 new RestRequest(Request, Method.Get),
                 Priority,
+                CTS?.Token ?? CancellationToken.None,
                 response =>
                 {
-                    Processed = true;
-                    HasMemoryRead = true;
                     if (response.HasValue)
                         MemoryRead?.Invoke(response.Value);
-                }, CTS?.Token ?? CancellationToken.None);
+
+                    Scheduled = false;
+                    HasMemoryRead = true;
+                    Stopwatch.Restart();
+
+                });
+
         }
         public void ResetScheduling()
         {
@@ -118,9 +111,9 @@ namespace Flux.ViewModels
                 {
                     CTR.Dispose();
                     CTS?.Dispose();
-                    Processed = true;
+                    Stopwatch.Restart();
+                    Scheduled = false;
                     HasMemoryRead = false;
-                    Scheduled = DateTime.MinValue;
                 }
                 catch
                 {
@@ -152,10 +145,10 @@ namespace Flux.ViewModels
             RRFObjectModel = new RRF_ObjectModel();
             GlobalChanged = RRFObjectModel.WhenAnyValue(m => m.Global);
 
-            var ultra_fast = TimeSpan.FromMilliseconds(500);
-            var fast = TimeSpan.FromMilliseconds(750);
-            var medium = TimeSpan.FromMilliseconds(1000);
-            var slow = TimeSpan.FromMilliseconds(1500);
+            var ultra_fast = TimeSpan.FromMilliseconds(100);
+            var fast = TimeSpan.FromMilliseconds(250);
+            var medium = TimeSpan.FromMilliseconds(500);
+            var slow = TimeSpan.FromMilliseconds(1000);
             var timeout = TimeSpan.FromMilliseconds(2000);
 
             MemoryReaders = new SourceCache<IRRF_MemoryReader, string>(f => f.Name);
@@ -170,18 +163,18 @@ namespace Flux.ViewModels
             AddModelReader<JObject>("queue", fast, timeout, IRRF_RequestPriority.High, g => RRFObjectModel.Global = g.ToObject<Dictionary<string, object>>());
 
             AddModelReader<RRF_ObjectModelMove>("move", medium, timeout, IRRF_RequestPriority.Medium, m => RRFObjectModel.Move = m);
+            AddModelReader<RRF_ObjectModelHeat>("heat", medium, timeout, IRRF_RequestPriority.Medium, h => RRFObjectModel.Heat = h);
             AddModelReader<List<RRF_ObjectModelInput>>("inputs", medium, timeout, IRRF_RequestPriority.Medium, i => RRFObjectModel.Inputs = i);
 
             AddModelReader<RRF_ObjectModelSeqs>("seqs", slow, timeout, IRRF_RequestPriority.Medium, s => RRFObjectModel.Seqs = s);
-            AddModelReader<RRF_ObjectModelHeat>("heat", slow, timeout, IRRF_RequestPriority.Medium, h => RRFObjectModel.Heat = h);
             AddModelReader<List<RRF_ObjectModelFan>>("fans", slow, timeout, IRRF_RequestPriority.Medium, f => RRFObjectModel.Fans = f);
             AddModelReader<List<RRF_ObjectModelBoard>>("boards", slow, timeout, IRRF_RequestPriority.Medium, b => RRFObjectModel.Boards = b);
 
             //AddModelReader<List<RRF_ObjectModelSpindle>>("spindles", slow, timeout, IRRF_RequestPriority.High, s => RRFObjectModel.Spindles = s);
 
             // File System
-            AddFileSytemReader("gcodes/queue", medium, timeout, IRRF_RequestPriority.Medium, f => RRFObjectModel.Queue = f);
-            AddFileSytemReader("gcodes/storage", medium, timeout, IRRF_RequestPriority.Medium, f => RRFObjectModel.Storage = f);
+            AddFileSytemReader("gcodes/queue", medium, timeout, IRRF_RequestPriority.High, f => RRFObjectModel.Queue = f);
+            AddFileSytemReader("gcodes/storage", medium, timeout, IRRF_RequestPriority.High, f => RRFObjectModel.Storage = f);
 
             _HasFullMemoryRead = MemoryReaders.Connect()
                 .TrueForAll(f => f.WhenAnyValue(f => f.HasMemoryRead), r => r)

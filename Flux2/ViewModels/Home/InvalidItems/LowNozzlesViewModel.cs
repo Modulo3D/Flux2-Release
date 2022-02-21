@@ -21,15 +21,20 @@ namespace Flux.ViewModels
         public LowNozzleViewModel(FeederEvaluator eval) : base($"{typeof(LowNozzleViewModel).GetRemoteControlName()}??{eval.Feeder.Position}", eval)
         {
             _InvalidItemBrush = Observable.CombineLatest(
-                eval.ToolNozzle.WhenAnyValue(m => m.CurrentWeight).ValueOr(() => 0),
-                eval.ToolNozzle.WhenAnyValue(m => m.ExpectedWeight).ValueOr(() => 0),
+                eval.ToolNozzle.WhenAnyValue(m => m.CurrentWeight),
+                eval.ToolNozzle.WhenAnyValue(m => m.ExpectedWeight),
                 (current_weight, expected_weight) =>
                 {
-                    var missing_weight = expected_weight - current_weight;
+                    if (!current_weight.HasValue || !expected_weight.HasValue)
+                        return FluxColors.Error;
+                    
+                    var missing_weight = expected_weight.Value - current_weight.Value;
                     if (missing_weight <= 0)
                         return FluxColors.Active;
+                    
                     if (missing_weight < 1000)
                         return FluxColors.Error;
+                    
                     return FluxColors.Warning;
                 })
                 .ToProperty(this, v => v.InvalidItemBrush)
