@@ -215,6 +215,11 @@ namespace Flux.ViewModels
         {
             throw new NotImplementedException();
         }
+
+        public override Task<bool> RenameFileAsync(string folder, string old_filename, string new_filename, bool wait, CancellationToken ct = default)
+        {
+            throw new NotImplementedException();
+        }
     }
     internal class Dummy_MemoryBuffer : FLUX_MemoryBuffer
     {

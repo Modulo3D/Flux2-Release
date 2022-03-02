@@ -314,18 +314,63 @@ namespace Flux.ViewModels
                 .StartWithEmpty()
                 .DistinctUntilChanged();
 
+            bool distinct_queue(Dictionary<QueuePosition, Guid> d1, Dictionary<QueuePosition, Guid> d2)
+            {
+                try
+                {
+                    return string.Join(";", d1.Select(kvp => $"{kvp.Key}:{kvp.Value}")) ==
+                        string.Join(";", d2.Select(kvp => $"{kvp.Key}:{kvp.Value}"));
+                }
+                catch (Exception ex)
+                {
+                    return false;
+                }
+            }
+
             var mcode_queue = Flux.ConnectionProvider
                 .ObserveVariable(c => c.QUEUE)
-                .StartWithEmpty()
-                .DistinctUntilChanged();
+                .ValueOr(() => new Dictionary<QueuePosition, Guid>())
+                .StartWith(new Dictionary<QueuePosition, Guid>())
+                .DistinctUntilChanged(distinct_queue);
 
-            var mcodes = Flux.MCodes.AvaiableMCodes
-                .Connect()
-                .QueryWhenChanged();
+            bool distinct_mcodes(Dictionary<Guid, IFluxMCodeStorageViewModel> d1, Dictionary<Guid, IFluxMCodeStorageViewModel> d2)
+            {
+                try
+                {
+                    return string.Join(";", d1.Select(kvp => $"{kvp.Key}:{kvp.Value}")) ==
+                        string.Join(";", d2.Select(kvp => $"{kvp.Key}:{kvp.Value}"));
+                }
+                catch (Exception ex)
+                {
+                    return false;
+                }
+            }
+
+            var mcodes = Flux.MCodes.AvaiableMCodes.Connect()
+                .QueryWhenChanged()
+                .Select(q => q.KeyValues.ToDictionary(kvp => kvp.Key, kvp => kvp.Value))
+                .StartWith(new Dictionary<Guid, IFluxMCodeStorageViewModel>())
+                .DistinctUntilChanged(distinct_mcodes);
+
+            bool distinct_odometers(Dictionary<QueueKey, OdometerReading> d1, Dictionary<QueueKey, OdometerReading> d2)
+            {
+                try
+                {
+                    return string.Join(";", d1.Select(kvp => $"{kvp.Key}:{kvp.Value.Line}")) ==
+                        string.Join(";", d2.Select(kvp => $"{kvp.Key}:{kvp.Value.Line}"));
+                }
+                catch (Exception ex)
+                {
+                    return false;
+                }
+            }
 
             var odometer_readings = Flux.Feeders.OdometerManager.Readings.Connect()
-                .QueryWhenChanged(q => q.Items.ToDictionary(i => i.Key))
-                .StartWith(new Dictionary<QueueKey, OdometerReading>());
+                .AutoRefresh(r => r.Line)
+                .QueryWhenChanged()
+                .Select(q => q.Items.ToDictionary(i => i.Key))
+                .StartWith(new Dictionary<QueueKey, OdometerReading>())
+                .DistinctUntilChanged(distinct_odometers);
 
             var extrusion_set_queue = Observable.CombineLatest(
                 queue_pos,
@@ -566,7 +611,7 @@ namespace Flux.ViewModels
         }
 
         // Progress and extrusion
-        private PrintProgress GetPrintProgress(Optional<QueuePosition> queue_pos, Optional<Dictionary<QueuePosition, Guid>> queue, PrintingEvaluation evaluation, LineNumber line_nr, Dictionary<QueueKey, OdometerReading> odometer_readings)
+        private PrintProgress GetPrintProgress(Optional<QueuePosition> queue_pos, Dictionary<QueuePosition, Guid> queue, PrintingEvaluation evaluation, LineNumber line_nr, Dictionary<QueueKey, OdometerReading> odometer_readings)
         {
             var selected_mcode = evaluation.SelectedMCode;
             // update job remaining time
@@ -583,8 +628,6 @@ namespace Flux.ViewModels
             else 
             {
                 if (!queue_pos.HasValue)
-                    return default_value;
-                if (!queue.HasValue)
                     return default_value;
 
                 var queue_key = new QueueKey(selected_mcode.Value.MCodeGuid, queue_pos.Value);
@@ -612,17 +655,15 @@ namespace Flux.ViewModels
                 yield return evaluator;
             }
         }
-        private Optional<Dictionary<QueueKey, ExtrusionSet>> GetExtrusionSetQueue(Optional<QueuePosition> queue_pos, Optional<Dictionary<QueuePosition, Guid>> queue, Dictionary<QueueKey, OdometerReading> odometer_readings, IQuery<IFluxMCodeStorageViewModel, Guid> mcodes)
+        private Optional<Dictionary<QueueKey, ExtrusionSet>> GetExtrusionSetQueue(Optional<QueuePosition> queue_pos, Dictionary<QueuePosition, Guid> queue, Dictionary<QueueKey, OdometerReading> odometer_readings, Dictionary<Guid, IFluxMCodeStorageViewModel> mcodes)
         {
             try
             {
                 if (!queue_pos.HasValue)
                     return default;
-                if (!queue.HasValue)
-                    return default;
 
                 var extrusion_set_queue = new Dictionary<QueueKey, ExtrusionSet>();
-                foreach (var mcode_queue in queue.Value)
+                foreach (var mcode_queue in queue)
                 {
                     var queue_key = new QueueKey(mcode_queue.Value, mcode_queue.Key);
                     if (mcode_queue.Key < queue_pos.Value)

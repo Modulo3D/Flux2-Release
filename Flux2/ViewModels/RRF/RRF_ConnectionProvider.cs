@@ -6,6 +6,7 @@ using RestSharp;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Reactive.Linq;
 using System.Text;
 using System.Threading;
@@ -48,13 +49,6 @@ namespace Flux.ViewModels
         public FluxViewModel Flux { get; }
         public override IFlux IFlux => Flux;
 
-        private int _ResponseTimeout;
-        public int ResponseTimeout 
-        {
-            get => _ResponseTimeout; 
-            set => this.RaiseAndSetIfChanged(ref _ResponseTimeout, value);
-        }
-
         public RRF_ConnectionProvider(FluxViewModel flux)
         {
             Flux = flux;
@@ -88,7 +82,6 @@ namespace Flux.ViewModels
             var debug_t = DateTime.Now;
             var status_t = DateTime.Now;
             var network_t = DateTime.Now;
-            var memory_buffer_t = DateTime.Now;
 
             StartConnection();
             DisposableTask.Start(async time =>
@@ -109,6 +102,7 @@ namespace Flux.ViewModels
                         network_t = DateTime.Now;
                     }
 
+                    // TODO
                     /*if (DateTime.Now - debug_t >= TimeSpan.FromSeconds(5))
                     {
                         Flux.MCodes.FindDrive();
@@ -118,9 +112,6 @@ namespace Flux.ViewModels
                             await WriteVariableAsync(m => m.DEBUG, debug);
                         debug_t = DateTime.Now;
                     }*/
-
-                    if (Connection.HasValue && ConnectionPhase.HasValue && ConnectionPhase.Value > RRF_ConnectionPhase.INITIALIZING_VARIABLES)
-                        Connection.Value.MemoryBuffer.UpdateBuffer();
                 }
                 catch
                 {
@@ -143,7 +134,6 @@ namespace Flux.ViewModels
                 {
 
                     CTS?.Dispose();
-                    ResponseTimeout = 0;
                     ConnectionPhase = RRF_ConnectionPhase.START_PHASE;
                 }
                 catch
@@ -155,11 +145,8 @@ namespace Flux.ViewModels
         {
             try
             {
-                if (!ConnectionPhase.HasValue || ResponseTimeout > 10)
-                {
-                    ResponseTimeout = 0;
+                if (!ConnectionPhase.HasValue)
                     ConnectionPhase = RRF_ConnectionPhase.START_PHASE;
-                }
 
                 switch (ConnectionPhase.Value)
                 {
@@ -198,16 +185,16 @@ namespace Flux.ViewModels
                     case RRF_ConnectionPhase.DISCONNECTING_CLIENT:
                         await CreateTimeoutAsync(TimeSpan.FromSeconds(5), async ct =>
                         {
-                            var disconnected = await Connection.Value.PutRequestAsync(new RestRequest("rr_disconnect", Method.Get), IRRF_RequestPriority.Immediate, ct: ct);
-                            ConnectionPhase = disconnected ? RRF_ConnectionPhase.CONNECTING_CLIENT : RRF_ConnectionPhase.START_PHASE;
+                            var disconnected = await Connection.Value.PostRequestAsync(new RRF_Request("rr_disconnect", Method.Get, ct));
+                            ConnectionPhase = disconnected.HasValue && disconnected.Value.Response.StatusCode == HttpStatusCode.OK ? RRF_ConnectionPhase.CONNECTING_CLIENT : RRF_ConnectionPhase.START_PHASE;
                         });
                         break;
 
                     case RRF_ConnectionPhase.CONNECTING_CLIENT:
                         await CreateTimeoutAsync(TimeSpan.FromSeconds(5), async ct =>
                         {
-                            var connected = await Connection.Value.PutRequestAsync(new RestRequest($"rr_connect?password=\"\"&time={DateTime.UtcNow:O}", Method.Get), IRRF_RequestPriority.Immediate, ct: ct);
-                            ConnectionPhase = connected ? RRF_ConnectionPhase.READING_STATUS : RRF_ConnectionPhase.START_PHASE;
+                            var connected = await Connection.Value.PostRequestAsync(new RRF_Request($"rr_connect?password=\"\"&time={DateTime.UtcNow:O}", Method.Get, ct));
+                            ConnectionPhase = connected.HasValue && connected.Value.Response.StatusCode == HttpStatusCode.OK ? RRF_ConnectionPhase.READING_STATUS : RRF_ConnectionPhase.START_PHASE;
                         });
                         break;
 
@@ -215,7 +202,7 @@ namespace Flux.ViewModels
                         Flux.Messages.Messages.Clear();
                         await CreateTimeoutAsync(TimeSpan.FromSeconds(5), async ct =>
                         {
-                            var state = await Connection.Value.MemoryBuffer.GetModelDataAsync<RRF_ObjectModelState>("state", IRRF_RequestPriority.Immediate, ct);
+                            var state = await Connection.Value.MemoryBuffer.GetModelDataAsync<RRF_ObjectModelState>("state", ct);
                             if (!state.HasValue)
                                 return;
                             var status = state.Value.GetProcessStatus();
@@ -229,7 +216,7 @@ namespace Flux.ViewModels
                         break;
 
                     case RRF_ConnectionPhase.CREATING_VARIABLES:
-                        await CreateTimeoutAsync(TimeSpan.FromSeconds(10), async ct =>
+                        await CreateTimeoutAsync(TimeSpan.FromSeconds(30), async ct =>
                         {
                             var result = await Connection.Value.CreateVariablesAsync(ct);
                             if (result)
@@ -238,7 +225,7 @@ namespace Flux.ViewModels
                         break;
 
                     case RRF_ConnectionPhase.INITIALIZING_VARIABLES:
-                        await CreateTimeoutAsync(TimeSpan.FromSeconds(10), async ct =>
+                        await CreateTimeoutAsync(TimeSpan.FromSeconds(30), async ct =>
                         {
                             var result = await Connection.Value.InitializeVariablesAsync(ct);
                             if (result)
@@ -308,7 +295,7 @@ namespace Flux.ViewModels
                 $"G1 U300 F1500",
                 $"G28 U0",
                 $"G1 Z280 F1000",
-                $"M98 P\"/sys/global/write_queue_pos.g\" S{{global.queue_pos + 1}}",
+                $"set global.queue_pos = global.queue_pos + 1",
                 $"if (!exists(var.next_job))",
                 $"    var next_job = \"queue/inner/start_\"^floor(global.queue_pos)^\".g\"",
                 $"    M32 {{var.next_job}}",

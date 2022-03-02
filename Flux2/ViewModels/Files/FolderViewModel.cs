@@ -13,7 +13,7 @@ namespace Flux.ViewModels
         [RemoteCommand]
         public ReactiveCommand<Unit, Unit> OpenFolderCommand { get; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> DeleteFolderCommand { get; }
+        public ReactiveCommand<Unit, Unit> ModifyFolderCommand { get; }
 
         public FolderViewModel(FilesViewModel files, Optional<FolderViewModel> folder, FLUX_File file) : base(files, folder, file)
         {
@@ -23,19 +23,8 @@ namespace Flux.ViewModels
             })
             .DisposeWith(Disposables);
 
-            DeleteFolderCommand = ReactiveCommand.CreateFromTask(async () =>
-            {
-                var dialog_result = await Files.Flux.ShowConfirmDialogAsync("Cancellare la cartella?", $"La cartella {FSPath}/{FSName} non potrà essere recuperata");
-                if (dialog_result != ContentDialogResult.Primary)
-                    return;
-
-                var delete_folder_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                var delete_result = await Files.Flux.ConnectionProvider.DeleteFileAsync(FSPath, FSName, true, delete_folder_cts.Token);
-
-                if (delete_result)
-                    Files.UpdateFolder.OnNext(Unit.Default);
-            })
-            .DisposeWith(Disposables);
+            ModifyFolderCommand = ReactiveCommand.CreateFromTask(() => files.ModifyFSAsync(this))
+                .DisposeWith(Disposables);
         }
     }
 }

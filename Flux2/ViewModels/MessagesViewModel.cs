@@ -889,7 +889,7 @@ namespace Flux.ViewModels
         }
         public void LogException<TCaller>(TCaller caller, Exception ex, [CallerLineNumber] int lineNumber = 0, [CallerMemberName] string callerMember = null)
         {
-            LogMessage($"Exception from {typeof(TCaller).Name}.{callerMember} at line: {lineNumber}", ex.ToString(), MessageLevel.ERROR, DateTime.Now, 16001);
+            LogMessage($"Exception from {typeof(TCaller).Name}.{callerMember} at line: {lineNumber}", ex.Message, MessageLevel.ERROR, DateTime.Now, 16001);
         }
         public (PLCProcessDataResult result, Optional<OSAI_Process> data) LogMessage(PLCProcessDataResult process_result, Optional<OSAI_Process> process_status)
         {

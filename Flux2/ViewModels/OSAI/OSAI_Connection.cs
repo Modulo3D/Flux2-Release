@@ -1239,5 +1239,10 @@ namespace Flux.ViewModels
             var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             return await ExecuteParamacroAsync(new[] { "G508" }, true, cts.Token);
         }
+
+        public override Task<bool> RenameFileAsync(string folder, string old_filename, string new_filename, bool wait, CancellationToken ct = default)
+        {
+            throw new NotImplementedException();
+        }
     }
 }

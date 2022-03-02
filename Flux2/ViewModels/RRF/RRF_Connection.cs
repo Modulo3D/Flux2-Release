@@ -20,37 +20,23 @@ using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
-    public enum IRRF_RequestPriority
-    {
-        Immediate = 0,
-        High = 1,
-        Medium = 2,
-        Low = 3
-    }
-
     public struct RRF_Request
     {
-        public int Id { get; }
         public RestRequest Request { get; }
         public CancellationToken CancellationToken { get; }
-        public Action<Optional<RRF_Response>> Action { get; }
-        public RRF_Request(RestRequest request, int id, Action<Optional<RRF_Response>> action = default, CancellationToken ct = default)
+        public RRF_Request(string request, Method method, CancellationToken ct = default)
         {
-            Id = id;
-            Action = action;
-            Request = request;
             CancellationToken = ct;
+            Request = new RestRequest(request, method);
         }
-        public override string ToString() => $"{Id} - {Request.Method}:{Request.Resource}/{string.Join("?", Request.Parameters.Select(p => $"{p.Name}={p.Value}"))}";
+        public override string ToString() => $"{nameof(RRF_Request)} Method:{Request.Method} Resource:{Request.Resource}?{string.Join("&", Request.Parameters.Select(p => $"{p.Name}={p.Value}"))}";
     }
 
     public struct RRF_Response
     {
-        public int Id { get; }
         public RestResponse Response { get; }
-        public RRF_Response(int id, RestResponse response)
+        public RRF_Response(RestResponse response)
         {
-            Id = id;
             Response = response;
         }
 
@@ -67,14 +53,14 @@ namespace Flux.ViewModels
         {
             if ((Response?.StatusCode ?? 0) != HttpStatusCode.OK)
                 return default;
-
             return JsonUtils.Deserialize<FLUX_FileList>(Response.Content);
         }
+
+        public override string ToString() => $"{nameof(RRF_Response)} Status:{Enum.GetName(typeof(HttpStatusCode), Response.StatusCode)}";
     }
 
     public class RRF_Connection : FLUX_Connection<RRF_VariableStore, RestClient, RRF_MemoryBuffer>
     {
-        private Random Random { get; }
         private RRF_MemoryBuffer _MemoryBuffer;
         public override RRF_MemoryBuffer MemoryBuffer
         {
@@ -85,12 +71,6 @@ namespace Flux.ViewModels
                 return _MemoryBuffer;
             }
         }
-
-        public Subject<RRF_Request> GCodeRequestSubject { get; }
-        public Subject<RRF_Request> ImmediateRequestSubject { get; }
-        public Subject<RRF_Request> FastRequestSubject { get; }
-        public Subject<RRF_Request> MediumRequestSubject { get; }
-        public Subject<RRF_Request> SlowRequestSubject { get; }
 
         public override string InnerQueuePath => "gcodes/queue/inner";
         public override string StoragePath => "gcodes/storage";
@@ -103,54 +83,36 @@ namespace Flux.ViewModels
         // FLUX_FolderType.System => "sys",
         // FLUX_FolderType.Global => "sys/global",
 
-        private ObservableAsPropertyHelper<Optional<RRF_Response>> _ProcessedRequest;
-        public Optional<RRF_Response> ProcessedRequest => _ProcessedRequest.Value;
-
         public FluxViewModel Flux { get; }
+
         public RRF_Connection(FluxViewModel flux, RRF_VariableStore variable_store) : base(variable_store)
         {
             Flux = flux;
-            Random = new Random();
-
-            ImmediateRequestSubject = new Subject<RRF_Request>().DisposeWith(Disposables);
-            MediumRequestSubject = new Subject<RRF_Request>().DisposeWith(Disposables);
-            GCodeRequestSubject = new Subject<RRF_Request>().DisposeWith(Disposables);
-            FastRequestSubject = new Subject<RRF_Request>().DisposeWith(Disposables);
-            SlowRequestSubject = new Subject<RRF_Request>().DisposeWith(Disposables);
-
-            _ProcessedRequest = GCodeRequestSubject
-                .WithInterval(TimeSpan.FromSeconds(0.3))
-                .MergeWithLowPriorityStream(ImmediateRequestSubject)
-                .MergeWithLowPriorityStream(FastRequestSubject)
-                .MergeWithLowPriorityStream(MediumRequestSubject)
-                .MergeWithLowPriorityStream(SlowRequestSubject)
-                .Select(r => Observable.FromAsync(() => ProcessRequestAsync(r)))
-                .Merge(1)
-                .ToProperty(this, v => v.ProcessedRequest)
-                .DisposeWith(Disposables);
         }
 
-        private async Task<Optional<RRF_Response>> ProcessRequestAsync(RRF_Request request)
+        public async Task<Optional<RRF_Response>> PostRequestAsync(RRF_Request request)
         {
-            Optional<RRF_Response> rrf_response = default;
             try
             {
-                if (Client.HasValue && !request.CancellationToken.IsCancellationRequested)
-                {
-                    var response = await Client.Value.ExecuteAsync(
-                        request.Request,
-                        request.CancellationToken);
-                    rrf_response = new RRF_Response(request.Id, response);
-                }
+                if (!Client.HasValue)
+                    return default;
+
+                if (request.CancellationToken.IsCancellationRequested)
+                    return default;
+                
+                var response = await Client.Value.ExecuteAsync(
+                    request.Request,
+                    request.CancellationToken);
+
+                if(response.StatusCode != HttpStatusCode.OK)
+                    Console.WriteLine($"{request}: {Enum.GetName(typeof(HttpStatusCode), response.StatusCode)}");
+
+                return new RRF_Response(response);
             }
             catch (Exception)
             {
+                return default;
             }
-            finally
-            {
-                request.Action?.Invoke(rrf_response);
-            }
-            return rrf_response;
         }
 
         public override Task<bool> CreateClientAsync(string address)
@@ -161,63 +123,87 @@ namespace Flux.ViewModels
 
         public async Task<bool> InitializeVariablesAsync(CancellationToken ct)
         {
-            var source = VariableStore.Variables.Values
-                .Where(v => v is IRRF_VariableBaseGlobalModel)
-                .Select(v => (IRRF_VariableBaseGlobalModel)v)
-                .Select(v => v.InitializeVariableString);
-            return await ExecuteParamacroAsync(source, false, ct);
-        }
-
-        public async Task<bool> CreateVariablesAsync(CancellationToken ct)
-        {
             var files = await ListFilesAsync(GlobalPath, ct);
             if (!files.HasValue)
                 return false;
 
-            foreach (var variable in VariableStore.Variables.Values)
+            var file_set = files.Value.Files.Select(f => f.Name).ToHashSet();
+            if (!file_set.Contains("initialize_variables.g"))
             {
-                if (variable is IRRF_VariableBaseGlobalModel global)
-                {
-                    if (files.Value.Files.Any(f => f.Name == global.CreateVariableName))
-                        continue;
+                var variables = VariableStore.Variables.Values
+                   .SelectMany(v => v switch
+                   {
+                       IFLUX_Array array => array.Variables.Items,
+                       IFLUX_Variable variable => new[] { variable },
+                       _ => throw new NotImplementedException()
+                   })
+                   .Where(v => v is IRRF_VariableGlobalModel global)
+                   .Select(v => (IRRF_VariableGlobalModel)v);
 
-                    var source = global.CreateVariableString.ToOptional();
-                    if (!await PutFileAsync(GlobalPath, global.CreateVariableName, ct, source))
-                        return false;
-                }
+                var source = variables
+                    .Select(v => v.LoadVariableMacro)
+                    .Select(m => $"M98 P\"/sys/global/{m}\"")
+                    .ToOptional();
+
+                if (!await PutFileAsync(c => ((RRF_Connection)c).GlobalPath, "initialize_variables.g", ct, source))
+                    return false;
             }
+
+            return await PostGCodeAsync("M98 P\"/sys/global/initialize_variables.g\"", ct);
+        }
+
+        public async Task<bool> CreateVariablesAsync(CancellationToken ct)
+        {
+            if (!Client.HasValue)
+                return false;
+
+            var files = await ListFilesAsync(GlobalPath, ct);
+            if (!files.HasValue)
+                return false;
+
+            var variables = VariableStore.Variables.Values
+                .SelectMany(v => v switch
+                {
+                    IFLUX_Array array => array.Variables.Items,
+                    IFLUX_Variable variable => new[] { variable },
+                    _ => throw new NotImplementedException()
+                })
+                .Where(v => v is IRRF_VariableGlobalModel global)
+                .Select(v => (IRRF_VariableGlobalModel)v);
+
+            var file_set = files.Value.Files.Select(f => f.Name).ToHashSet();
+            var files_to_create = variables
+                .Where(v => !file_set.Contains(v.LoadVariableMacro))
+                .Select(v => v);
+            
+            if (files_to_create.Any())
+            {
+                var advanced_mode = Flux.MCodes.OperatorUSB
+                    .ConvertOr(usb => usb.AdvancedSettings, () => false);
+                if (!advanced_mode)
+                    return false;
+                
+                var files_str = string.Join(Environment.NewLine, files_to_create);
+                var result = await Flux.ShowConfirmDialogAsync("Creare file di variabile?", files_str);
+
+                switch(result)
+                {
+                    case ContentDialogResult.Primary:
+                        foreach (var variable in variables)
+                            if (!file_set.Contains(variable.LoadVariableMacro))
+                                if (!await variable.InitializeVariableAsync())
+                                    return false;
+                        break;
+                    default:
+                        return false;
+                }    
+            }
+            
             return true;
         }
 
-        public Optional<Task<Optional<RRF_Response>>> WaitResponse(int id, CancellationToken ct)
-        {
-            try
-            {
-                if (ct == CancellationToken.None)
-                    return Optional<Task<Optional<RRF_Response>>>.None;
-
-                if (ct.IsCancellationRequested)
-                    return Task.FromResult(Optional<RRF_Response>.None);
-
-                return WaitUtils.WaitForOptionalAsync(
-                    this.WhenAnyValue(c => c.ProcessedRequest),
-                    is_valid, r => r, ct);
-            }
-            catch
-            {
-                return Optional<Task<Optional<RRF_Response>>>.None;
-            }
-
-            bool is_valid(RRF_Response response)
-            {
-                if (id != response.Id)
-                    return false;
-                return true;
-            }
-        }
-
         // GCODE
-        public async Task<bool> PostGCodeAsync(string paramacro, CancellationToken ct, bool wait = false, CancellationToken gcode_ct = default)
+        public async Task<bool> PostGCodeAsync(string gcode, CancellationToken ct, bool wait = false, CancellationToken gcode_ct = default)
         {
             try
             {
@@ -227,44 +213,17 @@ namespace Flux.ViewModels
                 if (!Client.HasValue)
                     return false;
 
-                var lenght = GetGCodeLenght(new[] { paramacro });
+                var lenght = GetGCodeLenght(new[] { gcode });
                 if (lenght >= 160)
                     return false;
 
-                if (string.IsNullOrEmpty(paramacro))
+                if (string.IsNullOrEmpty(gcode))
                     return true;
 
-                var resource = $"rr_gcode?gcode={paramacro}";
-                var request = new RestRequest(resource);
-                return await PostGCodeAsync(request, ct, wait, gcode_ct);
-            }
-            catch
-            {
-                return false;
-            }
-        }
-        public async Task<bool> PostGCodeAsync(RestRequest request, CancellationToken ct, bool wait = false, CancellationToken gcode_ct = default)
-        {
-            try
-            {
-                if (ct.IsCancellationRequested)
-                    return default;
-
-                var id = Random.Next();
-                var wait_response = WaitResponse(id, ct);
-
-                var rrf_request = new RRF_Request(request, id, ct: ct);
-                GCodeRequestSubject.OnNext(rrf_request);
-
-                if (wait_response.HasValue)
-                { 
-                    var response = await wait_response.Value;
-                    if (!response.HasValue)
-                    {
-                        ((RRF_ConnectionProvider)Flux.ConnectionProvider).ResponseTimeout++;
-                        return false;
-                    }
-                }
+                var rrf_request = new RRF_Request($"rr_gcode?gcode={gcode}", Method.Get, ct);
+                var rrf_response = await PostRequestAsync(rrf_request);
+                if (!rrf_response.HasValue)
+                    return false;
 
                 if (wait && gcode_ct != CancellationToken.None && !await WaitProcessStatusAsync(
                     status => status == FLUX_ProcessStatus.IDLE,
@@ -277,144 +236,8 @@ namespace Flux.ViewModels
             }
             catch
             {
-                return default;
-            }
-        }
-
-        public Optional<RRF_Request> PostGCode(string paramacro, CancellationToken ct, Action<Optional<RRF_Response>> action = default)
-        {
-            try
-            {
-                if (ct.IsCancellationRequested)
-                    return default;
-
-                if (!Client.HasValue)
-                    return default;
-
-                var lenght = GetGCodeLenght(new[] { paramacro });
-                if (lenght >= 160)
-                    return default;
-
-                if (string.IsNullOrEmpty(paramacro))
-                    return default;
-
-                var resource = $"rr_gcode?gcode={paramacro}";
-                var request = new RestRequest(resource);
-                return PostGCode(request, ct, action);
-            }
-            catch
-            {
-                return default;
-            }
-        }
-        public Optional<RRF_Request> PostGCode(RestRequest request, CancellationToken ct, Action<Optional<RRF_Response>> action = default)
-        {
-            try
-            {
-                if (ct.IsCancellationRequested)
-                    return default;
-
-                var id = Random.Next();
-
-                var rrf_request = new RRF_Request(request, id, action, ct);
-                GCodeRequestSubject.OnNext(rrf_request);
-
-                return rrf_request;
-            }
-            catch
-            {
-                return default;
-            }
-        }
-
-        // REQUEST
-        public async Task<Optional<RRF_Response>> PostRequestAsync(RestRequest request, IRRF_RequestPriority priority, CancellationToken ct)
-        {
-            try
-            {
-                if (ct.IsCancellationRequested)
-                    return default;
-
-                var id = Random.Next();
-                var wait_response = WaitResponse(id, ct);
-                var rrf_request = new RRF_Request(request, id, ct: ct);
-                switch (priority)
-                {
-                    case IRRF_RequestPriority.Immediate:
-                        ImmediateRequestSubject.OnNext(rrf_request);
-                        break;
-                    case IRRF_RequestPriority.High:
-                        FastRequestSubject.OnNext(rrf_request);
-                        break;
-                    case IRRF_RequestPriority.Medium:
-                        MediumRequestSubject.OnNext(rrf_request);
-                        break;
-                    case IRRF_RequestPriority.Low:
-                        SlowRequestSubject.OnNext(rrf_request);
-                        break;
-                    default:
-                        return default;
-                }
-                if (wait_response.HasValue)
-                { 
-                    var response = await wait_response.Value;
-                    if(!response.HasValue)
-                        ((RRF_ConnectionProvider)Flux.ConnectionProvider).ResponseTimeout++;
-                    return response;
-                }
-                return default;
-            }
-            catch
-            {
-                return default;
-            }
-        }
-
-        public Optional<RRF_Request> PostRequest(RestRequest request, IRRF_RequestPriority priority, CancellationToken ct, Action<Optional<RRF_Response>> action = default)
-        {
-            try
-            {
-                if (ct.IsCancellationRequested)
-                    return default;
-
-                var id = Random.Next();
-                var rrf_request = new RRF_Request(request, id, action, ct);
-                switch (priority)
-                {
-                    case IRRF_RequestPriority.Immediate:
-                        ImmediateRequestSubject.OnNext(rrf_request);
-                        break;
-                    case IRRF_RequestPriority.High:
-                        FastRequestSubject.OnNext(rrf_request);
-                        break;
-                    case IRRF_RequestPriority.Medium:
-                        MediumRequestSubject.OnNext(rrf_request);
-                        break;
-                    case IRRF_RequestPriority.Low:
-                        SlowRequestSubject.OnNext(rrf_request);
-                        break;
-                    default:
-                        return default;
-                }
-                return rrf_request;
-            }
-            catch
-            {
-                return default;
-            }
-        }
-
-        public Optional<bool> PutRequest(RestRequest request, IRRF_RequestPriority priority, CancellationToken ct, Action<Optional<RRF_Response>> action = default)
-        {
-            var rrf_request = PostRequest(request, priority, ct, action);
-            return rrf_request.HasValue;
-        }
-        public async Task<bool> PutRequestAsync(RestRequest request, IRRF_RequestPriority priority, CancellationToken ct)
-        {
-            var response = await PostRequestAsync(request, priority, ct);
-            if (!response.HasValue)
                 return false;
-            return response.Value.Response.StatusCode == HttpStatusCode.OK;
+            }
         }
 
         public override async Task<bool> ResetAsync()
@@ -489,6 +312,19 @@ namespace Flux.ViewModels
 
                 var request = new RestRequest($"rr_delete?name=0:/{path}");
                 var response = await Client.Value.ExecuteAsync(request, ct);
+
+                if (wait)
+                {
+                    var file_system = Observable.Interval(TimeSpan.FromSeconds(0.1))
+                        .Select(_ => Observable.FromAsync(() => ListFilesAsync(folder, ct)))
+                        .Merge(1);
+
+                    return await WaitUtils.WaitForOptionalAsync(
+                        file_system,
+                        f => !f.Files.Any(f => f.Name == filename),
+                        ct);
+                }
+
                 return response.ResponseStatus == ResponseStatus.Completed;
             }
             catch
@@ -499,7 +335,7 @@ namespace Flux.ViewModels
         public override async Task<bool> HoldAsync()
         {
             var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            return await ExecuteParamacroAsync(new[] { "M98 P\"/sys/global/write_req_hold.g\" Strue", "M108", "M25", "M0" }, true, cts.Token);
+            return await ExecuteParamacroAsync(new[] { "M108", "M25", "M0" }, true, cts.Token);
         }
         public override async Task<Optional<string>> DownloadFileAsync(string folder, string filename, CancellationToken ct)
         {
@@ -534,7 +370,7 @@ namespace Flux.ViewModels
                     return false;
 
                 var selected_pp = Observable.Timer(TimeSpan.Zero, TimeSpan.FromSeconds(5))
-                    .Select(_ => Observable.FromAsync(() => MemoryBuffer.GetModelDataAsync<RRF_ObjectModelJob>("job", IRRF_RequestPriority.Immediate, ct)))
+                    .Select(_ => Observable.FromAsync(() => MemoryBuffer.GetModelDataAsync<RRF_ObjectModelJob>("job", ct)))
                     .Merge(1)
                     .Convert(j => j.File.HasValue ? (j.File.Value.FileName.HasValue ? j.File.Value.FileName : j.LastFileName) : j.LastFileName);
 
@@ -551,10 +387,7 @@ namespace Flux.ViewModels
         {
             try
             {
-                var response = await PostRequestAsync(
-                    new RestRequest($"rr_filelist?dir={folder}", Method.Get),
-                    IRRF_RequestPriority.Immediate,
-                    ct);
+                var response = await PostRequestAsync(new RRF_Request($"rr_filelist?dir={folder}", Method.Get, ct));
                 return response.Convert(r => r.GetFileSystem());
             }
             catch
@@ -593,7 +426,13 @@ namespace Flux.ViewModels
                 client.DefaultRequestHeaders.Add("Connection", "Keep-Alive");
                 var response = await client.PostAsync($"rr_upload?name=0:/{folder}/{filename}&time={DateTime.Now:s}", content_stream, ct);
 
-                return response.StatusCode == HttpStatusCode.OK;
+                if (response.StatusCode != HttpStatusCode.OK)
+                {
+                    Flux.Messages.LogMessage("Errore durante l'upload del file", $"Stato: {Enum.GetName(typeof(HttpStatusCode), response.StatusCode)}", MessageLevel.ERROR, 0);
+                    return false;
+                }
+
+                return true;
 
                 IEnumerable<string> get_full_source()
                 {
@@ -773,10 +612,10 @@ namespace Flux.ViewModels
                 return new[] { $"T{position}", gcode.Value, "T-1" };
             return new string[0];
         }
-        public override string[] GetRelativeXMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 X {distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
-        public override string[] GetRelativeYMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 Y {distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
-        public override string[] GetRelativeZMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 Z {distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
-        public override string[] GetRelativeEMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 A {distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
+        public override string[] GetRelativeXMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 X{distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
+        public override string[] GetRelativeYMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 Y{distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
+        public override string[] GetRelativeZMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 Z{distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
+        public override string[] GetRelativeEMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 E{distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
 
         public override async Task<bool> CreateFolderAsync(string folder, string name, CancellationToken ct)
         {
@@ -818,6 +657,42 @@ namespace Flux.ViewModels
                 "M108", "M25", "M0",
                 "M98 P\"/macros/cancel_print\"",
             }, true, cts.Token);
+        }
+
+        public override async Task<bool> RenameFileAsync(string folder, string old_filename, string new_filename, bool wait, CancellationToken ct = default)
+        {
+            try
+            {
+                if (ct.IsCancellationRequested)
+                    return false;
+
+                if (!Client.HasValue)
+                    return false;
+
+                var old_path = $"{folder}/{old_filename}".TrimStart('/');
+                var new_path = $"{folder}/{new_filename}".TrimStart('/');
+
+                var request = new RestRequest($"rr_move?old=0:/{old_path}&new=0:/{new_path}");
+                var response = await Client.Value.ExecuteAsync(request, ct);
+
+                if (wait)
+                {
+                    var file_system = Observable.Interval(TimeSpan.FromSeconds(0.1))
+                        .Select(_ => Observable.FromAsync(() => ListFilesAsync(folder, ct)))
+                        .Merge(1);
+
+                    return await WaitUtils.WaitForOptionalAsync(
+                        file_system, 
+                        f => f.Files.Any(f => f.Name == new_filename),
+                        ct);
+                }
+
+                return response.ResponseStatus == ResponseStatus.Completed;
+            }
+            catch
+            {
+                return false;
+            }
         }
     }
 }

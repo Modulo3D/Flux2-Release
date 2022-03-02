@@ -315,6 +315,7 @@ namespace Flux.ViewModels
 
             void report_progress_internal(double percentage)
             {
+                percentage = Math.Ceiling(percentage);
                 mcode.LoadPercentage = percentage;
                 report_progress?.Invoke(percentage);
             }
@@ -397,14 +398,8 @@ namespace Flux.ViewModels
                 return false;
 
             if (queue_pos.Value < 0)
-            {
                 if (!await ClearQueueAsync())
                     return false;
-
-                Flux.StatusProvider.StartWithLowMaterials = false;
-                if (!await Flux.ConnectionProvider.WriteVariableAsync(c => c.QUEUE_POS, (short)0))
-                    return false;
-            }
 
             var queue = await ReadMCodeQueueAsync();
             if (!queue.HasValue)
@@ -416,19 +411,22 @@ namespace Flux.ViewModels
             var queue_size = optional_queue_size
                 .ValueOr(() => (ushort)1);
 
-            var current_index = queue.Value.Keys.Count > 0 ? queue.Value.Keys.Max() : new QueuePosition(-1);
-            if (current_index > -1)
+            var queue_count = queue.Value.Keys.Count > 0 ? queue.Value.Keys.Max() : new QueuePosition(-1);
+            if (queue_count > -1)
             {
                 if (queue.Value.Count >= queue_size)
                 {
                     if (queue.Value.Count < 1)
                         return false;
-                    var last_mcode = QueuedMCodes.Lookup(current_index);
-                    if (!last_mcode.HasValue)
-                        return false;
-                    if (!await DeleteFromQueueAsync(last_mcode.Value))
-                        return false;
-                    current_index--;
+                    var last_mcode = QueuedMCodes.Lookup(queue_count);
+                    if (last_mcode.HasValue)
+                    { 
+                        if (!await DeleteFromQueueAsync(last_mcode.Value))
+                            return false;
+                    }
+                    queue_count--;
+                    if (queue_pos.Value > queue_count)
+                        queue_pos = queue_count;
                 }
             }
 
@@ -438,9 +436,17 @@ namespace Flux.ViewModels
             var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             if (!await Flux.ConnectionProvider.PutFileAsync(
                 c => c.QueuePath,
-                $"{current_index + 1};{mcode.Analyzer.MCode.MCodeGuid}",
+                $"{queue_count + 1};{mcode.Analyzer.MCode.MCodeGuid}",
                 cts.Token))
                 return false;
+
+
+            if (queue_pos.Value < 0)
+            {
+                Flux.StatusProvider.StartWithLowMaterials = false;
+                if (!await Flux.ConnectionProvider.WriteVariableAsync(c => c.QUEUE_POS, (short)0))
+                    return false;
+            }
 
             if (queue_size <= 1)
                 Flux.Navigator.NavigateHome();

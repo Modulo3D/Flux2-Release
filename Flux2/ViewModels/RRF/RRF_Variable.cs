@@ -4,6 +4,7 @@ using Modulo3DStandard;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Reactive.Linq;
 using System.Text;
@@ -254,70 +255,46 @@ namespace Flux.ViewModels
         }
     }
 
-    public interface IRRF_VariableBaseGlobalModel
+    public interface IRRF_VariableGlobalModel : IFLUX_Variable
     {
         bool Stored { get; }
         string Variable { get; }
-        string CreateVariableName { get; }
-        string InitializeVariableString { get; }
-        IEnumerable<string> CreateVariableString { get; }
-        Optional<RRF_Connection> Connection { get; }
+        string LoadVariableMacro { get; }
+        Task<bool> InitializeVariableAsync();
     }
 
-    public class RRF_VariableGlobalModel<TData> : FLUX_VariableGP<RRF_Connection, TData, TData>, IRRF_VariableBaseGlobalModel
+    public class RRF_VariableGlobalModel<TData> : FLUX_VariableGP<RRF_Connection, TData, TData>, IRRF_VariableGlobalModel
     {
         public bool Stored { get; }
         public string Variable { get; }
         public override string Group => "Global";
+        public string LoadVariableMacro => $"load_{Variable}.g";
 
-        public IEnumerable<string> CreateVariableString
-        {
-            get
-            {
-                if (Stored)
-                {
-                    yield return "; Read variables";
-                    yield return $"M98 P\"/sys/global/read_{Variable}.g\"";
-                }
-
-                yield return "";
-                yield return "; Get variable";
-                yield return $"var {Variable} = exists(param.S) ? param.S : (exists(global.{Variable}) ? global.{Variable} : {(typeof(TData) == typeof(string ) ? "\"\"" : sanitize_value(default(TData)))})";
-
-                yield return "";
-                yield return "; Set variable";
-
-                yield return $"if !exists(global.{Variable})";
-                yield return $"    global {Variable} = var.{Variable}";
-                yield return $"else";
-                yield return $"    set global.{Variable} = var.{Variable}";
-
-                if (Stored)
-                {
-                    yield return "";
-                    yield return "; Store variable";
-
-                    yield return $"echo >\"/sys/global/read_{Variable}.g\" \"if (!exists(global.{Variable}))\"";
-                    yield return $"echo >>\"/sys/global/read_{Variable}.g\" \"  global {Variable} = \"^{(typeof(TData) == typeof(string) ? "\"\"\"\"^" : "")}var.{Variable}{(typeof(TData) == typeof(string) ? "^\"\"\"\"" : "")}";
-                    yield return $"echo >>\"/sys/global/read_{Variable}.g\" \"else\"";
-                    yield return $"echo >>\"/sys/global/read_{Variable}.g\" \" set global.{Variable} = \"^{(typeof(TData) == typeof(string) ? "\"\"\"\"^" : "")}var.{Variable}{(typeof(TData) == typeof(string) ? "^\"\"\"\"" : "")}";
-                    yield return $"echo >>\"/sys/global/read_{Variable}.g\" \"\"";
-                    yield return $"";
-                }
-            }
-        }
-        public string CreateVariableName => $"write_{Variable}.g";
-        public string InitializeVariableString => $"M98 P\"/sys/global/write_{Variable}.g\"";
-
-        public RRF_VariableGlobalModel(IObservable<Optional<RRF_Connection>> connection, string variable, bool stored, Func<object, TData> convert_data = default)
+        public RRF_VariableGlobalModel(FluxViewModel flux, IObservable<Optional<RRF_Connection>> connection, string variable, bool stored, Func<object, TData> convert_data = default)
             : base(connection, variable, FluxMemReadPriority.DISABLED, write_func: async (c, v) =>
             {
-                var gcode = $"M98 P\"/sys/global/write_{variable}.g\" S{(typeof(TData) == typeof(string) ? $"\"{sanitize_value(v)}\"" : sanitize_value(v))}";
 
-                var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-                var result = await c.PostGCodeAsync(gcode, cts.Token);
+                var s_value = sanitize_value(v);
+                var write_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                if (!await c.PostGCodeAsync($"set global.{variable} = {s_value}", write_cts.Token))
+                {
+                    flux.Messages.LogMessage("Impossibile scrivere la variabile", "Errore durante l'esecuzione del gcode", MessageLevel.ERROR, 0);
+                    return false;
+                }
 
-                return result;
+                if (stored)
+                { 
+                    var load_var_macro = $"load_{variable}.g";
+                    var gcode = WriteVariableString(variable, v).ToOptional();
+                    var put_file_cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                    if (!await c.PutFileAsync(c => ((RRF_Connection)c).GlobalPath, load_var_macro, put_file_cts.Token, gcode))
+                    {
+                        flux.Messages.LogMessage("Impossibile salvare la variabile", "Errore durante la scrittura del file", MessageLevel.ERROR, 0);
+                        return false;
+                    }
+                }
+
+                return true;
             })
         {
             Stored = stored;
@@ -327,119 +304,110 @@ namespace Flux.ViewModels
                 .BindTo(this, v => v.Value);
         }
 
-        static string sanitize_value(TData value) => $"{value:0.00}".ToLower().Replace(',', '.');
+        static string sanitize_value(TData value) => typeof(TData) == typeof(string) ? $"\"{value}\"" : $"{value:0.00}".ToLower().Replace(',', '.');
         Optional<TData> get_data(Optional<Dictionary<string, object>> global, string variable, Func<object, TData> convert_data) => 
-            global.Convert(g => g.Lookup(variable)).Convert(v => convert_data != null ? convert_data(v) : (TData)Convert.ChangeType(v, typeof(TData)));
+            global.Convert(g => g.Lookup(variable)).Convert(v => convert_data != null ? convert_data(v) : (TData)Convert.ChangeType(v, typeof(TData), CultureInfo.InvariantCulture));
+
+        public async Task<bool> InitializeVariableAsync() 
+        {
+            var gcode = WriteVariableString(Variable, default).ToOptional();
+            var put_file_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            return await Connection.ConvertOrAsync(c => c.PutFileAsync(c => ((RRF_Connection)c).GlobalPath, LoadVariableMacro, put_file_cts.Token, gcode), () => false);
+        }
+
+        public static IEnumerable<string> WriteVariableString(string variable, TData value)
+        {
+            var s_value = sanitize_value(value);
+            yield return $"if (!exists(global.{variable}))";
+            yield return $"    global {variable} = {s_value}";
+            yield return $"else";
+            yield return $"    set global.{variable} = {s_value}";
+        }
     }
 
-    public class RRF_ArrayVariableGlobalModel<TData> : FLUX_VariableGP<RRF_Connection, TData, TData>
+    public class RRF_ArrayVariableGlobalModel<TData> : FLUX_VariableGP<RRF_Connection, TData, TData>, IRRF_VariableGlobalModel
     {
+        public bool Stored { get; }
+        public string Variable { get; }
         public override string Group => "Global";
-        public RRF_ArrayVariableGlobalModel(RRF_ArrayGlobalModel<TData> array, VariableUnit unit, Func<object, TData> convert_data = default)
+        public string LoadVariableMacro => $"load_{Variable}_{Unit.Value.Value.ToLower()}.g";
+
+        public RRF_ArrayVariableGlobalModel(FluxViewModel flux, IObservable<Optional<RRF_Connection>> connection, string variable, VariableUnit unit, bool stored, Func<object, TData> convert_data = default)
             : base(
-                  array.WhenAnyValue(a => a.Connection),
-                  $"{array.Name} {unit.Value}",
-                  FluxMemReadPriority.DISABLED,
-                  write_func: async (c, v) =>
-                  {
-                      var gcode = $"M98 P\"/sys/global/write_{array.Variable}.g\" T\"{unit.Value.ToUpper()}\" S{(typeof(TData) == typeof(string) ? $"\"{sanitize_value(v)}\"" : sanitize_value(v))}";
+                connection,
+                $"{variable} {unit.Value}",
+                FluxMemReadPriority.DISABLED,
+                write_func: async (c, v) =>
+                {
+                    var lower_unit = unit.Value.ToLower();
 
-                      var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-                      var result = await c.PostGCodeAsync(gcode, cts.Token);
+                    var s_value = sanitize_value(v);
+                    var write_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    if (!await c.PostGCodeAsync($"set global.{variable}_{lower_unit} = {s_value}", write_cts.Token))
+                    {
+                        flux.Messages.LogMessage("Impossibile scrivere la variabile", "Errore durante l'esecuzione del gcode", MessageLevel.ERROR, 0);
+                        return false;
+                    }
+    
+                    if (stored)
+                    { 
+                        var load_var_macro = $"load_{variable}_{lower_unit}.g";
+                        var gcode = WriteVariableString(variable, unit, v).ToOptional();
+                        var put_file_cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                        if (!await c.PutFileAsync(c => ((RRF_Connection)c).GlobalPath, load_var_macro, put_file_cts.Token, gcode))
+                        {
+                            flux.Messages.LogMessage("Impossibile salvare la variabile", "Errore durante la scrittura del file", MessageLevel.ERROR, 0);
+                            return false;
+                        }
+                    }
 
-                      return result;
-                  },
-                  unit: unit)
+                    return true;
+                },
+                unit: unit)
         {
+            Stored = stored;
+            Variable = variable;
             var lower_unit = unit.Value.ToLower();
-            array.WhenAnyValue(a => a.Connection)
+            connection
                 .Convert(c => c.MemoryBuffer)
-                .ConvertMany(c => c.ObserveGlobalState(m => get_data(m, $"{array.Variable}_{lower_unit}", convert_data)))
+                .ConvertMany(c => c.ObserveGlobalState(m => get_data(m, $"{variable}_{lower_unit}", convert_data)))
                 .BindTo(this, v => v.Value);
         }
 
         static string sanitize_value(TData value) => $"{value:0.00}".ToLower().Replace(',', '.');
         static Optional<TData> get_data(Optional<Dictionary<string, object>> global, string variable, Func<object, TData> convert_data) 
-            => global.Convert(g => g.Lookup(variable)).Convert(v => convert_data != null ? convert_data(v) : (TData)Convert.ChangeType(v, typeof(TData)));
+            => global.Convert(g => g.Lookup(variable)).Convert(v => convert_data != null ? convert_data(v) : (TData)Convert.ChangeType(v, typeof(TData), CultureInfo.InvariantCulture));
+
+        public async Task<bool> InitializeVariableAsync()
+        {
+            var gcode = WriteVariableString(Variable, Unit.Value, default).ToOptional();
+            var put_file_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            return await Connection.ConvertOrAsync(c => c.PutFileAsync(c => ((RRF_Connection)c).GlobalPath, LoadVariableMacro, put_file_cts.Token, gcode), () => false);
+        }
+        public static IEnumerable<string> WriteVariableString(string variable, VariableUnit unit, TData value)
+        {
+            var s_value = sanitize_value(value);
+            var lower_unit = unit.Value.ToLower();
+            yield return $"if (!exists(global.{variable}_{lower_unit}))";
+            yield return $"    global {variable}_{lower_unit} = {s_value}";
+            yield return $"else";
+            yield return $"    set global.{variable}_{lower_unit} = {s_value}";
+        }
     }
 
-    public class RRF_ArrayGlobalModel<TData> : FLUX_Array<TData, TData>, IRRF_VariableBaseGlobalModel
+    public class RRF_ArrayGlobalModel<TData> : FLUX_Array<TData, TData>
     {
-        public bool Stored { get; }
-        public string Variable { get; }
         public override string Group => "Global";
-        private ObservableAsPropertyHelper<Optional<RRF_Connection>> _Connection;
-        public Optional<RRF_Connection> Connection => _Connection.Value;
 
-        public IEnumerable<string> CreateVariableString
+        public RRF_ArrayGlobalModel(FluxViewModel flux, IObservable<Optional<RRF_Connection>> connection, string name, IEnumerable<VariableUnit> variable_units, bool stored, Func<object, TData> convert_data = default)
+            : base(name, FluxMemReadPriority.DISABLED)
         {
-            get
-            {
-                if (Stored)
-                {
-                    yield return "; Read variables";
-                    yield return $"M98 P\"/sys/global/read_{Variable}.g\"";
-                    yield return "";
-                }
-
-                yield return "; Get variables";
-                for (ushort position = 0; position < Variables.Count; position++)
-                {
-                    var unit = GetArrayUnit(position);
-                    var lower_unit = unit.Value.ToLower();
-                    var upper_unit = unit.Value.ToUpper();
-                    yield return $"var {Variable}_{lower_unit} = (exists(param.T) && param.T == \"{upper_unit}\" && exists(param.S)) ? param.S : (exists(global.{Variable}_{lower_unit}) ? global.{Variable}_{lower_unit} : {(typeof(TData) == typeof(string) ? "\"\"" : sanitize_value(default(TData)))})";
-                }
-
-                yield return "";
-                yield return "; Set variables";
-
-                for (ushort position = 0; position < Variables.Count; position++)
-                {
-                    var unit = GetArrayUnit(position);
-                    var lower_unit = unit.Value.ToLower();
-                    yield return $"if !exists(global.{Variable}_{lower_unit})";
-                    yield return $"     global {Variable}_{lower_unit} = var.{Variable}_{lower_unit}";
-                    yield return $"else";
-                    yield return $"     set global.{Variable}_{lower_unit} = var.{Variable}_{lower_unit}";
-                }
-
-                if (Stored)
-                {
-                    yield return "";
-                    yield return "; Store variables";
-
-                    for (ushort position = 0; position < Variables.Count; position++)
-                    {
-                        var unit = GetArrayUnit(position);
-                        var lower_unit = unit.Value.ToLower();
-                        yield return $"echo {(position == 0 ? ">" : ">>")}\"/sys/global/read_{Variable}.g\" \"if (!exists(global.{Variable}_{lower_unit}))\"";
-                        yield return $"echo >>\"/sys/global/read_{Variable}.g\" \" global {Variable}_{lower_unit} = \"^{(typeof(TData) == typeof(string) ? "\"\"\"\"^" : "")}var.{Variable}_{lower_unit}{(typeof(TData) == typeof(string) ? "^\"\"\"\"" : "")}";
-                        yield return $"echo >>\"/sys/global/read_{Variable}.g\" \"else\"";
-                        yield return $"echo >>\"/sys/global/read_{Variable}.g\" \" set global.{Variable}_{lower_unit} = \"^{(typeof(TData) == typeof(string) ? "\"\"\"\"^" : "")}var.{Variable}_{lower_unit}{(typeof(TData) == typeof(string) ? "^\"\"\"\"" : "")}";
-                        yield return $"echo >>\"/sys/global/read_{Variable}.g\" \"\"";
-                        yield return $"";
-                    }
-                }
-
-            }
-        }
-        public string CreateVariableName => $"write_{Variable}.g";
-        public string InitializeVariableString => $"M98 P\"/sys/global/write_{Variable}.g\"";
-
-        public RRF_ArrayGlobalModel(IObservable<Optional<RRF_Connection>> connection, string variable, IEnumerable<VariableUnit> variable_units, bool stored, Func<object, TData> convert_data = default)
-            : base(variable, FluxMemReadPriority.DISABLED)
-        {
-            Stored = stored;
-            Variable = variable;
-            _Connection = connection
-                .ToProperty(this, v => v.Connection);
             Variables = new SourceCache<IFLUX_Variable<TData, TData>, VariableUnit>(k => k.Unit.ValueOr(() => ""));
             for (ushort position = 0; position < variable_units.Count(); position++)
             {
                 var unit = variable_units.ElementAt(position);
                 var variables = ((ISourceCache<IFLUX_Variable<TData, TData>, VariableUnit>)Variables);
-                variables.AddOrUpdate(new RRF_ArrayVariableGlobalModel<TData>(this, unit, convert_data));
+                variables.AddOrUpdate(new RRF_ArrayVariableGlobalModel<TData>(flux, connection, name, unit, stored, convert_data));
             }
         }
 
@@ -451,7 +419,5 @@ namespace Flux.ViewModels
                 .Convert(v => v.Unit)
                 .ValueOr(() => $"{position}");
         }
-
-        static string sanitize_value(TData value) => $"{value:0.00}".ToLower().Replace(',', '.');
     }
 }

@@ -3,6 +3,7 @@ using DynamicData.Kernel;
 using Modulo3DStandard;
 using ReactiveUI;
 using System;
+using System.Globalization;
 using System.Reactive;
 using System.Threading.Tasks;
 
@@ -77,11 +78,15 @@ namespace Flux.ViewModels
                     return Optional.Some(set_double_async);
                     async Task set_double_async(ContentDialog dialog, bool is_virtual)
                     {
-                        var tb_double_value = new TextBox("tbValue", "VALORE?", @double.Value.ValueOr(() => 0).ToString());
+                        var tb_double_value = new TextBox("tbValue", "VALORE?", $"{@double.Value.ValueOr(() => 0):0.###}".Replace(",", "."));
                         dialog.AddContent(tb_double_value);
 
                         var double_result = await dialog.ShowAsync();
-                        if (double_result == ContentDialogResult.Primary && double.TryParse(tb_double_value.Value, out var double_value))
+                        if (double_result == ContentDialogResult.Primary && double.TryParse(
+                            tb_double_value.Value,
+                            NumberStyles.Float, 
+                            CultureInfo.InvariantCulture,
+                            out var double_value))
                         {
                             if (is_virtual)
                                 @double.SetMemoryValue(double_value);

@@ -4,6 +4,7 @@ using Modulo3DStandard;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Disposables;
@@ -45,32 +46,7 @@ namespace Flux.ViewModels
                 Folder = Folder.Convert(f => f.Folder);
             });
 
-            CreateFSCommand = ReactiveCommand.CreateFromTask(async () =>
-            {
-                var options = ComboOption.Create("type", "Tipo di documento", Enum.GetValues<FLUX_FileType>(), b => (uint)b);
-                var name = new TextBox("name", "Nome del documento", "", false);
-                var result = await Flux.ShowSelectionAsync("Cosa vuoi creare?", true, options, name);
-                if (result != ContentDialogResult.Primary)
-                    return;
-
-                if (!options.Value.HasValue)
-                    return;
-
-                var path = Folder.ConvertOr(f => f.FSFullPath, () => "");
-                switch (options.Value.Value)
-                {
-                    case FLUX_FileType.File:
-                        var file_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                        await Flux.ConnectionProvider.PutFileAsync(path, name.Value, file_cts.Token);
-                        break;
-                    case FLUX_FileType.Directory:
-                        var folder_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                        await Flux.ConnectionProvider.CreateFolderAsync(path, name.Value, folder_cts.Token);
-                        break;
-                }
-
-                UpdateFolder.OnNext(Unit.Default);
-            });
+            CreateFSCommand = ReactiveCommand.CreateFromTask(CreateFSAsync);
 
             var folderContent = Observable.CombineLatest(
                 UpdateFolder.StartWith(Unit.Default).ObserveOn(RxApp.MainThreadScheduler),
@@ -88,7 +64,115 @@ namespace Flux.ViewModels
                 .DisposeWith(Disposables);
         }
 
-        private async Task<(Optional<FolderViewModel>, Optional<FLUX_FileList>)> ListFilesAsync(Optional<FolderViewModel> folder)
+        public async Task CreateFSAsync()
+        {
+            var options = ComboOption.Create("type", "Tipo di documento", Enum.GetValues<FLUX_FileType>(), b => (uint)b);
+            var name = new TextBox("name", "Nome del documento", "", false);
+            var result = await Flux.ShowSelectionAsync("Cosa vuoi creare?", true, options, name);
+            if (result != ContentDialogResult.Primary)
+                return;
+
+            if (!options.Value.HasValue)
+                return;
+
+            var path = Folder.ConvertOr(f => f.FSFullPath, () => "");
+            switch (options.Value.Value)
+            {
+                case FLUX_FileType.File:
+                    var file_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    await Flux.ConnectionProvider.PutFileAsync(path, name.Value, file_cts.Token);
+                    break;
+                case FLUX_FileType.Directory:
+                    var folder_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    await Flux.ConnectionProvider.CreateFolderAsync(path, name.Value, folder_cts.Token);
+                    break;
+            }
+
+            UpdateFolder.OnNext(Unit.Default);
+        }
+
+        public async Task ModifyFSAsync(IFSViewModel fs)
+        {
+            var modify_option = ComboOption.Create("operations", "Operazione:", Enum.GetValues<FLUX_FileModify>(), f => (uint)f);
+            var modify_dialog_result = await Flux.ShowSelectionAsync("Tipo di operazione", true, modify_option);
+            if (modify_dialog_result != ContentDialogResult.Primary)
+                return;
+
+            if (!modify_option.Value.HasValue)
+                return;
+
+            switch (modify_option.Value.Value)
+            {
+                case FLUX_FileModify.Rename:
+                    var rename_option = new TextBox("rename", "Nome del file", fs.FSName);
+                    var rename_dialog_result = await Flux.ShowSelectionAsync("Rinominare il file?", true, rename_option);
+                    if (rename_dialog_result != ContentDialogResult.Primary)
+                        return;
+
+                    var rename_file_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    var rename_result = await Flux.ConnectionProvider.RenameFileAsync(fs.FSPath, fs.FSName, rename_option.Value, true, rename_file_cts.Token);
+
+                    if (rename_result)
+                        UpdateFolder.OnNext(Unit.Default);
+                    break;
+
+                case FLUX_FileModify.Delete:
+                    var delete_dialog_result = await Flux.ShowConfirmDialogAsync("Cancellare il file?", $"Il file {fs.FSPath}/{fs.FSName} non potrà essere recuperato");
+                    if (delete_dialog_result != ContentDialogResult.Primary)
+                        return;
+
+                    var delete_file_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    var delete_result = await Flux.ConnectionProvider.DeleteFileAsync(fs.FSPath, fs.FSName, true, delete_file_cts.Token);
+
+                    if (delete_result)
+                        UpdateFolder.OnNext(Unit.Default);
+                    break;
+            }
+        }
+
+        public async Task EditFileAsync(FileViewModel file)
+        {
+            var download_cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var file_source = await Flux.ConnectionProvider.DownloadFileAsync(file.FSPath, file.FSName, download_cts.Token);
+            if (!file_source.HasValue)
+                return;
+
+            var textbox = new TextBox("source", file.FSName, file_source.Value, multiline: true);
+            var combo = ComboOption.Create("file_access", "Accesso al file",
+                Enum.GetValues<FLUX_FileAccess>(), f => (uint)f,
+                (uint)FLUX_FileAccess.ReadOnly, f =>
+                {
+                    var textbox_value = textbox.RemoteInputs.Lookup("value");
+                    if (!textbox_value.HasValue)
+                        return;
+
+                    var enabled = f.HasValue && ((FLUX_FileAccess)f.Value) == FLUX_FileAccess.ReadWrite;
+                    textbox_value.Value.IsEnabled = enabled;
+                });
+
+            textbox.InitializeRemoteView();
+            combo.InitializeRemoteView();
+
+            var result = await Flux.ShowSelectionAsync("Modifica File", true, combo, textbox);
+            if (result != ContentDialogResult.Primary)
+                return;
+
+            var source = read_source(file_source.Value)
+                .ToOptional();
+
+            var upload_cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            await Flux.ConnectionProvider.PutFileAsync(file.FSPath, file.FSName, upload_cts.Token, source);
+
+            IEnumerable<string> read_source(string source)
+            {
+                string line;
+                using var reader = new StringReader(textbox.Value);
+                while ((line = reader.ReadLine()) != null)
+                    yield return line;
+            }
+        }
+
+        public async Task<(Optional<FolderViewModel>, Optional<FLUX_FileList>)> ListFilesAsync(Optional<FolderViewModel> folder)
         {
             var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             var path = folder.ConvertOr(f => f.FSFullPath, () => "");
@@ -96,7 +180,7 @@ namespace Flux.ViewModels
             return (folder, file_list);
         }
 
-        private IEnumerable<IFSViewModel> GetFolderContent((Optional<FolderViewModel> folder, Optional<FLUX_FileList> files) file_list)
+        public IEnumerable<IFSViewModel> GetFolderContent((Optional<FolderViewModel> folder, Optional<FLUX_FileList> files) file_list)
         {
             if (!file_list.files.HasValue)
                 yield break;

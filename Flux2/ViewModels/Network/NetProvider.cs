@@ -222,22 +222,27 @@ namespace Flux.ViewModels
 
             InterNetworkConnectivity = await PingAsync(
                 "8.8.8.8",
-                TimeSpan.FromSeconds(10));
+                TimeSpan.FromSeconds(5));
         }
 
         public async Task<bool> PingAsync(Optional<string> address, TimeSpan timeout)
         {
             try
             {
-                if (!address.HasValue)
-                    return false;
+                for (int i = 0; i < 5; i++)
+                {
+                    if (!address.HasValue)
+                        return false;
 
-                address = address.Value.Split(":", StringSplitOptions.RemoveEmptyEntries)
-                    .FirstOrDefault();
+                    address = address.Value.Split(":", StringSplitOptions.RemoveEmptyEntries)
+                        .FirstOrDefault();
 
-                var result = await Pinger.SendPingAsync(address.Value, (int)timeout.TotalMilliseconds);
+                    var result = await Pinger.SendPingAsync(address.Value, (int)timeout.TotalMilliseconds);
 
-                return result.Status == IPStatus.Success;
+                    if (result.Status == IPStatus.Success)
+                        return true;
+                }
+                return false;
             }
             catch (Exception)
             {
@@ -251,14 +256,18 @@ namespace Flux.ViewModels
             {
                 if (!address.HasValue)
                     return false;
+                for (int i = 0; i < 5; i++)
+                {
+                    var request = new RestRequest($"http://{address}", Method.Options);
 
-                var request = new RestRequest($"http://{address}", Method.Options);
+                    var cts = new CancellationTokenSource(timeout);
+                    var response = await Client.ExecuteAsync(request, cts.Token);
 
-                var cts = new CancellationTokenSource(timeout);
-                var response = await Client.ExecuteAsync(request, cts.Token);
-
-                return response.StatusCode == HttpStatusCode.OK || 
-                       response.StatusCode == HttpStatusCode.NoContent;
+                    if (response.StatusCode == HttpStatusCode.OK ||
+                        response.StatusCode == HttpStatusCode.NoContent)
+                        return true;
+                }
+                return false;
             }
             catch (Exception)
             {

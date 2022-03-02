@@ -82,6 +82,9 @@ namespace Flux.ViewModels
             core_settings.WhenAnyValue(s => s.PrinterID)
                 .BindTo(this, v => v.Printers.SelectedKey);
 
+            core_settings.WhenAnyValue(s => s.HostID)
+                .BindTo(this, v => v.HostAddress.SelectedKey);
+
             core_settings.WhenAnyValue(s => s.PLCAddress)
                 .BindTo(this, v => v.PlcAddress);
 
