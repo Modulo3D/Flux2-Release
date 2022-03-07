@@ -197,15 +197,14 @@ namespace Flux.ViewModels
                                 Connection = default;
                             }
 
-                            Connection = new OSAI_Connection(Flux, VariableStore);
                             var plc_address = Flux.SettingsProvider.CoreSettings.Local.PLCAddress;
                             if (!plc_address.HasValue || string.IsNullOrEmpty(plc_address.Value))
                             {
                                 Flux.Messages.LogMessage(OSAI_ConnectResponse.CONNECT_INVALID_ADDRESS);
                                 return false;
                             }
-
-                            return await Connection.Value.CreateClientAsync($"http://{plc_address.Value}/");
+                            Connection = new OSAI_Connection(Flux, VariableStore, $"http://{plc_address.Value}/");
+                            return true;
                         }
 
                         break;

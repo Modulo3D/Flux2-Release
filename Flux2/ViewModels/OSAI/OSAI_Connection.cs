@@ -37,7 +37,7 @@ namespace Flux.ViewModels
         public override string StoragePath => "PROGRAMS\\STORAGE";
 
         // MEMORY VARIABLES
-        public OSAI_Connection(FluxViewModel flux, OSAI_VariableStore variable_store) : base(variable_store)
+        public OSAI_Connection(FluxViewModel flux, OSAI_VariableStore variable_store, string address) : base(variable_store, new OPENcontrolPortTypeClient(OPENcontrolPortTypeClient.EndpointConfiguration.OPENcontrol, address))
         {
             Flux = flux;
         }
@@ -47,11 +47,8 @@ namespace Flux.ViewModels
         {
             try
             {
-                if (!Client.HasValue)
-                    return false;
-
                 var write_request = new WriteVarWordBitRequest((ushort)address.VarCode, ProcessNumber, address.Index, address.BitIndex, value ? (ushort)1 : (ushort)0);
-                var write_response = await Client.Value.WriteVarWordBitAsync(write_request);
+                var write_response = await Client.WriteVarWordBitAsync(write_request);
 
                 if (!ProcessResponse(
                     write_response.retval,
@@ -71,11 +68,8 @@ namespace Flux.ViewModels
         {
             try
             {
-                if (!Client.HasValue)
-                    return false;
-
                 var write_request = new WriteVarWordRequest((ushort)address.VarCode, ProcessNumber, address.Index, 1, new unsignedshortarray { ShortConverter.Convert(value) });
-                var write_response = await Client.Value.WriteVarWordAsync(write_request);
+                var write_response = await Client.WriteVarWordAsync(write_request);
 
                 if (!ProcessResponse(
                     write_response.retval,
@@ -95,14 +89,11 @@ namespace Flux.ViewModels
         {
             try
             {
-                if (!Client.HasValue)
-                    return false;
-
                 if (value.Length > 128)
                     return false;
 
                 var write_request = new WriteVarTextRequest((ushort)address.VarCode, ProcessNumber, address.Index, (ushort)value.Length, value);
-                var write_response = await Client.Value.WriteVarTextAsync(write_request);
+                var write_response = await Client.WriteVarTextAsync(write_request);
 
                 if (!ProcessResponse(
                     write_response.retval,
@@ -122,11 +113,8 @@ namespace Flux.ViewModels
         {
             try
             {
-                if (!Client.HasValue)
-                    return false;
-
                 var write_request = new WriteVarWordRequest((ushort)address.VarCode, ProcessNumber, address.Index, 1, new unsignedshortarray { value });
-                var write_response = await Client.Value.WriteVarWordAsync(write_request);
+                var write_response = await Client.WriteVarWordAsync(write_request);
 
                 if (!ProcessResponse(
                     write_response.retval,
@@ -146,11 +134,8 @@ namespace Flux.ViewModels
         {
             try
             {
-                if (!Client.HasValue)
-                    return false;
-
                 var write_request = new WriteVarDoubleRequest((ushort)address.VarCode, ProcessNumber, address.Index, 1, new doublearray { value });
-                var write_response = await Client.Value.WriteVarDoubleAsync(write_request);
+                var write_response = await Client.WriteVarDoubleAsync(write_request);
 
                 if (!ProcessResponse(
                     write_response.retval,
@@ -170,11 +155,8 @@ namespace Flux.ViewModels
         {
             try
             {
-                if (!Client.HasValue)
-                    return false;
-
                 var write_request = new WriteVarWordBitRequest((ushort)address.VarCode, ProcessNumber, address.Index, bit_index, value ? (ushort)1 : (ushort)0);
-                var write_response = await Client.Value.WriteVarWordBitAsync(write_request);
+                var write_response = await Client.WriteVarWordBitAsync(write_request);
 
                 if (!ProcessResponse(
                     write_response.retval,
@@ -195,11 +177,8 @@ namespace Flux.ViewModels
         {
             try
             {
-                if (!Client.HasValue)
-                    return false;
-
                 var write_named_variable_request = new WriteNamedVarDoubleRequest(ProcessNumber, address.Name, 1, address.Index, -1, -1, new doublearray() { value ? 1.0 : 0.0 });
-                var write_named_variable_response = await Client.Value.WriteNamedVarDoubleAsync(write_named_variable_request);
+                var write_named_variable_response = await Client.WriteNamedVarDoubleAsync(write_named_variable_request);
 
                 if (!ProcessResponse(
                     write_named_variable_response.retval,
@@ -219,11 +198,8 @@ namespace Flux.ViewModels
         {
             try
             {
-                if (!Client.HasValue)
-                    return false;
-
                 var write_named_variable_request = new WriteNamedVarDoubleRequest(ProcessNumber, address.Name, 1, address.Index, -1, -1, new doublearray() { value });
-                var write_named_variable_response = await Client.Value.WriteNamedVarDoubleAsync(write_named_variable_request);
+                var write_named_variable_response = await Client.WriteNamedVarDoubleAsync(write_named_variable_request);
 
                 if (!ProcessResponse(
                     write_named_variable_response.retval,
@@ -243,11 +219,8 @@ namespace Flux.ViewModels
         {
             try
             {
-                if (!Client.HasValue)
-                    return false;
-
                 var write_named_variable_request = new WriteNamedVarDoubleRequest(ProcessNumber, address.Name, 1, address.Index, -1, -1, new doublearray() { value });
-                var write_named_variable_response = await Client.Value.WriteNamedVarDoubleAsync(write_named_variable_request);
+                var write_named_variable_response = await Client.WriteNamedVarDoubleAsync(write_named_variable_request);
 
                 if (!ProcessResponse(
                     write_named_variable_response.retval,
@@ -267,15 +240,12 @@ namespace Flux.ViewModels
         {
             try
             {
-                if (!Client.HasValue)
-                    return false;
-
                 if (value.Length > lenght)
                     return false;
 
                 var bytes_array = Encoding.ASCII.GetBytes(value);
                 var write_named_variable_request = new WriteNamedVarByteArrayRequest(ProcessNumber, address.Name, (ushort)bytes_array.Length, 0, -1, -1, bytes_array);
-                var write_named_variable_response = await Client.Value.WriteNamedVarByteArrayAsync(write_named_variable_request);
+                var write_named_variable_response = await Client.WriteNamedVarByteArrayAsync(write_named_variable_request);
 
                 if (!ProcessResponse(
                     write_named_variable_response.retval,
@@ -296,11 +266,8 @@ namespace Flux.ViewModels
         {
             try
             {
-                if (!Client.HasValue)
-                    return default;
-
                 var read_request = new ReadVarWordRequest((ushort)address.VarCode, ProcessNumber, address.Index, 1);
-                var read_response = await Client.Value.ReadVarWordAsync(read_request);
+                var read_response = await Client.ReadVarWordAsync(read_request);
 
                 if (!ProcessResponse(
                     read_response.retval,
@@ -320,11 +287,8 @@ namespace Flux.ViewModels
         {
             try
             {
-                if (!Client.HasValue)
-                    return default;
-
                 var read_request = new ReadVarWordRequest((ushort)address.VarCode, ProcessNumber, address.Index, 1);
-                var read_response = await Client.Value.ReadVarWordAsync(read_request);
+                var read_response = await Client.ReadVarWordAsync(read_request);
 
                 if (!ProcessResponse(
                     read_response.retval,
@@ -344,11 +308,8 @@ namespace Flux.ViewModels
         {
             try
             {
-                if (!Client.HasValue)
-                    return default;
-
                 var read_request = new ReadVarWordRequest((ushort)address.VarCode, ProcessNumber, address.Index, 1);
-                var read_response = await Client.Value.ReadVarWordAsync(read_request);
+                var read_response = await Client.ReadVarWordAsync(read_request);
 
                 if (!ProcessResponse(
                     read_response.retval,
@@ -368,11 +329,8 @@ namespace Flux.ViewModels
         {
             try
             {
-                if (!Client.HasValue)
-                    return default;
-
                 var read_request = new ReadVarTextRequest((ushort)address.VarCode, ProcessNumber, address.Index, 128);
-                var read_response = await Client.Value.ReadVarTextAsync(read_request);
+                var read_response = await Client.ReadVarTextAsync(read_request);
 
                 if (!ProcessResponse(
                     read_response.retval,
@@ -392,11 +350,8 @@ namespace Flux.ViewModels
         {
             try
             {
-                if (!Client.HasValue)
-                    return default;
-
                 var read_request = new ReadVarDoubleRequest((ushort)address.VarCode, ProcessNumber, address.Index, 1);
-                var read_response = await Client.Value.ReadVarDoubleAsync(read_request);
+                var read_response = await Client.ReadVarDoubleAsync(read_request);
 
                 if (!ProcessResponse(
                     read_response.retval,
@@ -416,11 +371,8 @@ namespace Flux.ViewModels
         {
             try
             {
-                if (!Client.HasValue)
-                    return default;
-
                 var read_request = new ReadVarWordRequest((ushort)address.VarCode, ProcessNumber, address.Index, 1);
-                var read_response = await Client.Value.ReadVarWordAsync(read_request);
+                var read_response = await Client.ReadVarWordAsync(read_request);
 
                 if (!ProcessResponse(
                     read_response.retval,
@@ -441,11 +393,8 @@ namespace Flux.ViewModels
         {
             try
             {
-                if (!Client.HasValue)
-                    return default;
-
                 var read_named_variable_request = new ReadNamedVarDoubleRequest(ProcessNumber, address.Name, 1, address.Index, -1, -1);
-                var read_named_variable_response = await Client.Value.ReadNamedVarDoubleAsync(read_named_variable_request);
+                var read_named_variable_response = await Client.ReadNamedVarDoubleAsync(read_named_variable_request);
 
                 if (!ProcessResponse(
                     read_named_variable_response.retval,
@@ -466,11 +415,8 @@ namespace Flux.ViewModels
         {
             try
             {
-                if (!Client.HasValue)
-                    return default;
-
                 var read_named_variable_request = new ReadNamedVarDoubleRequest(ProcessNumber, address.Name, 1, address.Index, -1, -1);
-                var read_named_variable_response = await Client.Value.ReadNamedVarDoubleAsync(read_named_variable_request);
+                var read_named_variable_response = await Client.ReadNamedVarDoubleAsync(read_named_variable_request);
 
                 if (!ProcessResponse(
                     read_named_variable_response.retval,
@@ -491,11 +437,8 @@ namespace Flux.ViewModels
         {
             try
             {
-                if (!Client.HasValue)
-                    return default;
-
                 var read_named_variable_request = new ReadNamedVarDoubleRequest(ProcessNumber, address.Name, 1, address.Index, -1, -1);
-                var read_named_variable_response = await Client.Value.ReadNamedVarDoubleAsync(read_named_variable_request);
+                var read_named_variable_response = await Client.ReadNamedVarDoubleAsync(read_named_variable_request);
 
                 if (!ProcessResponse(
                     read_named_variable_response.retval,
@@ -516,11 +459,8 @@ namespace Flux.ViewModels
         {
             try
             {
-                if (!Client.HasValue)
-                    return default;
-
                 var read_named_variable_request = new ReadNamedVarByteArrayRequest(ProcessNumber, address.Name, lenght, address.Index, -1, -1);
-                var read_named_variable_response = await Client.Value.ReadNamedVarByteArrayAsync(read_named_variable_request);
+                var read_named_variable_response = await Client.ReadNamedVarByteArrayAsync(read_named_variable_request);
 
                 if (!ProcessResponse(
                     read_named_variable_response.retval,
@@ -538,37 +478,11 @@ namespace Flux.ViewModels
             }
         }
 
-        // Connect
-        public override async Task<bool> CreateClientAsync(string address)
-        {
-            try
-            {
-                if (string.IsNullOrEmpty(address))
-                    return false;
-
-                var uri = new Uri(address);
-                var endpoint = new EndpointAddress(uri);
-
-                var binding_type = OPENcontrolPortTypeClient.EndpointConfiguration.OPENcontrol;
-                Client = new OPENcontrolPortTypeClient(binding_type, endpoint);
-                if (!Client.HasValue)
-                    return false;
-
-                await Client.Value.OpenAsync();
-                return Client.Value.State == CommunicationState.Opened;
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return false;
-            }
-        }
         public async Task<(OSAI_CloseResponse response, CommunicationState state)> CloseAsync()
         {
             try
             {
-                if (Client.HasValue)
-                    await Client.Value.CloseAsync();
+                await Client.CloseAsync();
                 return (OSAI_CloseResponse.CLOSE_SUCCESS, CommunicationState.Closed);
             }
             catch (Exception ex)
@@ -612,11 +526,8 @@ namespace Flux.ViewModels
         {
             try
             {
-                if (!Client.HasValue)
-                    return false;
-
                 var shutdown_request = new BootShutDownRequest();
-                var shutdown_response = await Client.Value.BootShutDownAsync(shutdown_request);
+                var shutdown_response = await Client.BootShutDownAsync(shutdown_request);
 
                 if (!ProcessResponse(
                     shutdown_response.retval,
@@ -636,13 +547,8 @@ namespace Flux.ViewModels
         {
             try
             {
-                if (!Client.HasValue)
-                    return false;
-
-                // 0 : Hold On
-                // 1 : Hold Off
                 var hold_request = new HoldRequest(ProcessNumber, on ? (ushort)0 : (ushort)1);
-                var hold_response = await Client.Value.HoldAsync(hold_request);
+                var hold_response = await Client.HoldAsync(hold_request);
 
                 if (!ProcessResponse(
                     hold_response.retval,
@@ -662,11 +568,8 @@ namespace Flux.ViewModels
         {
             try
             {
-                if (!Client.HasValue)
-                    return false;
-
                 var reset_request = new ResetRequest(ProcessNumber);
-                var reset_response = await Client.Value.ResetAsync(reset_request);
+                var reset_response = await Client.ResetAsync(reset_request);
 
                 if (!ProcessResponse(
                     reset_response.retval,
@@ -690,13 +593,8 @@ namespace Flux.ViewModels
         {
             try
             {
-                if (!Client.HasValue)
-                    return false;
-
-                // 0 : Cycle Stop
-                // 1 : Cycle Start
                 var cycle_request = new CycleRequest(ProcessNumber, start ? (ushort)1 : (ushort)0);
-                var cycle_response = await Client.Value.CycleAsync(cycle_request);
+                var cycle_response = await Client.CycleAsync(cycle_request);
 
                 if (!ProcessResponse(
                     cycle_response.retval,
@@ -734,13 +632,10 @@ namespace Flux.ViewModels
         {
             try
             {
-                if (!Client.HasValue)
-                    return false;
-
                 if (from_drive)
                 {
                     var select_part_program_request = new SelectPartProgramFromDriveRequest(ProcessNumber, "");
-                    var select_part_program_response = await Client.Value.SelectPartProgramFromDriveAsync(select_part_program_request);
+                    var select_part_program_response = await Client.SelectPartProgramFromDriveAsync(select_part_program_request);
 
                     if (!ProcessResponse(
                         select_part_program_response.retval,
@@ -751,7 +646,7 @@ namespace Flux.ViewModels
                 else
                 {
                     var select_part_program_request = new SelectPartProgramRequest(ProcessNumber, "");
-                    var select_part_program_response = await Client.Value.SelectPartProgramAsync(select_part_program_request);
+                    var select_part_program_response = await Client.SelectPartProgramAsync(select_part_program_request);
 
                     if (!ProcessResponse(
                         select_part_program_response.retval,
@@ -776,13 +671,10 @@ namespace Flux.ViewModels
         {
             try
             {
-                if (!Client.HasValue)
-                    return false;
-
                 if (from_drive)
                 {
                     var select_part_program_request = new SelectPartProgramFromDriveRequest(ProcessNumber, $"{StoragePath}\\{filename}");
-                    var select_part_program_response = await Client.Value.SelectPartProgramFromDriveAsync(select_part_program_request);
+                    var select_part_program_response = await Client.SelectPartProgramFromDriveAsync(select_part_program_request);
 
                     if (!ProcessResponse(
                         select_part_program_response.retval,
@@ -793,7 +685,7 @@ namespace Flux.ViewModels
                 else
                 {
                     var select_part_program_request = new SelectPartProgramRequest(ProcessNumber, $"{StoragePath}\\{filename}");
-                    var select_part_program_response = await Client.Value.SelectPartProgramAsync(select_part_program_request);
+                    var select_part_program_response = await Client.SelectPartProgramAsync(select_part_program_request);
 
                     if (!ProcessResponse(
                         select_part_program_response.retval,
@@ -816,11 +708,8 @@ namespace Flux.ViewModels
         {
             try
             {
-                if (!Client.HasValue)
-                    return false;
-
                 var remove_file_request = new LogFSRemoveFileRequest(folder, filename);
-                var remove_file_response = await Client.Value.LogFSRemoveFileAsync(remove_file_request);
+                var remove_file_response = await Client.LogFSRemoveFileAsync(remove_file_request);
 
                 if (remove_file_response.ErrClass == 5 &&
                     remove_file_response.ErrNum == 17)
@@ -844,10 +733,7 @@ namespace Flux.ViewModels
         {
             try
             {
-                if (!Client.HasValue)
-                    return default;
-
-                var find_first_result = await Client.Value.LogFSFindFirstOrDefaultAsync($"{folder}\\*");
+                var find_first_result = await Client.LogFSFindFirstOrDefaultAsync($"{folder}\\*");
 
                 if (!ProcessResponse(
                     find_first_result.Body.retval,
@@ -869,7 +755,7 @@ namespace Flux.ViewModels
                 Optional<LogFSFindNextResponse> find_next_result;
                 do
                 {
-                    find_next_result = await Client.Value.LogFSFindNextAsync(handle);
+                    find_next_result = await Client.LogFSFindNextAsync(handle);
                     if (!find_next_result.HasValue)
                         return files_data;
 
@@ -885,7 +771,7 @@ namespace Flux.ViewModels
                 while (find_next_result.ConvertOr(r => r.Body.Found, () => false));
 
                 var close_request = new LogFSFindCloseRequest(find_first_result.Body.Finder);
-                var close_response = await Client.Value.LogFSFindCloseAsync(close_request);
+                var close_response = await Client.LogFSFindCloseAsync(close_request);
 
                 if (!ProcessResponse(
                     find_next_result.Value.Body.retval,
@@ -910,9 +796,6 @@ namespace Flux.ViewModels
             Optional<uint> source_blocks = default,
             Action<double> report_progress = default)
         {
-            if (!Client.HasValue)
-                return false;
-
             ushort file_id;
             uint block_number = 0;
             uint skipped_blocks = 0;
@@ -921,10 +804,10 @@ namespace Flux.ViewModels
             try
             {
                 var remove_file_request = new LogFSRemoveFileRequest(folder, "file_upload.tmp");
-                var remove_file_response = await Client.Value.LogFSRemoveFileAsync(remove_file_request);
+                var remove_file_response = await Client.LogFSRemoveFileAsync(remove_file_request);
 
                 var create_file_request = new LogFSCreateFileRequest($"{folder}\\file_upload.tmp");
-                var create_file_response = await Client.Value.LogFSCreateFileAsync(create_file_request);
+                var create_file_response = await Client.LogFSCreateFileAsync(create_file_request);
 
                 if (!ProcessResponse(
                     create_file_response.retval,
@@ -933,7 +816,7 @@ namespace Flux.ViewModels
                     return false;
 
                 var open_file_request = new LogFSOpenFileRequest($"{folder}\\file_upload.tmp", true, 0, 0);
-                var open_file_response = await Client.Value.LogFSOpenFileAsync(open_file_request);
+                var open_file_response = await Client.LogFSOpenFileAsync(open_file_request);
 
                 if (!ProcessResponse(
                     open_file_response.retval,
@@ -957,7 +840,7 @@ namespace Flux.ViewModels
 
                         var byte_data = Encoding.UTF8.GetBytes(recovery_writer.ToString());
                         var write_record_request = new LogFSWriteRecordRequest(file_id, transaction++, (uint)byte_data.Length, byte_data);
-                        var write_record_response = await Client.Value.LogFSWriteRecordAsync(write_record_request);
+                        var write_record_response = await Client.LogFSWriteRecordAsync(write_record_request);
 
                         if (!ProcessResponse(
                             write_record_response.retval,
@@ -965,7 +848,7 @@ namespace Flux.ViewModels
                             write_record_response.ErrNum))
                         {
                             var close_file_request = new LogFSCloseFileRequest(file_id, (ushort)(transaction - 1));
-                            var close_file_response = await Client.Value.LogFSCloseFileAsync(close_file_request);
+                            var close_file_response = await Client.LogFSCloseFileAsync(close_file_request);
 
                             ProcessResponse(
                                 close_file_response.retval,
@@ -996,7 +879,7 @@ namespace Flux.ViewModels
 
                             var byte_data = Encoding.UTF8.GetBytes(gcode_writer.ToString());
                             var write_record_request = new LogFSWriteRecordRequest(file_id, transaction++, (uint)byte_data.Length, byte_data);
-                            var write_record_response = await Client.Value.LogFSWriteRecordAsync(write_record_request);
+                            var write_record_response = await Client.LogFSWriteRecordAsync(write_record_request);
 
                             if (!ProcessResponse(
                                 write_record_response.retval,
@@ -1004,7 +887,7 @@ namespace Flux.ViewModels
                                 write_record_response.ErrNum))
                             {
                                 var close_file_request = new LogFSCloseFileRequest(file_id, (ushort)(transaction - 1));
-                                var close_file_response = await Client.Value.LogFSCloseFileAsync(close_file_request);
+                                var close_file_response = await Client.LogFSCloseFileAsync(close_file_request);
 
                                 ProcessResponse(
                                     close_file_response.retval,
@@ -1026,7 +909,7 @@ namespace Flux.ViewModels
 
                 var byte_data_newline = Encoding.UTF8.GetBytes(Environment.NewLine);
                 var write_record_request_newline = new LogFSWriteRecordRequest(file_id, transaction++, (uint)byte_data_newline.Length, byte_data_newline);
-                var write_record_response_newline = await Client.Value.LogFSWriteRecordAsync(write_record_request_newline);
+                var write_record_response_newline = await Client.LogFSWriteRecordAsync(write_record_request_newline);
 
                 if (!ProcessResponse(
                     write_record_response_newline.retval,
@@ -1034,7 +917,7 @@ namespace Flux.ViewModels
                     write_record_response_newline.ErrNum))
                 {
                     var close_file_request = new LogFSCloseFileRequest(file_id, (ushort)(transaction - 1));
-                    var close_file_response = await Client.Value.LogFSCloseFileAsync(close_file_request);
+                    var close_file_response = await Client.LogFSCloseFileAsync(close_file_request);
                     return false;
                 }
             }
@@ -1050,7 +933,7 @@ namespace Flux.ViewModels
                     return false;
 
                 var close_file_request = new LogFSCloseFileRequest(file_id, transaction++);
-                var close_file_response = await Client.Value.LogFSCloseFileAsync(close_file_request);
+                var close_file_response = await Client.LogFSCloseFileAsync(close_file_request);
                 if (!ProcessResponse(
                     close_file_response.retval,
                     close_file_response.ErrClass,
@@ -1058,10 +941,10 @@ namespace Flux.ViewModels
                     return false;
 
                 var remove_file_request = new LogFSRemoveFileRequest(folder, filename);
-                var remove_file_response = await Client.Value.LogFSRemoveFileAsync(remove_file_request);
+                var remove_file_response = await Client.LogFSRemoveFileAsync(remove_file_request);
 
                 var rename_request = new LogFSRenameRequest($"{folder}\\file_upload.tmp", $"{folder}\\{filename}");
-                var rename_responde = await Client.Value.LogFSRenameAsync(rename_request);
+                var rename_responde = await Client.LogFSRenameAsync(rename_request);
                 if (!ProcessResponse(
                     rename_responde.retval,
                     rename_responde.ErrClass,
@@ -1126,11 +1009,8 @@ namespace Flux.ViewModels
         {
             try
             {
-                if (!Client.HasValue)
-                    return false;
-
                 var axes_ref_request = new AxesRefRequest(ProcessNumber, (ushort)axes.Length, string.Join("", axes));
-                var axes_ref_response = await Client.Value.AxesRefAsync(axes_ref_request);
+                var axes_ref_response = await Client.AxesRefAsync(axes_ref_request);
 
                 if (!ProcessResponse(
                     axes_ref_response.retval,

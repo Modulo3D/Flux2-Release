@@ -45,12 +45,12 @@ namespace Flux.ViewModels
         {
             Flux = flux;
             Disposables = new CompositeDisposable();
-            flux.WhenAnyValue(v => v.RemoteControlData)
-                .ThrottleMax(TimeSpan.FromSeconds(0.01), TimeSpan.FromSeconds(0.05))
-                .DistinctUntilChanged()
-                .Select(rc => Observable.FromAsync(() => SendRemoteControlDataAsync(rc)))
-                .Merge(1)
-                .Subscribe()
+
+            var send_data_thread = new DisposableThread(async () =>
+                {
+                    var data = flux.RemoteControlData;
+                    await SendRemoteControlDataAsync(data);
+                }, TimeSpan.FromMilliseconds(50))
                 .DisposeWith(Disposables);
         }
         private async Task SendRemoteControlDataAsync(Optional<RemoteControlData> rc)
@@ -227,9 +227,9 @@ namespace Flux.ViewModels
 
         public async Task<bool> PingAsync(Optional<string> address, TimeSpan timeout)
         {
-            try
+            for (int i = 0; i < 5; i++)
             {
-                for (int i = 0; i < 5; i++)
+                try
                 {
                     if (!address.HasValue)
                         return false;
@@ -242,21 +242,21 @@ namespace Flux.ViewModels
                     if (result.Status == IPStatus.Success)
                         return true;
                 }
-                return false;
+                catch (Exception ex)
+                {
+                    return false;
+                }
             }
-            catch (Exception)
-            {
-                return false;
-            }
+            return false;
         }
 
         public async Task<bool> OptionsAsync(Optional<string> address, TimeSpan timeout)
         {
-            try
+            if (!address.HasValue)
+                return false;
+            for (int i = 0; i < 5; i++)
             {
-                if (!address.HasValue)
-                    return false;
-                for (int i = 0; i < 5; i++)
+                try
                 {
                     var request = new RestRequest($"http://{address}", Method.Options);
 
@@ -267,12 +267,12 @@ namespace Flux.ViewModels
                         response.StatusCode == HttpStatusCode.NoContent)
                         return true;
                 }
-                return false;
+                catch (Exception ex)
+                {
+                    return false;
+                }
             }
-            catch (Exception)
-            {
-                return false;
-            }
+            return false;
         }
 
         private void InitializeWebServer()

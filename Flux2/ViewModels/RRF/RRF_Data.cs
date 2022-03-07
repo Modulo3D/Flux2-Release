@@ -1111,11 +1111,11 @@ namespace Flux.ViewModels
 
     public class RRF_ObjectModel : ReactiveObject
     {
-        private Optional<List<RRF_ObjectModelBoard>> _Boards;
-        public Optional<List<RRF_ObjectModelBoard>> Boards { get => _Boards; set => this.RaiseAndSetIfChanged(ref _Boards, value); }
+        //private Optional<List<RRF_ObjectModelBoard>> _Boards;
+        //public Optional<List<RRF_ObjectModelBoard>> Boards { get => _Boards; set => this.RaiseAndSetIfChanged(ref _Boards, value); }
 
-        private Optional<List<RRF_ObjectModelFan>> _Fans;
-        public Optional<List<RRF_ObjectModelFan>> Fans { get => _Fans; set => this.RaiseAndSetIfChanged(ref _Fans, value); }
+        //private Optional<List<RRF_ObjectModelFan>> _Fans;
+        //public Optional<List<RRF_ObjectModelFan>> Fans { get => _Fans; set => this.RaiseAndSetIfChanged(ref _Fans, value); }
 
         private Optional<RRF_ObjectModelHeat> _Heat;
         public Optional<RRF_ObjectModelHeat> Heat { get => _Heat; set => this.RaiseAndSetIfChanged(ref _Heat, value); }
@@ -1132,8 +1132,8 @@ namespace Flux.ViewModels
         private Optional<RRF_ObjectModelSensors> _Sensors;
         public Optional<RRF_ObjectModelSensors> Sensors { get => _Sensors; set => this.RaiseAndSetIfChanged(ref _Sensors, value); }
 
-        private Optional<RRF_ObjectModelSeqs> _Seqs;
-        public Optional<RRF_ObjectModelSeqs> Seqs { get => _Seqs; set => this.RaiseAndSetIfChanged(ref _Seqs, value); }
+        //private Optional<RRF_ObjectModelSeqs> _Seqs;
+        //public Optional<RRF_ObjectModelSeqs> Seqs { get => _Seqs; set => this.RaiseAndSetIfChanged(ref _Seqs, value); }
 
         /*private Optional<List<RRF_ObjectModelSpindle>> _Spindles;
         public Optional<List<RRF_ObjectModelSpindle>> Spindles { get => _Spindles; set => this.RaiseAndSetIfChanged(ref _Spindles, value); }*/
@@ -1211,18 +1211,17 @@ namespace Flux.ViewModels
                     return default;
 
                 // Full part program from filename
-                var filename = data.job.File.Convert(f => f.FileName)
-                    .ValueOr(() => data.job.LastFileName.ValueOrDefault());
-                if (!string.IsNullOrEmpty(filename))
-                {
-                    if (MCodePartProgram.TryParse(filename, out var full_part_program))
-                    { 
-                        if (storage_dict.TryGetValue(full_part_program.MCodeGuid, out var part_programs))
-                        { 
-                            if (part_programs.TryGetValue(full_part_program.StartBlock, out var part_program))
-                                return part_program;
-                        }
-                    }
+                var partprogram_filename = data.job.File
+                    .Convert(f => f.FileName)
+                    .ValueOrOptional(() => data.job.LastFileName)
+                    .ValueOr(() => "");
+
+                if (MCodePartProgram.TryParse(partprogram_filename, out var full_part_program) && 
+                    full_part_program.MCodeGuid == current_guid)
+                { 
+                    if (storage_dict.TryGetValue(full_part_program.MCodeGuid, out var part_programs) &&
+                        part_programs.TryGetValue(full_part_program.StartBlock, out var part_program))
+                        return part_program;
                 }
 
                 return storage_dict.FirstOrOptional(kvp => kvp.Key == current_guid)

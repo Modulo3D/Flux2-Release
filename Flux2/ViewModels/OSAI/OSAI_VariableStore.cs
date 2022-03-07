@@ -315,10 +315,7 @@ namespace Flux.ViewModels
         {
             try
             {
-                if (!connection.Client.HasValue)
-                    return default;
-
-                var get_blk_num_response = await connection.Client.Value.GetBlkNumAsync(connection.ProcessNumber);
+                var get_blk_num_response = await connection.Client.GetBlkNumAsync(connection.ProcessNumber);
 
                 if (!connection.ProcessResponse(
                     get_blk_num_response.Body.retval,
@@ -338,11 +335,8 @@ namespace Flux.ViewModels
         {
             try
             {
-                if (!connection.Client.HasValue)
-                    return default;
-
                 var boot_phase_request = new BootPhaseEnquiryRequest();
-                var boot_phase_response = await connection.Client.Value.BootPhaseEnquiryAsync(boot_phase_request);
+                var boot_phase_response = await connection.Client.BootPhaseEnquiryAsync(boot_phase_request);
 
                 if (!connection.ProcessResponse(
                     boot_phase_response.retval,
@@ -362,11 +356,8 @@ namespace Flux.ViewModels
         {
             try
             {
-                if (!connection.Client.HasValue)
-                    return default;
-
                 var boot_mode_request = new BootModeRequest((ushort)boot_mode);
-                var boot_mode_response = await connection.Client.Value.BootModeAsync(boot_mode_request);
+                var boot_mode_response = await connection.Client.BootModeAsync(boot_mode_request);
 
                 if (!connection.ProcessResponse(
                     boot_mode_response.retval,
@@ -413,10 +404,7 @@ namespace Flux.ViewModels
         {
             try
             {
-                if (!connection.Client.HasValue)
-                    return default;
-
-                var process_status_response = await connection.Client.Value.GetProcessStatusAsync(connection.ProcessNumber);
+                var process_status_response = await connection.Client.GetProcessStatusAsync(connection.ProcessNumber);
 
                 if (!connection.ProcessResponse(
                     process_status_response.Body.retval,
@@ -436,10 +424,7 @@ namespace Flux.ViewModels
         {
             try
             {
-                if (!connection.Client.HasValue)
-                    return default;
-
-                var process_status_response = await connection.Client.Value.GetProcessStatusAsync(connection.ProcessNumber);
+                var process_status_response = await connection.Client.GetProcessStatusAsync(connection.ProcessNumber);
 
                 if (!connection.ProcessResponse(
                     process_status_response.Body.retval,
@@ -485,11 +470,8 @@ namespace Flux.ViewModels
         {
             try
             {
-                if (!connection.Client.HasValue)
-                    return false;
-
                 var set_process_mode_request = new SetProcessModeRequest(connection.ProcessNumber, (ushort)process_mode);
-                var set_process_mode_response = await connection.Client.Value.SetProcessModeAsync(set_process_mode_request);
+                var set_process_mode_response = await connection.Client.SetProcessModeAsync(set_process_mode_request);
 
                 if (!connection.ProcessResponse(
                     set_process_mode_response.retval,

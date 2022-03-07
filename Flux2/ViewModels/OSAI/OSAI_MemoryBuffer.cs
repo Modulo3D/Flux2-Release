@@ -176,31 +176,28 @@ namespace Flux.ViewModels
         }
         public async Task UpdateBufferAsync()
         {
-            if (!Connection.Client.HasValue)
-                return;
-
-            var gd_response = await Connection.Client.Value.ReadVarDoubleAsync(GD_BUFFER_REQ);
+            var gd_response = await Connection.Client.ReadVarDoubleAsync(GD_BUFFER_REQ);
             if (Connection.ProcessResponse(
                 gd_response.retval,
                 gd_response.ErrClass,
                 gd_response.ErrNum))
                 GD_BUFFER = gd_response.Value;
 
-            var gw_response = await Connection.Client.Value.ReadVarWordAsync(GW_BUFFER_REQ);
+            var gw_response = await Connection.Client.ReadVarWordAsync(GW_BUFFER_REQ);
             if (Connection.ProcessResponse(
                 gw_response.retval,
                 gw_response.ErrClass,
                 gw_response.ErrNum))
                 GW_BUFFER = gw_response.Value;
 
-            var l_response = await Connection.Client.Value.ReadVarDoubleAsync(L_BUFFER_REQ);
+            var l_response = await Connection.Client.ReadVarDoubleAsync(L_BUFFER_REQ);
             if (Connection.ProcessResponse(
                 l_response.retval,
                 l_response.ErrClass,
                 l_response.ErrNum))
                 L_BUFFER = l_response.Value;
 
-            var mw_response = await Connection.Client.Value.ReadVarWordAsync(MW_BUFFER_REQ);
+            var mw_response = await Connection.Client.ReadVarWordAsync(MW_BUFFER_REQ);
             if (Connection.ProcessResponse(
                 mw_response.retval,
                 mw_response.ErrClass,

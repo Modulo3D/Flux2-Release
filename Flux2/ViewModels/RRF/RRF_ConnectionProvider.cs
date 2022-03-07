@@ -151,7 +151,7 @@ namespace Flux.ViewModels
                 switch (ConnectionPhase.Value)
                 {
                     case RRF_ConnectionPhase.START_PHASE:
-                        await CreateTimeoutAsync(TimeSpan.FromSeconds(5), async ct =>
+                        await CreateTimeoutAsync(TimeSpan.FromSeconds(5), ct =>
                         {
                             if (Connection.HasValue)
                             {
@@ -159,42 +159,34 @@ namespace Flux.ViewModels
                                 Connection = default;
                             }
 
-                            Connection = new RRF_Connection(Flux, VariableStore);
-
-                            var plc_connected = await connect_plc_async();
-                            if (plc_connected)
-                                ConnectionPhase = RRF_ConnectionPhase.DISCONNECTING_CLIENT;
-                        });
-                        async Task<bool> connect_plc_async()
-                        {
-                            if (Connection == default)
-                                return false;
-
                             var plc_address = Flux.SettingsProvider.CoreSettings.Local.PLCAddress;
                             if (!plc_address.HasValue || string.IsNullOrEmpty(plc_address.Value))
                             {
                                 Flux.Messages.LogMessage(OSAI_ConnectResponse.CONNECT_INVALID_ADDRESS);
-                                return false;
+                                return Task.CompletedTask;
                             }
-                            if (Connection.HasValue)
-                                return await Connection.Value.CreateClientAsync($"http://{plc_address.Value}/");
-                            return false;
-                        }
+
+                            Connection = new RRF_Connection(Flux, VariableStore, $"http://{plc_address.Value}/");
+                            ConnectionPhase = RRF_ConnectionPhase.DISCONNECTING_CLIENT;
+                            return Task.CompletedTask;
+                        });
                         break;
 
                     case RRF_ConnectionPhase.DISCONNECTING_CLIENT:
                         await CreateTimeoutAsync(TimeSpan.FromSeconds(5), async ct =>
                         {
-                            var disconnected = await Connection.Value.PostRequestAsync(new RRF_Request("rr_disconnect", Method.Get, ct));
-                            ConnectionPhase = disconnected.HasValue && disconnected.Value.Response.StatusCode == HttpStatusCode.OK ? RRF_ConnectionPhase.CONNECTING_CLIENT : RRF_ConnectionPhase.START_PHASE;
+                            var request = new RRF_Request("rr_disconnect", Method.Get, RRF_RequestPriority.Immediate, ct);
+                            var disconnected = await Connection.Value.Client.ExecuteAsync(request);
+                            ConnectionPhase = disconnected.Ok ? RRF_ConnectionPhase.CONNECTING_CLIENT : RRF_ConnectionPhase.START_PHASE;
                         });
                         break;
 
                     case RRF_ConnectionPhase.CONNECTING_CLIENT:
                         await CreateTimeoutAsync(TimeSpan.FromSeconds(5), async ct =>
                         {
-                            var connected = await Connection.Value.PostRequestAsync(new RRF_Request($"rr_connect?password=\"\"&time={DateTime.UtcNow:O}", Method.Get, ct));
-                            ConnectionPhase = connected.HasValue && connected.Value.Response.StatusCode == HttpStatusCode.OK ? RRF_ConnectionPhase.READING_STATUS : RRF_ConnectionPhase.START_PHASE;
+                            var request = new RRF_Request($"rr_connect?password=\"\"&time={DateTime.UtcNow:O}", Method.Get, RRF_RequestPriority.Immediate, ct);
+                            var connected = await Connection.Value.Client.ExecuteAsync(request);
+                            ConnectionPhase = connected.Ok ? RRF_ConnectionPhase.READING_STATUS : RRF_ConnectionPhase.START_PHASE;
                         });
                         break;
 

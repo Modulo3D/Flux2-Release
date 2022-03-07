@@ -409,7 +409,7 @@ namespace Flux.ViewModels
             async Task<Optional<string>> read_card(Optional<NFCReaderHandle> handle)
             {
                 var operator_usb = Flux.MCodes.OperatorUSB;
-                var card_id = await handle.ConvertAsync(h => h.WaitForTagAsync(TimeSpan.FromSeconds(0.1), TimeSpan.FromSeconds(5)));
+                var card_id = await handle.ConvertAsync(h => h.WaitForTagAsync(TimeSpan.FromSeconds(0.5), TimeSpan.FromSeconds(10)));
 
                 if (!card_id.HasValue)
                 {
@@ -437,7 +437,7 @@ namespace Flux.ViewModels
             {
                 var result = await Reader.Value.OpenAsync(async handle =>
                 {
-                    var tag_id = await handle.WaitForTagAsync(TimeSpan.FromSeconds(0.1), TimeSpan.FromSeconds(5));
+                    var tag_id = await handle.WaitForTagAsync(TimeSpan.FromSeconds(0.5), TimeSpan.FromSeconds(10));
                     if (!tag_id.HasValue)
                     {
                         Flux.Messages.LogMessage("Errore di scrittura", "Nessun tag trovato", MessageLevel.ERROR, 35002);
@@ -470,7 +470,7 @@ namespace Flux.ViewModels
                 var virtual_tag = false;
                 var operator_usb = Flux.MCodes.OperatorUSB;
 
-                var card_id = await handle.ConvertAsync(h => h.WaitForTagAsync(TimeSpan.FromSeconds(0.1), TimeSpan.FromSeconds(5)));
+                var card_id = await handle.ConvertAsync(h => h.WaitForTagAsync(TimeSpan.FromSeconds(0.5), TimeSpan.FromSeconds(10)));
                 if (!card_id.HasValue)
                 {
                     if (handle.HasValue && !operator_usb.ConvertOr(o => o.RewriteNFC, () => false))

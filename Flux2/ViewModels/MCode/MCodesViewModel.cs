@@ -395,57 +395,76 @@ namespace Flux.ViewModels
         {
             var queue_pos = await Flux.ConnectionProvider.ReadVariableAsync(c => c.QUEUE_POS);
             if (!queue_pos.HasValue)
+            {
+                Flux.Messages.LogMessage("Errore durante la selezione del lavoro", "Posizione della coda non trovata", MessageLevel.ERROR, 0);
                 return false;
+            }
 
             if (queue_pos.Value < 0)
+            {
                 if (!await ClearQueueAsync())
+                {
+                    Flux.Messages.LogMessage("Errore durante la selezione del lavoro", "Impossibile pulire la coda", MessageLevel.ERROR, 0);
                     return false;
+                }
+            }
 
             var queue = await ReadMCodeQueueAsync();
             if (!queue.HasValue)
+            {
+                Flux.Messages.LogMessage("Errore durante la selezione del lavoro", "Impossibile leggere lo stato della coda", MessageLevel.ERROR, 0);
                 return false;
+            }
 
             var optional_queue_size = await Flux.ConnectionProvider
                 .ReadVariableAsync(c => c.QUEUE_SIZE);
 
             var queue_size = optional_queue_size
-                .ValueOr(() => (ushort)1);
+                .ConvertOr(s => s > 0 ? s : (ushort)1, () => (ushort)1);
 
-            var queue_count = queue.Value.Keys.Count > 0 ? queue.Value.Keys.Max() : new QueuePosition(-1);
-            if (queue_count > -1)
+            var queue_count = queue.Value.Count;
+            var last_queue_pos = (QueuePosition)(queue_count - 1);
+            if (queue_count >= queue_size)
             {
-                if (queue.Value.Count >= queue_size)
-                {
-                    if (queue.Value.Count < 1)
+                var last_mcode = QueuedMCodes.Lookup(last_queue_pos);
+                if (last_mcode.HasValue)
+                { 
+                    if (!await DeleteFromQueueAsync(last_mcode.Value))
+                    {
+                        Flux.Messages.LogMessage("Errore durante la selezione del lavoro", "Impossibile cancellare il lavoro dalla coda", MessageLevel.ERROR, 0);
                         return false;
-                    var last_mcode = QueuedMCodes.Lookup(queue_count);
-                    if (last_mcode.HasValue)
-                    { 
-                        if (!await DeleteFromQueueAsync(last_mcode.Value))
-                            return false;
                     }
-                    queue_count--;
-                    if (queue_pos.Value > queue_count)
-                        queue_pos = queue_count;
                 }
+                queue_count--;
+                last_queue_pos--;
+                if (queue_pos.Value > last_queue_pos)
+                    queue_pos = last_queue_pos;
             }
 
             if (!await PrepareMCodeAsync(mcode, false))
+            {
+                Flux.Messages.LogMessage("Errore durante la selezione del lavoro", "Impossibile preparare il lavoro", MessageLevel.ERROR, 0);
                 return false;
+            }
 
             var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             if (!await Flux.ConnectionProvider.PutFileAsync(
                 c => c.QueuePath,
-                $"{queue_count + 1};{mcode.Analyzer.MCode.MCodeGuid}",
+                $"{last_queue_pos + 1};{mcode.Analyzer.MCode.MCodeGuid}",
                 cts.Token))
+            {
+                Flux.Messages.LogMessage("Errore durante la selezione del lavoro", "Impossibile aggiungere alla coda", MessageLevel.ERROR, 0);
                 return false;
-
+            }
 
             if (queue_pos.Value < 0)
             {
                 Flux.StatusProvider.StartWithLowMaterials = false;
                 if (!await Flux.ConnectionProvider.WriteVariableAsync(c => c.QUEUE_POS, (short)0))
+                {
+                    Flux.Messages.LogMessage("Errore durante la selezione del lavoro", "Impossibile selezionare il lavoro", MessageLevel.ERROR, 0);
                     return false;
+                }
             }
 
             if (queue_size <= 1)
@@ -468,8 +487,9 @@ namespace Flux.ViewModels
             if (queue.Value.Keys.Count <= 0)
                 return false;
 
-            var queue_count = queue.Value.Keys.Max();
-            for (var position = mcode.QueueIndex; position < queue_count + 1; position++)
+            var queue_count = queue.Value.Count;
+            var last_queue_pos = (QueuePosition)(queue_count - 1);
+            for (var position = mcode.QueueIndex; position < queue_count; position++)
             {
                 var current_position = position;
                 var next_position = new QueuePosition((short)(position.Value + 1));
@@ -500,7 +520,7 @@ namespace Flux.ViewModels
             if (!queue_pos.HasValue)
                 return false;
 
-            if (queue_pos.Value >= queue_count)
+            if (queue_pos.Value >= last_queue_pos)
             {
                 var new_queue_pos = (short)(queue_pos.Value - 1);
                 if (!await Flux.ConnectionProvider.WriteVariableAsync(c => c.QUEUE_POS, new_queue_pos))

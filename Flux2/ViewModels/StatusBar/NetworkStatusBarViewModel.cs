@@ -34,11 +34,11 @@ namespace Flux.ViewModels
 
             network.Throttle(TimeSpan.FromSeconds(5))
                 .Where(n => !n.plc)
-                .Subscribe(_ => Flux.Messages.LogMessage("Connessione", "Impossibile raggiungere il plc", MessageLevel.EMERG, 21001));
+                .Subscribe(_ => Flux.Messages.LogMessage("Connessione", "Impossibile raggiungere il plc", MessageLevel.INFO, 21001));
 
             network.Throttle(TimeSpan.FromSeconds(5))
                 .Where(n => !n.inter)
-                .Subscribe(_ => Flux.Messages.LogMessage("Connessione", "Impossibile connettersi a internet", MessageLevel.WARNING, 21002));
+                .Subscribe(_ => Flux.Messages.LogMessage("Connessione", "Impossibile connettersi a internet", MessageLevel.INFO, 21002));
 
             return network.Select(
                 network =>

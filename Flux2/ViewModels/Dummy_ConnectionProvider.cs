@@ -51,17 +51,12 @@ namespace Flux.ViewModels
 
         public override string StoragePath => throw new NotImplementedException();
 
-        public Dummy_Connection(Dummy_VariableStore variable_store) : base(variable_store)
+        public Dummy_Connection(Dummy_VariableStore variable_store) : base(variable_store, Unit.Default)
         {
             MemoryBuffer = new Dummy_MemoryBuffer(this);
         }
 
         public override Task<bool> ClearFolderAsync(string folder, bool wait, CancellationToken ct = default)
-        {
-            throw new NotImplementedException();
-        }
-
-        public override Task<bool> CreateClientAsync(string address)
         {
             throw new NotImplementedException();
         }
