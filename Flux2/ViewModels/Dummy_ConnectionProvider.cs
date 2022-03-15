@@ -76,92 +76,92 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override string[] GetGotoPurgePositionGCode(ushort position)
+        public override Optional<IEnumerable<string>> GetGotoPurgePositionGCode(ushort position)
         {
             throw new NotImplementedException();
         }
 
-        public override string[] GetGotoReaderGCode(ushort position)
+        public override Optional<IEnumerable<string>> GetGotoReaderGCode(ushort position)
         {
             throw new NotImplementedException();
         }
 
-        public override string[] GetHomingGCode()
+        public override Optional<IEnumerable<string>> GetHomingGCode()
         {
             throw new NotImplementedException();
         }
 
-        public override string[] GetLoadFilamentGCode(ushort position, Nozzle nozzle, double temperature)
+        public override Optional<IEnumerable<string>> GetLoadFilamentGCode(ushort position, Nozzle nozzle, double temperature)
         {
             throw new NotImplementedException();
         }
 
-        public override string[] GetLowerPlateGCode()
+        public override Optional<IEnumerable<string>> GetLowerPlateGCode()
         {
             throw new NotImplementedException();
         }
 
-        public override string[] GetParkToolGCode()
+        public override Optional<IEnumerable<string>> GetParkToolGCode()
         {
             throw new NotImplementedException();
         }
 
-        public override string[] GetProbePlateGCode()
+        public override Optional<IEnumerable<string>> GetProbePlateGCode()
         {
             throw new NotImplementedException();
         }
 
-        public override string[] GetProbeToolGCode(ushort position, Nozzle nozzle, double temperature)
+        public override Optional<IEnumerable<string>> GetProbeToolGCode(ushort position, Nozzle nozzle, double temperature)
         {
             throw new NotImplementedException();
         }
 
-        public override string[] GetPurgeToolGCode(ushort position, Nozzle nozzle, double temperature)
+        public override Optional<IEnumerable<string>> GetPurgeToolGCode(ushort position, Nozzle nozzle, double temperature)
         {
             throw new NotImplementedException();
         }
 
-        public override string[] GetRaisePlateGCode()
+        public override Optional<IEnumerable<string>> GetRaisePlateGCode()
         {
             throw new NotImplementedException();
         }
 
-        public override string[] GetRelativeEMovementGCode(double distance, double feedrate)
+        public override Optional<IEnumerable<string>> GetRelativeEMovementGCode(double distance, double feedrate)
         {
             throw new NotImplementedException();
         }
 
-        public override string[] GetRelativeXMovementGCode(double distance, double feedrate)
+        public override Optional<IEnumerable<string>> GetRelativeXMovementGCode(double distance, double feedrate)
         {
             throw new NotImplementedException();
         }
 
-        public override string[] GetRelativeYMovementGCode(double distance, double feedrate)
+        public override Optional<IEnumerable<string>> GetRelativeYMovementGCode(double distance, double feedrate)
         {
             throw new NotImplementedException();
         }
 
-        public override string[] GetRelativeZMovementGCode(double distance, double feedrate)
+        public override Optional<IEnumerable<string>> GetRelativeZMovementGCode(double distance, double feedrate)
         {
             throw new NotImplementedException();
         }
 
-        public override string[] GetSelectToolGCode(ushort position)
+        public override Optional<IEnumerable<string>> GetSelectToolGCode(ushort position)
         {
             throw new NotImplementedException();
         }
 
-        public override string[] GetSetToolTemperatureGCode(ushort position, double temperature)
+        public override Optional<IEnumerable<string>> GetSetToolTemperatureGCode(ushort position, double temperature)
         {
             throw new NotImplementedException();
         }
 
-        public override string[] GetStartPartProgramGCode(string file_name)
+        public override Optional<IEnumerable<string>> GetStartPartProgramGCode(string file_name)
         {
             throw new NotImplementedException();
         }
 
-        public override string[] GetUnloadFilamentGCode(ushort position, Nozzle nozzle, double temperature)
+        public override Optional<IEnumerable<string>> GetUnloadFilamentGCode(ushort position, Nozzle nozzle, double temperature)
         {
             throw new NotImplementedException();
         }
@@ -196,7 +196,7 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override string[] GetSetToolOffsetGCode(ushort position, double x, double y, double z)
+        public override Optional<IEnumerable<string>> GetSetToolOffsetGCode(ushort position, double x, double y, double z)
         {
             throw new NotImplementedException();
         }

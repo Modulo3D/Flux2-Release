@@ -91,7 +91,7 @@ namespace Flux.ViewModels
 
                 public RRF_ArrayObjectModel<TState, TRData, TWData> Create<TRData, TWData>(
                     string name,
-                    IEnumerable<VariableUnit> variable_units,
+                    IObservable<IEnumerable<VariableUnit>> variable_units,
                     Func<RRF_Connection, TVariable, Optional<TRData>> read_data)
                 {
                     RRF_VariableObjectModel<TVariable, TRData, TWData> get_variable(VariableUnit unit)
@@ -104,7 +104,7 @@ namespace Flux.ViewModels
                 }
                 public RRF_ArrayObjectModel<TState, TRData, TWData> Create<TRData, TWData>(
                     string name,
-                    IEnumerable<VariableUnit> variable_units,
+                    IObservable<IEnumerable<VariableUnit>> variable_units,
                     Func<RRF_Connection, TVariable, Optional<TRData>> read_data,
                     Func<RRF_Connection, TWData, VariableUnit, bool> write_data)
                 {
@@ -119,7 +119,7 @@ namespace Flux.ViewModels
                 }
                 public RRF_ArrayObjectModel<TState, TRData, TWData> Create<TRData, TWData>(
                     string name,
-                    IEnumerable<VariableUnit> variable_units,
+                    IObservable<IEnumerable<VariableUnit>> variable_units,
                     Func<RRF_Connection, TVariable, Optional<TRData>> read_data,
                     Func<RRF_Connection, TWData, VariableUnit, Task<bool>> write_data)
                 {
@@ -234,15 +234,18 @@ namespace Flux.ViewModels
     public class RRF_ArrayObjectModel<TVariable, TRData, TWData> : FLUX_Array<TRData, TWData>
     {
         public override string Group => "ObjectModel";
-        public new ISourceCache<IFLUX_Variable<TRData, TWData>, VariableUnit> Variables { get; }
-        public RRF_ArrayObjectModel(string name, IEnumerable<VariableUnit> variable_units, Func<VariableUnit, IFLUX_Variable<TRData, TWData>> get_variable)
+        public RRF_ArrayObjectModel(string name, IObservable<IEnumerable<VariableUnit>> variable_units, Func<VariableUnit, IFLUX_Variable<TRData, TWData>> get_variable)
             : base(name, FluxMemReadPriority.DISABLED)
         {
-            Variables = new SourceCache<IFLUX_Variable<TRData, TWData>, VariableUnit>(v => v.Unit.ValueOr(() => ""));
-            base.Variables = Variables;
-
-            foreach (var unit in variable_units)
-                Variables.AddOrUpdate(get_variable(unit));
+            Variables = ObservableChangeSet.Create<IFLUX_Variable<TRData, TWData>, VariableUnit>(v =>
+            {
+                return variable_units.Subscribe(unit =>
+                {
+                    var variables = unit.Select(get_variable);
+                    v.EditDiff(variables, (v1, v2) => v1.Name == v2.Name);
+                });
+            }, v => v.Unit.ValueOr(() => ""))
+            .AsObservableCache();
         }
 
         public override VariableUnit GetArrayUnit(ushort position)
@@ -278,7 +281,7 @@ namespace Flux.ViewModels
                 var write_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 if (!await c.PostGCodeAsync($"set global.{variable} = {s_value}", write_cts.Token))
                 {
-                    flux.Messages.LogMessage("Impossibile scrivere la variabile", "Errore durante l'esecuzione del gcode", MessageLevel.ERROR, 0);
+                    flux.Messages.LogMessage($"Impossibile scrivere la variabile {variable}", "Errore durante l'esecuzione del gcode", MessageLevel.ERROR, 0);
                     return false;
                 }
 
@@ -289,7 +292,7 @@ namespace Flux.ViewModels
                     var put_file_cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
                     if (!await c.PutFileAsync(c => ((RRF_Connection)c).GlobalPath, load_var_macro, put_file_cts.Token, gcode))
                     {
-                        flux.Messages.LogMessage("Impossibile salvare la variabile", "Errore durante la scrittura del file", MessageLevel.ERROR, 0);
+                        flux.Messages.LogMessage($"Impossibile salvare la variabile {variable}", "Errore durante la scrittura del file", MessageLevel.ERROR, 0);
                         return false;
                     }
                 }
@@ -345,7 +348,7 @@ namespace Flux.ViewModels
                     var write_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                     if (!await c.PostGCodeAsync($"set global.{variable}_{lower_unit} = {s_value}", write_cts.Token))
                     {
-                        flux.Messages.LogMessage("Impossibile scrivere la variabile", "Errore durante l'esecuzione del gcode", MessageLevel.ERROR, 0);
+                        flux.Messages.LogMessage($"Impossibile scrivere la variabile {variable}_{lower_unit}", "Errore durante l'esecuzione del gcode", MessageLevel.ERROR, 0);
                         return false;
                     }
     
@@ -356,7 +359,7 @@ namespace Flux.ViewModels
                         var put_file_cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
                         if (!await c.PutFileAsync(c => ((RRF_Connection)c).GlobalPath, load_var_macro, put_file_cts.Token, gcode))
                         {
-                            flux.Messages.LogMessage("Impossibile salvare la variabile", "Errore durante la scrittura del file", MessageLevel.ERROR, 0);
+                            flux.Messages.LogMessage($"Impossibile salvare la variabile {variable}_{lower_unit}", "Errore durante la scrittura del file", MessageLevel.ERROR, 0);
                             return false;
                         }
                     }
@@ -399,16 +402,20 @@ namespace Flux.ViewModels
     {
         public override string Group => "Global";
 
-        public RRF_ArrayGlobalModel(FluxViewModel flux, IObservable<Optional<RRF_Connection>> connection, string name, IEnumerable<VariableUnit> variable_units, bool stored, Func<object, TData> convert_data = default)
+        public RRF_ArrayGlobalModel(FluxViewModel flux, IObservable<Optional<RRF_Connection>> connection, string name, IObservable<IEnumerable<VariableUnit>> variable_units, bool stored, Func<object, TData> convert_data = default)
             : base(name, FluxMemReadPriority.DISABLED)
         {
-            Variables = new SourceCache<IFLUX_Variable<TData, TData>, VariableUnit>(k => k.Unit.ValueOr(() => ""));
-            for (ushort position = 0; position < variable_units.Count(); position++)
+            Variables = ObservableChangeSet.Create<IFLUX_Variable<TData, TData>, VariableUnit>(v =>
             {
-                var unit = variable_units.ElementAt(position);
-                var variables = ((ISourceCache<IFLUX_Variable<TData, TData>, VariableUnit>)Variables);
-                variables.AddOrUpdate(new RRF_ArrayVariableGlobalModel<TData>(flux, connection, name, unit, stored, convert_data));
-            }
+                return variable_units.Subscribe(unit =>
+                {
+                    var variables = unit.Select(get_variable);
+                    v.EditDiff(variables, (v1, v2) => v1.Name == v2.Name);
+                });
+            }, v => v.Unit.ValueOr(() => ""))
+            .AsObservableCache();
+
+            RRF_ArrayVariableGlobalModel<TData> get_variable(VariableUnit unit) => new RRF_ArrayVariableGlobalModel<TData>(flux, connection, name, unit, stored, convert_data);
         }
 
         public override VariableUnit GetArrayUnit(ushort position)

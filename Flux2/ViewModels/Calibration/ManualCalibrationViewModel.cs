@@ -165,10 +165,25 @@ namespace Flux.ViewModels
             await Flux.ConnectionProvider.ExecuteParamacroAsync(c =>
             {
                 var gcode = new List<string>();
+                
                 if (SelectedTool.HasValue)
-                    gcode.AddRange(c.GetSetToolTemperatureGCode(SelectedTool.Value, 0));
-                gcode.AddRange(c.GetLowerPlateGCode());
-                gcode.AddRange(c.GetParkToolGCode());
+                { 
+                    var set_tool_temp_gcode = c.GetSetToolTemperatureGCode(SelectedTool.Value, 0);
+                    if (!set_tool_temp_gcode.HasValue)
+                        return default;
+                    gcode.AddRange(set_tool_temp_gcode.Value);
+                }
+    
+                var lower_plate_gcode = c.GetLowerPlateGCode();
+                if (!lower_plate_gcode.HasValue)
+                    return default;
+                gcode.AddRange(lower_plate_gcode.Value);
+
+                var park_tool_gcode = c.GetParkToolGCode();
+                if (!park_tool_gcode.HasValue)
+                    return default;
+                gcode.AddRange(park_tool_gcode.Value);
+
                 return gcode;
             }, true, exit_ctk.Token);
 
@@ -222,10 +237,26 @@ namespace Flux.ViewModels
                     await Flux.ConnectionProvider.ExecuteParamacroAsync(c =>
                     {
                         var gcode = new List<string>();
-                        gcode.AddRange(c.GetSelectToolGCode(e));
-                        gcode.AddRange(c.GetSetToolTemperatureGCode(e, print_temperature.Value));
-                        gcode.AddRange(c.GetSetToolOffsetGCode(e, tool_offset.Value.X, tool_offset.Value.Y, 0));
-                        gcode.AddRange(c.GetRaisePlateGCode());
+                        var select_tool_gcode = c.GetSelectToolGCode(e);
+                        if (!select_tool_gcode.HasValue)
+                            return default;
+                        gcode.AddRange(select_tool_gcode.Value);
+
+                        var set_tool_temp_gcode = c.GetSetToolTemperatureGCode(e, print_temperature.Value);
+                        if (!set_tool_temp_gcode.HasValue)
+                            return default;
+                        gcode.AddRange(set_tool_temp_gcode.Value);
+
+                        var set_tool_offset_gcode = c.GetSetToolOffsetGCode(e, tool_offset.Value.X, tool_offset.Value.Y, 0);
+                        if (!set_tool_offset_gcode.HasValue)
+                            return default;
+                        gcode.AddRange(set_tool_offset_gcode.Value);
+
+                        var raise_plate_gcode = c.GetRaisePlateGCode();
+                        if (!raise_plate_gcode.HasValue)
+                            return default;
+                        gcode.AddRange(raise_plate_gcode.Value);
+
                         return gcode;
                     }, true, select_tool_ctk.Token);
                 }

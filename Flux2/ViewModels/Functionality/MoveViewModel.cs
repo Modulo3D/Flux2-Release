@@ -3,6 +3,7 @@ using DynamicData.Kernel;
 using Modulo3DStandard;
 using ReactiveUI;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Linq;
@@ -80,7 +81,7 @@ namespace Flux.ViewModels
                     e.IsHomed.ValueOrDefault() &&
                     e.IsEnabledAxis.ValueOrDefault());
 
-            async Task moveAsync(Func<IFLUX_Connection, string[]> func)
+            async Task moveAsync(Func<IFLUX_Connection, Optional<IEnumerable<string>>> func)
             {
                 await Flux.ConnectionProvider.ExecuteParamacroAsync(func, false);
             }

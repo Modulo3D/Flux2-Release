@@ -68,7 +68,13 @@ namespace Flux.ViewModels
         {
             var options = ComboOption.Create("type", "Tipo di documento", Enum.GetValues<FLUX_FileType>(), b => (uint)b);
             var name = new TextBox("name", "Nome del documento", "", false);
-            var result = await Flux.ShowSelectionAsync("Cosa vuoi creare?", true, options, name);
+
+            var result = await Flux.ShowSelectionAsync(
+                "Cosa vuoi creare?",
+                Observable.Return(true),
+                options, 
+                name);
+
             if (result != ContentDialogResult.Primary)
                 return;
 
@@ -94,7 +100,12 @@ namespace Flux.ViewModels
         public async Task ModifyFSAsync(IFSViewModel fs)
         {
             var modify_option = ComboOption.Create("operations", "Operazione:", Enum.GetValues<FLUX_FileModify>(), f => (uint)f);
-            var modify_dialog_result = await Flux.ShowSelectionAsync("Tipo di operazione", true, modify_option);
+            
+            var modify_dialog_result = await Flux.ShowSelectionAsync(
+                "Tipo di operazione",
+                Observable.Return(true),
+                modify_option);
+            
             if (modify_dialog_result != ContentDialogResult.Primary)
                 return;
 
@@ -105,7 +116,12 @@ namespace Flux.ViewModels
             {
                 case FLUX_FileModify.Rename:
                     var rename_option = new TextBox("rename", "Nome del file", fs.FSName);
-                    var rename_dialog_result = await Flux.ShowSelectionAsync("Rinominare il file?", true, rename_option);
+
+                    var rename_dialog_result = await Flux.ShowSelectionAsync(
+                        "Rinominare il file?",
+                        Observable.Return(true),
+                        rename_option);
+
                     if (rename_dialog_result != ContentDialogResult.Primary)
                         return;
 
@@ -153,7 +169,13 @@ namespace Flux.ViewModels
             textbox.InitializeRemoteView();
             combo.InitializeRemoteView();
 
-            var result = await Flux.ShowSelectionAsync("Modifica File", true, combo, textbox);
+            var result = await Flux.ShowSelectionAsync(
+                "Modifica File",
+                Observable.Return(true),
+                combo.Items.SelectedValueChanged.Select(f => f.HasValue && f.Value == FLUX_FileAccess.ReadWrite),
+                combo, 
+                textbox);
+            
             if (result != ContentDialogResult.Primary)
                 return;
 

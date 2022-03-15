@@ -148,9 +148,9 @@ namespace Flux.ViewModels
         IFluxNavigatorViewModel IFlux.Navigator => Navigator;
         IFluxCalibrationViewModel IFlux.Calibration => Calibration;
 
-        private Optional<ContentDialog> _ContentDialog;
+        private Optional<IContentDialog> _ContentDialog;
         [RemoteContent(true, "dialog")]
-        public Optional<ContentDialog> ContentDialog 
+        public Optional<IContentDialog> ContentDialog 
         { 
             get => _ContentDialog;
             set => this.RaiseAndSetIfChanged(ref _ContentDialog, value);
@@ -280,7 +280,11 @@ namespace Flux.ViewModels
                         .AsObservableCache();
 
                     var printer_option = ComboOption.Create($"printer", "Stampante:", printers);
-                    var result = await ShowSelectionAsync("Seleziona un modello di stampante", false, printer_option);
+                    var result = await ShowSelectionAsync(
+                        "Seleziona un modello di stampante",
+                        default,
+                        printer_option);
+
                     if (result != ContentDialogResult.Primary)
                         Environment.Exit(2);
 
@@ -373,43 +377,65 @@ namespace Flux.ViewModels
             }
         }
 
+        public async Task<ContentDialogResult> ShowContentDialogAsync(Func<IFlux, IContentDialog> get_dialog)
+        {
+            using var dialog = get_dialog(this);
+            return await dialog.ShowAsync();
+        }
         public async Task<ContentDialogResult> ShowConfirmDialogAsync(string title, string content)
         {
-            using var dialog = new ContentDialog(this, title,
-                confirm: () => Task.CompletedTask, 
-                cancel: () => Task.CompletedTask);
-
-            dialog.AddContent(new TextBlock("content", content));
-            return await dialog.ShowAsync();
-        }
-        public async Task ShowProgressDialogAsync(string title, Func<IContentDialog, IDialogOption<double>, Task> operation)
-        {
-            using var dialog = new ContentDialog(this, title);
-
-            var progress = new ProgressBar("progress", "PROGRESSO...");
-            dialog.AddContent(progress);
-
-            var dialog_task = dialog.ShowAsync();
-            var operation_task = Task.Run(async () =>
+            return await ShowContentDialogAsync(f =>
             {
-                try
-                {
-                    await operation(dialog, progress);
-                }
-                catch
-                { }
+                var dialog = new ContentDialog(f, title,
+                    can_cancel: Observable.Return(true),
+                    can_confirm: Observable.Return(true));
+                dialog.AddContent(new TextBlock("content", content));
+                return dialog;
             });
-
-            await dialog_task;
         }
-        public async Task<ContentDialogResult> ShowSelectionAsync(string title, bool can_cancel, params IDialogOption[] options)
+        public async Task<ContentDialogResult> ShowProgressDialogAsync(string title, Func<IContentDialog, IDialogOption<double>, Task> operation)
         {
-            using var dialog = new ContentDialog(this, title, 
-                confirm: () => Task.CompletedTask, 
-                cancel: can_cancel ? () => Task.CompletedTask : default);
+            return await ShowContentDialogAsync(f =>
+            {
+                var dialog = new ContentDialog(this, title);
 
-            dialog.AddContent("options", options);
-            return await dialog.ShowAsync();
+                var progress = new ProgressBar("progress", "PROGRESSO...");
+                dialog.AddContent(progress);
+                var operation_task = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await operation(dialog, progress);
+                    }
+                    catch
+                    { }
+                });
+
+                return dialog;
+            });
+        }
+        public async Task<ContentDialogResult> ShowSelectionAsync(string title, IObservable<bool> can_cancel, IObservable<bool> can_confirm, params IDialogOption[] options)
+        {
+            return await ShowContentDialogAsync(f =>
+            {
+                var dialog = new ContentDialog(f, title,
+                    can_cancel: can_cancel,
+                    can_confirm: can_confirm);
+                dialog.AddContent("options", options);
+                return dialog;
+            });
+        }
+        public async Task<ContentDialogResult> ShowSelectionAsync(string title, IObservable<bool> can_cancel, params IDialogOption[] options)
+        {
+            return await ShowContentDialogAsync(f =>
+            {
+                var can_confirm = Observable.CombineLatest(options.Select(o => o.WhenAnyValue(o => o.HasValue)), l => l.All(l => l));
+                var dialog = new ContentDialog(f, title,
+                    can_cancel: can_cancel,
+                    can_confirm: can_confirm);
+                dialog.AddContent("options", options);
+                return dialog;
+            });
         }
     }
 

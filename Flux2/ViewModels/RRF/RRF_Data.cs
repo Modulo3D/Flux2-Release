@@ -271,8 +271,8 @@ namespace Flux.ViewModels
         //[JsonProperty("name")]
         //public Optional<string> Name { get; set; }
 
-        //[JsonProperty("stackDepth")]
-        //public Optional<double> StackDepth { get; set; }
+        [JsonProperty("stackDepth")]
+        public Optional<double> StackDepth { get; set; }
 
         //[JsonProperty("state")]
         //public Optional<string> State { get; set; }
@@ -1168,19 +1168,34 @@ namespace Flux.ViewModels
 
     public static class RRF_DataUtils
     {
-        public static Optional<LineNumber> GetBlockNum(this (RRF_ObjectModelState state, List<RRF_ObjectModelInput> input) data)
+        public static Optional<LineNumber> GetBlockNum(this (RRF_ObjectModelJob job, RRF_ObjectModelState state, List<RRF_ObjectModelInput> input) data)
         {
             try
             {
-                return data.state.Status.Convert(s =>
+                if (!data.job.File.HasValue)
+                    return default;
+                var file = data.job.File.Value;
+                if (!file.FileName.HasValue)
+                    return default;
+                if (string.IsNullOrEmpty(file.FileName.Value))
+                    return default;
+
+                if (!data.input[2].StackDepth.HasValue)
+                    return default;
+                if (data.input[2].StackDepth.Value > 0)
+                    return default;
+           
+                if (!data.state.Status.HasValue)
+                    return default;
+                var line_number = data.input[2].LineNumber;
+                if (!line_number.HasValue)
+                    return default;
+
+                return data.state.Status.Value switch
                 {
-                    return s switch
-                    {
-                        "idle" or "paused" or "halted" => (LineNumber)0,
-                        "busy" or "pausing" or "resuming" or "simulating" or "processing" or "changingTool" => data.input[2].LineNumber.Convert(l => (LineNumber)(l / 2)),
-                        _ => (LineNumber)0,
-                    };
-                });
+                    "idle" or "halted" => default,
+                    _ => (LineNumber)(line_number.Value / 2),
+                };
             }
             catch
             {

@@ -19,6 +19,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Web;
 
 namespace Flux.ViewModels
 {
@@ -218,27 +219,30 @@ namespace Flux.ViewModels
         {
             try
             {
-                if (ct.IsCancellationRequested)
-                    return default;
-
-                var lenght = GetGCodeLenght(new[] { gcode });
-                if (lenght >= 160)
+                var resource = $"rr_gcode?gcode={gcode}";
+                if (resource.Length >= 160)
+                {
+                    Flux.Messages.LogMessage("Errore esecuzione gcode", $"Lunghezza gcode oltre i limiti", MessageLevel.EMERG, 0);
                     return false;
+                }
 
-                if (string.IsNullOrEmpty(gcode))
-                    return true;
-
-                var rrf_request = new RRF_Request($"rr_gcode?gcode={gcode}", Method.Get, RRF_RequestPriority.Immediate, ct);
+                var rrf_request = new RRF_Request(resource, Method.Get, RRF_RequestPriority.Immediate, ct);
                 var rrf_response = await Client.ExecuteAsync(rrf_request);
                 if (!rrf_response.Ok)
+                {
+                    Flux.Messages.LogMessage($"{rrf_request}", $"{rrf_response}", MessageLevel.ERROR, 0);
                     return false;
+                }
 
                 if (wait && gcode_ct != CancellationToken.None && !await WaitProcessStatusAsync(
                     status => status == FLUX_ProcessStatus.IDLE,
                     TimeSpan.FromSeconds(0.5),
                     TimeSpan.FromSeconds(0.1),
                     gcode_ct))
+                {
+                    Flux.Messages.LogMessage($"{rrf_request}", $"Timeout esecuzione gcode", MessageLevel.ERROR, 0);
                     return false;
+                }
 
                 return true;
             }
@@ -264,7 +268,6 @@ namespace Flux.ViewModels
         public override async Task<bool> ExecuteParamacroAsync(IEnumerable<string> paramacro, bool wait = false, CancellationToken ct = default)
         {
             paramacro = paramacro.Select(line => Regex.Replace(line, "M98 P\"(.*)\"", m => $"M98 P\"{m.Groups[1].Value.ToLower().Replace(" ", "_")}\""));
-
             var lenght = GetGCodeLenght(paramacro);
             if (lenght < 160)
             {
@@ -367,19 +370,32 @@ namespace Flux.ViewModels
 
                 var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
                 if (!await PostGCodeAsync($"M23 storage/{filename}", cts.Token))
+                {
+                    Flux.Messages.LogMessage("Errore selezione partprogram", "Impossibile eseguire il gcode", MessageLevel.ERROR, 0);
                     return false;
+                }
 
-                var selected_pp = Observable.Timer(TimeSpan.Zero, TimeSpan.FromSeconds(5))
-                    .Select(_ => Observable.FromAsync(() => MemoryBuffer.GetModelDataAsync<RRF_ObjectModelJob>("job", ct)))
-                    .Merge(1)
-                    .Convert(j => j.File.HasValue ? (j.File.Value.FileName.HasValue ? j.File.Value.FileName : j.LastFileName) : j.LastFileName);
+                var selected_pp = MemoryBuffer.RRFObjectModel
+                    .WhenAnyValue(o => o.Job)
+                    .Convert(j => 
+                    {
+                        return j.File
+                            .Convert(f => f.FileName)
+                            .ValueOrOptional(() => j.LastFileName);
+                    })
+                    .ConvertOr(f => Path.GetFileName(f) == filename, () => false);
 
-                return await WaitUtils.WaitForAsync(selected_pp,
-                    pp => pp.ConvertOr(p => Path.GetFileName(p) == filename, () => false),
-                    ct);
+                if (!await WaitUtils.WaitForAsync(selected_pp, ct))
+                {
+                    Flux.Messages.LogMessage("Errore selezione partprogram", "Timeout di selezione", MessageLevel.ERROR, 0);
+                    return false;
+                }
+
+                return true;
             }
-            catch
+            catch(Exception ex)
             {
+                Flux.Messages.LogException(this, ex);
                 return false;
             }
         }
@@ -555,75 +571,96 @@ namespace Flux.ViewModels
                 }
             }
         }
-        public override string[] GetHomingGCode()
+        public override Optional<IEnumerable<string>> GetHomingGCode()
         {
             return new[] { "G28" };
         }
-        public override string[] GetParkToolGCode()
+        public override Optional<IEnumerable<string>> GetParkToolGCode()
         {
             return new[] { $"T-1" };
         }
-        public override string[] GetProbePlateGCode()
+        public override Optional<IEnumerable<string>> GetProbePlateGCode()
         {
             throw new NotImplementedException();
         }
-        public override string[] GetLowerPlateGCode()
+        public override Optional<IEnumerable<string>> GetLowerPlateGCode()
         {
             return new[] { "M98 P\"/macros/lower_plate\"" };
         }
-        public override string[] GetRaisePlateGCode()
+        public override Optional<IEnumerable<string>> GetRaisePlateGCode()
         {
             return new[] { "M98 P\"/macros/raise_plate\"" };
         }
-        public override string[] GetSelectToolGCode(ushort position)
+        public override Optional<IEnumerable<string>> GetSelectToolGCode(ushort position)
         {
             return new[] { $"T{position}" };
         }
-        public override string[] GetGotoReaderGCode(ushort position)
+        public override Optional<IEnumerable<string>> GetGotoReaderGCode(ushort position)
         {
             throw new NotImplementedException();
         }
-        public override string[] GetStartPartProgramGCode(string file_name)
+        public override Optional<IEnumerable<string>> GetStartPartProgramGCode(string file_name)
         {
             return new[] { $"M32 storage/{file_name}" };
         }
-        public override string[] GetGotoPurgePositionGCode(ushort position)
+        public override Optional<IEnumerable<string>> GetGotoPurgePositionGCode(ushort position)
         {
             throw new NotImplementedException();
         }
-        public override string[] GetSetToolTemperatureGCode(ushort position, double temperature)
+        public override Optional<IEnumerable<string>> GetSetToolTemperatureGCode(ushort position, double temperature)
         {
             return new[] { $"M104 T{position} S{temperature}" };
         }
-        public override string[] GetPurgeToolGCode(ushort position, Nozzle nozzle, double temperature)
+        public override Optional<IEnumerable<string>> GetPurgeToolGCode(ushort position, Nozzle nozzle, double temperature)
         {
-            var gcode = nozzle.GetPurgeFilamentGCode(position, temperature);
-            if (gcode.HasValue)
-                return new[] { $"T{position}", gcode.Value, "T-1" };
-            return new string[0];
+            var gcode = nozzle.GetPurgeFilamentGCode(temperature);
+            if (!gcode.HasValue)
+                return default;
+            return load_filament().ToOptional();
+            IEnumerable<string> load_filament()
+            {
+                yield return $"T{position}";
+                foreach (var line in gcode.Value)
+                    yield return line;
+                yield return "T-1";
+            }
         }
-        public override string[] GetProbeToolGCode(ushort position, Nozzle nozzle, double temperature)
+        public override Optional<IEnumerable<string>> GetProbeToolGCode(ushort position, Nozzle nozzle, double temperature)
         {
             throw new NotImplementedException();
         }
-        public override string[] GetLoadFilamentGCode(ushort position, Nozzle nozzle, double temperature)
+        public override Optional<IEnumerable<string>> GetLoadFilamentGCode(ushort position, Nozzle nozzle, double temperature)
         {
-            var gcode = nozzle.GetLoadFilamentGCode(position, temperature);
-            if (gcode.HasValue)
-                return new[] { $"T{position}", gcode.Value, "T-1" };
-            return new string[0];
+            var gcode = nozzle.GetLoadFilamentGCode(temperature);
+            if (!gcode.HasValue)
+                return default;
+            return load_filament().ToOptional();
+            IEnumerable<string> load_filament()
+            {
+                yield return $"T{position}";
+                foreach (var line in gcode.Value)
+                    yield return line;
+                yield return "T-1";
+            }
         }
-        public override string[] GetUnloadFilamentGCode(ushort position, Nozzle nozzle, double temperature)
+        public override Optional<IEnumerable<string>> GetUnloadFilamentGCode(ushort position, Nozzle nozzle, double temperature)
         {
-            var gcode = nozzle.GetUnloadFilamentGCode(position, temperature);
-            if (gcode.HasValue)
-                return new[] { $"T{position}", gcode.Value, "T-1" };
-            return new string[0];
+            var gcode = nozzle.GetUnloadFilamentGCode(temperature);
+            if (!gcode.HasValue)
+                return default;
+            return load_filament().ToOptional();
+            IEnumerable<string> load_filament()
+            {
+                yield return $"T{position}";
+                foreach (var line in gcode.Value)
+                    yield return line;
+                yield return "T-1";
+            }
         }
-        public override string[] GetRelativeXMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 X{distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
-        public override string[] GetRelativeYMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 Y{distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
-        public override string[] GetRelativeZMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 Z{distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
-        public override string[] GetRelativeEMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 E{distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
+        public override Optional<IEnumerable<string>> GetRelativeXMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 X{distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
+        public override Optional<IEnumerable<string>> GetRelativeYMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 Y{distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
+        public override Optional<IEnumerable<string>> GetRelativeZMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 Z{distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
+        public override Optional<IEnumerable<string>> GetRelativeEMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 E{distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
 
         public override async Task<bool> CreateFolderAsync(string folder, string name, CancellationToken ct)
         {
@@ -643,7 +680,7 @@ namespace Flux.ViewModels
             }
         }
 
-        public override string[] GetSetToolOffsetGCode(ushort position, double x, double y, double z)
+        public override Optional<IEnumerable<string>> GetSetToolOffsetGCode(ushort position, double x, double y, double z)
         {
             return new[]
             {

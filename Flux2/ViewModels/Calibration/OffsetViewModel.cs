@@ -377,23 +377,16 @@ namespace Flux.ViewModels
             if (!ProbeOffsetKey.HasValue)
                 return;
 
-            using var dialog = new ContentDialog(Flux, "IMPOSTA OFFSET",
-                confirm: () => Task.CompletedTask, 
-                cancel: () => Task.CompletedTask);
+            var offset_x = new NumericOption("offset_x", "OFFSET X", ProbeOffset.ConvertOr(o => o.X, () => 0), 0.05);
+            var offset_y = new NumericOption("offset_y", "OFFSET Y", ProbeOffset.ConvertOr(o => o.Y, () => 0), 0.05);
+            var offset_z = new NumericOption("offset_z", "OFFSET Z", ProbeOffset.ConvertOr(o => o.Z, () => 0), 0.01);
+            var result = await Flux.ShowSelectionAsync(
+                "IMPOSTA OFFSET",
+                Observable.Return(true),
+                offset_x,
+                offset_y,
+                offset_z);
 
-            var offset_x = new NumericOption("offset_x", "OFFSET X", 0, 0.05);
-            var offset_y = new NumericOption("offset_y", "OFFSET Y", 0, 0.05);
-            var offset_z = new NumericOption("offset_z", "OFFSET Z", 0, 0.01);
-
-            offset_x.Value = ProbeOffset.ConvertOr(o => o.X, () => 0);
-            offset_y.Value = ProbeOffset.ConvertOr(o => o.Y, () => 0);
-            offset_z.Value = ProbeOffset.ConvertOr(o => o.Z, () => 0);
-
-            dialog.AddContent(offset_x);
-            dialog.AddContent(offset_y);
-            dialog.AddContent(offset_z);
-
-            var result = await dialog.ShowAsync();
             if (result != ContentDialogResult.Primary)
                 return;
 

@@ -1028,7 +1028,7 @@ namespace Flux.ViewModels
         }
         public override Task<bool> ClearFolderAsync(string folder, bool wait, CancellationToken ct = default) => DeleteFileAsync(folder, "*", wait, ct);
 
-        public override string[] GetHomingGCode()
+        public override Optional<IEnumerable<string>> GetHomingGCode()
         {
             return new[]
             {
@@ -1037,31 +1037,31 @@ namespace Flux.ViewModels
                 "G201 X(@PRBP_XPOS) Y(@PRBP_YPOS) Z400 F10000"
             };
         }
-        public override string[] GetParkToolGCode()
+        public override Optional<IEnumerable<string>> GetParkToolGCode()
         {
             return new[] { $"G500 T0" };
         }
-        public override string[] GetProbePlateGCode()
+        public override Optional<IEnumerable<string>> GetProbePlateGCode()
         {
             return new[] { "G401" };
         }
-        public override string[] GetLowerPlateGCode()
+        public override Optional<IEnumerable<string>> GetLowerPlateGCode()
         {
             return new[] { "G0 Z400" };
         }
-        public override string[] GetRaisePlateGCode()
+        public override Optional<IEnumerable<string>> GetRaisePlateGCode()
         {
             throw new NotImplementedException();
         }
-        public override string[] GetGotoReaderGCode(ushort position)
+        public override Optional<IEnumerable<string>> GetGotoReaderGCode(ushort position)
         {
             return new[] { $"G501 T{position + 1}" };
         }
-        public override string[] GetSelectToolGCode(ushort position)
+        public override Optional<IEnumerable<string>> GetSelectToolGCode(ushort position)
         {
             return new[] { $"G500 T{position + 1}" };
         }
-        public override string[] GetGotoPurgePositionGCode(ushort position)
+        public override Optional<IEnumerable<string>> GetGotoPurgePositionGCode(ushort position)
         {
             return new[]
             {
@@ -1070,34 +1070,34 @@ namespace Flux.ViewModels
                 "G201 X(@PURGE_XPOS) Y(@PURGE_YPOS) F10000"
             };
         }
-        public override string[] GetStartPartProgramGCode(string file_name)
+        public override Optional<IEnumerable<string>> GetStartPartProgramGCode(string file_name)
         {
             throw new NotImplementedException();
         }
-        public override string[] GetSetToolTemperatureGCode(ushort position, double temperature)
+        public override Optional<IEnumerable<string>> GetSetToolTemperatureGCode(ushort position, double temperature)
         {
             throw new NotImplementedException();
         }
-        public override string[] GetProbeToolGCode(ushort position, Nozzle nozzle, double temperature)
+        public override Optional<IEnumerable<string>> GetProbeToolGCode(ushort position, Nozzle nozzle, double temperature)
         {
             return new[] { $"G402 T{position + 1} S{temperature}" };
         }
-        public override string[] GetPurgeToolGCode(ushort position, Nozzle nozzle, double temperature)
+        public override Optional<IEnumerable<string>> GetPurgeToolGCode(ushort position, Nozzle nozzle, double temperature)
         {
             return new[] { $"G507 T{position + 1} S{temperature}" };
         }
-        public override string[] GetLoadFilamentGCode(ushort position, Nozzle nozzle, double temperature)
+        public override Optional<IEnumerable<string>> GetLoadFilamentGCode(ushort position, Nozzle nozzle, double temperature)
         {
             return new[] { $"G505 T{position + 1} S{temperature}" };
         }
-        public override string[] GetUnloadFilamentGCode(ushort position, Nozzle nozzle, double temperature)
+        public override Optional<IEnumerable<string>> GetUnloadFilamentGCode(ushort position, Nozzle nozzle, double temperature)
         {
             return new[] { $"G506 T{position + 1} S{temperature}" };
         }
-        public override string[] GetRelativeXMovementGCode(double distance, double feedrate) => new[] { $"G1 X>>{distance / 2} Y>>{distance / 2} F{feedrate}".Replace(",", ".") };
-        public override string[] GetRelativeYMovementGCode(double distance, double feedrate) => new[] { $"G1 X>>{distance / 2} Y>>{distance / 2} F{feedrate}".Replace(",", ".") };
-        public override string[] GetRelativeZMovementGCode(double distance, double feedrate) => new[] { $"G1 Z>>{distance} F{feedrate}".Replace(",", ".") };
-        public override string[] GetRelativeEMovementGCode(double distance, double feedrate) => new[] { $"G1 A>>{distance} F{feedrate}".Replace(",", ".") };
+        public override Optional<IEnumerable<string>> GetRelativeXMovementGCode(double distance, double feedrate) => new[] { $"G1 X>>{distance / 2} Y>>{distance / 2} F{feedrate}".Replace(",", ".") };
+        public override Optional<IEnumerable<string>> GetRelativeYMovementGCode(double distance, double feedrate) => new[] { $"G1 X>>{distance / 2} Y>>{distance / 2} F{feedrate}".Replace(",", ".") };
+        public override Optional<IEnumerable<string>> GetRelativeZMovementGCode(double distance, double feedrate) => new[] { $"G1 Z>>{distance} F{feedrate}".Replace(",", ".") };
+        public override Optional<IEnumerable<string>> GetRelativeEMovementGCode(double distance, double feedrate) => new[] { $"G1 A>>{distance} F{feedrate}".Replace(",", ".") };
 
         public override Task<Optional<string>> DownloadFileAsync(string folder, string filename, CancellationToken ct)
         {
@@ -1109,7 +1109,7 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override string[] GetSetToolOffsetGCode(ushort position, double x, double y, double z)
+        public override Optional<IEnumerable<string>> GetSetToolOffsetGCode(ushort position, double x, double y, double z)
         {
             throw new NotImplementedException();
         }

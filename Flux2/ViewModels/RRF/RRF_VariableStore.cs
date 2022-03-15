@@ -33,9 +33,9 @@ namespace Flux.ViewModels
                 var queue = RRF_StateBuilder.Create(connection, m => m.WhenAnyValue(m => m.Queue));
                 var job = RRF_StateBuilder.Create(connection, m => m.WhenAnyValue(m => m.Job));
 
-                var state_input = RRF_StateBuilder.Create(connection,
-                    m => Observable.CombineLatest(state.GetState(m), input.GetState(m),
-                    (s, i) => s.Convert(s => i.Convert(i => (s, i)))));
+                var job_state_input = RRF_StateBuilder.Create(connection,
+                    m => Observable.CombineLatest(job.GetState(m), state.GetState(m), input.GetState(m),
+                    (j, s, i) => j.Convert(j => s.Convert(s => i.Convert(i => (j, s, i))))));
 
                 var storage_queue = RRF_StateBuilder.Create(connection,
                     m => Observable.CombineLatest(storage.GetState(m), queue.GetState(m),
@@ -43,18 +43,18 @@ namespace Flux.ViewModels
 
                 var job_global_storage_queue = RRF_StateBuilder.Create(connection,
                     m => Observable.CombineLatest(job.GetState(m), global.GetState(m), storage.GetState(m), queue.GetState(m),
-                    (job, global, storage, queue) => job.Convert(job => global.Convert(global => storage.Convert(storage => queue.Convert(queue => (job, global, storage, queue)))))));
+                    (j, g, s, i) => j.Convert(j => g.Convert(g => s.Convert(s => i.Convert(q => (j, g, s, q)))))));
 
                 QUEUE = RegisterVariable(queue.CreateVariable<Dictionary<QueuePosition, Guid>, Unit>("QUEUE", (c, m) => m.GetGuidDictionaryFromQueue()));
                 PROCESS_STATUS = RegisterVariable(state.CreateVariable<FLUX_ProcessStatus, Unit>("PROCESS STATUS", (c, m) => m.GetProcessStatus()));
                 STORAGE = RegisterVariable(storage.CreateVariable<Dictionary<Guid, Dictionary<BlockNumber, MCodePartProgram>>, Unit>("STORAGE", (c, m) => m.GetPartProgramDictionaryFromStorage()));
 
                 PART_PROGRAM = RegisterVariable(job_global_storage_queue.CreateVariable<MCodePartProgram, Unit>("PART PROGRAM", (c, m) => m.GetPartProgram()));
-                BLOCK_NUM = RegisterVariable(state_input.CreateVariable<LineNumber, Unit>("BLOCK NUM", (c, m) => m.GetBlockNum()));
+                BLOCK_NUM = RegisterVariable(job_state_input.CreateVariable<LineNumber, Unit>("BLOCK NUM", (c, m) => m.GetBlockNum()));
                 IS_HOMED = RegisterVariable(move.CreateVariable<bool, bool>("IS HOMED", (c, m) => m.IsHomed()));
 
                 var axes = move.CreateArray(m => m.Axes.Convert(a => a.ToDictionary(a => a.Letter)));
-                AXIS_POSITION = RegisterVariable(axes.Create<double, Unit>("AXIS_POSITION", new VariableUnit[] { "X", "Y", "Z", "C" }, (c, a) => a.MachinePosition));
+                AXIS_POSITION = RegisterVariable(axes.Create<double, Unit>("AXIS_POSITION", VariableUnit.Range("X", "Y", "Z", "C"), (c, a) => a.MachinePosition));
 
                 X_USER_OFFSET_T = RegisterVariable(new RRF_ArrayGlobalModel<double>(connection_provider.Flux, connection, "x_user_offset", VariableUnit.Range(0, 4), false));
                 Y_USER_OFFSET_T = RegisterVariable(new RRF_ArrayGlobalModel<double>(connection_provider.Flux, connection, "y_user_offset", VariableUnit.Range(0, 4), false));
@@ -86,9 +86,9 @@ namespace Flux.ViewModels
                 //MEM_TOOL_ON_TRAILER = RegisterVariable(new RRF_ArrayGlobalModel<bool>(connection, "tool_on_trailer", 4, true));
                 //MEM_TOOL_IN_MAGAZINE = RegisterVariable(new RRF_ArrayGlobalModel<bool>(connection, "tool_in_magazine", 4, true));
 
-                PURGE_POSITION = RegisterVariable(new RRF_ArrayGlobalModel<double>(connection_provider.Flux, connection, "purge_position", new VariableUnit[] { "X", "Y" }, true));
-                HOME_OFFSET = RegisterVariable(new RRF_ArrayGlobalModel<double>(connection_provider.Flux, connection, "home_offset", new VariableUnit[] { "X", "Y", "Z" }, true));
-                HOME_BUMP = RegisterVariable(new RRF_ArrayGlobalModel<double>(connection_provider.Flux, connection, "home_bump", new VariableUnit[] { "X", "Y", "Z" }, true));
+                PURGE_POSITION = RegisterVariable(new RRF_ArrayGlobalModel<double>(connection_provider.Flux, connection, "purge_position", VariableUnit.Range("X", "Y"), true));
+                HOME_OFFSET = RegisterVariable(new RRF_ArrayGlobalModel<double>(connection_provider.Flux, connection, "home_offset", VariableUnit.Range("X", "Y", "Z"), true));
+                HOME_BUMP = RegisterVariable(new RRF_ArrayGlobalModel<double>(connection_provider.Flux, connection, "home_bump", VariableUnit.Range("X", "Y", "Z"), true));
                 QUEUE_SIZE = RegisterVariable(new RRF_VariableGlobalModel<ushort>(connection_provider.Flux, connection, "queue_size", true));
 
                 X_MAGAZINE_POS = RegisterVariable(new RRF_ArrayGlobalModel<double>(connection_provider.Flux, connection, "x_magazine_pos", VariableUnit.Range(0, 4), true));
@@ -101,28 +101,16 @@ namespace Flux.ViewModels
 
                 var endstops = sensors.CreateArray(s =>
                 {
-                    var endstop_units = new VariableUnit[] { "X", "Y", "Z", "U" };
-
-                    var position = 0;
-                    var endstops = new Dictionary<VariableUnit, bool>();
-                    if (s.Endstops.HasValue)
+                    return new Dictionary<VariableUnit, bool>
                     {
-                        foreach (var endstop in s.Endstops.Value)
-                        {
-                            if (endstop != null && endstop.Triggered.HasValue)
-                                endstops.Add(endstop_units[position], endstop.Triggered.Value);
-                            position++;
-                        }
-                    }
-                    var z_probe = s.GetProbeLevels(0).Convert(l => l[0] > 0);
-                    if (z_probe.HasValue)
-                        endstops.Add("Z", z_probe.Value);
-                    return endstops.ToOptional();
+                        { "X", s.Endstops.Value[0].Triggered.Value },
+                        { "Y", s.Endstops.Value[1].Triggered.Value },
+                        { "Z", s.GetProbeLevels(0).ConvertOr(l => l[0] > 0, () => false)},
+                    }.ToOptional();
                 });
 
-
-                AXIS_ENDSTOP = RegisterVariable(endstops.Create<bool, bool>("AXIS ENDSTOP", new VariableUnit[] { "X", "Y", "Z", "U" }, (c, triggered) => triggered));
-                ENABLE_DRIVERS = RegisterVariable(axes.Create<bool, bool>("ENABLE DRIVERS", new VariableUnit[] { "X", "Y", "Z", "U", "C" }, (c, m) => m.IsEnabledDriver(), EnableDriverAsync));
+                AXIS_ENDSTOP = RegisterVariable(endstops.Create<bool, bool>("AXIS ENDSTOP", VariableUnit.Range("X", "Y", "Z"), (c, triggered) => triggered));
+                ENABLE_DRIVERS = RegisterVariable(axes.Create<bool, bool>("ENABLE DRIVERS", VariableUnit.Range("X", "Y", "Z", "C"), (c, m) => m.IsEnabledDriver(), EnableDriverAsync));
             }
             catch (Exception ex)
             {

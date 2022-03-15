@@ -94,7 +94,7 @@ namespace Flux.ViewModels
             UpdateMaterialTagCommand = ReactiveCommand.CreateFromTask(async () =>
                 {
                     var operator_usb = Flux.MCodes.OperatorUSB;
-                    var reading = await Material.ReadTagAsync(true, operator_usb.ConvertOr(o => o.RewriteNFC, () => false));
+                    var reading = await Material.ReadTagAsync(default, true, operator_usb.ConvertOr(o => o.RewriteNFC, () => false));
                     if (reading.HasValue)
                         await Material.StoreTagAsync(reading.Value);
                 },
@@ -104,7 +104,7 @@ namespace Flux.ViewModels
             UpdateToolNozzleTagCommand = ReactiveCommand.CreateFromTask(async () =>
                 {
                     var operator_usb = Flux.MCodes.OperatorUSB;
-                    var reading = await ToolNozzle.ReadTagAsync(true, operator_usb.ConvertOr(o => o.RewriteNFC, () => false));
+                    var reading = await ToolNozzle.ReadTagAsync(default, true, operator_usb.ConvertOr(o => o.RewriteNFC, () => false));
                     if (reading.HasValue)
                         await ToolNozzle.StoreTagAsync(reading.Value);
                 },

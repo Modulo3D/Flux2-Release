@@ -19,24 +19,24 @@ namespace Flux.ViewModels
         public ReactiveCommand<Unit, Unit> TweetReaderCommand { get; }
 
         [RemoteInput]
-        public SelectableCache<NFCReaderHandle, string> NFCReaders { get; }
+        public SelectableCache<(INFCReader reader, NFCDeviceInformations info), string> NFCReaders { get; }
 
         public NFCSettingsViewModel(IFlux flux, string name) : base(name)
         {
             Flux = flux;
-            var cache = flux.NFCProvider.Readers.Connect()
-                .Transform(reader => Optional<NFCReaderHandle>.Create(reader));
+            var cache = flux.NFCProvider.ComReaders.Connect()
+                .Transform(reader => reader.ToOptional());
 
-            NFCReaders = new SelectableCache<NFCReaderHandle, string>(cache);
+            NFCReaders = new SelectableCache<(INFCReader reader, NFCDeviceInformations info), string>(cache);
             NFCReaders.StartAutoSelect(q =>
             {
                 return q.KeyValues.FirstOrOptional(kvp => kvp.Value.HasValue)
                     .Convert(kvp => kvp.Key);
             });
 
-            var can_tween = NFCReaders.SelectedValueChanged
+            var can_tweet = NFCReaders.SelectedValueChanged
                 .Select(nfc => nfc.HasValue);
-            TweetReaderCommand = ReactiveCommand.CreateFromTask(TweetReaderAsync, can_tween);
+            TweetReaderCommand = ReactiveCommand.CreateFromTask(TweetReaderAsync, can_tweet);
         }
 
         private async Task TweetReaderAsync()
@@ -44,8 +44,7 @@ namespace Flux.ViewModels
             if (!NFCReaders.SelectedValue.HasValue)
                 return;
             var nfc_reader = NFCReaders.SelectedValue.Value;
-
-            await nfc_reader.OpenAsync(h => h.ReaderUISignal(LightSignalMode.Flash, BeepSignalMode.TripleShort), TimeSpan.FromSeconds(1));
+            await nfc_reader.reader.OpenAsync(h => h.ReaderUISignal(LightSignalMode.Flash, BeepSignalMode.TripleShort), TimeSpan.FromSeconds(1));
         }
     }
 

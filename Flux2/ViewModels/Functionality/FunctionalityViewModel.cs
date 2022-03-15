@@ -58,7 +58,7 @@ namespace Flux.ViewModels
             if (!feeder.HasValue)
                 return;
             var tag_vm = get_tag_vm(feeder.Value);
-            await tag_vm.LockTagAsync();
+            await tag_vm.LockTagAsync(default);
         }
         private async Task unlock_tag_async(ushort position, Func<IFluxFeederViewModel, IFluxTagViewModel> get_tag_vm)
         {
@@ -66,7 +66,7 @@ namespace Flux.ViewModels
             if (!feeder.HasValue)
                 return;
             var tag_vm = get_tag_vm(feeder.Value);
-            await tag_vm.UnlockTagAsync();
+            await tag_vm.UnlockTagAsync(default);
         }
         private IObservable<bool> is_locked_tag(ushort position, Func<IFluxFeederViewModel, IFluxTagViewModel> get_tag_vm)
         {

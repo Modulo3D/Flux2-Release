@@ -72,9 +72,9 @@ namespace Flux.ViewModels
                     e.printing.SelectedPartProgram.HasValue &&
                     e.status.CanSafeStop);
 
-            StartCommand = ReactiveCommand.CreateFromTask(StartAsync, canStart, RxApp.MainThreadScheduler);
-            HoldCommand = ReactiveCommand.CreateFromTask(HoldAsync, canHold, RxApp.MainThreadScheduler);
-            ResetCommand = ReactiveCommand.CreateFromTask(ResetAsync, canStop, RxApp.MainThreadScheduler);
+            StartCommand = ReactiveCommand.CreateFromTask(StartAsync, canStart);
+            HoldCommand = ReactiveCommand.CreateFromTask(HoldAsync, canHold);
+            ResetCommand = ReactiveCommand.CreateFromTask(ResetAsync, canStop);
 
             _SelectedMCodeName = Flux.StatusProvider
                 .WhenAnyValue(v => v.PrintingEvaluation)

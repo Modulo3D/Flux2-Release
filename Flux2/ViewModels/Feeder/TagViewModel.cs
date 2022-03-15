@@ -31,8 +31,8 @@ namespace Flux.ViewModels
             set => this.RaiseAndSetIfChanged(ref _Nfc, value);
         }
 
-        private ObservableAsPropertyHelper<Optional<NFCReaderHandle>> _Reader;
-        public Optional<NFCReaderHandle> Reader => _Reader.Value;
+        private ObservableAsPropertyHelper<Optional<INFCReader>> _Reader;
+        private Optional<INFCReader> Reader => _Reader.Value;
 
         private readonly ObservableAsPropertyHelper<TDocument> _Document;
         public TDocument Document => _Document.Value;
@@ -108,156 +108,181 @@ namespace Flux.ViewModels
 
         public abstract void Initialize();
 
-        public async Task DisconnectAsync()
+        public Task DisconnectAsync()
         {
-            await CloseAsync();
             Nfc = default;
+            return Task.CompletedTask;
         }
 
-        protected abstract IObservable<Optional<NFCReaderHandle>> GetReader();
+        protected abstract IObservable<Optional<INFCReader>> GetReader();
         protected abstract Task<(bool result, Optional<TNFCTag> tag)> CreateTagAsync(string card_id, bool virtual_tag);
 
-        public async Task<bool> LockTagAsync()
+        public Task<bool> LockTagAsync(Optional<INFCHandle> handle)
         {
             var settings = Flux.SettingsProvider.CoreSettings.Local;
-
-            // check current tag
-            var card_id = await ReadCardId();
-            if (!card_id.HasValue)
+            return UseReader(handle, lock_tag_async, s => s);
+            async Task<bool> lock_tag_async(Optional<INFCHandle> handle)
             {
-                Flux.Messages.LogMessage("Errore blocco tag", "Tag non trovato, controllare la distanza dal lettore nfc", MessageLevel.ERROR, 33000);
-                return false;
-            }
+                // check current tag
+                var card_id = Nfc.IsVirtualTag ? Optional.Some(Nfc.CardId) : await ReadCardId(handle);
+                if (!card_id.HasValue)
+                {
+                    Flux.Messages.LogMessage("Errore blocco tag", "Tag non trovato, controllare la distanza dal lettore nfc", MessageLevel.INFO, 33000);
+                    return false;
+                }
 
-            if (card_id != Nfc.CardId)
-            {
-                Flux.Messages.LogMessage("Errore blocco tag", $"Id del tag non corretto {card_id} -> {Nfc.CardId}", MessageLevel.ERROR, 33001);
-                return false;
-            }
+                if (card_id != Nfc.CardId)
+                {
+                    Flux.Messages.LogMessage("Errore blocco tag", $"Id del tag non corretto {card_id} -> {Nfc.CardId}", MessageLevel.INFO, 33001);
+                    return false;
+                }
 
-            if (!Nfc.Tag.HasValue)
-            {
-                Flux.Messages.LogMessage("Errore blocco tag", "Dati del tag non trovati, controllare la corretta scrittura", MessageLevel.ERROR, 33002);
-                return false;
-            }
+                if (!Nfc.Tag.HasValue)
+                {
+                    Flux.Messages.LogMessage("Errore blocco tag", "Dati del tag non trovati, controllare la corretta scrittura", MessageLevel.INFO, 33002);
+                    return false;
+                }
 
-            if (Nfc.Tag.Value.PrinterGuid != Guid.Empty)
-            {
-                Flux.Messages.LogMessage("Errore di blocco tag", "Tag già bloccato", MessageLevel.ERROR, 33003);
-                return false;
-            }
+                if (Nfc.Tag.Value.PrinterGuid != Guid.Empty)
+                {
+                    Flux.Messages.LogMessage("Errore di blocco tag", "Tag già bloccato", MessageLevel.INFO, 33003);
+                    return false;
+                }
 
-            // Write locked tag
-            await StoreTagAsync(Nfc.SetTag(t => t.SetPrinterGuid(settings.PrinterGuid)));
-            if (!Nfc.IsVirtualTag && !await WriteTagAsync(Nfc.Tag.Value))
-            {
-                Flux.Messages.LogMessage("Errore di blocco tag", "Impossibile scrivere il tag, controllare la distanza dal lettore nfc", MessageLevel.ERROR, 33004);
-                await StoreTagAsync(Nfc.SetTag(t => t.SetPrinterGuid(default)));
-                return false;
-            }
+                // Write locked tag
+                await StoreTagAsync(Nfc.SetTag(t => t.SetPrinterGuid(settings.PrinterGuid)));
+                if (!Nfc.IsVirtualTag)
+                {
+                    if (!handle.HasValue)
+                    {
+                        Flux.Messages.LogMessage("Errore di blocco tag", "Impossibile trovare un lettore nfc", MessageLevel.ERROR, 33004);
+                        await StoreTagAsync(Nfc.SetTag(t => t.SetPrinterGuid(default)));
+                        return false;
+                    }
 
-            // Create backup
-            if (!WriteBackupTag(Nfc))
-            {
-                Flux.Messages.LogMessage("Errore di blocco tag", "Backup non effettuato", MessageLevel.ERROR, 33003);
-                return false;
-            }
+                    if (!await WriteTagAsync(handle.Value, Nfc.Tag.Value))
+                    {
+                        Flux.Messages.LogMessage("Errore di blocco tag", "Impossibile scrivere il tag, controllare la distanza dal lettore nfc", MessageLevel.INFO, 33004);
+                        await StoreTagAsync(Nfc.SetTag(t => t.SetPrinterGuid(default)));
+                        return false;
+                    }
+                }
 
-            // check written tag
-            var written_tag = Nfc.IsVirtualTag ? Optional.Some(Nfc) : await ReadTagAsync(false, false);
-            if (!written_tag.HasValue)
-            {
-                Flux.Messages.LogMessage("Errore di blocco tag", "Errore durante la lettura del tag", MessageLevel.ERROR, 33005);
-                await StoreTagAsync(Nfc.SetTag(t => t.SetPrinterGuid(default)));
-                return false;
-            }
+                // Create backup
+                if (!WriteBackupTag(Nfc))
+                {
+                    Flux.Messages.LogMessage("Errore di blocco tag", "Backup non effettuato", MessageLevel.INFO, 33003);
+                    return false;
+                }
 
-            using var sha256 = SHA256.Create();
-            var source_hash = sha256.ComputeHash(Encoding.UTF8.GetBytes(Nfc.Serialize())).ToHex();
-            var written_hash = sha256.ComputeHash(Encoding.UTF8.GetBytes(written_tag.Value.Serialize())).ToHex();
+                // check written tag
+                var written_tag = Nfc.IsVirtualTag ? Optional.Some(Nfc) : await ReadTagAsync(handle, read_from_backup: false, create_tag: false);
+                if (!written_tag.HasValue)
+                {
+                    Flux.Messages.LogMessage("Errore di blocco tag", "Errore durante la lettura del tag", MessageLevel.INFO, 33005);
+                    await StoreTagAsync(Nfc.SetTag(t => t.SetPrinterGuid(default)));
+                    return false;
+                }
 
-            if (source_hash != written_hash)
-            {
-                Flux.Messages.LogMessage("Errore di blocco tag", "Errore durante la scrittura del tag", MessageLevel.ERROR, 33006);
-                await StoreTagAsync(Nfc.SetTag(t => t.SetPrinterGuid(default)));
-                return false;
-            }
+                using var sha256 = SHA256.Create();
+                var source_hash = sha256.ComputeHash(Encoding.UTF8.GetBytes(Nfc.Serialize())).ToHex();
+                var written_hash = sha256.ComputeHash(Encoding.UTF8.GetBytes(written_tag.Value.Serialize())).ToHex();
 
-            return true;
-        }
-        public async Task<bool> UnlockTagAsync()
-        {
-            var settings = Flux.SettingsProvider.CoreSettings.Local;
-
-            // check current tag
-            var card_id = await ReadCardId();
-            if (!card_id.HasValue)
-            {
-                Flux.Messages.LogMessage("Errore sblocco tag", "Tag non trovato, controllare la distanza dal lettore nfc", MessageLevel.ERROR, 34000);
-                return false;
-            }
-
-            if (card_id != Nfc.CardId)
-            {
-                Flux.Messages.LogMessage("Errore sblocco tag", "Id del tag non corretto", MessageLevel.ERROR, 34001);
-                return false;
-            }
-
-            if (!Nfc.Tag.HasValue)
-            {
-                Flux.Messages.LogMessage("Errore blocco tag", "Dati del tag non trovati, controllare la corretta scrittura", MessageLevel.ERROR, 34002);
-                return false;
-            }
-
-            // Already unlocked
-            if (Nfc.Tag.Value.PrinterGuid == Guid.Empty)
+                if (source_hash != written_hash)
+                {
+                    Flux.Messages.LogMessage("Errore di blocco tag", "Errore durante la scrittura del tag", MessageLevel.INFO, 33006);
+                    await StoreTagAsync(Nfc.SetTag(t => t.SetPrinterGuid(default)));
+                    return false;
+                }
                 return true;
-
-            if (Nfc.Tag.Value.PrinterGuid != settings.PrinterGuid)
-            {
-                Flux.Messages.LogMessage("Errore sblocco tag", "Tag non appartenente alla stampante, contattare l'assistenza", MessageLevel.ERROR, 34003);
-                return false;
             }
-
-            // Write unlocked tag
-            await StoreTagAsync(Nfc.SetTag(t => t.SetPrinterGuid(default)));
-            if (!Nfc.IsVirtualTag && !await WriteTagAsync(Nfc.Tag.Value))
+        }
+        public Task<bool> UnlockTagAsync(Optional<INFCHandle> handle)
+        {
+            var settings = Flux.SettingsProvider.CoreSettings.Local;
+            return UseReader(handle, unlock_tag_async, s => s);
+            async Task<bool> unlock_tag_async(Optional<INFCHandle> handle)
             {
-                Flux.Messages.LogMessage("Errore di sblocco tag", "Impossibile scrivere il tag, controllare la distanza dal lettore nfc", MessageLevel.ERROR, 34004);
-                await StoreTagAsync(Nfc.SetTag(t => t.SetPrinterGuid(settings.PrinterGuid)));
-                return false;
-            }
+                // check current tag
+                var card_id = Nfc.IsVirtualTag ? Optional.Some(Nfc.CardId) : await ReadCardId(handle);
+                if (!card_id.HasValue)
+                {
+                    Flux.Messages.LogMessage("Errore sblocco tag", "Tag non trovato, controllare la distanza dal lettore nfc", MessageLevel.INFO, 34000);
+                    return false;
+                }
 
-            // check written tag
-            var written_tag = Nfc.IsVirtualTag ? Optional.Some(Nfc) : await ReadTagAsync(read_from_backup: false, create_tag: false);
-            if (!written_tag.HasValue)
-            {
-                Flux.Messages.LogMessage("Errore di sblocco tag", "Errore durante la lettura del tag", MessageLevel.ERROR, 33005);
+                if (card_id != Nfc.CardId)
+                {
+                    Flux.Messages.LogMessage("Errore sblocco tag", "Id del tag non corretto", MessageLevel.INFO, 34001);
+                    return false;
+                }
+
+                if (!Nfc.Tag.HasValue)
+                {
+                    Flux.Messages.LogMessage("Errore blocco tag", "Dati del tag non trovati, controllare la corretta scrittura", MessageLevel.INFO, 34002);
+                    return false;
+                }
+
+                // Already unlocked
+                if (Nfc.Tag.Value.PrinterGuid == Guid.Empty)
+                    return true;
+
+                if (Nfc.Tag.Value.PrinterGuid != settings.PrinterGuid)
+                {
+                    Flux.Messages.LogMessage("Errore sblocco tag", "Tag non appartenente alla stampante, contattare l'assistenza", MessageLevel.INFO, 34003);
+                    return false;
+                }
+
+                // Write unlocked tag
                 await StoreTagAsync(Nfc.SetTag(t => t.SetPrinterGuid(default)));
-                return false;
+                if (!Nfc.IsVirtualTag)
+                {
+                    if (!handle.HasValue)
+                    {
+                        Flux.Messages.LogMessage("Errore di sblocco tag", "Impossibile trovare un lettore nfc", MessageLevel.ERROR, 33004);
+                        await StoreTagAsync(Nfc.SetTag(t => t.SetPrinterGuid(default)));
+                        return false;
+                    }
+
+                    if (!await WriteTagAsync(handle.Value, Nfc.Tag.Value))
+                    {
+                        Flux.Messages.LogMessage("Errore di sblocco tag", "Impossibile scrivere il tag, controllare la distanza dal lettore nfc", MessageLevel.INFO, 34004);
+                        await StoreTagAsync(Nfc.SetTag(t => t.SetPrinterGuid(settings.PrinterGuid)));
+                        return false;
+                    }
+                }
+
+                // check written tag
+                var written_tag = Nfc.IsVirtualTag ? Optional.Some(Nfc) : await ReadTagAsync(handle, read_from_backup: false, create_tag: false);
+                if (!written_tag.HasValue)
+                {
+                    Flux.Messages.LogMessage("Errore di sblocco tag", "Errore durante la lettura del tag", MessageLevel.INFO, 33005);
+                    await StoreTagAsync(Nfc.SetTag(t => t.SetPrinterGuid(default)));
+                    return false;
+                }
+
+                using var sha256 = SHA256.Create();
+                var source_hash = sha256.ComputeHash(Encoding.UTF8.GetBytes(Nfc.Serialize())).ToHex();
+                var written_hash = sha256.ComputeHash(Encoding.UTF8.GetBytes(written_tag.Value.Serialize())).ToHex();
+
+                if (source_hash != written_hash)
+                {
+                    Flux.Messages.LogMessage("Errore di sblocco tag", "Errore durante la scrittura del tag", MessageLevel.INFO, 34006);
+                    await StoreTagAsync(Nfc.SetTag(t => t.SetPrinterGuid(settings.PrinterGuid)));
+                    return false;
+                }
+
+                // Delete backup
+                if (!DeleteBackupTag(Nfc))
+                {
+                    Flux.Messages.LogMessage("Errore di sblocco tag", "Impossibile cancellare il backup", MessageLevel.INFO, 34007);
+                    await StoreTagAsync(Nfc.SetTag(t => t.SetPrinterGuid(settings.PrinterGuid)));
+                    return false;
+                }
+
+                await DisconnectAsync();
+                return true;
             }
-
-            using var sha256 = SHA256.Create();
-            var source_hash = sha256.ComputeHash(Encoding.UTF8.GetBytes(Nfc.Serialize())).ToHex();
-            var written_hash = sha256.ComputeHash(Encoding.UTF8.GetBytes(written_tag.Value.Serialize())).ToHex();
-
-            if (source_hash != written_hash)
-            {
-                Flux.Messages.LogMessage("Errore di sblocco tag", "Errore durante la scrittura del tag", MessageLevel.ERROR, 34006);
-                await StoreTagAsync(Nfc.SetTag(t => t.SetPrinterGuid(settings.PrinterGuid)));
-                return false;
-            }
-
-            // Delete backup
-            if (!DeleteBackupTag(Nfc))
-            {
-                Flux.Messages.LogMessage("Errore di sblocco tag", "Impossibile cancellare il backup", MessageLevel.ERROR, 34007);
-                await StoreTagAsync(Nfc.SetTag(t => t.SetPrinterGuid(settings.PrinterGuid)));
-                return false;
-            }
-
-            await DisconnectAsync();
-            return true;
         }
 
         // Backup nfc
@@ -383,30 +408,10 @@ namespace Flux.ViewModels
         }
 
         // Nfc
-        protected async Task<UFR_STATUS> CloseAsync()
+        private Task<Optional<string>> ReadCardId(Optional<INFCHandle> handle)
         {
-            return await Task.Run(async () =>
-            {
-                if (!Reader.HasValue)
-                    return UFR_STATUS.UNKNOWN_ERROR;
-                return await Reader.Value.CloseAsync(TimeSpan.FromSeconds(5));
-            });
-        }
-        private async Task<Optional<string>> ReadCardId()
-        {
-            if (Nfc.IsVirtualTag)
-                return Nfc.CardId;
-
-            return await Task.Run(async () =>
-            {
-                var card_id = await Reader.ConvertAsync(
-                    async r => await r.OpenAsync(h => read_card(h), TimeSpan.FromSeconds(5)));
-                if (card_id.HasValue)
-                    return card_id.Value;
-                return await read_card(default);
-            });
-
-            async Task<Optional<string>> read_card(Optional<NFCReaderHandle> handle)
+            return UseReader(handle, read_card_id, s => s.HasValue);
+            async Task<Optional<string>> read_card_id(Optional<INFCHandle> handle)
             {
                 var operator_usb = Flux.MCodes.OperatorUSB;
                 var card_id = await handle.ConvertAsync(h => h.WaitForTagAsync(TimeSpan.FromSeconds(0.5), TimeSpan.FromSeconds(10)));
@@ -415,7 +420,7 @@ namespace Flux.ViewModels
                 {
                     if (!operator_usb.ConvertOr(o => o.RewriteNFC, () => false))
                     {
-                        Flux.Messages.LogMessage("Errore di lettura", "Nessun tag trovato", MessageLevel.ERROR, 36002);
+                        Flux.Messages.LogMessage("Errore di lettura", "Nessun tag trovato", MessageLevel.INFO, 36002);
                         return default;
                     }
 
@@ -425,47 +430,27 @@ namespace Flux.ViewModels
                 return card_id;
             }
         }
-        protected async Task<bool> WriteTagAsync(TNFCTag tag)
+        protected async Task<bool> WriteTagAsync(INFCHandle handle, TNFCTag tag)
         {
-            if (!Reader.HasValue)
+            var tag_id = await handle.WaitForTagAsync(TimeSpan.FromSeconds(0.5), TimeSpan.FromSeconds(10));
+            if (!tag_id.HasValue)
             {
-                Flux.Messages.LogMessage("Errore di scrittura", "Nessun lettore trovato", MessageLevel.ERROR, 35001);
+                Flux.Messages.LogMessage("Errore di scrittura", "Nessun tag trovato", MessageLevel.INFO, 35002);
                 return false;
             }
 
-            return await Task.Run(async () =>
+            if (!handle.NDEFWrite(tag))
             {
-                var result = await Reader.Value.OpenAsync(async handle =>
-                {
-                    var tag_id = await handle.WaitForTagAsync(TimeSpan.FromSeconds(0.5), TimeSpan.FromSeconds(10));
-                    if (!tag_id.HasValue)
-                    {
-                        Flux.Messages.LogMessage("Errore di scrittura", "Nessun tag trovato", MessageLevel.ERROR, 35002);
-                        return false;
-                    }
+                Flux.Messages.LogMessage("Errore di scrittura", "Tag non scritto", MessageLevel.INFO, 35003);
+                return false;
+            }
 
-                    if (!handle.NDEFWrite(tag))
-                    {
-                        Flux.Messages.LogMessage("Errore di scrittura", "Tag non scritto", MessageLevel.ERROR, 35003);
-                        return false;
-                    }
-
-                    return true;
-                }, TimeSpan.FromSeconds(5));
-
-                return result.ValueOr(() => false);
-            });
+            return true;
         }
-        public virtual async Task<Optional<NFCReading<TNFCTag>>> ReadTagAsync(bool read_from_backup, bool create_tag)
+        public virtual Task<Optional<NFCReading<TNFCTag>>> ReadTagAsync(Optional<INFCHandle> handle, bool read_from_backup, bool create_tag)
         {
-            return await Task.Run(async () =>
-            {
-                return await Reader.ConvertOr(
-                    r => r.OpenAsync(h => get_tag_async(h), TimeSpan.FromSeconds(5)),
-                    () => get_tag_async(default));
-            });
-
-            async Task<Optional<NFCReading<TNFCTag>>> get_tag_async(Optional<NFCReaderHandle> handle)
+            return UseReader(handle, read_tag_async, s => s.HasValue);
+            async Task<Optional<NFCReading<TNFCTag>>> read_tag_async(Optional<INFCHandle> handle)
             {
                 var virtual_tag = false;
                 var operator_usb = Flux.MCodes.OperatorUSB;
@@ -473,9 +458,15 @@ namespace Flux.ViewModels
                 var card_id = await handle.ConvertAsync(h => h.WaitForTagAsync(TimeSpan.FromSeconds(0.5), TimeSpan.FromSeconds(10)));
                 if (!card_id.HasValue)
                 {
-                    if (handle.HasValue && !operator_usb.ConvertOr(o => o.RewriteNFC, () => false))
+                    if (!operator_usb.ConvertOr(o => o.RewriteNFC, () => false))
                     {
-                        Flux.Messages.LogMessage("Errore di lettura", "Nessun tag trovato", MessageLevel.ERROR, 36002);
+                        if (!handle.HasValue)
+                        { 
+                            Flux.Messages.LogMessage("Errore di lettura", "Nessun lettore trovato", MessageLevel.INFO, 36002);
+                            return default;
+                        }
+
+                        Flux.Messages.LogMessage("Errore di lettura", "Nessun tag trovato", MessageLevel.INFO, 36002);
                         return default;
                     }
 
@@ -500,7 +491,7 @@ namespace Flux.ViewModels
                 var expected_type = typeof(TNFCTag).GetLowerCaseName();
                 if (type.HasValue && !string.IsNullOrEmpty(type.Value) && type.Value != expected_type)
                 {
-                    Flux.Messages.LogMessage("Errore di lettura", $"Tipo del tag non corretto: {type} invece di {expected_type}", MessageLevel.ERROR, 36001);
+                    Flux.Messages.LogMessage("Errore di lettura", $"Tipo del tag non corretto: {type} invece di {expected_type}", MessageLevel.INFO, 36001);
                     return default;
                 }
 
@@ -536,7 +527,7 @@ namespace Flux.ViewModels
                 var settings = Flux.SettingsProvider.CoreSettings.Local;
                 if (tag.Value.PrinterGuid != Guid.Empty && tag.Value.PrinterGuid != settings.PrinterGuid)
                 {
-                    Flux.Messages.LogMessage("Errore di lettura", "Tag bloccato", MessageLevel.ERROR, 36006);
+                    Flux.Messages.LogMessage("Errore di lettura", "Tag bloccato", MessageLevel.INFO, 36006);
                     return default;
                 }
 
@@ -595,5 +586,28 @@ namespace Flux.ViewModels
         }
 
         public void StoreTag(Func<INFCTag, INFCTag> modify_tag) => StoreTag(t => (TNFCTag)modify_tag(t));
+
+
+        public async Task<TResult> UseReader<TResult>(Optional<INFCHandle> handle, Func<Optional<INFCHandle>, Task<TResult>> func, Func<TResult, bool> success_func)
+        {
+            if (handle.HasValue)
+                return await func(handle);
+
+            var task = await Reader.ConvertAsync(r => r.OpenAsync(log_result, TimeSpan.FromSeconds(1)));
+            if (task.HasValue)
+                return task.Value;
+
+            return await func(default);
+
+            async Task<TResult> log_result(INFCHandle handle)
+            {
+                var result = await func(handle.ToOptional());
+                var success = success_func(result);
+                var light = success ? LightSignalMode.LongGreen : LightSignalMode.LongRed;
+                var beep = success ? BeepSignalMode.TripleShort : BeepSignalMode.DoubleShort;
+                handle.ReaderUISignal(light, beep);
+                return result;
+            }
+        }
     }
 }

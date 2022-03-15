@@ -420,13 +420,8 @@ namespace Flux.ViewModels
                 .DistinctUntilChanged()
                 .ToProperty(this, v => v.StatusEvaluation);
 
-            var block_nr = Flux.ConnectionProvider
-                .ObserveVariable(m => m.BLOCK_NUM)
-                .ValueOr(() => 0U)
-                .DistinctUntilChanged()
-                .PairWithPreviousValue()
-                .Where(b => b.NewValue == 0 || b.NewValue > b.OldValue)
-                .Select(b => b.NewValue);
+            var block_nr = Flux.ConnectionProvider.ObserveVariable(m => m.BLOCK_NUM)
+                .DistinctUntilChanged();
 
             _PrintProgress = Observable.CombineLatest(
                 queue_pos,
@@ -611,7 +606,7 @@ namespace Flux.ViewModels
         }
 
         // Progress and extrusion
-        private PrintProgress GetPrintProgress(Optional<QueuePosition> queue_pos, Dictionary<QueuePosition, Guid> queue, PrintingEvaluation evaluation, LineNumber line_nr, Dictionary<QueueKey, OdometerReading> odometer_readings)
+        private PrintProgress GetPrintProgress(Optional<QueuePosition> queue_pos, Dictionary<QueuePosition, Guid> queue, PrintingEvaluation evaluation, Optional<LineNumber> line_nr, Dictionary<QueueKey, OdometerReading> odometer_readings)
         {
             var selected_mcode = evaluation.SelectedMCode;
             // update job remaining time
@@ -621,9 +616,9 @@ namespace Flux.ViewModels
 
             float progress;
             var blocks = selected_mcode.Value.BlockCount;
-            if (line_nr != 0)
+            if (line_nr.HasValue && line_nr.Value != 0)
             {
-                progress = Math.Max(0, Math.Min(1, (float)line_nr / blocks));
+                progress = Math.Max(0, Math.Min(1, (float)line_nr.Value / blocks));
             }
             else 
             {

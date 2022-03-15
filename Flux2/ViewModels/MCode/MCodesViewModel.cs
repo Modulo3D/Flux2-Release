@@ -290,19 +290,29 @@ namespace Flux.ViewModels
                 IsPreparingFile = true;
                 mcode_vm = AvaiableMCodes.Lookup(mcode.Analyzer.MCode.MCodeGuid);
                 if (!mcode_vm.HasValue)
+                {
+                    Flux.Messages.LogMessage("Impossibile preparare il lavoro", "MCode non disponibile", MessageLevel.ERROR, 0);
                     return false;
+                }
 
-                var evaluation = Flux.StatusProvider.PrintingEvaluation;
+                var analyzer = mcode_vm.Value.Analyzer;
+                var recovery = Flux.StatusProvider.PrintingEvaluation.Recovery;
+
                 var put_ctk = new CancellationTokenSource(TimeSpan.FromMinutes(10));
-                var result = await Flux.ConnectionProvider.PreparePartProgramAsync(
-                    mcode_vm.Value.Analyzer, evaluation.Recovery, select, put_ctk.Token,
-                    report_progress_internal);
-
-                if (!result)
+                if (!await Flux.ConnectionProvider.PreparePartProgramAsync(analyzer, recovery, select, put_ctk.Token, report_progress_internal))
+                {
+                    Flux.Messages.LogMessage("Impossibile preparare il lavoro", "Impossibile preparare il partprogram", MessageLevel.ERROR, 0);
                     return false;
+                }
 
                 if (Flux.ConnectionProvider.VariableStore.HasVariable(c => c.ENABLE_VACUUM))
-                    await Flux.ConnectionProvider.WriteVariableAsync(m => m.ENABLE_VACUUM, true);
+                {
+                    if (!await Flux.ConnectionProvider.WriteVariableAsync(m => m.ENABLE_VACUUM, true))
+                    {
+                        Flux.Messages.LogMessage("Impossibile preparare il lavoro", "Impossibile attivare la pompa a vuoto", MessageLevel.ERROR, 0);
+                        return false;
+                    }
+                }
 
                 return true;
 

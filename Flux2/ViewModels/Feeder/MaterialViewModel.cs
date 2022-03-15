@@ -103,8 +103,8 @@ namespace Flux.ViewModels
                     can_unload = CanUnloadMaterial(ms, tn, tm, si),
                 });
 
-            UnloadCommand = ReactiveCommand.CreateFromTask(UnloadAsync, material.Select(m => m.can_unload), RxApp.MainThreadScheduler);
-            LoadPurgeCommand = ReactiveCommand.CreateFromTask(LoadPurgeAsync, material.Select(m => m.can_load || m.can_purge), RxApp.MainThreadScheduler);
+            UnloadCommand = ReactiveCommand.CreateFromTask(UnloadAsync, material.Select(m => m.can_unload));
+            LoadPurgeCommand = ReactiveCommand.CreateFromTask(LoadPurgeAsync, material.Select(m => m.can_load || m.can_purge));
         }
         private IObservable<MaterialState> FindMaterialState()
         {
@@ -197,7 +197,7 @@ namespace Flux.ViewModels
                 Flux.Navigator.Navigate(LoadMaterialViewModel);
             }
         }
-        protected override IObservable<Optional<NFCReaderHandle>> GetReader()
+        protected override IObservable<Optional<INFCReader>> GetReader()
         {
             return Flux.NFCProvider.GetMaterialReader(Feeder.Position);
         }
@@ -241,7 +241,8 @@ namespace Flux.ViewModels
             }, converter: typeof(WeightConverter));
 
             var result = await Flux.ShowSelectionAsync(
-                $"MATERIALE N.{Feeder.Position + 1}{(virtual_tag ? " (VIRTUALE)" : "")}, ID: {card_id}", true,
+                $"MATERIALE N.{Feeder.Position + 1}{(virtual_tag ? " (VIRTUALE)" : "")}, ID: {card_id}", 
+                Observable.Return(true),
                 material_option, max_weight_option, cur_weight_option);
 
             if (result != ContentDialogResult.Primary)

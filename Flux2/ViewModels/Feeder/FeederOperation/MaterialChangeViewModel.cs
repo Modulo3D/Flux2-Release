@@ -53,7 +53,7 @@ namespace Flux.ViewModels
                 return false;
             }
         }
-        protected async Task<(bool result, Optional<double> current_break_temp)> ExecuteFilamentOperation(Func<IFLUX_Connection, Func<ushort, Nozzle, double, string[]>> filament_operation, bool use_last_temp)
+        protected async Task<(bool result, Optional<double> current_break_temp)> ExecuteFilamentOperation(Func<IFLUX_Connection, Func<ushort, Nozzle, double, Optional<IEnumerable<string>>>> filament_operation, bool use_last_temp)
         {
             try
             {
@@ -200,17 +200,21 @@ namespace Flux.ViewModels
                 });
         }
 
-        public override async Task UpdateNFCAsync()
+        public override Task<bool> UpdateNFCAsync()
         {
-            if (!Feeder.Material.Nfc.Tag.HasValue)
-            {
-                var operator_usb = Flux.MCodes.OperatorUSB;
-                var reading = await Feeder.Material.ReadTagAsync(true, operator_usb.ConvertOr(o => o.RewriteNFC, () => false));
-                if (!reading.HasValue)
-                    return;
-                await Feeder.Material.StoreTagAsync(reading.Value);
+            return Feeder.Material.UseReader(default, update_nfc, s => s);
+            async Task<bool> update_nfc(Optional<INFCHandle> handle)
+            { 
+                if (!Feeder.Material.Nfc.Tag.HasValue)
+                {
+                    var operator_usb = Flux.MCodes.OperatorUSB;
+                    var reading = await Feeder.Material.ReadTagAsync(handle, true, operator_usb.ConvertOr(o => o.RewriteNFC, () => false));
+                    if (!reading.HasValue)
+                        return false;
+                    await Feeder.Material.StoreTagAsync(reading.Value);
+                }
+                return await Feeder.Material.LockTagAsync(handle);
             }
-            await Feeder.Material.LockTagAsync();
         }
         protected override IObservable<bool> FindCanUpdateNFC()
         {
@@ -332,19 +336,24 @@ namespace Flux.ViewModels
                     return "MATERIALE COMPATIBILE";
                 });
         }
-        public override async Task UpdateNFCAsync()
+        public override Task<bool> UpdateNFCAsync()
         {
-            if (!Feeder.Material.Nfc.Tag.HasValue)
+            return Feeder.Material.UseReader(default, update_nfc, s => s);
+            async Task<bool> update_nfc(Optional<INFCHandle> handle)
             {
-                var operator_usb = Flux.MCodes.OperatorUSB;
-                var reading = await Feeder.Material.ReadTagAsync(true, operator_usb.ConvertOr(o => o.RewriteNFC, () => false));
-                if (!reading.HasValue)
-                    return;
-                await Feeder.Material.StoreTagAsync(reading.Value);
+                if (!Feeder.Material.Nfc.Tag.HasValue)
+                {
+                    var operator_usb = Flux.MCodes.OperatorUSB;
+                    var reading = await Feeder.Material.ReadTagAsync(handle, true, operator_usb.ConvertOr(o => o.RewriteNFC, () => false));
+                    if (!reading.HasValue)
+                        return false;
+                    await Feeder.Material.StoreTagAsync(reading.Value);
+                }
+                if (!await Feeder.Material.UnlockTagAsync(handle))
+                    return false;
+                Flux.Navigator.NavigateBack();
+                return true;
             }
-            if (!await Feeder.Material.UnlockTagAsync())
-                return;
-            Flux.Navigator.NavigateBack();
         }
         protected override IObservable<bool> FindCanUpdateNFC()
         {

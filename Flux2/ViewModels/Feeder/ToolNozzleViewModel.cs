@@ -67,7 +67,7 @@ namespace Flux.ViewModels
                     return true;
                 });
 
-            ChangeCommand = ReactiveCommand.CreateFromTask(ChangeAsync, can_load_unload_tool, RxApp.MainThreadScheduler);
+            ChangeCommand = ReactiveCommand.CreateFromTask(ChangeAsync, can_load_unload_tool);
         }
 
         public Task ChangeAsync()
@@ -138,7 +138,7 @@ namespace Flux.ViewModels
                 });
         }
 
-        protected override IObservable<Optional<NFCReaderHandle>> GetReader()
+        protected override IObservable<Optional<INFCReader>> GetReader()
         {
             return Flux.NFCProvider.GetToolReader();
         }
@@ -165,7 +165,8 @@ namespace Flux.ViewModels
 
             var tool_option = ComboOption.Create("tool", "Utensile:", tools);
             var tool_result = await Flux.ShowSelectionAsync(
-                $"UTENSILE N.{Feeder.Position + 1}{(virtual_tag ? " (VIRTUALE)" : "")}, ID:{card_id}", true,
+                $"UTENSILE N.{Feeder.Position + 1}{(virtual_tag ? " (VIRTUALE)" : "")}, ID:{card_id}",
+                Observable.Return(true),
                 tool_option);
 
             if (tool_result != ContentDialogResult.Primary)
@@ -211,7 +212,8 @@ namespace Flux.ViewModels
             }, converter: typeof(WeightConverter));
 
             var nozzle_result = await Flux.ShowSelectionAsync(
-                $"UGELLO N.{Feeder.Position + 1}{(virtual_tag ? " (VIRTUALE)" : "")}, ID:{card_id}", true,
+                $"UGELLO N.{Feeder.Position + 1}{(virtual_tag ? " (VIRTUALE)" : "")}, ID:{card_id}",
+                Observable.Return(true),
                 nozzle_option, max_weight_option, cur_weight_option);
 
             if (nozzle_result != ContentDialogResult.Primary)

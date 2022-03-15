@@ -20,6 +20,9 @@ namespace Flux.ViewModels
         public string Title { get; }
         [RemoteOutput(true)]
         public abstract TValue Value { get; set; }
+        [RemoteOutput(true)]
+        public abstract bool HasValue { get; }
+
         public DialogOption(string name, string title) : base($"{typeof(TViewModel).GetRemoteControlName()}??{name}")
         {
             Title = title;
@@ -32,9 +35,13 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public override Optional<TValue> Value
         {
-            get => Items.SelectedValue;
+            get => Items?.SelectedValue ?? default;
             set => throw new Exception();
         }
+        private ObservableAsPropertyHelper<bool> _HasValue;
+        [RemoteOutput(true)]
+        public override bool HasValue => _HasValue.Value;
+
         public ComboOption(string name, string title, IObservableCache<TValue, TKey> items_source, Optional<TKey> key = default, Action<Optional<TKey>> selection_changed = default, Type converter = default) : base(name, title)
         {
             Items = SelectableCache.Create(items_source.Connect().Transform(v => v.ToOptional()))
@@ -48,6 +55,11 @@ namespace Flux.ViewModels
             Items.SelectedKeyChanged
                 .Subscribe(v => selection_changed?.Invoke(v))
                 .DisposeWith(Disposables);
+
+            _HasValue = Items.SelectedValueChanged
+               .Select(v => v.HasValue)
+               .ToProperty(this, v => v.HasValue)
+               .DisposeWith(Disposables);
 
             AddInput("items", Items, converter: converter);
         }
@@ -92,21 +104,29 @@ namespace Flux.ViewModels
             get => _Value;
             set => this.RaiseAndSetIfChanged(ref _Value, value);
         }
+        private ObservableAsPropertyHelper<bool> _HasValue;
+        [RemoteOutput(true)]
+        public override bool HasValue => _HasValue.Value;
 
-        public NumericOption(string name, string title, double value, double step, double min = double.MinValue, double max = double.MaxValue, Type converter = default) : base(name, title)
+        public NumericOption(string name, string title, double value, double step, double min = double.MinValue, double max = double.MaxValue, Type converter = default, Func<double, bool> has_value = default) : base(name, title)
         {
             Min = min;
             Max = max;
             Step = step;
             Value = value;
             AddInput("value", this.WhenAnyValue(v => v.Value), SetValue, step: step, converter: converter);
+
+            _HasValue = this.WhenAnyValue(v => v.Value)
+               .Select(v => has_value?.Invoke(v) ?? true)
+               .ToProperty(this, v => v.HasValue)
+               .DisposeWith(Disposables);
         }
         void SetValue(double value) => Value = value;
     }
 
     public class ContentDialog : RemoteControl<ContentDialog>, IContentDialog
     {
-        public FluxViewModel Flux { get; }
+        public IFlux Flux { get; }
 
         [RemoteOutput(false)]
         public string Title { get; }
@@ -126,39 +146,50 @@ namespace Flux.ViewModels
         public ContentDialogResult Result { get; private set; }
         public TaskCompletionSource<ContentDialogResult> ShowAsyncSource { get; private set; }
 
-        public ContentDialog(FluxViewModel flux, string title, Func<Task> close = default, Func<Task> confirm = default, Func<Task> cancel = default) : base("dialog")
+        public ContentDialog(
+            IFlux flux,
+            string title, 
+            Func<Task> close = default,
+            IObservable<bool> can_close = default,
+            Func<Task> confirm = default,
+            IObservable<bool> can_confirm = default,
+            Func<Task> cancel = default,
+            IObservable<bool> can_cancel = default) : base("dialog")
         {
             Flux = flux;
             Title = title;
 
-            if (close != null)
+            if (can_close != default)
             {
                 CloseCommand = ReactiveCommand.CreateFromTask(async () =>
                 {
                     Result = ContentDialogResult.None;
-                    await close();
+                    if(close != default)
+                        await close.Invoke();
                     Hide();
-                }).DisposeWith(Disposables);
+                }, can_close).DisposeWith(Disposables);
             }
 
-            if (confirm != null)
+            if (can_confirm != default)
             {
                 ConfirmCommand = ReactiveCommand.CreateFromTask(async () =>
                 {
                     Result = ContentDialogResult.Primary;
-                    await confirm();
+                    if (confirm != default)
+                        await confirm.Invoke();
                     Hide();
-                }).DisposeWith(Disposables);
+                }, can_confirm).DisposeWith(Disposables);
             }
 
-            if (cancel != null)
+            if (can_cancel != default)
             {
                 CancelCommand = ReactiveCommand.CreateFromTask(async () =>
                 {
-                    Result = ContentDialogResult.Secondary;
-                    await cancel();
+                    Result = ContentDialogResult.Secondary; 
+                    if (cancel != default)
+                        await cancel.Invoke();
                     Hide();
-                }).DisposeWith(Disposables);
+                }, can_cancel).DisposeWith(Disposables);
             }
 
             _IsShown = Flux.RemoteContents.Connect()
@@ -209,6 +240,8 @@ namespace Flux.ViewModels
             get => _Value;
             set => this.RaiseAndSetIfChanged(ref _Value, value);
         }
+        [RemoteOutput(false)]
+        public override bool HasValue => true;
 
         public ProgressBar(string name, string title) : base(name, title)
         {
@@ -223,6 +256,8 @@ namespace Flux.ViewModels
             get => Title;
             set => throw new Exception();
         }
+        [RemoteOutput(false)]
+        public override bool HasValue => true;
 
         public TextBlock(string name, string text) : base(name, text)
         {
@@ -241,10 +276,20 @@ namespace Flux.ViewModels
         [RemoteOutput(false)]
         public bool Multiline { get; }
 
-        public TextBox(string name, string title, string text, bool multiline = false) : base(name, title)
+
+        private ObservableAsPropertyHelper<bool> _HasValue;
+        [RemoteOutput(true)]
+        public override bool HasValue => _HasValue.Value;
+
+        public TextBox(string name, string title, string text, bool multiline = false, Func<string, bool> has_value = default) : base(name, title)
         {
             Value = text;
             Multiline = multiline;
+
+            _HasValue = this.WhenAnyValue(v => v.Value)
+               .Select(v => has_value?.Invoke(v) ?? true)
+               .ToProperty(this, v => v.HasValue)
+               .DisposeWith(Disposables);
         }
     }
 
