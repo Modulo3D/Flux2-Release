@@ -98,7 +98,7 @@ namespace Flux.ViewModels
                 { FluxMemReadPriority.ULTRAHIGH, OSAI_Connection.UltraHighPriority },
             };
 
-            DisposableTask.Start(async time =>
+            DisposableThread.Start(async () =>
             {
                 if (DateTime.Now - status_t >= TimeSpan.FromMilliseconds(100))
                     await update_status();
@@ -125,7 +125,7 @@ namespace Flux.ViewModels
                     Connection.IfHasValue(c => c.MemoryBuffer.HasFullMemoryRead = false);
                 }
 
-            }, TimeSpan.Zero, RxApp.TaskpoolScheduler);
+            }, TimeSpan.Zero);
 
             async Task update_debug()
             {

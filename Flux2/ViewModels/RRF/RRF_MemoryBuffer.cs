@@ -33,62 +33,6 @@ namespace Flux.ViewModels
         TimeSpan Period { get; }
         TimeSpan Timeout { get; }
     }
-
-    public class DisposableThread : IDisposable
-    {
-        private readonly Task _Task;
-        private readonly Stopwatch _Stopwatch;
-        private readonly CancellationTokenSource _CancellationTokenSource;
-
-        public DisposableThread(Action action, TimeSpan period)
-        {
-            _Stopwatch = Stopwatch.StartNew();
-            _CancellationTokenSource = new CancellationTokenSource();
-
-            var token = _CancellationTokenSource.Token;
-            _Task = Task.Run(async () =>
-            {
-                while (!token.IsCancellationRequested)
-                {
-                    var delay = period - _Stopwatch.Elapsed;
-                    if (delay > TimeSpan.Zero)
-                        await Task.Delay(period, token);
-                    action();
-                }
-            }, token);
-        }
-        public DisposableThread(Func<Task> task, TimeSpan period)
-        {
-            _Stopwatch = Stopwatch.StartNew();
-            _CancellationTokenSource = new CancellationTokenSource();
-
-            var token = _CancellationTokenSource.Token;
-            _Task = Task.Run(async () =>
-            {
-                while (!token.IsCancellationRequested)
-                {
-                    var delay = period - _Stopwatch.Elapsed;
-                    if (delay > TimeSpan.Zero)
-                        await Task.Delay(period, token);
-                    await task();
-                    _Stopwatch.Restart();
-                }
-            }, token);
-        }
-
-        public void Dispose()
-        {
-            _CancellationTokenSource.Cancel();
-            try
-            {
-                _Task.Wait();
-            }
-            catch (Exception)
-            {
-            }
-        }
-    }
-
     public class RRF_MemoryReader : ReactiveObject, IRRF_MemoryReader
     {
         public string Name { get; }
@@ -145,7 +89,7 @@ namespace Flux.ViewModels
             Connection = connection;
             Disposables = new CompositeDisposable();
 
-            Thread = new DisposableThread(TryScheduleAsync, period)
+            Thread = DisposableThread.Start(TryScheduleAsync, period)
                 .DisposeWith(Disposables);
 
             MemoryReaders = new SourceCache<RRF_MemoryReader, string>(r => r.Name)

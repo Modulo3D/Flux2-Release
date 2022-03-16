@@ -84,7 +84,7 @@ namespace Flux.ViewModels
             var network_t = DateTime.Now;
 
             StartConnection();
-            DisposableTask.Start(async time =>
+            DisposableThread.Start(async () =>
             {
                 try
                 {
@@ -117,7 +117,7 @@ namespace Flux.ViewModels
                 {
                 }
 
-            }, TimeSpan.Zero, RxApp.TaskpoolScheduler);
+            }, TimeSpan.Zero);
         }
         public override void StartConnection()
         {
