@@ -140,10 +140,6 @@ namespace Flux.ViewModels
         [RemoteCommand()]
         public Optional<ReactiveCommand<Unit, Unit>> CancelCommand { get; }
 
-        private ObservableAsPropertyHelper<bool> _IsShown;
-        public bool IsShown => _IsShown.Value;
-
-        public ContentDialogResult Result { get; private set; }
         public TaskCompletionSource<ContentDialogResult> ShowAsyncSource { get; private set; }
 
         public ContentDialog(
@@ -163,10 +159,9 @@ namespace Flux.ViewModels
             {
                 CloseCommand = ReactiveCommand.CreateFromTask(async () =>
                 {
-                    Result = ContentDialogResult.None;
                     if(close != default)
                         await close.Invoke();
-                    Hide();
+                    ShowAsyncSource.SetResult(ContentDialogResult.None);
                 }, can_close).DisposeWith(Disposables);
             }
 
@@ -174,10 +169,9 @@ namespace Flux.ViewModels
             {
                 ConfirmCommand = ReactiveCommand.CreateFromTask(async () =>
                 {
-                    Result = ContentDialogResult.Primary;
                     if (confirm != default)
                         await confirm.Invoke();
-                    Hide();
+                    ShowAsyncSource.SetResult(ContentDialogResult.Primary);
                 }, can_confirm).DisposeWith(Disposables);
             }
 
@@ -185,18 +179,11 @@ namespace Flux.ViewModels
             {
                 CancelCommand = ReactiveCommand.CreateFromTask(async () =>
                 {
-                    Result = ContentDialogResult.Secondary; 
                     if (cancel != default)
                         await cancel.Invoke();
-                    Hide();
+                    ShowAsyncSource.SetResult(ContentDialogResult.Secondary);
                 }, can_cancel).DisposeWith(Disposables);
             }
-
-            _IsShown = Flux.RemoteContents.Connect()
-                .WatchOptional(Name)
-                .Select(c => c.HasValue)
-                .ToProperty(this, v => v.IsShown)
-                .DisposeWith(Disposables);
 
             ShowAsyncSource = new TaskCompletionSource<ContentDialogResult>();
         }
@@ -204,24 +191,7 @@ namespace Flux.ViewModels
         public async Task<ContentDialogResult> ShowAsync()
         {
             Flux.ContentDialog = this;
-            var result = await ShowAsyncSource.Task;
-            await Observable.CombineLatest(
-                CloseCommand.ConvertOr(c => c.IsExecuting, () => Observable.Return(false)),
-                CancelCommand.ConvertOr(c => c.IsExecuting, () => Observable.Return(false)),
-                ConfirmCommand.ConvertOr(c => c.IsExecuting, () => Observable.Return(false)))
-                .PairWithPreviousValue()
-                .FirstOrDefaultAsync(e => (e.OldValue?.Any(e => e) ?? false) && (e.NewValue?.All(e => !e) ?? false));
-            return result;
-        }
-
-        public void Hide()
-        {
-            try
-            {
-                ShowAsyncSource.SetResult(Result);
-            }
-            catch (Exception ex)
-            { }
+            return await ShowAsyncSource.Task;
         }
 
         public override void Dispose()
@@ -250,17 +220,19 @@ namespace Flux.ViewModels
 
     public class TextBlock : DialogOption<TextBlock, string>
     {
-        [RemoteOutput(false)]
+        private string _Value;
+        [RemoteOutput(true)]
         public override string Value
         {
-            get => Title;
-            set => throw new Exception();
+            get => _Value;
+            set => this.RaiseAndSetIfChanged(ref _Value, value);
         }
         [RemoteOutput(false)]
         public override bool HasValue => true;
 
-        public TextBlock(string name, string text) : base(name, text)
+        public TextBlock(string name, string text) : base(name, "")
         {
+            Value = text;
         }
     }
 

@@ -154,14 +154,16 @@ namespace Flux.ViewModels
 
                 async Task move_tool(double d)
                 {
-                    await Flux.ConnectionProvider.ExecuteParamacroAsync(c => c.GetRelativeZMovementGCode(d, 500), false);
+                    using var put_relative_movement_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    await Flux.ConnectionProvider.ExecuteParamacroAsync(c => c.GetRelativeZMovementGCode(d, 500), put_relative_movement_cts.Token);
                 }
             }
         }
 
         private async Task ExitAsync()
         {
-            var exit_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            using var put_exit_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var wait_exit_cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             await Flux.ConnectionProvider.ExecuteParamacroAsync(c =>
             {
                 var gcode = new List<string>();
@@ -185,7 +187,7 @@ namespace Flux.ViewModels
                 gcode.AddRange(park_tool_gcode.Value);
 
                 return gcode;
-            }, true, exit_ctk.Token);
+            }, put_exit_cts.Token, true, wait_exit_cts.Token);
 
             Flux.Navigator.NavigateBack();
         }
@@ -233,7 +235,8 @@ namespace Flux.ViewModels
                     if (!tool_offset.HasValue)
                         return;
 
-                    var select_tool_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+                    using var put_select_tool_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    using var wait_select_tool_cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
                     await Flux.ConnectionProvider.ExecuteParamacroAsync(c =>
                     {
                         var gcode = new List<string>();
@@ -258,7 +261,7 @@ namespace Flux.ViewModels
                         gcode.AddRange(raise_plate_gcode.Value);
 
                         return gcode;
-                    }, true, select_tool_ctk.Token);
+                    }, put_select_tool_cts.Token, true, wait_select_tool_cts.Token);
                 }
             }
         }

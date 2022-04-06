@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
@@ -83,7 +84,8 @@ namespace Flux.ViewModels
 
             async Task moveAsync(Func<IFLUX_Connection, Optional<IEnumerable<string>>> func)
             {
-                await Flux.ConnectionProvider.ExecuteParamacroAsync(func, false);
+                using var put_move_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                await Flux.ConnectionProvider.ExecuteParamacroAsync(func, put_move_cts.Token);
             }
 
             MovePrinterLeftCommand = ReactiveCommand.CreateFromTask(() => moveAsync(c => c.GetRelativeXMovementGCode(-MovePrinterDistance, MovePrinterFeedrate)), can_move);

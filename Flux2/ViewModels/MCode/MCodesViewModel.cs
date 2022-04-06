@@ -18,6 +18,8 @@ namespace Flux.ViewModels
 {
     public class MCodesViewModel : FluxRoutableNavBarViewModel<MCodesViewModel>, IFluxMCodesViewModel
     {
+        private CancellationTokenSource PrepareMCodeCTS { get; set; }
+
         [RemoteContent(true)]
         public ISourceCache<IFluxMCodeStorageViewModel, Guid> AvaiableMCodes { get; }
 
@@ -176,6 +178,7 @@ namespace Flux.ViewModels
             }
         }
 
+
         // IMPORTING
         public async Task ImportMCodesAsync(Optional<DirectoryInfo> import_directory = default)
         {
@@ -247,12 +250,22 @@ namespace Flux.ViewModels
                 }
                 finally
                 {
-                    dialog.Hide();
+                    dialog.ShowAsyncSource.SetResult(ContentDialogResult.None);
                 }
             });
         }
 
         // STORAGE
+        public void CancelPrepareMCode()
+        {
+            try
+            {
+                PrepareMCodeCTS?.Cancel();
+            }
+            catch (Exception ex)
+            { 
+            }
+        }
         private async Task<Optional<Dictionary<Guid, Dictionary<BlockNumber, MCodePartProgram>>>> ReadMCodeStorageAsync()
         {
             var qctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
@@ -298,12 +311,9 @@ namespace Flux.ViewModels
                 var analyzer = mcode_vm.Value.Analyzer;
                 var recovery = Flux.StatusProvider.PrintingEvaluation.Recovery;
 
-                var put_ctk = new CancellationTokenSource(TimeSpan.FromMinutes(10));
-                if (!await Flux.ConnectionProvider.PreparePartProgramAsync(analyzer, recovery, select, put_ctk.Token, report_progress_internal))
-                {
-                    Flux.Messages.LogMessage("Impossibile preparare il lavoro", "Impossibile preparare il partprogram", MessageLevel.ERROR, 0);
-                    return false;
-                }
+                using (PrepareMCodeCTS = new CancellationTokenSource())
+                    if (!await Flux.ConnectionProvider.PreparePartProgramAsync(analyzer, recovery, select, PrepareMCodeCTS.Token, report_progress_internal))
+                        return false;
 
                 if (Flux.ConnectionProvider.VariableStore.HasVariable(c => c.ENABLE_VACUUM))
                 {
@@ -326,7 +336,7 @@ namespace Flux.ViewModels
             void report_progress_internal(double percentage)
             {
                 percentage = Math.Ceiling(percentage);
-                mcode.LoadPercentage = percentage;
+                mcode.UploadPercentage = percentage;
                 report_progress?.Invoke(percentage);
             }
         }
@@ -452,10 +462,7 @@ namespace Flux.ViewModels
             }
 
             if (!await PrepareMCodeAsync(mcode, false))
-            {
-                Flux.Messages.LogMessage("Errore durante la selezione del lavoro", "Impossibile preparare il lavoro", MessageLevel.ERROR, 0);
                 return false;
-            }
 
             var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             if (!await Flux.ConnectionProvider.PutFileAsync(

@@ -330,8 +330,9 @@ namespace Flux.ViewModels
             if (!await MGuard_MagazinePositionAsync((ushort)(position.Value - 1)))
                 return false;
 
-            var park_tool_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            return await ExecuteParamacroAsync(c => c.GetParkToolGCode(), true, park_tool_ctk.Token);
+            using var put_park_tool_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var wait_park_tool_cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            return await ExecuteParamacroAsync(c => c.GetParkToolGCode(), put_park_tool_cts.Token, true, wait_park_tool_cts.Token);
         }
         public override async Task<bool> ResetClampAsync()
         {

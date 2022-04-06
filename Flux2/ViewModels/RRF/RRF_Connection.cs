@@ -203,7 +203,7 @@ namespace Flux.ViewModels
                     case ContentDialogResult.Primary:
                         foreach (var variable in variables)
                             if (!file_set.Contains(variable.LoadVariableMacro))
-                                if (!await variable.InitializeVariableAsync())
+                                if (!await variable.InitializeVariableAsync(ct))
                                     return false;
                         break;
                     default:
@@ -254,29 +254,30 @@ namespace Flux.ViewModels
 
         public override async Task<bool> ResetAsync()
         {
-            var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            return await ExecuteParamacroAsync(new[] { "M108", "M25", "M0" }, true, cts.Token);
+            using var put_reset_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var wait_reset_cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            return await ExecuteParamacroAsync(new[] { "M108", "M25", "M0" }, put_reset_cts.Token, true, wait_reset_cts.Token);
         }
         private int GetGCodeLenght(IEnumerable<string> paramacro)
         {
             return 15 + paramacro.Sum(line => line.Length) + ((paramacro.Count() - 2) * 3);
         }
-        public override async Task<bool> CycleAsync(bool start, bool wait, CancellationToken ct = default)
+        public override async Task<bool> CycleAsync(bool start, bool wait = false, CancellationToken wait_ct = default)
         {
-            return await ExecuteParamacroAsync(new[] { "M24" }, wait, ct);
+            using var put_start_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            return await ExecuteParamacroAsync(new[] { "M24" }, put_start_cts.Token, wait, wait_ct);
         }
-        public override async Task<bool> ExecuteParamacroAsync(IEnumerable<string> paramacro, bool wait = false, CancellationToken ct = default)
+        public override async Task<bool> ExecuteParamacroAsync(IEnumerable<string> paramacro, CancellationToken put_ctk, bool wait = false, CancellationToken wait_ct = default)
         {
             paramacro = paramacro.Select(line => Regex.Replace(line, "M98 P\"(.*)\"", m => $"M98 P\"{m.Groups[1].Value.ToLower().Replace(" ", "_")}\""));
             var lenght = GetGCodeLenght(paramacro);
             if (lenght < 160)
             {
-                var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-                return await PostGCodeAsync(string.Join("%0A", paramacro), cts.Token, wait, ct);
+                return await PostGCodeAsync(string.Join("%0A", paramacro), put_ctk, wait, wait_ct);
             }
             else
             { 
-                return await base.ExecuteParamacroAsync(paramacro, wait, ct);
+                return await base.ExecuteParamacroAsync(paramacro, put_ctk, wait, wait_ct);
             }
         }
 
@@ -342,8 +343,9 @@ namespace Flux.ViewModels
         }
         public override async Task<bool> HoldAsync()
         {
-            var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            return await ExecuteParamacroAsync(new[] { "M108", "M25", "M0" }, true, cts.Token);
+            using var put_hold_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var wait_hold_cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            return await ExecuteParamacroAsync(new[] { "M108", "M25", "M0" }, put_hold_cts.Token, true, wait_hold_cts.Token);
         }
         public override async Task<Optional<string>> DownloadFileAsync(string folder, string filename, CancellationToken ct)
         {
@@ -436,6 +438,7 @@ namespace Flux.ViewModels
                 var plc_address = Flux.SettingsProvider.CoreSettings.Local.PLCAddress;
 
                 using var client = new HttpClient();
+                client.Timeout = TimeSpan.FromHours(1);
                 client.BaseAddress = new Uri($"http://{plc_address}");
                 client.DefaultRequestHeaders.Add("Connection", "Keep-Alive");
                 var response = await client.PostAsync($"rr_upload?name=0:/{folder}/{filename}&time={DateTime.Now:s}", content_stream, ct);
@@ -481,7 +484,8 @@ namespace Flux.ViewModels
             }
             catch (Exception ex)
             {
-                Flux.Messages.LogException(this, ex);
+                if(ex is not OperationCanceledException)
+                    Flux.Messages.LogException(this, ex);
                 return false;
             }
         }
@@ -693,12 +697,13 @@ namespace Flux.ViewModels
         public override async Task<bool> CancelPrintAsync(bool hard_cancel)
         {
             // TODO
-            var cts = new CancellationTokenSource(TimeSpan.FromMinutes(1));
+            using var put_cancel_print_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var wait_cancel_print_cts = new CancellationTokenSource(TimeSpan.FromMinutes(1));
             return await ExecuteParamacroAsync(new []
             {
                 "M108", "M25", "M0",
                 "M98 P\"/macros/cancel_print\"",
-            }, true, cts.Token);
+            }, put_cancel_print_cts.Token, true, wait_cancel_print_cts.Token);
         }
 
         public override async Task<bool> RenameFileAsync(string folder, string old_filename, string new_filename, bool wait, CancellationToken ct = default)

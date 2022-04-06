@@ -87,8 +87,9 @@ namespace Flux.ViewModels
                     return (false, current_break_temp);
                 }
 
-                using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
-                if (!await Flux.ConnectionProvider.ExecuteParamacroAsync(f => filament_operation(f)(Feeder.Position, nozzle, break_temp), true, cts.Token))
+                using var put_filament_op_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                using var wait_filament_op_cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
+                if (!await Flux.ConnectionProvider.ExecuteParamacroAsync(f => filament_operation(f)(Feeder.Position, nozzle, break_temp), put_filament_op_cts.Token, true, wait_filament_op_cts.Token))
                 {
                     Flux.Messages.LogMessage(MaterialChangeResult.MATERIAL_CHANGE_ERROR_PARAMACRO, Feeder.Material.State);
                     return (false, current_break_temp);
@@ -200,21 +201,33 @@ namespace Flux.ViewModels
                 });
         }
 
-        public override Task<bool> UpdateNFCAsync()
+        public override async Task<bool> UpdateNFCAsync()
         {
-            return Feeder.Material.UseReader(default, update_nfc, s => s);
-            async Task<bool> update_nfc(Optional<INFCHandle> handle)
-            { 
-                if (!Feeder.Material.Nfc.Tag.HasValue)
+            if (!Feeder.Material.Nfc.Tag.HasValue)
+            {
+                var operator_usb = Flux.MCodes.OperatorUSB;
+                var reading = await Flux.UseReader(h => Feeder.Material.ReadTag(h, true), r => r.HasValue);
+
+                if (!reading.HasValue)
                 {
-                    var operator_usb = Flux.MCodes.OperatorUSB;
-                    var reading = await Feeder.Material.ReadTagAsync(handle, true, operator_usb.ConvertOr(o => o.RewriteNFC, () => false));
+                    if (operator_usb.ConvertOr(o => o.RewriteNFC, () => false))
+                    {
+                        var tag = await Feeder.Material.CreateTagAsync();
+                        reading = new NFCReading<NFCMaterial>(tag, Feeder.Material.VirtualCardId);
+                    }
+
                     if (!reading.HasValue)
                         return false;
-                    await Feeder.Material.StoreTagAsync(reading.Value);
                 }
-                return await Feeder.Material.LockTagAsync(handle);
+
+                await Feeder.Material.StoreTagAsync(reading.Value);
             }
+            
+            var result = Feeder.Material.Nfc.IsVirtualTag ?
+                await Feeder.Material.LockTagAsync(default) :
+                await Flux.UseReader(h => Feeder.Material.LockTagAsync(h), l => l);
+            
+            return result.ValueOr(() => false);
         }
         protected override IObservable<bool> FindCanUpdateNFC()
         {
@@ -336,24 +349,37 @@ namespace Flux.ViewModels
                     return "MATERIALE COMPATIBILE";
                 });
         }
-        public override Task<bool> UpdateNFCAsync()
+        public override async Task<bool> UpdateNFCAsync()
         {
-            return Feeder.Material.UseReader(default, update_nfc, s => s);
-            async Task<bool> update_nfc(Optional<INFCHandle> handle)
+            if (!Feeder.Material.Nfc.Tag.HasValue)
             {
-                if (!Feeder.Material.Nfc.Tag.HasValue)
+                var operator_usb = Flux.MCodes.OperatorUSB;
+                var reading = await Flux.UseReader(h => Feeder.Material.ReadTag(h, true), r => r.HasValue);
+
+                if (!reading.HasValue)
                 {
-                    var operator_usb = Flux.MCodes.OperatorUSB;
-                    var reading = await Feeder.Material.ReadTagAsync(handle, true, operator_usb.ConvertOr(o => o.RewriteNFC, () => false));
+                    if (operator_usb.ConvertOr(o => o.RewriteNFC, () => false))
+                    {
+                        var tag = await Feeder.Material.CreateTagAsync();
+                        reading = new NFCReading<NFCMaterial>(tag, Feeder.Material.VirtualCardId);
+                    }
+
                     if (!reading.HasValue)
                         return false;
-                    await Feeder.Material.StoreTagAsync(reading.Value);
                 }
-                if (!await Feeder.Material.UnlockTagAsync(handle))
-                    return false;
-                Flux.Navigator.NavigateBack();
-                return true;
+
+                await Feeder.Material.StoreTagAsync(reading.Value);
             }
+
+            var result = Feeder.Material.Nfc.IsVirtualTag ? 
+                await Feeder.Material.UnlockTagAsync(default) :
+                await Flux.UseReader(h => Feeder.Material.UnlockTagAsync(h), u => u);
+            
+            if (!result.HasValue || !result.Value)
+                return false;
+
+            Flux.Navigator.NavigateBack();
+            return true;
         }
         protected override IObservable<bool> FindCanUpdateNFC()
         {

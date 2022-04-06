@@ -23,13 +23,16 @@ namespace Flux.ViewModels
         public MCodesViewModel MCodes { get; }
         public FluxViewModel Flux => MCodes.Flux;
 
-        private double _LoadPercentage;
+        private double _UploadPercentage;
         [RemoteOutput(true)]
-        public double LoadPercentage
+        public double UploadPercentage
         {
-            get => _LoadPercentage;
-            set => this.RaiseAndSetIfChanged(ref _LoadPercentage, value);
+            get => _UploadPercentage;
+            set => this.RaiseAndSetIfChanged(ref _UploadPercentage, value);
         }
+
+        private ObservableAsPropertyHelper<bool> _IsUploading;
+        public bool IsUploading => _IsUploading.Value;
 
         private bool _ShowInfo;
         public bool ShowInfo
@@ -46,6 +49,8 @@ namespace Flux.ViewModels
         [RemoteCommand]
         public ReactiveCommand<Unit, Unit> SelectMCodeStorageCommand { get; }
         [RemoteCommand]
+        public ReactiveCommand<Unit, Unit> CancelSelectMCodeStorageCommand { get; }
+        [RemoteCommand]
         public ReactiveCommand<Unit, Unit> ToggleMCodeStorageInfoCommand { get; }
 
         private ObservableAsPropertyHelper<bool> _CanSelect;
@@ -58,6 +63,10 @@ namespace Flux.ViewModels
         {
             MCodes = mcodes;
             Analyzer = analyzer;
+
+            _IsUploading = this.WhenAnyValue(v => v.UploadPercentage)
+                .Select(p => p > 0)
+                .ToProperty(this, v => v.IsUploading);
 
             Materials = Flux.DatabaseProvider.WhenAnyValue(v => v.Database)
                 .Select(db => FindDocuments<Material>(db, r => r.MaterialId))
@@ -116,6 +125,11 @@ namespace Flux.ViewModels
             SelectMCodeStorageCommand = ReactiveCommand.CreateFromTask(
                 async () => { await mcodes.AddToQueueAsync(this); },
                 this.WhenAnyValue(v => v.CanSelect))
+                .DisposeWith(Disposables);
+
+            CancelSelectMCodeStorageCommand = ReactiveCommand.Create(
+                () => mcodes.CancelPrepareMCode(),
+                this.WhenAnyValue(v => v.IsUploading))
                 .DisposeWith(Disposables);
 
             var name = analyzer.MCode.Name;

@@ -197,11 +197,7 @@ namespace Flux.ViewModels
                 Flux.Navigator.Navigate(LoadMaterialViewModel);
             }
         }
-        protected override IObservable<Optional<INFCReader>> GetReader()
-        {
-            return Flux.NFCProvider.GetMaterialReader(Feeder.Position);
-        }
-        protected override async Task<(bool result, Optional<NFCMaterial> tag)> CreateTagAsync(string card_id, bool virtual_tag)
+        public override async Task<Optional<NFCMaterial>> CreateTagAsync()
         {
             var database = Flux.DatabaseProvider.Database;
             if (!database.HasValue)
@@ -241,25 +237,24 @@ namespace Flux.ViewModels
             }, converter: typeof(WeightConverter));
 
             var result = await Flux.ShowSelectionAsync(
-                $"MATERIALE N.{Feeder.Position + 1}{(virtual_tag ? " (VIRTUALE)" : "")}, ID: {card_id}", 
+                $"MATERIALE N.{Feeder.Position + 1}", 
                 Observable.Return(true),
                 material_option, max_weight_option, cur_weight_option);
 
             if (result != ContentDialogResult.Primary)
-                return (false, default);
+                return default;
 
             var material = material_option.Value;
             if (!material.HasValue)
-                return (true, default);
+                return default;
 
             var max_weight = max_weight_option.Value;
             if (!max_weight.HasValue)
-                return (true, default);
+                return default;
 
             var cur_weight = cur_weight_option.Value;
 
-            var nfc_material = new NFCMaterial(material.Value, max_weight.Value, cur_weight);
-            return (true, nfc_material);
+            return new NFCMaterial(material.Value, max_weight.Value, cur_weight);
         }
     }
 }

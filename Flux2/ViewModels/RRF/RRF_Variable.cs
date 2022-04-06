@@ -263,7 +263,7 @@ namespace Flux.ViewModels
         bool Stored { get; }
         string Variable { get; }
         string LoadVariableMacro { get; }
-        Task<bool> InitializeVariableAsync();
+        Task<bool> InitializeVariableAsync(CancellationToken ct);
     }
 
     public class RRF_VariableGlobalModel<TData> : FLUX_VariableGP<RRF_Connection, TData, TData>, IRRF_VariableGlobalModel
@@ -311,11 +311,10 @@ namespace Flux.ViewModels
         Optional<TData> get_data(Optional<Dictionary<string, object>> global, string variable, Func<object, TData> convert_data) => 
             global.Convert(g => g.Lookup(variable)).Convert(v => convert_data != null ? convert_data(v) : (TData)Convert.ChangeType(v, typeof(TData), CultureInfo.InvariantCulture));
 
-        public async Task<bool> InitializeVariableAsync() 
+        public async Task<bool> InitializeVariableAsync(CancellationToken ct) 
         {
             var gcode = WriteVariableString(Variable, default).ToOptional();
-            var put_file_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            return await Connection.ConvertOrAsync(c => c.PutFileAsync(c => ((RRF_Connection)c).GlobalPath, LoadVariableMacro, put_file_cts.Token, gcode), () => false);
+            return await Connection.ConvertOrAsync(c => c.PutFileAsync(c => ((RRF_Connection)c).GlobalPath, LoadVariableMacro, ct, gcode), () => false);
         }
 
         public static IEnumerable<string> WriteVariableString(string variable, TData value)
@@ -381,11 +380,10 @@ namespace Flux.ViewModels
         static Optional<TData> get_data(Optional<Dictionary<string, object>> global, string variable, Func<object, TData> convert_data) 
             => global.Convert(g => g.Lookup(variable)).Convert(v => convert_data != null ? convert_data(v) : (TData)Convert.ChangeType(v, typeof(TData), CultureInfo.InvariantCulture));
 
-        public async Task<bool> InitializeVariableAsync()
+        public async Task<bool> InitializeVariableAsync(CancellationToken ct)
         {
             var gcode = WriteVariableString(Variable, Unit.Value, default).ToOptional();
-            var put_file_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            return await Connection.ConvertOrAsync(c => c.PutFileAsync(c => ((RRF_Connection)c).GlobalPath, LoadVariableMacro, put_file_cts.Token, gcode), () => false);
+            return await Connection.ConvertOrAsync(c => c.PutFileAsync(c => ((RRF_Connection)c).GlobalPath, LoadVariableMacro, ct, gcode), () => false);
         }
         public static IEnumerable<string> WriteVariableString(string variable, VariableUnit unit, TData value)
         {

@@ -94,9 +94,21 @@ namespace Flux.ViewModels
             UpdateMaterialTagCommand = ReactiveCommand.CreateFromTask(async () =>
                 {
                     var operator_usb = Flux.MCodes.OperatorUSB;
-                    var reading = await Material.ReadTagAsync(default, true, operator_usb.ConvertOr(o => o.RewriteNFC, () => false));
-                    if (reading.HasValue)
-                        await Material.StoreTagAsync(reading.Value);
+                    var reading = await Flux.UseReader(h => Material.ReadTag(h, true), r => r.HasValue);
+
+                    if (!reading.HasValue)
+                    {
+                        if (operator_usb.ConvertOr(o => o.RewriteNFC, () => false))
+                        {
+                            var tag = await Material.CreateTagAsync();
+                            reading = new NFCReading<NFCMaterial>(tag, Material.VirtualCardId);
+                        }
+
+                        if (!reading.HasValue)
+                            return;
+                    }
+
+                    await Material.StoreTagAsync(reading.Value);
                 },
                 Flux.StatusProvider.CanSafeCycle,
                 RxApp.MainThreadScheduler);
@@ -104,9 +116,21 @@ namespace Flux.ViewModels
             UpdateToolNozzleTagCommand = ReactiveCommand.CreateFromTask(async () =>
                 {
                     var operator_usb = Flux.MCodes.OperatorUSB;
-                    var reading = await ToolNozzle.ReadTagAsync(default, true, operator_usb.ConvertOr(o => o.RewriteNFC, () => false));
-                    if (reading.HasValue)
-                        await ToolNozzle.StoreTagAsync(reading.Value);
+                    var reading = await Flux.UseReader(h => ToolNozzle.ReadTag(h, true), r => r.HasValue);
+
+                    if (!reading.HasValue)
+                    {
+                        if (operator_usb.ConvertOr(o => o.RewriteNFC, () => false))
+                        {
+                            var tag = await ToolNozzle.CreateTagAsync();
+                            reading = new NFCReading<NFCToolNozzle>(tag, ToolNozzle.VirtualCardId);
+                        }
+
+                        if (!reading.HasValue)
+                            return;
+                    }
+
+                    await ToolNozzle.StoreTagAsync(reading.Value);
                 },
                 Flux.StatusProvider.CanSafeCycle,
                 RxApp.MainThreadScheduler);

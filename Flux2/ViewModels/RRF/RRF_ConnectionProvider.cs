@@ -28,8 +28,6 @@ namespace Flux.ViewModels
 
     public class RRF_ConnectionProvider : FLUX_ConnectionProvider<RRF_Connection, RRF_VariableStore>
     {
-        public CancellationTokenSource CTS { get; private set; }
-
         private ObservableAsPropertyHelper<Optional<bool>> _IsConnecting;
         public override Optional<bool> IsConnecting => _IsConnecting.Value;
 
@@ -121,25 +119,7 @@ namespace Flux.ViewModels
         }
         public override void StartConnection()
         {
-            try
-            {
-                CTS?.Cancel();
-            }
-            catch
-            {
-            }
-            finally
-            {
-                try
-                {
-
-                    CTS?.Dispose();
-                    ConnectionPhase = RRF_ConnectionPhase.START_PHASE;
-                }
-                catch
-                {
-                }
-            }
+            ConnectionPhase = RRF_ConnectionPhase.START_PHASE;
         }
         protected override async Task RollConnectionAsync()
         {
@@ -243,33 +223,23 @@ namespace Flux.ViewModels
 
         public override async Task<bool> ResetClampAsync()
         {
-            var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            using var put_reset_clamp_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var wait_reset_clamp_cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             return await ExecuteParamacroAsync(c => new[]
             {
                 "G28 C0",
                 "T-1 P0"
-            }, true, cts.Token);
+            }, put_reset_clamp_cts.Token, true, wait_reset_clamp_cts.Token);
         }
-        private async Task CreateTimeoutAsync(TimeSpan timeout, Func<CancellationToken, Task> func)
+        private static async Task CreateTimeoutAsync(TimeSpan timeout, Func<CancellationToken, Task> func)
         {
             try
             {
-                CTS?.Cancel();
+                var cts = new CancellationTokenSource(timeout);
+                await func(cts.Token);
             }
             catch
             {
-            }
-            finally
-            {
-                try
-                {
-                    CTS?.Dispose();
-                    CTS = new CancellationTokenSource(timeout);
-                    await func(CTS.Token);
-                }
-                catch
-                {
-                }
             }
         }
 
@@ -309,8 +279,9 @@ namespace Flux.ViewModels
             if (!await MGuard_MagazinePositionAsync((ushort)position.Value))
                 return false;
 
-            var park_tool_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            return await ExecuteParamacroAsync(c => c.GetParkToolGCode(), true, park_tool_ctk.Token);
+            using var put_park_tool_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var wait_park_tool_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            return await ExecuteParamacroAsync(c => c.GetParkToolGCode(), put_park_tool_ctk.Token, true, wait_park_tool_ctk.Token);
         }
     }
 }

@@ -106,8 +106,6 @@ namespace Flux.ViewModels
         public StatusBarViewModel StatusBar { get; private set; }
         public CalibrationViewModel Calibration { get; private set; }
         public FunctionalityViewModel Functionality { get; private set; }
-
-        public NFCProvider NFCProvider { get; private set; }
         public NetProvider NetProvider { get; private set; }
         public StatsProvider StatsProvider { get; private set; }
         public StatusProvider StatusProvider { get; private set; }
@@ -136,7 +134,6 @@ namespace Flux.ViewModels
         public string StatusBrush => _StatusBrush?.Value;
 
         IFluxNetProvider IFlux.NetProvider => NetProvider;
-        IFluxNFCProvider IFlux.NFCProvider => NFCProvider;
         IFluxStatsProvider IFlux.StatsProvider => StatsProvider;
         IFluxStatusProvider IFlux.StatusProvider => StatusProvider;
         IFluxSettingsProvider IFlux.SettingsProvider => SettingsProvider;
@@ -186,7 +183,6 @@ namespace Flux.ViewModels
 
                     Messages = new MessagesViewModel(this);
                     NetProvider = new NetProvider(this);
-                    NFCProvider = new NFCProvider(this);
                     Feeders = new FeedersViewModel(this);
                     MCodes = new MCodesViewModel(this);
                     StatusProvider = new StatusProvider(this);
@@ -436,6 +432,88 @@ namespace Flux.ViewModels
                 dialog.AddContent("options", options);
                 return dialog;
             });
+        }
+        public async Task<(bool success, Optional<TResult> result)> ShowNFCDialog<TResult>(Optional<INFCHandle> handle, Func<Optional<INFCHandle>, Task<Optional<TResult>>> func, Func<Optional<TResult>, bool> success_func)
+        {
+            bool reading = true;
+            Optional<TResult> result = default;
+
+            using var dialog = new ContentDialog(this, "Lettura tag in corso...", can_cancel: Observable.Return(true));
+
+            var dialog_result = Task.Run(async () =>
+            {
+                var result = await dialog.ShowAsync();
+                reading = false;
+                return result == ContentDialogResult.Primary;
+            });
+
+            var reading_result = Task.Run(async () =>
+            {
+                bool success = false;
+                do
+                {
+                    result = await func(handle);
+                    success = result.HasValue && success_func(result.Value);
+                    if (!success)
+                        await Task.Delay(1000);
+                }
+                while (!success && reading);
+
+                dialog.ShowAsyncSource.TrySetResult(ContentDialogResult.None);
+                return success;
+            });
+
+            var success = await Task.WhenAll(dialog_result, reading_result);
+            return (success[1], result);
+        }
+
+
+
+        public Task<Optional<TResult>> UseReader<TResult>(Func<Optional<INFCHandle>, TResult> func, Func<TResult, bool> success_func)
+        {
+            return UseReader(h => func(h).ToOptional(), r => r.HasValue && success_func(r.Value));
+        }
+        public Task<Optional<TResult>> UseReader<TResult>(Func<Optional<INFCHandle>, Task<TResult>> func, Func<TResult, bool> success_func)
+        {
+            return UseReader(async h => (await func(h)).ToOptional(), r => r.HasValue && success_func(r.Value));
+        }
+        public async Task<Optional<TResult>> UseReader<TResult>(Func<Optional<INFCHandle>, Optional<TResult>> func, Func<Optional<TResult>, bool> success_func)
+        {
+            var task = await NFCReader.OpenAsync(log_result);
+            if (task.HasValue)
+                return task.Value;
+
+            return func(default);
+
+            async Task<Optional<TResult>> log_result(INFCHandle handle)
+            {
+                var reading = await ShowNFCDialog(handle.ToOptional(), h => Task.FromResult(func(h)), success_func);
+
+                var light = reading.success ? LightSignalMode.LongGreen : LightSignalMode.LongRed;
+                var beep = reading.success ? BeepSignalMode.TripleShort : BeepSignalMode.DoubleShort;
+                handle.ReaderUISignal(light, beep);
+
+                return reading.result;
+            }
+        }
+        public async Task<Optional<TResult>> UseReader<TResult>(Func<Optional<INFCHandle>, Task<Optional<TResult>>> func, Func<Optional<TResult>, bool> success_func)
+        {
+            var task = await NFCReader.OpenAsync(log_result);
+            if (task.HasValue)
+                return task.Value;
+
+            return await func(default);
+
+            async Task<Optional<TResult>> log_result(INFCHandle handle)
+            {
+                var reading = await ShowNFCDialog(handle.ToOptional(), func, success_func);
+
+                var light = reading.success ? LightSignalMode.LongGreen : LightSignalMode.LongRed;
+                var beep = reading.success ? BeepSignalMode.TripleShort : BeepSignalMode.DoubleShort;
+                handle.ReaderUISignal(light, beep);
+
+                return reading.result;
+            }
         }
     }
 

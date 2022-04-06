@@ -4,6 +4,7 @@ using ReactiveUI;
 using System;
 using System.Linq;
 using System.Reactive.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
@@ -331,7 +332,11 @@ namespace Flux.ViewModels
 
                     AddCommand(
                         "setMagazineLimits",
-                        () => Flux.ConnectionProvider.ExecuteParamacroAsync(m => new[] { "M98 P\"/macros/magazine_limits\"" }, false),
+                        () =>
+                        {
+                            using var put_mag_limits_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                            Flux.ConnectionProvider.ExecuteParamacroAsync(m => new[] { "M98 P\"/macros/magazine_limits\"" }, put_mag_limits_cts.Token);
+                        },
                         can_execute: IS_IEHS,
                         visible: advanced_mode);
 

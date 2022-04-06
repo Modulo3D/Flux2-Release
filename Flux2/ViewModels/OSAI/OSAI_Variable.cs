@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Reactive;
 using System.Reactive.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
@@ -195,7 +196,11 @@ namespace Flux.ViewModels
         }
         public override async Task<bool> WriteAsync(double temp)
         {
-            return await Connection.ConvertOrAsync(c => c.ExecuteParamacroAsync(new[] { WriteTemp(temp) }, false), () => false);
+            return await Connection.ConvertOrAsync(c =>
+            {
+                using var put_write_temp_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                return c.ExecuteParamacroAsync(new[] { WriteTemp(temp) }, put_write_temp_cts.Token);
+            }, () => false);
         }
     }
 

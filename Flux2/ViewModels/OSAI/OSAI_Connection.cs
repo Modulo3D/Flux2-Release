@@ -1116,8 +1116,9 @@ namespace Flux.ViewModels
 
         public override async Task<bool> CancelPrintAsync(bool hard_cancel)
         {
-            var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            return await ExecuteParamacroAsync(new[] { "G508" }, true, cts.Token);
+            using var put_cancel_print_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var wait_cancel_print_cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            return await ExecuteParamacroAsync(new[] { "G508" }, put_cancel_print_cts.Token, true, wait_cancel_print_cts.Token);
         }
 
         public override Task<bool> RenameFileAsync(string folder, string old_filename, string new_filename, bool wait, CancellationToken ct = default)

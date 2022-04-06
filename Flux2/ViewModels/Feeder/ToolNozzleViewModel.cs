@@ -138,12 +138,7 @@ namespace Flux.ViewModels
                 });
         }
 
-        protected override IObservable<Optional<INFCReader>> GetReader()
-        {
-            return Flux.NFCProvider.GetToolReader();
-        }
-
-        public async Task<(bool result, Optional<Tool> tool)> FindNewToolAsync(string card_id, bool virtual_tag)
+        public async Task<(bool result, Optional<Tool> tool)> FindNewToolAsync()
         {
             var database = Flux.DatabaseProvider.Database;
             if (!database.HasValue)
@@ -165,7 +160,7 @@ namespace Flux.ViewModels
 
             var tool_option = ComboOption.Create("tool", "Utensile:", tools);
             var tool_result = await Flux.ShowSelectionAsync(
-                $"UTENSILE N.{Feeder.Position + 1}{(virtual_tag ? " (VIRTUALE)" : "")}, ID:{card_id}",
+                $"UTENSILE N.{Feeder.Position + 1}",
                 Observable.Return(true),
                 tool_option);
 
@@ -178,7 +173,7 @@ namespace Flux.ViewModels
 
             return (true, tool.Value);
         }
-        public async Task<(bool result, Optional<Nozzle> nozzle, double max_weight, double cur_weight)> FindNewNozzleAsync(string card_id, Tool tool, bool virtual_tag)
+        public async Task<(bool result, Optional<Nozzle> nozzle, double max_weight, double cur_weight)> FindNewNozzleAsync(Tool tool)
         {
             var database = Flux.DatabaseProvider.Database;
             if (!database.HasValue)
@@ -212,7 +207,7 @@ namespace Flux.ViewModels
             }, converter: typeof(WeightConverter));
 
             var nozzle_result = await Flux.ShowSelectionAsync(
-                $"UGELLO N.{Feeder.Position + 1}{(virtual_tag ? " (VIRTUALE)" : "")}, ID:{card_id}",
+                $"UGELLO N.{Feeder.Position + 1}",
                 Observable.Return(true),
                 nozzle_option, max_weight_option, cur_weight_option);
 
@@ -232,32 +227,20 @@ namespace Flux.ViewModels
             return (true, nozzle.Value, max_weight.Value, cur_weight);
         }
 
-        protected override async Task<(bool result, Optional<NFCToolNozzle> tag)> CreateTagAsync(string card_id, bool virtual_tag)
+        public override async Task<Optional<NFCToolNozzle>> CreateTagAsync()
         {
-            var tool = await FindNewToolAsync(card_id, virtual_tag);
+            var tool = await FindNewToolAsync();
             if (!tool.result)
-                return (false, default);
+                return default;
 
             if (!tool.tool.HasValue)
-                return (true, default);
+                return default;
 
-            var nozzle = await FindNewNozzleAsync(card_id, tool.tool.Value, virtual_tag);
+            var nozzle = await FindNewNozzleAsync(tool.tool.Value);
             if (!nozzle.result)
-                return (false, default);
+                return default;
 
-            // TODO
-            var tool_nozzle = new NFCToolNozzle(tool.tool.Value, nozzle.nozzle, nozzle.max_weight, nozzle.cur_weight);
-            return (true, tool_nozzle);
+            return new NFCToolNozzle(tool.tool.Value, nozzle.nozzle, nozzle.max_weight, nozzle.cur_weight);
         }
-
-        /*public override async Task<Optional<NFCReading<NFCToolNozzle>>> ReadTagAsync(bool read_from_backup, bool create_tag)
-        {
-            if (Flux.ConnectionProvider.VariableStore.HasVariable(m => m.X_MAGAZINE_POS) &&
-                Flux.ConnectionProvider.VariableStore.HasVariable(m => m.X_MAGAZINE_POS) &&
-                Flux.ConnectionProvider.VariableStore.HasVariable(m => m.READER_POSITION))
-                return await Flux.ConnectionProvider.MoveToReaderAsync(Feeder.Position, async () => await base.ReadTagAsync(read_from_backup, create_tag));
-            else
-                return await base.ReadTagAsync(read_from_backup, create_tag);
-        }*/
     }
 }
