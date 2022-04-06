@@ -701,6 +701,7 @@ namespace Flux.ViewModels
             }, true, cts.Token);
         }
 
+        // test
         public override async Task<bool> RenameFileAsync(string folder, string old_filename, string new_filename, bool wait, CancellationToken ct = default)
         {
             try
