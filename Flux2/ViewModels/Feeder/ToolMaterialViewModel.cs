@@ -32,8 +32,10 @@ namespace Flux.ViewModels
 
         public void Initialize()
         {
+            var material = Feeder.Materials.SelectedValueChanged;
+
             _Document = Observable.CombineLatest(
-                Feeder.Material.WhenAnyValue(v => v.Document),
+                material.ConvertMany(m => m.WhenAnyValue(v => v.Document)),
                 Feeder.ToolNozzle.WhenAnyValue(v => v.Document),
                 Flux.DatabaseProvider.WhenAnyValue(v => v.Database),
                 FindToolMaterial)
@@ -41,7 +43,7 @@ namespace Flux.ViewModels
                 .DisposeWith(Feeder.Disposables);
 
             _State = Observable.CombineLatest(
-                Feeder.Material.WhenAnyValue(v => v.Document),
+                material.ConvertMany(m => m.WhenAnyValue(v => v.Document)),
                 Feeder.ToolNozzle.WhenAnyValue(v => v.Document),
                 this.WhenAnyValue(v => v.Document),
                 (m, tn, tm) => new ToolMaterialState(tn.tool.HasValue && tn.nozzle.HasValue, m.HasValue, tm.HasValue))

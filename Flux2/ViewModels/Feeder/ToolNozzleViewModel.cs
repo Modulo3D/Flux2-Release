@@ -5,18 +5,21 @@ using ReactiveUI;
 using System;
 using System.Linq;
 using System.Reactive;
+using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
-    public class ToolNozzleViewModel : TagViewModel<NFCToolNozzle, (Optional<Tool> tool, Optional<Nozzle> nozzle), ToolNozzleState>, IFluxToolNozzleViewModel
+    public class ToolNozzleViewModel : TagViewModel<ToolNozzleViewModel, NFCToolNozzle, (Optional<Tool> tool, Optional<Nozzle> nozzle), ToolNozzleState>, IFluxToolNozzleViewModel
     {
-        public override int VirtualTagId => 2;
+        public override ushort VirtualTagId => 2;
+        public override ushort VirtualTagPosition => Feeder.Position;
 
         public override OdometerViewModel<NFCToolNozzle> Odometer { get; }
 
         private ObservableAsPropertyHelper<Optional<FLUX_Temp>> _Temperature;
+        [RemoteOutput(true, typeof(TemperatureConverter))]
         public Optional<FLUX_Temp> Temperature => _Temperature.Value;
 
         private ObservableAsPropertyHelper<ToolNozzleState> _State;
@@ -37,16 +40,13 @@ namespace Flux.ViewModels
                 tn.GetDocument<Nozzle>(db, tn => tn.NozzleGuid));
         }, t => t.ToolGuid)
         {
-            var multiplier = feeder.Material.WhenAnyValue(v => v.Document)
-                .Convert(m => m.GetPropertyRW("odometer_multiplier").TryGetValue<double>())
-                .ValueOr(() => 1);
-
-            Odometer = new OdometerViewModel<NFCToolNozzle>(this, multiplier);
+            Odometer = new OdometerViewModel<NFCToolNozzle>(this, Observable.Return(1.0));
 
             var tool_key = Flux.ConnectionProvider.VariableStore.GetArrayUnit(m => m.TEMP_TOOL, Feeder.Position);
             _Temperature = Flux.ConnectionProvider
                 .ObserveVariable(m => m.TEMP_TOOL, tool_key.ValueOr(() => ""))
-                .ToProperty(this, v => v.Temperature);
+                .ToProperty(this, v => v.Temperature)
+                .DisposeWith(Disposables);
         }
 
         public override void Initialize()
@@ -54,15 +54,19 @@ namespace Flux.ViewModels
             _State = FindToolState()
                 .ToProperty(this, v => v.State);
 
+            var material = Feeder.Materials.SelectedValueChanged;
+
             var can_load_unload_tool = Observable.CombineLatest(
                 Flux.StatusProvider.CanSafeCycle,
                 this.WhenAnyValue(v => v.State),
-                Feeder.Material.WhenAnyValue(v => v.State),
+                material.ConvertMany(m => m.WhenAnyValue(v => v.State)),
                 (idle, tool, material) =>
                 {
                     if (!idle)
                         return false;
-                    if (!material.IsNotLoaded())
+                    if (!material.HasValue)
+                        return false;
+                    if (!material.Value.IsNotLoaded())
                         return false;
                     return true;
                 });

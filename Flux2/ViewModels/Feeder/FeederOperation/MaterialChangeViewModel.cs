@@ -91,7 +91,7 @@ namespace Flux.ViewModels
                 using var wait_filament_op_cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
                 if (!await Flux.ConnectionProvider.ExecuteParamacroAsync(f => filament_operation(f)(Feeder.Position, nozzle, break_temp), put_filament_op_cts.Token, true, wait_filament_op_cts.Token))
                 {
-                    Flux.Messages.LogMessage(MaterialChangeResult.MATERIAL_CHANGE_ERROR_PARAMACRO, Feeder.Material.State);
+                    Flux.Messages.LogMessage(MaterialChangeResult.MATERIAL_CHANGE_ERROR_PARAMACRO, default);
                     return (false, current_break_temp);
                 }
 
@@ -124,16 +124,20 @@ namespace Flux.ViewModels
             var operation = await ExecuteFilamentOperation(c => c.GetLoadFilamentGCode, true);
             if (operation.result == false)
             {
-                Flux.Messages.LogMessage(MaterialChangeResult.MATERIAL_CHANGE_ERROR_PARAMACRO, Feeder.Material.State);
+                Flux.Messages.LogMessage(MaterialChangeResult.MATERIAL_CHANGE_ERROR_PARAMACRO, default);
                 return false;
             }
 
-            Feeder.Material.StoreTag(t => t.SetLoaded(Feeder.Position));
+            var material = Feeder.Materials.SelectedValue;
+            if (!material.HasValue)
+                return false;
+
+            material.Value.StoreTag(t => t.SetLoaded(Feeder.Position));
 
             var break_temp = Feeder.ToolMaterial.BreakTemp;
             if (!break_temp.HasValue)
             {
-                Flux.Messages.LogMessage(MaterialChangeResult.MATERIAL_CHANGE_ERROR_INVALID_BREAK_TEMP, Feeder.Material.State);
+                Flux.Messages.LogMessage(MaterialChangeResult.MATERIAL_CHANGE_ERROR_INVALID_BREAK_TEMP, default);
                 return false;
             }
 
@@ -142,7 +146,7 @@ namespace Flux.ViewModels
             var extrusion_temp = Feeder.ToolMaterial.ExtrusionTemp;
             if (!extrusion_temp.HasValue)
             {
-                Flux.Messages.LogMessage(MaterialChangeResult.MATERIAL_CHANGE_ERROR_INVALID_EXTRUSION_TEMP, Feeder.Material.State);
+                Flux.Messages.LogMessage(MaterialChangeResult.MATERIAL_CHANGE_ERROR_INVALID_EXTRUSION_TEMP, default);
                 return false;
             }
 
@@ -157,7 +161,7 @@ namespace Flux.ViewModels
 
             if (result != ContentDialogResult.Primary)
             {
-                Flux.Messages.LogMessage(MaterialChangeResult.MATERIAL_CHANGE_CANCELLED, Feeder.Material.State);
+                Flux.Messages.LogMessage(MaterialChangeResult.MATERIAL_CHANGE_CANCELLED, default);
                 return false;
             }
 
@@ -173,12 +177,14 @@ namespace Flux.ViewModels
                 yield return Flux.StatusProvider.ChamberLockClosed;
             }
 
+            var material = Feeder.Materials.SelectedValueChanged;
+
             yield return ConditionViewModel.Create("materialKnown??0",
-                Feeder.Material.WhenAnyValue(m => m.Document).Select(d => d.ToOptional()), m => m.HasValue,
+                material.ConvertMany(m => m.WhenAnyValue(m => m.Document)).Select(d => d.ToOptional()), m => m.HasValue,
                 (m, valid) => m.Convert(m => m.Convert(m => $"MATERIALE LETTO: {m.Name}")).ValueOr(() => "LEGGI UN MATERIALE"));
 
             yield return ConditionViewModel.Create("materialReady??1",
-                Feeder.Material.WhenAnyValue(f => f.State).Select(s => s.ToOptional()), state => state.Locked,
+                material.ConvertMany(m => m.WhenAnyValue(f => f.State)).Select(s => s.ToOptional()), state => state.HasValue && state.Value.Locked,
                 (value, valid) => valid ? "MATERIALE PRONTO AL CARICAMENTO" : "BLOCCA IL MATERIALE");
 
             yield return ConditionViewModel.Create("toolMaterialCompatible??2",
@@ -203,48 +209,55 @@ namespace Flux.ViewModels
 
         public override async Task<bool> UpdateNFCAsync()
         {
-            if (!Feeder.Material.Nfc.Tag.HasValue)
+            var material = Feeder.Materials.SelectedValue;
+            if (!material.HasValue)
+                return false;
+
+            if (!material.Value.Nfc.Tag.HasValue)
             {
                 var operator_usb = Flux.MCodes.OperatorUSB;
-                var reading = await Flux.UseReader(h => Feeder.Material.ReadTag(h, true), r => r.HasValue);
+                var reading = await Flux.UseReader(h => material.Value.ReadTag(h, true), r => r.HasValue);
 
                 if (!reading.HasValue)
                 {
                     if (operator_usb.ConvertOr(o => o.RewriteNFC, () => false))
                     {
-                        var tag = await Feeder.Material.CreateTagAsync();
-                        reading = new NFCReading<NFCMaterial>(tag, Feeder.Material.VirtualCardId);
+                        var tag = await material.Value.CreateTagAsync();
+                        reading = new NFCReading<NFCMaterial>(tag, material.Value.VirtualCardId);
                     }
 
                     if (!reading.HasValue)
                         return false;
                 }
 
-                await Feeder.Material.StoreTagAsync(reading.Value);
+                await material.Value.StoreTagAsync(reading.Value);
             }
             
-            var result = Feeder.Material.Nfc.IsVirtualTag ?
-                await Feeder.Material.LockTagAsync(default) :
-                await Flux.UseReader(h => Feeder.Material.LockTagAsync(h), l => l);
+            var result = material.Value.Nfc.IsVirtualTag ?
+                await material.Value.LockTagAsync(default) :
+                await Flux.UseReader(h => material.Value.LockTagAsync(h), l => l);
             
             return result.ValueOr(() => false);
         }
         protected override IObservable<bool> FindCanUpdateNFC()
         {
-            var state = Feeder.Material.WhenAnyValue(m => m.State);
-            return state.Select(s =>
+            var material = Feeder.Materials.SelectedValueChanged;
+            var state = material.ConvertMany(m => m.WhenAnyValue(m => m.State));
+            return state.ConvertOr(s =>
             {
                 if (s.Inserted && !s.Known)
                     return false;
                 if (s.Loaded || s.Locked)
                     return false;
                 return true;
-            });
+            }, () => false);
         }
         protected override IObservable<string> FindUpdateNFCText()
         {
+            var material = Feeder.Materials.SelectedValueChanged;
+
             return Observable.CombineLatest(
-                Feeder.Material.WhenAnyValue(m => m.Document),
+                material.ConvertMany(m => m.WhenAnyValue(m => m.Document)),
                 this.WhenAnyValue(v => v.CanUpdateNFC),
                 (d, nfc) => d.HasValue ? (nfc ? "BLOCCA" : "✔") : "LEGGI");
         }
@@ -266,18 +279,22 @@ namespace Flux.ViewModels
         }
         protected override async Task<bool> ExecuteOperationAsync()
         {
-            var nfc = Feeder.Material.Nfc;
+            var material = Feeder.Materials.SelectedValue;
+            if (!material.HasValue)
+                return false;
 
-            if (Feeder.Material.WirePresence1 == false)
+            var nfc = material.Value.Nfc;
+
+            if (material.Value.WirePresence1 == false)
             {
                 if (nfc.Tag.HasValue)
                 {
-                    var tag = Feeder.Material.Nfc.Tag.Value;
+                    var tag = material.Value.Nfc.Tag.Value;
                     if (tag.CurWeightG.HasValue)
                     {
                         var material_limit = tag.MaxWeightG / 100 * 5;
                         if (tag.CurWeightG.Value < material_limit)
-                            Feeder.Material.StoreTag(m => m.SetCurWeight(default));
+                            material.Value.StoreTag(m => m.SetCurWeight(default));
                     }
                 }
             }
@@ -286,7 +303,7 @@ namespace Flux.ViewModels
             if (operation.result == false)
                 return false;
 
-            Feeder.Material.StoreTag(t => t.SetLoaded(default));
+            material.Value.StoreTag(t => t.SetLoaded(default));
 
             var tool_key = Flux.ConnectionProvider.VariableStore.GetArrayUnit(m => m.TEMP_TOOL, Feeder.Position);
             if (!tool_key.HasValue)
@@ -304,27 +321,31 @@ namespace Flux.ViewModels
                 yield return Flux.StatusProvider.ChamberLockClosed;
             }
 
+            var material = Feeder.Materials.SelectedValueChanged;
+
             yield return ConditionViewModel.Create("materialKnown??0",
-                Feeder.Material.WhenAnyValue(m => m.Document).Select(d => d.ToOptional()), m => m.HasValue,
+                material.ConvertMany(m => m.WhenAnyValue(m => m.Document)).Select(d => d.ToOptional()), m => m.HasValue,
                 (m, valid) => m.Convert(m => m.Convert(m => $"MATERIALE LETTO: {m.Name}")).ValueOr(() => "LEGGI UN MATERIALE"));
 
             yield return ConditionViewModel.Create("materialReady??1",
-                Feeder.Material.WhenAnyValue(f => f.State).Select(s => s.ToOptional()),
+                material.ConvertMany(m => m.WhenAnyValue(f => f.State)).Select(s => s.ToOptional()),
                 s =>
                 {
-                    if (!s.Known)
+                    if (!s.HasValue)
                         return false;
-                    if (s.Loaded && s.Locked)
+                    if (!s.Value.Known)
+                        return false;
+                    if (s.Value.Loaded && s.Value.Locked)
                         return true;
-                    if (!s.Loaded && !s.Locked)
+                    if (!s.Value.Loaded && !s.Value.Locked)
                         return true;
                     return false;
                 },
                 (value, valid) =>
                 {
-                    if (!value.HasValue)
+                    if (!value.HasValue || !value.Value.HasValue)
                         return "IMPOSSIBILE BLOCCARE IL MATERIALE";
-                    if (value.Value.Loaded)
+                    if (value.Value.Value.Loaded)
                         return valid ? "MATERIALE PRONTO ALLO SCARICAMENTO" : "BLOCCA IL MATERIALE";
                     else
                         return valid ? "MATERIALE SCARICATO" : "SBLOCCA IL MATERALE";
@@ -351,29 +372,33 @@ namespace Flux.ViewModels
         }
         public override async Task<bool> UpdateNFCAsync()
         {
-            if (!Feeder.Material.Nfc.Tag.HasValue)
+            var material = Feeder.Materials.SelectedValue;
+            if (!material.HasValue)
+                return false;
+
+            if (!material.Value.Nfc.Tag.HasValue)
             {
                 var operator_usb = Flux.MCodes.OperatorUSB;
-                var reading = await Flux.UseReader(h => Feeder.Material.ReadTag(h, true), r => r.HasValue);
+                var reading = await Flux.UseReader(h => material.Value.ReadTag(h, true), r => r.HasValue);
 
                 if (!reading.HasValue)
                 {
                     if (operator_usb.ConvertOr(o => o.RewriteNFC, () => false))
                     {
-                        var tag = await Feeder.Material.CreateTagAsync();
-                        reading = new NFCReading<NFCMaterial>(tag, Feeder.Material.VirtualCardId);
+                        var tag = await material.Value.CreateTagAsync();
+                        reading = new NFCReading<NFCMaterial>(tag, material.Value.VirtualCardId);
                     }
 
                     if (!reading.HasValue)
                         return false;
                 }
 
-                await Feeder.Material.StoreTagAsync(reading.Value);
+                await material.Value.StoreTagAsync(reading.Value);
             }
 
-            var result = Feeder.Material.Nfc.IsVirtualTag ? 
-                await Feeder.Material.UnlockTagAsync(default) :
-                await Flux.UseReader(h => Feeder.Material.UnlockTagAsync(h), u => u);
+            var result = material.Value.Nfc.IsVirtualTag ? 
+                await material.Value.UnlockTagAsync(default) :
+                await Flux.UseReader(h => material.Value.UnlockTagAsync(h), u => u);
             
             if (!result.HasValue || !result.Value)
                 return false;
@@ -383,24 +408,29 @@ namespace Flux.ViewModels
         }
         protected override IObservable<bool> FindCanUpdateNFC()
         {
-            var state = Feeder.Material.WhenAnyValue(m => m.State);
+            var material = Feeder.Materials.SelectedValueChanged;
+
+            var state = material.ConvertMany(m => m.WhenAnyValue(m => m.State));
             return state.Select(s =>
             {
-                if (!s.Known)
+                if (!s.HasValue)
                     return false;
-                if (s.Loaded && !s.Locked)
+                if (!s.Value.Known)
+                    return false;
+                if (s.Value.Loaded && !s.Value.Locked)
                     return true;
-                if (!s.Loaded && s.Locked)
+                if (!s.Value.Loaded && s.Value.Locked)
                     return true;
                 return false;
             });
         }
         protected override IObservable<string> FindUpdateNFCText()
         {
+            var material = Feeder.Materials.SelectedValueChanged;
             return Observable.CombineLatest(
-                Feeder.Material.WhenAnyValue(m => m.State),
+                material.ConvertMany(m => m.WhenAnyValue(m => m.State)),
                 this.WhenAnyValue(v => v.CanUpdateNFC),
-                (s, nfc) => s.Loaded ? (nfc ? "BLOCCA" : "✔") : (nfc ? "SBLOCCA" : "✔"));
+                (s, nfc) => s.HasValue && s.Value.Loaded ? (nfc ? "BLOCCA" : "✔") : (nfc ? "SBLOCCA" : "✔"));
         }
     }
 }

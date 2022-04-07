@@ -6,6 +6,8 @@ using ReactiveUI;
 using System;
 using System.IO;
 using System.Linq;
+using System.Reactive;
+using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Security.Cryptography;
 using System.Text;
@@ -13,14 +15,16 @@ using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
-    public abstract class TagViewModel<TNFCTag, TDocument, TState> : ReactiveObject, IFluxTagViewModel<TNFCTag, TDocument, TState>
-         where TNFCTag : INFCOdometerTag<TNFCTag>
+    public abstract class TagViewModel<TTagViewModel, TNFCTag, TDocument, TState> : RemoteControl<TTagViewModel>, IFluxTagViewModel<TNFCTag, TDocument, TState>
+        where TTagViewModel : TagViewModel<TTagViewModel, TNFCTag, TDocument, TState>
+        where TNFCTag : INFCOdometerTag<TNFCTag>
     {
         public FluxViewModel Flux { get; }
         public abstract TState State { get; }
         public FeederViewModel Feeder { get; }
-        public abstract int VirtualTagId { get; }
-        public string VirtualCardId => $"00-00-{VirtualTagId:00}-{Feeder.Position:00}";
+        public abstract ushort VirtualTagId { get; }
+        public abstract ushort VirtualTagPosition { get; }
+        public string VirtualCardId => $"00-00-{VirtualTagId:00}-{VirtualTagId:00}";
         IFluxFeederViewModel IFluxTagViewModel.Feeder => Feeder;
         public abstract OdometerViewModel<TNFCTag> Odometer { get; }
 
@@ -31,8 +35,21 @@ namespace Flux.ViewModels
             get => _Nfc;
             set => this.RaiseAndSetIfChanged(ref _Nfc, value);
         }
+
         private readonly ObservableAsPropertyHelper<TDocument> _Document;
+        [RemoteOutput(true, typeof(ToStringConverter))]
         public TDocument Document => _Document.Value;
+
+        private ObservableAsPropertyHelper<double> _OdometerPercentage;
+        [RemoteOutput(true)]
+        public double OdometerPercentage => _OdometerPercentage.Value;
+
+        private ObservableAsPropertyHelper<Optional<double>> _RemainingWeight;
+        [RemoteOutput(true, typeof(WeightConverter))]
+        public Optional<double> RemainingWeight => _RemainingWeight.Value;
+
+        [RemoteCommand]
+        public ReactiveCommand<Unit, Unit> UpdateTagCommand { get; internal set; }
 
         public TagViewModel(
             FeederViewModel feeder,
@@ -56,7 +73,8 @@ namespace Flux.ViewModels
                         return default;
                     return find_document(tuple.db.Value, tuple.nfc.Tag.Value);
                 })
-                .ToProperty(this, vm => vm.Document);
+                .ToProperty(this, vm => vm.Document)
+                .DisposeWith(Disposables);
 
             var core_settings = Flux.SettingsProvider.CoreSettings;
             var user_settings = Flux.SettingsProvider.UserSettings;
@@ -98,9 +116,43 @@ namespace Flux.ViewModels
                         Nfc = backup;
                 }
             }
+
+            UpdateTagCommand = ReactiveCommand.CreateFromTask(async () =>
+                {
+                    var operator_usb = Flux.MCodes.OperatorUSB;
+                    var reading = await Flux.UseReader(h => ReadTag(h, true), r => r.HasValue);
+
+                    if (!reading.HasValue)
+                    {
+                        if (operator_usb.ConvertOr(o => o.RewriteNFC, () => false))
+                        {
+                            var tag = await CreateTagAsync();
+                            reading = new NFCReading<TNFCTag>(tag, VirtualCardId);
+                        }
+
+                        if (!reading.HasValue)
+                            return;
+                    }
+
+                    await StoreTagAsync(reading.Value);
+                },
+                Flux.StatusProvider.CanSafeCycle,
+                RxApp.MainThreadScheduler)
+                .DisposeWith(Disposables);
         }
 
-        public abstract void Initialize();
+        public virtual void Initialize() 
+        {
+            _OdometerPercentage = Odometer.WhenAnyValue(v => v.Percentage)
+                .ToProperty(this, v => v.OdometerPercentage)
+                .DisposeWith(Disposables);
+
+            _RemainingWeight = this.WhenAnyValue(v => v.Nfc)
+                .Select(d => d.Tag)
+                .Convert(n => n.CurWeightG)
+                .ToProperty(this, v => v.RemainingWeight)
+                .DisposeWith(Disposables);
+        }
 
         public Task DisconnectAsync()
         {
@@ -200,15 +252,18 @@ namespace Flux.ViewModels
 
             foreach (var feeder in Feeder.Feeders.Feeders.Items)
             {
-                var material = feeder.Material.Nfc;
-                var result = check_tag(material, feeder.Position);
+                var material = feeder.Materials.SelectedValue;
+                if (!material.HasValue)
+                    continue;
+                var material_nfc = material.Value.Nfc;
+                var result = check_tag(material_nfc, feeder.Position);
                 if (result.HasValue)
                 {
                     if (result.Value)
                         continue;
                     return nfc;
                 }
-                await feeder.Material.DisconnectAsync();
+                await material.Value.DisconnectAsync();
             }
 
             Nfc = nfc;

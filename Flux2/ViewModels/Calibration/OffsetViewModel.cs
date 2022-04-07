@@ -174,24 +174,28 @@ namespace Flux.ViewModels
                 .ToProperty(this, v => v.UserOffsetKey)
                 .DisposeWith(Disposables);
 
+            var material = Feeder.Materials.SelectedValueChanged;
+
             _ProbeOffsetKey = Observable.CombineLatest(
                 Flux.DatabaseProvider.WhenAnyValue(v => v.Database),
                 Feeder.ToolNozzle.WhenAnyValue(v => v.Nfc),
-                Feeder.Material.WhenAnyValue(v => v.Nfc),
+                material.ConvertMany(m => m.WhenAnyValue(v => v.Nfc)),
                 (db, tool_reading, material_reading) =>
                 {
                     if (!tool_reading.CardId.HasValue)
                         return Optional<ProbeOffsetKey>.None;
                     if (!tool_reading.Tag.HasValue)
                         return Optional<ProbeOffsetKey>.None;
-                    if (!material_reading.Tag.HasValue)
+                    if (!material_reading.HasValue)
+                        return Optional<ProbeOffsetKey>.None;
+                    if (!material_reading.Value.Tag.HasValue)
                         return Optional<ProbeOffsetKey>.None;
 
                     var tool_nfc = tool_reading.Tag.Value;
                     var tool_card = tool_reading.CardId.Value;
                     var relative_id = new ToolId(Feeder.Position, tool_card, tool_nfc);
 
-                    var probe_offset_key = new ProbeOffsetKey(relative_id, material_reading.Tag.Value.MaterialGuid);
+                    var probe_offset_key = new ProbeOffsetKey(relative_id, material_reading.Value.Tag.Value.MaterialGuid);
                     var probe_offset_lookup = user_settings.Local.ProbeOffsets.Lookup(probe_offset_key);
                     if (!probe_offset_lookup.HasValue)
                     {
@@ -230,7 +234,7 @@ namespace Flux.ViewModels
                 this.WhenAnyValue(s => s.ToolOffset),
                 this.WhenAnyValue(s => s.ProbeOffset),
                 Feeder.ToolNozzle.WhenAnyValue(f => f.State),
-                Feeder.Material.WhenAnyValue(f => f.State),
+                material.ConvertMany(m => m.WhenAnyValue(f => f.State)),
                 (tool_offset, probe_offset, tool_state, material_state) =>
                 {
                     if (!tool_state.IsInMagazine() && !tool_state.IsOnTrailer())
@@ -246,7 +250,7 @@ namespace Flux.ViewModels
                     if (probe_offset.HasValue && probe_offset.Value.Z > tool_offset.Value.Z)
                         return FluxProbeState.ERROR_PROBE;
 
-                    if (!tool_state.IsLoaded() || !material_state.IsLoaded())
+                    if (!tool_state.IsLoaded() || !material_state.HasValue || !material_state.Value.IsLoaded())
                         return FluxProbeState.NO_PROBE;
 
                     if (!probe_offset.HasValue || probe_offset.Value.Z == tool_offset.Value.Z)

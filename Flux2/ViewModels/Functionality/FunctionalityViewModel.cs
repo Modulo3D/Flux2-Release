@@ -11,96 +11,72 @@ namespace Flux.ViewModels
 {
     public class NFCInnerViewModel : NavPanelViewModel<NFCInnerViewModel>
     {
-        public NFCInnerViewModel(FluxViewModel flux, string name, Func<IFluxFeederViewModel, IFluxTagViewModel> get_tag, ushort extr) : base(flux, $"{name.ToCamelCase()}??{extr + 1}")
+        public NFCInnerViewModel(string name, IFluxTagViewModel tag_vm) : base((FluxViewModel)tag_vm.Feeder.Flux, $"{name.ToCamelCase()}??{tag_vm.VirtualTagPosition + 1}")
         {
             var can_lock = Observable.CombineLatest(
-                is_unlocked_tag(extr, get_tag),
-                is_unloaded_tag(extr, get_tag),
+                is_unlocked_tag(tag_vm),
+                is_unloaded_tag(tag_vm),
                 (l, un) => l && un).ToOptional();
-            AddCommand($"lock{name}Tag??{extr + 1}", () => lock_tag_async(extr, get_tag), can_lock);
+            AddCommand($"lock{name}Tag??{tag_vm.VirtualTagPosition + 1}", () => lock_tag_async(tag_vm), can_lock);
 
             var can_unlock = Observable.CombineLatest(
-                is_locked_tag(extr, get_tag),
-                is_unloaded_tag(extr, get_tag),
+                is_locked_tag(tag_vm),
+                is_unloaded_tag(tag_vm),
                 (l, un) => l && un).ToOptional();
-            AddCommand($"unlock{name}Tag??{extr + 1}", () => unlock_tag_async(extr, get_tag), can_unlock);
+            AddCommand($"unlock{name}Tag??{tag_vm.VirtualTagPosition + 1}", () => unlock_tag_async(tag_vm), can_unlock);
 
             var can_load = Observable.CombineLatest(
-                is_locked_tag(extr, get_tag),
-                is_unloaded_tag(extr, get_tag),
+                is_locked_tag(tag_vm),
+                is_unloaded_tag(tag_vm),
                 (l, un) => l && un).ToOptional();
-            AddCommand($"load{name}Tag??{extr + 1}", () => load_tag(extr, get_tag), can_load);
+            AddCommand($"load{name}Tag??{tag_vm.VirtualTagPosition + 1}", () => load_tag(tag_vm), can_load);
 
             var can_unload = Observable.CombineLatest(
-                is_locked_tag(extr, get_tag),
-                is_loaded_tag(extr, get_tag),
+                is_locked_tag(tag_vm),
+                is_loaded_tag(tag_vm),
                 (l, lo) => l && lo).ToOptional();
-            AddCommand($"unload{name}Tag??{extr + 1}", () => unload_tag(extr, get_tag), can_unload);
+            AddCommand($"unload{name}Tag??{tag_vm.VirtualTagPosition + 1}", () =>  unload_tag(tag_vm), can_unload);
         }
-        private void load_tag(ushort position, Func<IFluxFeederViewModel, IFluxTagViewModel> get_tag_vm)
+        private void load_tag(IFluxTagViewModel tag_vm)
         {
-            var feeder = Flux.Feeders.Feeders.Lookup(position);
-            if (!feeder.HasValue)
-                return;
-            var tag_vm = get_tag_vm(feeder.Value);
-            tag_vm.StoreTag(t => t.SetLoaded(position));
+            tag_vm.StoreTag(t => t.SetLoaded(tag_vm.VirtualTagPosition));
         }
-        private void unload_tag(ushort position, Func<IFluxFeederViewModel, IFluxTagViewModel> get_tag_vm)
+        private void unload_tag(IFluxTagViewModel tag_vm)
         {
-            var feeder = Flux.Feeders.Feeders.Lookup(position);
-            if (!feeder.HasValue)
-                return;
-            var tag_vm = get_tag_vm(feeder.Value);
             tag_vm.StoreTag(t => t.SetLoaded(default));
         }
-        private async Task lock_tag_async(ushort position, Func<IFluxFeederViewModel, IFluxTagViewModel> get_tag_vm)
+        private async Task lock_tag_async(IFluxTagViewModel tag_vm)
         {
-            var feeder = Flux.Feeders.Feeders.Lookup(position);
-            if (!feeder.HasValue)
-                return;
-            var tag_vm = get_tag_vm(feeder.Value);
             await tag_vm.LockTagAsync(default);
         }
-        private async Task unlock_tag_async(ushort position, Func<IFluxFeederViewModel, IFluxTagViewModel> get_tag_vm)
+        private async Task unlock_tag_async(IFluxTagViewModel tag_vm)
         {
-            var feeder = Flux.Feeders.Feeders.Lookup(position);
-            if (!feeder.HasValue)
-                return;
-            var tag_vm = get_tag_vm(feeder.Value);
             await tag_vm.UnlockTagAsync(default);
         }
-        private IObservable<bool> is_locked_tag(ushort position, Func<IFluxFeederViewModel, IFluxTagViewModel> get_tag_vm)
+        private IObservable<bool> is_locked_tag(IFluxTagViewModel tag_vm)
         {
             var printer_guid = Flux.SettingsProvider.CoreSettings.Local.PrinterGuid;
-            return Flux.Feeders.Feeders.Connect()
-                .WatchOptional(position)
-                .ConvertMany(f => get_tag_vm(f).WhenAnyValue(t => t.Nfc))
-                .Select(nfc => nfc.Convert(nfc => nfc.Tag.Convert(t => t.PrinterGuid == printer_guid))
-                .ValueOr(() => false));
+            return tag_vm.WhenAnyValue(t => t.Nfc)
+                .Select(nfc => nfc.Tag.Convert(t => t.PrinterGuid == printer_guid))
+                .ValueOr(() => false);
         }
-        private IObservable<bool> is_unlocked_tag(ushort position, Func<IFluxFeederViewModel, IFluxTagViewModel> get_tag_vm)
+        private IObservable<bool> is_unlocked_tag(IFluxTagViewModel tag_vm)
         {
-            return Flux.Feeders.Feeders.Connect()
-                .WatchOptional(position)
-                .ConvertMany(f => get_tag_vm(f).WhenAnyValue(t => t.Nfc))
-                .Select(nfc => nfc.Convert(nfc => nfc.Tag.Convert(t => t.PrinterGuid == Guid.Empty))
-                .ValueOr(() => false));
+            return tag_vm.WhenAnyValue(t => t.Nfc)
+                .Select(nfc => nfc.Tag.Convert(t => t.PrinterGuid == Guid.Empty))
+                .ValueOr(() => false);
         }
-        private IObservable<bool> is_unloaded_tag(ushort position, Func<IFluxFeederViewModel, IFluxTagViewModel> get_tag_vm)
+        private IObservable<bool> is_unloaded_tag(IFluxTagViewModel tag_vm)
         {
-            return Flux.Feeders.Feeders.Connect()
-                .WatchOptional(position)
-                .ConvertMany(f => get_tag_vm(f).WhenAnyValue(t => t.Nfc))
-                .Select(nfc => nfc.Convert(nfc => nfc.Tag.Convert(t => !t.Loaded.HasValue))
-                .ValueOr(() => false));
+            return tag_vm.WhenAnyValue(t => t.Nfc)
+                .Select(nfc => nfc.Tag.Convert(t => !t.Loaded.HasValue))
+                .ValueOr(() => false);
         }
-        private IObservable<bool> is_loaded_tag(ushort position, Func<IFluxFeederViewModel, IFluxTagViewModel> get_tag_vm)
+        private IObservable<bool> is_loaded_tag(IFluxTagViewModel tag_vm)
         {
-            return Flux.Feeders.Feeders.Connect()
-                .WatchOptional(position)
-                .ConvertMany(f => get_tag_vm(f).WhenAnyValue(t => t.Nfc))
-                .Select(nfc => nfc.Convert(nfc => nfc.Tag.Convert(t => t.Loaded.HasValue && t.Loaded.Value == position))
-                .ValueOr(() => false));
+            return tag_vm.WhenAnyValue(t => t.Nfc)
+                .Select(nfc => nfc.Tag.Convert(t => t.Loaded.HasValue && t.Loaded.Value == tag_vm.VirtualTagPosition))
+                .ValueOr(() => false);
         }
     }
 

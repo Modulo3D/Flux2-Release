@@ -5,6 +5,7 @@ using ReactiveUI;
 using System;
 using System.Linq;
 using System.Reactive;
+using System.Reactive.Disposables;
 using System.Reactive.Linq;
 
 namespace Flux.ViewModels
@@ -21,16 +22,12 @@ namespace Flux.ViewModels
         private ObservableAsPropertyHelper<EFeederState> _FeederState;
         public EFeederState FeederState => _FeederState.Value;
 
-        public MaterialViewModel Material { get; }
         public ToolNozzleViewModel ToolNozzle { get; }
         public ToolMaterialViewModel ToolMaterial { get; }
+        public SelectableCache<IFluxMaterialViewModel, ushort> Materials { get; }
 
-        IFluxMaterialViewModel IFluxFeederViewModel.Material => Material;
         IFluxToolNozzleViewModel IFluxFeederViewModel.ToolNozzle => ToolNozzle;
         IFluxToolMaterialViewModel IFluxFeederViewModel.ToolMaterial => ToolMaterial;
-
-        public ReactiveCommand<Unit, Unit> UpdateMaterialTagCommand { get; internal set; }
-        public ReactiveCommand<Unit, Unit> UpdateToolNozzleTagCommand { get; internal set; }
 
         private ObservableAsPropertyHelper<bool> _HasInvalidState;
         public bool HasInvalidState => _HasInvalidState.Value;
@@ -57,9 +54,10 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public string MaterialBrush => _MaterialBrush.Value;
 
-        private ObservableAsPropertyHelper<bool> _MaterialLoaded;
+        private ObservableAsPropertyHelper<Optional<ushort>> _MaterialLoaded;
         [RemoteOutput(true)]
-        public bool MaterialLoaded => _MaterialLoaded.Value;
+        public Optional<ushort> MaterialLoaded => _MaterialLoaded.Value;
+
 
         // CONSTRUCTOR
         public FeederViewModel(FeedersViewModel feeders, ushort position) : base($"{typeof(FeederViewModel).GetRemoteControlName()}??{position}")
@@ -68,135 +66,93 @@ namespace Flux.ViewModels
             Flux = feeders.Flux;
             Position = position;
 
-            Material = new MaterialViewModel(this);
             ToolNozzle = new ToolNozzleViewModel(this);
             ToolMaterial = new ToolMaterialViewModel(this);
+            Materials = new SelectableCache<IFluxMaterialViewModel, ushort>(default);
 
             ToolMaterial.Initialize();
             ToolNozzle.Initialize();
-            Material.Initialize();
 
             _FeederState = ToolNozzle.WhenAnyValue(v => v.State)
                 .Select(FindFeederState)
-                .ToProperty(this, v => v.FeederState);
+                .ToProperty(this, v => v.FeederState)
+                .DisposeWith(Disposables);
 
             _HasInvalidState = this.WhenAnyValue(f => f.FeederState)
                 .Select(f => f == EFeederState.ERROR)
-                .ToProperty(this, v => v.HasInvalidState);
+                .ToProperty(this, v => v.HasInvalidState)
+                .DisposeWith(Disposables);
 
-            _MaterialLoaded = Material.WhenAnyValue(v => v.State)
-                .Select(s => s.IsLoaded())
-                .ToProperty(this, v => v.MaterialLoaded);
+            _MaterialLoaded = Materials.ItemsSource.Connect()
+                .AutoRefreshOnObservable(m => m.ConvertOr(m => m.WhenAnyValue(m => m.State), () => Observable.Return(new MaterialState())))
+                .QueryWhenChanged(m => m.Items.SingleOrDefault(m => m.HasValue && m.Value.State.IsLoaded()))
+                .Convert(m => m.Position)
+                .ToProperty(this, v => v.MaterialLoaded)
+                .DisposeWith(Disposables);
 
             FeederStateChanged = this.WhenAnyValue(f => f.FeederState);
-            HasInvalidStateChanged = this.WhenAnyValue(f => f.HasInvalidState);
+            HasInvalidStateChanged = this.WhenAnyValue(f => f.HasInvalidState);     
 
-            UpdateMaterialTagCommand = ReactiveCommand.CreateFromTask(async () =>
+            _FeederStateStr = this.WhenAnyValue(v => v.FeederState)
+                .Select(state => state switch
                 {
-                    var operator_usb = Flux.MCodes.OperatorUSB;
-                    var reading = await Flux.UseReader(h => Material.ReadTag(h, true), r => r.HasValue);
+                    EFeederState.FEEDER_SELECTED => "ATTIVA",
+                    EFeederState.FEEDER_WAIT => "ATTESA",
+                    EFeederState.FEEDER_EMPTY => "VUOTA",
+                    _ => "ERRORE",
+                })
+                .ToProperty(this, v => v.FeederStateStr)
+                .DisposeWith(Disposables);
 
-                    if (!reading.HasValue)
-                    {
-                        if (operator_usb.ConvertOr(o => o.RewriteNFC, () => false))
-                        {
-                            var tag = await Material.CreateTagAsync();
-                            reading = new NFCReading<NFCMaterial>(tag, Material.VirtualCardId);
-                        }
-
-                        if (!reading.HasValue)
-                            return;
-                    }
-
-                    await Material.StoreTagAsync(reading.Value);
-                },
-                Flux.StatusProvider.CanSafeCycle,
-                RxApp.MainThreadScheduler);
-
-            UpdateToolNozzleTagCommand = ReactiveCommand.CreateFromTask(async () =>
+            _FeederBrush = this.WhenAnyValue(v => v.FeederState)
+                .Select(state => state switch
                 {
-                    var operator_usb = Flux.MCodes.OperatorUSB;
-                    var reading = await Flux.UseReader(h => ToolNozzle.ReadTag(h, true), r => r.HasValue);
+                    EFeederState.FEEDER_SELECTED => FluxColors.Selected,
+                    EFeederState.FEEDER_WAIT => FluxColors.Inactive,
+                    EFeederState.FEEDER_EMPTY => FluxColors.Empty,
+                    _ => FluxColors.Error,
+                })
+                .ToProperty(this, v => v.FeederBrush)
+                .DisposeWith(Disposables);
 
-                    if (!reading.HasValue)
-                    {
-                        if (operator_usb.ConvertOr(o => o.RewriteNFC, () => false))
-                        {
-                            var tag = await ToolNozzle.CreateTagAsync();
-                            reading = new NFCReading<NFCToolNozzle>(tag, ToolNozzle.VirtualCardId);
-                        }
+            _ToolNozzleBrush = ToolNozzle.WhenAnyValue(v => v.State)
+                .Select(state =>
+                {
+                    if (state.IsNotLoaded())
+                        return FluxColors.Empty;
+                    if (!state.IsLoaded() || state.InMateinance)
+                        return FluxColors.Warning;
+                    if (state.IsOnTrailer())
+                        return FluxColors.Active;
+                    if (state.IsInMagazine())
+                        return FluxColors.Inactive;
+                    return FluxColors.Error;
+                })
+                .ToProperty(this, v => v.ToolNozzleBrush)
+                .DisposeWith(Disposables);
 
-                        if (!reading.HasValue)
-                            return;
-                    }
-
-                    await ToolNozzle.StoreTagAsync(reading.Value);
-                },
-                Flux.StatusProvider.CanSafeCycle,
-                RxApp.MainThreadScheduler);
-
-            AddCommand("unloadMaterial", Material.UnloadCommand);
-            AddCommand("updateMaterial", UpdateMaterialTagCommand);
-            AddCommand("loadPurgeMaterial", Material.LoadPurgeCommand);
-            AddOutput("materialPercentage", Material.Odometer.WhenAnyValue(v => v.Percentage));
-            AddOutput("materialName", Material.WhenAnyValue(v => v.Document).Convert(n => n.Name));
-            AddOutput("materialWeight", Material.WhenAnyValue(v => v.Nfc).Select(d => d.Tag).Convert(n => n.CurWeightG), typeof(WeightConverter));
-
-            AddCommand("changeToolNozzle", ToolNozzle.ChangeCommand);
-            AddCommand("updateToolNozzle", UpdateToolNozzleTagCommand);
-            AddOutput("nozzlePercentage", ToolNozzle.Odometer.WhenAnyValue(v => v.Percentage));
-            AddOutput("nozzleName", ToolNozzle.WhenAnyValue(v => v.Document).Select(d => d.nozzle).Convert(n => n.Name));
-            AddOutput("nozzleTemperature", ToolNozzle.WhenAnyValue(v => v.Temperature), typeof(FluxTemperatureConverter));
-            AddOutput("nozzleWeight", ToolNozzle.WhenAnyValue(v => v.Nfc).Select(d => d.Tag).Convert(n => n.CurWeightG), typeof(WeightConverter));
-
-            _FeederStateStr = this.WhenAnyValue(v => v.FeederState).Select(state => state switch
-            {
-                EFeederState.FEEDER_SELECTED => "ATTIVA",
-                EFeederState.FEEDER_WAIT => "ATTESA",
-                EFeederState.FEEDER_EMPTY => "VUOTA",
-                _ => "ERRORE",
-            }).ToProperty(this, v => v.FeederStateStr);
-
-            _FeederBrush = this.WhenAnyValue(v => v.FeederState).Select(state => state switch
-            {
-                EFeederState.FEEDER_SELECTED => FluxColors.Selected,
-                EFeederState.FEEDER_WAIT => FluxColors.Inactive,
-                EFeederState.FEEDER_EMPTY => FluxColors.Empty,
-                _ => FluxColors.Error,
-            }).ToProperty(this, v => v.FeederBrush);
-
-            _ToolNozzleBrush = ToolNozzle.WhenAnyValue(v => v.State).Select(state =>
-            {
-                if (state.IsNotLoaded())
-                    return FluxColors.Empty;
-                if (!state.IsLoaded() || state.InMateinance)
-                    return FluxColors.Warning;
-                if (state.IsOnTrailer())
-                    return FluxColors.Active;
-                if (state.IsInMagazine())
-                    return FluxColors.Inactive;
-                return FluxColors.Error;
-            }).ToProperty(this, v => v.ToolNozzleBrush);
+            var material = Materials.SelectedValueChanged;
 
             _MaterialBrush = Observable.CombineLatest(
-                Material.WhenAnyValue(v => v.State),
+                material.ConvertMany(m => m.WhenAnyValue(v => v.State)),
                 ToolMaterial.WhenAnyValue(v => v.State),
                 (m, tm) =>
                 {
-                    if (!tm.KnownNozzle)
+                    if (!m.HasValue || !tm.KnownNozzle)
                         return FluxColors.Empty;
                     if (tm.KnownMaterial && !tm.Compatible)
                         return FluxColors.Error;
-                    if (m.IsNotLoaded())
+                    if (m.Value.IsNotLoaded())
                         return FluxColors.Empty;
-                    if (!m.Known)
+                    if (!m.Value.Known)
                         return FluxColors.Warning;
-                    if (!m.IsLoaded())
+                    if (!m.Value.IsLoaded())
                         return FluxColors.Inactive;
-                    if (!m.Locked)
+                    if (!m.Value.Locked)
                         return FluxColors.Error;
                     return FluxColors.Active;
-                }).ToProperty(this, v => v.MaterialBrush);
+                }).ToProperty(this, v => v.MaterialBrush)
+                .DisposeWith(Disposables);
         }
 
         // FEEDER

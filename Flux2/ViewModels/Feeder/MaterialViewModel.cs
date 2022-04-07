@@ -10,9 +10,10 @@ using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
-    public class MaterialViewModel : TagViewModel<NFCMaterial, Optional<Material>, MaterialState>, IFluxMaterialViewModel
+    public class MaterialViewModel : TagViewModel<MaterialViewModel, NFCMaterial, Optional<Material>, MaterialState>, IFluxMaterialViewModel
     {
-        public override int VirtualTagId => 1;
+        public override ushort VirtualTagId => 1;
+        public override ushort VirtualTagPosition => (ushort)(Feeder.Position * Feeder.Materials.ItemsSource.Count + Position);
 
         private ObservableAsPropertyHelper<MaterialState> _State;
         public override MaterialState State => _State.Value;
@@ -59,11 +60,23 @@ namespace Flux.ViewModels
             }
         }
 
-        public MaterialViewModel(FeederViewModel feeder) : base(feeder, s => s.Materials, (db, m) =>
+        private ObservableAsPropertyHelper<string> _MaterialBrush;
+        [RemoteOutput(true)]
+        public string MaterialBrush => _MaterialBrush.Value;
+
+        private ObservableAsPropertyHelper<bool> _MaterialLoaded;
+        [RemoteOutput(true)]
+        public bool MaterialLoaded => _MaterialLoaded.Value;
+
+        public ushort Position { get; }
+
+        public MaterialViewModel(FeederViewModel feeder, ushort position) : base(feeder, s => s.Materials, (db, m) =>
         {
             return m.GetDocument<Material>(db, m => m.MaterialGuid);
         }, t => t.MaterialGuid)
         {
+            Position = position;
+
             var multiplier = Observable.Return(1.0);
             Odometer = new OdometerViewModel<NFCMaterial>(this, multiplier);
 
@@ -87,6 +100,9 @@ namespace Flux.ViewModels
 
             _State = FindMaterialState()
                 .ToProperty(this, v => v.State);
+
+            AddCommand("unloadMaterial", UnloadCommand);
+            AddCommand("loadPurgeMaterial", LoadPurgeCommand);
         }
 
         public override void Initialize()
@@ -187,7 +203,7 @@ namespace Flux.ViewModels
                 var extrusion_temp = Feeder.ToolMaterial.ExtrusionTemp;
                 if (!extrusion_temp.HasValue)
                 {
-                    Flux.Messages.LogMessage(MaterialChangeResult.MATERIAL_CHANGE_ERROR_INVALID_BREAK_TEMP, Feeder.Material.State);
+                    Flux.Messages.LogMessage(MaterialChangeResult.MATERIAL_CHANGE_ERROR_INVALID_BREAK_TEMP, default);
                     return;
                 }
                 await Flux.ConnectionProvider.PurgeAsync(Feeder.Position, extrusion_temp.Value);
