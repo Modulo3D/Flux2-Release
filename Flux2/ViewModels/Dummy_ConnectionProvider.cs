@@ -86,7 +86,7 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override Optional<IEnumerable<string>> GetHomingGCode()
+        public override Optional<IEnumerable<string>> GetHomingGCode(params char[] axis)
         {
             throw new NotImplementedException();
         }

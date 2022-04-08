@@ -575,9 +575,9 @@ namespace Flux.ViewModels
                 }
             }
         }
-        public override Optional<IEnumerable<string>> GetHomingGCode()
+        public override Optional<IEnumerable<string>> GetHomingGCode(params char[] axis)
         {
-            return new[] { "G28" };
+            return new[] { $"G28 {string.Join(" ", axis.Select(a => $"{a}0"))}" };
         }
         public override Optional<IEnumerable<string>> GetParkToolGCode()
         {
