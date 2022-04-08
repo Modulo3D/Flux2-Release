@@ -297,7 +297,7 @@ namespace Flux.ViewModels
 
                     AddCommand(
                         "homePrinter",
-                        Flux.ConnectionProvider.HomeAsync,
+                        () => Flux.ConnectionProvider.HomeAsync(),
                         can_execute: IS_IEHS,
                         visible: advanced_mode);
 

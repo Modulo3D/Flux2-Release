@@ -1028,7 +1028,7 @@ namespace Flux.ViewModels
         }
         public override Task<bool> ClearFolderAsync(string folder, bool wait, CancellationToken ct = default) => DeleteFileAsync(folder, "*", wait, ct);
 
-        public override Optional<IEnumerable<string>> GetHomingGCode()
+        public override Optional<IEnumerable<string>> GetHomingGCode(params char[] axis)
         {
             return new[]
             {
