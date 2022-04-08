@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Net;
 using System.Reactive.Concurrency;
 using System.Reactive.Disposables;
@@ -110,9 +111,13 @@ namespace Flux.ViewModels
             }
         }
 
-        public void AddModelReader<T>(string key, Action<T> model)
+        public void AddModelReader<T>(RRF_MemoryBuffer buffer, Action<T> model)
         {
-            var reader = new RRF_MemoryReader(Connection, key, $"rr_model?key={key}&flags=d99v", r => 
+            var key = buffer.ModelKeys.Lookup(typeof(T));
+            if (!key.HasValue)
+                return;
+
+            var reader = new RRF_MemoryReader(Connection, key.Value, $"rr_model?key={key.Value}&flags=d99v", r => 
             {
                 var model_data = r.GetContent<RRF_ObjectModelResponse<T>>();
                 if (model_data.HasValue)
@@ -145,16 +150,16 @@ namespace Flux.ViewModels
         private SourceCache<RRF_MemoryReaderGroup, TimeSpan> MemoryReaders { get; }
 
         public RRF_ObjectModel RRFObjectModel { get; }
-        private IObservable<Optional<Dictionary<string, object>>> GlobalChanged { get; }
 
         private ObservableAsPropertyHelper<bool> _HasFullMemoryRead;
         public bool HasFullMemoryRead => _HasFullMemoryRead.Value;
+
+        public Dictionary<Type, string> ModelKeys { get; }
 
         public RRF_MemoryBuffer(RRF_Connection connection)
         {
             Connection = connection;
             RRFObjectModel = new RRF_ObjectModel();
-            GlobalChanged = RRFObjectModel.WhenAnyValue(m => m.Global);
 
             var ultra_fast = TimeSpan.FromMilliseconds(100);
             var fast = TimeSpan.FromMilliseconds(200);
@@ -162,29 +167,41 @@ namespace Flux.ViewModels
             var slow = TimeSpan.FromMilliseconds(500);
             var timeout = TimeSpan.FromMilliseconds(5000);
 
+            ModelKeys = new Dictionary<Type, string>()
+            {
+                { typeof(List<RRF_ObjectModelInput>), "inputs" },
+                { typeof(List<RRF_ObjectModelTool>), "tools" },
+                { typeof(RRF_ObjectModelSensors), "sensors" },
+                { typeof(RRF_ObjectModelState), "state" },
+                { typeof(RRF_ObjectModelMove), "move" },
+                { typeof(RRF_ObjectModelHeat), "heat" },
+                { typeof(RRF_ObjectModelJob), "job" },
+                { typeof(RRF_GlobalModel), "global" },
+            };
+
             MemoryReaders = new SourceCache<RRF_MemoryReaderGroup, TimeSpan>(f => f.Period);
 
-            AddModelReader<RRF_ObjectModelState>("state", ultra_fast, timeout, s => RRFObjectModel.State = s);
+            AddModelReader<RRF_ObjectModelState>(ultra_fast, timeout, s => RRFObjectModel.State = s);
             
-            AddModelReader<List<RRF_ObjectModelTool>>("tools", fast, timeout, s => RRFObjectModel.Tools = s);
-            AddModelReader<RRF_ObjectModelSensors>("sensors", fast, timeout, s => RRFObjectModel.Sensors = s);
-            AddModelReader<JObject>("global", fast, timeout, g => RRFObjectModel.Global = g.ToObject<Dictionary<string, object>>());
+            AddModelReader<List<RRF_ObjectModelTool>>(fast, timeout, s => RRFObjectModel.Tools = s);
+            AddModelReader<RRF_ObjectModelSensors>(fast, timeout, s => RRFObjectModel.Sensors = s);
+            AddModelReader<RRF_GlobalModel>(fast, timeout, g => RRFObjectModel.Global = g);
             
-            AddModelReader<RRF_ObjectModelMove>("move", medium, timeout, m => RRFObjectModel.Move = m);
-            AddModelReader<RRF_ObjectModelHeat>("heat", medium, timeout, h => RRFObjectModel.Heat = h);
-            AddFileSytemReader("gcodes/queue", medium, timeout, f => RRFObjectModel.Queue = f);
-            AddFileSytemReader("gcodes/storage", medium, timeout, f => RRFObjectModel.Storage = f);
-            
-            AddModelReader<RRF_ObjectModelJob>("job", medium, timeout, j => RRFObjectModel.Job = j);
-            AddModelReader<List<RRF_ObjectModelInput>>("inputs", medium, timeout, i => RRFObjectModel.Inputs = i);
+            AddModelReader<List<RRF_ObjectModelInput>>(medium, timeout, i => RRFObjectModel.Inputs = i);
+            AddModelReader<RRF_ObjectModelMove>(medium, timeout, m => RRFObjectModel.Move = m);
+            AddModelReader<RRF_ObjectModelHeat>(medium, timeout, h => RRFObjectModel.Heat = h);
+            AddModelReader<RRF_ObjectModelJob>(medium, timeout, j => RRFObjectModel.Job = j);
 
+            AddFileSytemReader("gcodes/storage", medium, timeout, f => RRFObjectModel.Storage = f);
+            AddFileSytemReader("gcodes/queue", medium, timeout, f => RRFObjectModel.Queue = f);
+            
             _HasFullMemoryRead = MemoryReaders.Connect()
                 .TrueForAll(f => f.WhenAnyValue(f => f.HasMemoryRead), r => r)
                 .ToProperty(this, v => v.HasFullMemoryRead)
                 .DisposeWith(Disposables);
         }
 
-        private void AddModelReader<T>(string key, TimeSpan period, TimeSpan timeout, Action<T> model)
+        private void AddModelReader<T>(TimeSpan period, TimeSpan timeout, Action<T> model)
         {
             var memory_reader = MemoryReaders.Lookup(period);
             if (!memory_reader.HasValue)
@@ -192,7 +209,7 @@ namespace Flux.ViewModels
             memory_reader = MemoryReaders.Lookup(period);
             if (!memory_reader.HasValue)
                 return;
-            memory_reader.Value.AddModelReader(key, model);
+            memory_reader.Value.AddModelReader(this, model);
         }
 
         private void AddFileSytemReader(string key, TimeSpan period, TimeSpan timeout, Action<FLUX_FileList> file_system)
@@ -206,43 +223,63 @@ namespace Flux.ViewModels
             memory_reader.Value.AddFileSytemReader(key, file_system);
         }
 
-        public async Task<Optional<T>> GetModelDataAsync<T>(string key, CancellationToken ct)
+        public async Task<Optional<T>> GetModelDataAsync<T>(CancellationToken ct)
         {
-            var request = new RRF_Request($"rr_model?key={key}&flags=d99v", Method.Get, RRF_RequestPriority.Immediate, ct);
+            var key = ModelKeys.Lookup(typeof(T));
+            if (!key.HasValue)
+                return default;
+
+            var request = new RRF_Request($"rr_model?key={key.Value}&flags=d99v", Method.Get, RRF_RequestPriority.Immediate, ct);
             var response = await Connection.Client.ExecuteAsync(request);
             return response.GetContent<RRF_ObjectModelResponse<T>>()
                 .Convert(r => r.Result);
         }
 
-        public IObservable<Optional<TRData>> ObserveState<TState, TRData>(
-            Func<RRF_ObjectModel, IObservable<Optional<TState>>> get_state,
-            Func<RRF_Connection, TState, Optional<TRData>> get_data)
+        public async Task<Optional<T>> GetModelDataAsync<T>(Expression<Func<RRF_ObjectModel, Optional<T>>> dummy_expression, CancellationToken ct)
         {
-            return get_state(RRFObjectModel)
+            var key = ModelKeys.Lookup(typeof(T));
+            if (!key.HasValue)
+                return default;
+
+            var request = new RRF_Request($"rr_model?key={key.Value}&flags=d99v", Method.Get, RRF_RequestPriority.Immediate, ct);
+            var response = await Connection.Client.ExecuteAsync(request);
+            return response.GetContent<RRF_ObjectModelResponse<T>>()
+                .Convert(r => r.Result);
+        }
+
+        public IObservable<Optional<TRData>> ObserveModel<TModel, TRData>(
+            Func<RRF_ObjectModel, IObservable<Optional<TModel>>> get_model,
+            Func<RRF_Connection, TModel, Optional<TRData>> get_data)
+        {
+            return get_model(RRFObjectModel)
                 .Convert(s => get_data(Connection, s))
                 .DistinctUntilChanged();
         }
-        public IObservable<Optional<TRData>> ObserveState<TState, TRData>(
-            Func<RRF_ObjectModel, IObservable<Optional<TState>>> get_state,
-            Func<RRF_Connection, TState, Task<Optional<TRData>>> get_data)
+        public IObservable<Optional<TRData>> ObserveModel<TModel, TRData>(
+            Func<RRF_ObjectModel, IObservable<Optional<TModel>>> get_model,
+            Func<RRF_Connection, TModel, Task<Optional<TRData>>> get_data)
         {
-            return get_state(RRFObjectModel)
+            return get_model(RRFObjectModel)
                 .Select(s => Observable.FromAsync(() => s.ConvertAsync(async s => await get_data(Connection, s))))
                 .Merge(1)
                 .DistinctUntilChanged();
         }
 
-        public IObservable<Optional<TRData>> ObserveGlobalState<TRData>(
-            Func<Optional<Dictionary<string, object>>, Optional<TRData>> get_data)
+        public IObservable<Optional<TRData>> ObserveGlobalModel<TRData>(
+            Func<RRF_GlobalModel, Optional<TRData>> get_data)
         {
-            return GlobalChanged.Select(s => get_data(s))
+            return RRFObjectModel
+                .WhenAnyValue(m => m.Global)
+                .Convert(s => get_data(s))
                 .DistinctUntilChanged();
         }
-        public IObservable<Optional<TRData>> ObserveGlobalState<TRData>(
-            Func<Optional<Dictionary<string, object>>, Task<Optional<TRData>>> get_data)
+        public IObservable<Optional<TRData>> ObserveGlobalModel<TRData>(
+            Func<RRF_GlobalModel, Task<Optional<TRData>>> get_data)
         {
-            return GlobalChanged
-                .Select(s => Observable.FromAsync(async () => await get_data(s)))
+            return RRFObjectModel
+                .WhenAnyValue(m => m.Global)
+                .Convert(s => Observable.FromAsync(async () => await get_data(s)))
+                .ValueOr(() => Observable.Return(Optional<TRData>.None))
                 .Merge(1)
                 .DistinctUntilChanged();
         }

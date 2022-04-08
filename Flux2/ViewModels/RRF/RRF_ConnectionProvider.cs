@@ -174,7 +174,7 @@ namespace Flux.ViewModels
                         Flux.Messages.Messages.Clear();
                         await CreateTimeoutAsync(TimeSpan.FromSeconds(5), async ct =>
                         {
-                            var state = await Connection.Value.MemoryBuffer.GetModelDataAsync<RRF_ObjectModelState>("state", ct);
+                            var state = await Connection.Value.MemoryBuffer.GetModelDataAsync<RRF_ObjectModelState>(ct);
                             if (!state.HasValue)
                                 return;
                             var status = state.Value.GetProcessStatus();
