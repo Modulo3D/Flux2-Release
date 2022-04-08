@@ -24,7 +24,7 @@ namespace Flux.ViewModels
         where TDocument : IDocument
     {
         public FeederEvaluator FeederEvaluator { get; }
-        public abstract IFluxTagViewModel<TNFCTag, TTagDocument, TState> TagViewModel { get; }
+        public abstract Optional<IFluxTagViewModel<TNFCTag, TTagDocument, TState>> TagViewModel { get; }
 
         private ObservableAsPropertyHelper<Optional<Dictionary<QueueKey, TDocument>>> _ExpectedDocumentQueue;
         public Optional<Dictionary<QueueKey, TDocument>> ExpectedDocumentQueue => _ExpectedDocumentQueue.Value;
@@ -67,13 +67,16 @@ namespace Flux.ViewModels
                 (p, db, f) => GetExpectedDocumentQueue(p, db, f, GetDocumentId))
                 .ToProperty(this, v => v.ExpectedDocumentQueue);
 
-            _CurrentDocument = TagViewModel.WhenAnyValue(t => t.Document)
-                .Select(GetCurrentDocument)
+            _CurrentDocument = this.WhenAnyValue(v => v.TagViewModel)
+                .ConvertMany(t => t.WhenAnyValue(t => t.Document))
+                .Convert(GetCurrentDocument)
                 .ToProperty(this, v => v.CurrentDocument);
 
             _IsInvalid = Observable.CombineLatest(
-                TagViewModel.WhenAnyValue(f => f.Document),
-                TagViewModel.WhenAnyValue(f => f.State),
+                this.WhenAnyValue(v => v.TagViewModel)
+                    .ConvertMany(t => t.WhenAnyValue(t => t.Document)),
+                this.WhenAnyValue(v => v.TagViewModel)
+                    .ConvertMany(t => t.WhenAnyValue(t => t.State)),
                 eval_changed,
                 GetInvalid)
                 .ToProperty(this, e => e.IsInvalid);
@@ -82,7 +85,8 @@ namespace Flux.ViewModels
                 .Convert(e => e.Values.Sum(e => e.ConvertOr(e => (double)e.WeightG, () => 0)))
                 .ToProperty(this, v => v.ExpectedWeight);
 
-            _CurrentWeight = TagViewModel.Odometer.WhenAnyValue(v => v.Value)
+            _CurrentWeight = this.WhenAnyValue(v => v.TagViewModel)
+                .ConvertMany(t => t.Odometer.WhenAnyValue(t => t.Value))
                 .ToProperty(this, v => v.CurrentWeight);
 
             _HasLowWeight = Observable.CombineLatest(
@@ -95,7 +99,7 @@ namespace Flux.ViewModels
 
         public abstract int GetDocumentId(FeederReport feeder_report);
         public abstract Optional<TDocument> GetCurrentDocument(TTagDocument tag_document);
-        public abstract bool GetInvalid(TTagDocument document, TState state, Optional<Dictionary<QueueKey, FeederReport>> report);
+        public abstract bool GetInvalid(Optional<TTagDocument> document, Optional<TState> state, Optional<Dictionary<QueueKey, FeederReport>> report);
 
         private Optional<Dictionary<QueueKey, TDocument>> GetExpectedDocumentQueue(Optional<QueueKey> queue_key, Optional<ILocalDatabase> database, Optional<Dictionary<QueueKey, FeederReport>> feered_queue, Func<FeederReport, int> get_id)
         {
@@ -158,9 +162,14 @@ namespace Flux.ViewModels
 
     public class MaterialEvaluator : TagViewModelEvaluator<NFCMaterial, Optional<Material>, Material, MaterialState>
     {
-        public override IFluxTagViewModel<NFCMaterial, Optional<Material>, MaterialState> TagViewModel => FeederEvaluator.Feeder.Material;
+        private ObservableAsPropertyHelper<Optional<IFluxTagViewModel<NFCMaterial, Optional<Material>, MaterialState>>> _TagViewModel;
+        public override Optional<IFluxTagViewModel<NFCMaterial, Optional<Material>, MaterialState>> TagViewModel => _TagViewModel.Value;
+        
         public MaterialEvaluator(FeederEvaluator feeder_eval) : base(feeder_eval)
         {
+            _TagViewModel = FeederEvaluator.Feeder.Materials.SelectedValueChanged
+                .Convert(m => (IFluxTagViewModel<NFCMaterial, Optional<Material>, MaterialState>)m)
+                .ToProperty(this, v => v.TagViewModel);
         }
         public override Optional<Material> GetCurrentDocument(Optional<Material> tag_document)
         {
@@ -170,7 +179,7 @@ namespace Flux.ViewModels
         {
             return feeder_report.MaterialId;
         }
-        public override bool GetInvalid(Optional<Material> document, MaterialState state, Optional<Dictionary<QueueKey, FeederReport>> report_queue)
+        public override bool GetInvalid(Optional<Optional<Material>> document, Optional<MaterialState> state, Optional<Dictionary<QueueKey, FeederReport>> report_queue)
         {
             if (!report_queue.HasValue)
                 return true;
@@ -178,14 +187,14 @@ namespace Flux.ViewModels
             if (report_queue.Value.Count == 0)
                 return false;
 
-            if (!document.HasValue)
+            if (!document.HasValue || !document.Value.HasValue)
                 return true;
 
-            if (!state.IsLoaded())
+            if (!state.HasValue || !state.Value.IsLoaded())
                 return true;
 
             foreach (var report in report_queue.Value)
-                if (report.Value.MaterialId != document.Value.Id)
+                if (report.Value.MaterialId != document.Value.Value.Id)
                     return true;
 
             return false;
@@ -194,7 +203,9 @@ namespace Flux.ViewModels
 
     public class ToolNozzleEvaluator : TagViewModelEvaluator<NFCToolNozzle, (Optional<Tool> tool, Optional<Nozzle> nozzle), Nozzle, ToolNozzleState>
     {
-        public override IFluxTagViewModel<NFCToolNozzle, (Optional<Tool> tool, Optional<Nozzle> nozzle), ToolNozzleState> TagViewModel => FeederEvaluator.Feeder.ToolNozzle;
+        public override Optional<IFluxTagViewModel<NFCToolNozzle, (Optional<Tool> tool, Optional<Nozzle> nozzle), ToolNozzleState>> TagViewModel => 
+            ((IFluxTagViewModel<NFCToolNozzle, (Optional<Tool> tool, Optional<Nozzle> nozzle), ToolNozzleState>)FeederEvaluator.Feeder.ToolNozzle).ToOptional();
+
         public ToolNozzleEvaluator(FeederEvaluator feeder_eval) : base(feeder_eval)
         {
         }
@@ -206,7 +217,7 @@ namespace Flux.ViewModels
         {
             return tag_document.nozzle;
         }
-        public override bool GetInvalid((Optional<Tool> tool, Optional<Nozzle> nozzle) document, ToolNozzleState state, Optional<Dictionary<QueueKey, FeederReport>> report_queue)
+        public override bool GetInvalid(Optional<(Optional<Tool> tool, Optional<Nozzle> nozzle)> document, Optional<ToolNozzleState> state, Optional<Dictionary<QueueKey, FeederReport>> report_queue)
         {
             if (!report_queue.HasValue)
                 return true;
@@ -214,17 +225,20 @@ namespace Flux.ViewModels
             if (report_queue.Value.Count == 0)
                 return false;
 
-            if (!document.tool.HasValue)
+            if (!document.HasValue)
                 return true;
 
-            if (!document.nozzle.HasValue)
+            if (!document.Value.tool.HasValue)
                 return true;
 
-            if (!state.IsLoaded())
+            if (!document.Value.nozzle.HasValue)
+                return true;
+
+            if (!state.HasValue || !state.Value.IsLoaded())
                 return true;
 
             foreach (var report in report_queue.Value)
-                if (report.Value.NozzleId != document.nozzle.Value.Id)
+                if (report.Value.NozzleId != document.Value.nozzle.Value.Id)
                     return true;
 
             return false;

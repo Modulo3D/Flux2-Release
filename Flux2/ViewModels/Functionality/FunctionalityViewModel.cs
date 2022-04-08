@@ -92,9 +92,19 @@ namespace Flux.ViewModels
                     if (extruders.HasValue)
                     {
                         for (ushort extr = 0; extr < extruders.Value; extr++)
-                            AddModal(new NFCInnerViewModel(flux, "Tool", f => f.ToolNozzle, extr));
-                        for (ushort extr = 0; extr < extruders.Value; extr++)
-                            AddModal(new NFCInnerViewModel(flux, "Material", f => f.Material, extr));
+                        {
+                            var feeder = flux.Feeders.Feeders.Lookup(extr);
+                            if (!feeder.HasValue)
+                                continue;
+                            AddModal(new NFCInnerViewModel("Tool", feeder.Value.ToolNozzle));
+
+                            foreach (var material in feeder.Value.Materials.ItemsSource.Items)
+                            {
+                                if (!material.HasValue)
+                                    continue;
+                                AddModal(new NFCInnerViewModel("Material", material.Value));
+                            }
+                        }
                     }
                 });
         }
