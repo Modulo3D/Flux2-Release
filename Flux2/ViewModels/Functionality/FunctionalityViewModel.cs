@@ -331,6 +331,11 @@ namespace Flux.ViewModels
                         can_execute: IS_IEHS);
 
                     AddCommand(
+                         "setLowCurrentAsync",
+                         Flux.ConnectionProvider.SetLowCurrentAsync,
+                         can_execute: IS_IEHS);
+
+                    AddCommand(
                         "setMagazineLimits",
                         () =>
                         {
@@ -354,6 +359,19 @@ namespace Flux.ViewModels
                             AddCommand(
                                 $"selectExtruder??{extr + 1}",
                                 () => Flux.ConnectionProvider.SelectToolAsync(extr),
+                                can_execute: IS_IEHS,
+                                visible: advanced_mode);
+                        }
+                    }
+
+                    if (extruders.HasValue)
+                    {
+                        for (ushort extruder = 0; extruder < extruders.Value; extruder++)
+                        {
+                            var extr = extruder;
+                            AddCommand(
+                                $"probeMagazine??{extr + 1}",
+                                () => Flux.ConnectionProvider.ProbeMagazineAsync(extr),
                                 can_execute: IS_IEHS,
                                 visible: advanced_mode);
                         }

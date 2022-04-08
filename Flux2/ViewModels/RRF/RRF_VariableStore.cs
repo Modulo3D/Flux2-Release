@@ -21,29 +21,22 @@ namespace Flux.ViewModels
         {
             try
             {
+                var read_timeout = TimeSpan.FromSeconds(5);
                 var connection = connection_provider.WhenAnyValue(v => v.Connection);
-                var heat = RRF_StateBuilder.Create(connection, m => m.WhenAnyValue(m => m.Heat));
-                var input = RRF_StateBuilder.Create(connection, m => m.WhenAnyValue(m => m.Inputs));
-                var move = RRF_StateBuilder.Create(connection, m => m.WhenAnyValue(m => m.Move));
-                var sensors = RRF_StateBuilder.Create(connection, m => m.WhenAnyValue(m => m.Sensors));
-                var state = RRF_StateBuilder.Create(connection, m => m.WhenAnyValue(m => m.State));
-                var tools = RRF_StateBuilder.Create(connection, m => m.WhenAnyValue(m => m.Tools));
-                var global = RRF_StateBuilder.Create(connection, m => m.WhenAnyValue(m => m.Global));
-                var storage = RRF_StateBuilder.Create(connection, m => m.WhenAnyValue(m => m.Storage));
-                var queue = RRF_StateBuilder.Create(connection, m => m.WhenAnyValue(m => m.Queue));
-                var job = RRF_StateBuilder.Create(connection, m => m.WhenAnyValue(m => m.Job));
+                var job = RRF_ModelBuilder.Create(connection, m => m.Job, read_timeout);
+                var heat = RRF_ModelBuilder.Create(connection, m => m.Heat, read_timeout);
+                var move = RRF_ModelBuilder.Create(connection, m => m.Move, read_timeout);
+                var state = RRF_ModelBuilder.Create(connection, m => m.State, read_timeout);
+                var tools = RRF_ModelBuilder.Create(connection, m => m.Tools, read_timeout);
+                var queue = RRF_ModelBuilder.Create(connection, m => m.Queue, read_timeout);
+                var input = RRF_ModelBuilder.Create(connection, m => m.Inputs, read_timeout);
+                var global = RRF_ModelBuilder.Create(connection, m => m.Global, read_timeout);
+                var storage = RRF_ModelBuilder.Create(connection, m => m.Storage, read_timeout);
+                var sensors = RRF_ModelBuilder.Create(connection, m => m.Sensors, read_timeout);
 
-                var job_state_input = RRF_StateBuilder.Create(connection,
-                    m => Observable.CombineLatest(job.GetState(m), state.GetState(m), input.GetState(m),
-                    (j, s, i) => j.Convert(j => s.Convert(s => i.Convert(i => (j, s, i))))));
-
-                var storage_queue = RRF_StateBuilder.Create(connection,
-                    m => Observable.CombineLatest(storage.GetState(m), queue.GetState(m),
-                    (s, q) => s.Convert(s => q.Convert(q => (s, q)))));
-
-                var job_global_storage_queue = RRF_StateBuilder.Create(connection,
-                    m => Observable.CombineLatest(job.GetState(m), global.GetState(m), storage.GetState(m), queue.GetState(m),
-                    (j, g, s, i) => j.Convert(j => g.Convert(g => s.Convert(s => i.Convert(q => (j, g, s, q)))))));
+                var storage_queue = RRF_ModelBuilder.Create(connection, m => m.Storage, m => m.Queue, read_timeout);
+                var job_state_input = RRF_ModelBuilder.Create(connection, m => m.Job, m => m.State, m => m.Inputs, read_timeout);
+                var job_global_storage_queue = RRF_ModelBuilder.Create(connection, m => m.Job, m => m.Global, m => m.Storage, m => m.Queue, read_timeout);
 
                 QUEUE = RegisterVariable(queue.CreateVariable<Dictionary<QueuePosition, Guid>, Unit>("QUEUE", (c, m) => m.GetGuidDictionaryFromQueue()));
                 PROCESS_STATUS = RegisterVariable(state.CreateVariable<FLUX_ProcessStatus, Unit>("PROCESS STATUS", (c, m) => m.GetProcessStatus()));
@@ -56,17 +49,17 @@ namespace Flux.ViewModels
                 var axes = move.CreateArray(m => m.Axes.Convert(a => a.ToDictionary(a => a.Letter)));
                 AXIS_POSITION = RegisterVariable(axes.Create<double, Unit>("AXIS_POSITION", VariableUnit.Range("X", "Y", "Z", "C"), (c, a) => a.MachinePosition));
 
-                X_USER_OFFSET_T = RegisterVariable(new RRF_ArrayGlobalModel<double>(connection_provider.Flux, connection, "x_user_offset", VariableUnit.Range(0, 4), false));
-                Y_USER_OFFSET_T = RegisterVariable(new RRF_ArrayGlobalModel<double>(connection_provider.Flux, connection, "y_user_offset", VariableUnit.Range(0, 4), false));
-                Z_USER_OFFSET_T = RegisterVariable(new RRF_ArrayGlobalModel<double>(connection_provider.Flux, connection, "z_user_offset", VariableUnit.Range(0, 4), false));
-                X_PROBE_OFFSET_T = RegisterVariable(new RRF_ArrayGlobalModel<double>(connection_provider.Flux, connection, "x_probe_offset", VariableUnit.Range(0, 4), false));
-                Y_PROBE_OFFSET_T = RegisterVariable(new RRF_ArrayGlobalModel<double>(connection_provider.Flux, connection, "y_probe_offset", VariableUnit.Range(0, 4), false));
-                Z_PROBE_OFFSET_T = RegisterVariable(new RRF_ArrayGlobalModel<double>(connection_provider.Flux, connection, "z_probe_offset", VariableUnit.Range(0, 4), false));
-                QUEUE_POS = RegisterVariable(new RRF_VariableGlobalModel<QueuePosition>(connection_provider.Flux, connection, "queue_pos", false, v => new QueuePosition((short)Convert.ChangeType(v, typeof(short)))));
+                X_USER_OFFSET_T = RegisterVariable(new RRF_ArrayGlobalModel<double>(connection, "x_user_offset", VariableUnit.Range(0, 4), false));
+                Y_USER_OFFSET_T = RegisterVariable(new RRF_ArrayGlobalModel<double>(connection, "y_user_offset", VariableUnit.Range(0, 4), false));
+                Z_USER_OFFSET_T = RegisterVariable(new RRF_ArrayGlobalModel<double>(connection, "z_user_offset", VariableUnit.Range(0, 4), false));
+                X_PROBE_OFFSET_T = RegisterVariable(new RRF_ArrayGlobalModel<double>(connection, "x_probe_offset", VariableUnit.Range(0, 4), false));
+                Y_PROBE_OFFSET_T = RegisterVariable(new RRF_ArrayGlobalModel<double>(connection, "y_probe_offset", VariableUnit.Range(0, 4), false));
+                Z_PROBE_OFFSET_T = RegisterVariable(new RRF_ArrayGlobalModel<double>(connection, "z_probe_offset", VariableUnit.Range(0, 4), false));
+                QUEUE_POS = RegisterVariable(new RRF_VariableGlobalModel<QueuePosition>(connection, "queue_pos", false, v => new QueuePosition((short)Convert.ChangeType(v, typeof(short)))));
 
                 TOOL_CUR = RegisterVariable(state.CreateVariable<short, short>("TOOL CUR", (c, s) => s.CurrentTool));
                 TOOL_NUM = RegisterVariable(tools.CreateVariable<ushort, ushort>("TOOL NUM", (c, t) => (ushort)t.Count));
-                DEBUG = RegisterVariable(new RRF_VariableGlobalModel<bool>(connection_provider.Flux, connection, "debug", false));
+                DEBUG = RegisterVariable(new RRF_VariableGlobalModel<bool>(connection, "debug", false));
 
                 MCODE_RECOVERY = RegisterVariable(storage.CreateVariable<IFLUX_MCodeRecovery, Unit>("mcode_recovery", GetMCodeRecoveryAsync));
 
@@ -86,13 +79,13 @@ namespace Flux.ViewModels
                 //MEM_TOOL_ON_TRAILER = RegisterVariable(new RRF_ArrayGlobalModel<bool>(connection, "tool_on_trailer", 4, true));
                 //MEM_TOOL_IN_MAGAZINE = RegisterVariable(new RRF_ArrayGlobalModel<bool>(connection, "tool_in_magazine", 4, true));
 
-                PURGE_POSITION = RegisterVariable(new RRF_ArrayGlobalModel<double>(connection_provider.Flux, connection, "purge_position", VariableUnit.Range("X", "Y"), true));
-                HOME_OFFSET = RegisterVariable(new RRF_ArrayGlobalModel<double>(connection_provider.Flux, connection, "home_offset", VariableUnit.Range("X", "Y", "Z"), true));
-                HOME_BUMP = RegisterVariable(new RRF_ArrayGlobalModel<double>(connection_provider.Flux, connection, "home_bump", VariableUnit.Range("X", "Y", "Z"), true));
-                QUEUE_SIZE = RegisterVariable(new RRF_VariableGlobalModel<ushort>(connection_provider.Flux, connection, "queue_size", true));
+                PURGE_POSITION = RegisterVariable(new RRF_ArrayGlobalModel<double>(connection, "purge_position", VariableUnit.Range("X", "Y"), true));
+                HOME_OFFSET = RegisterVariable(new RRF_ArrayGlobalModel<double>(connection, "home_offset", VariableUnit.Range("X", "Y", "Z"), true));
+                HOME_BUMP = RegisterVariable(new RRF_ArrayGlobalModel<double>(connection, "home_bump", VariableUnit.Range("X", "Y", "Z"), true));
+                QUEUE_SIZE = RegisterVariable(new RRF_VariableGlobalModel<ushort>(connection, "queue_size", true));
 
-                X_MAGAZINE_POS = RegisterVariable(new RRF_ArrayGlobalModel<double>(connection_provider.Flux, connection, "x_magazine_pos", VariableUnit.Range(0, 4), true));
-                Y_MAGAZINE_POS = RegisterVariable(new RRF_ArrayGlobalModel<double>(connection_provider.Flux, connection, "y_magazine_pos", VariableUnit.Range(0, 4), true));
+                X_MAGAZINE_POS = RegisterVariable(new RRF_ArrayGlobalModel<double>(connection, "x_magazine_pos", VariableUnit.Range(0, 4), true));
+                Y_MAGAZINE_POS = RegisterVariable(new RRF_ArrayGlobalModel<double>(connection, "y_magazine_pos", VariableUnit.Range(0, 4), true));
 
                 TEMP_PLATE = RegisterVariable(heat.CreateVariable<FLUX_Temp, double>("TEMP PLATE", (c, m) => m.GetPlateTemperature(), SetPlateTemperature));
 

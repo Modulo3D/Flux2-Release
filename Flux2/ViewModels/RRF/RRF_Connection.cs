@@ -738,5 +738,15 @@ namespace Flux.ViewModels
                 return false;
             }
         }
+
+        public override Optional<IEnumerable<string>> GetSetLowCurrentGCode()
+        {
+            return new[] { "M98 P\"/macros/low_current\"" };
+        }
+
+        public override Optional<IEnumerable<string>> GetProbeMagazineGCode()
+        {
+            return new[] { "M98 P\"/macros/probe_magazine\"" };
+        }
     }
 }

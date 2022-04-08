@@ -1125,5 +1125,15 @@ namespace Flux.ViewModels
         {
             throw new NotImplementedException();
         }
+
+        public override Optional<IEnumerable<string>> GetSetLowCurrentGCode()
+        {
+            throw new NotImplementedException();
+        }
+
+        public override Optional<IEnumerable<string>> GetProbeMagazineGCode()
+        {
+            throw new NotImplementedException();
+        }
     }
 }

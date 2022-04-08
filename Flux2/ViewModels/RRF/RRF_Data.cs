@@ -1,6 +1,7 @@
 ﻿using DynamicData.Kernel;
 using Modulo3DStandard;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
@@ -1109,6 +1110,34 @@ namespace Flux.ViewModels
         //public Optional<string> State { get; set; }
     }
 
+    public class RRF_GlobalModelConverter : JsonConverter<RRF_GlobalModel>
+    {
+        public override RRF_GlobalModel ReadJson(JsonReader reader, Type objectType, RRF_GlobalModel existingValue, bool hasExistingValue, JsonSerializer serializer)
+        {
+            try
+            {
+                var model = serializer.Deserialize<JObject>(reader);
+                return new RRF_GlobalModel(model);
+            }
+            catch (Exception)
+            {
+                return existingValue;
+            }
+        }
+
+        public override void WriteJson(JsonWriter writer, RRF_GlobalModel value, JsonSerializer serializer)
+        {
+            throw new NotImplementedException();
+        }
+    }
+
+
+    [JsonConverter(typeof(RRF_GlobalModelConverter))]
+    public class RRF_GlobalModel : JObject
+    {
+        public RRF_GlobalModel(JObject model) : base(model) { }
+    }
+
     public class RRF_ObjectModel : ReactiveObject
     {
         //private Optional<List<RRF_ObjectModelBoard>> _Boards;
@@ -1144,8 +1173,8 @@ namespace Flux.ViewModels
         private Optional<List<RRF_ObjectModelTool>> _Tools;
         public Optional<List<RRF_ObjectModelTool>> Tools { get => _Tools; set => this.RaiseAndSetIfChanged(ref _Tools, value); }
 
-        private Optional<Dictionary<string, object>> _Global;
-        public Optional<Dictionary<string, object>> Global { get => _Global; set => this.RaiseAndSetIfChanged(ref _Global, value); }
+        private Optional<RRF_GlobalModel> _Global;
+        public Optional<RRF_GlobalModel> Global { get => _Global; set => this.RaiseAndSetIfChanged(ref _Global, value); }
 
         private Optional<FLUX_FileList> _Queue;
         public Optional<FLUX_FileList> Queue { get => _Queue; set => this.RaiseAndSetIfChanged(ref _Queue, value); }
@@ -1203,17 +1232,14 @@ namespace Flux.ViewModels
             }
         }
 
-        public static Optional<MCodePartProgram> GetPartProgram(this (RRF_ObjectModelJob job, Dictionary<string, object> global, FLUX_FileList storage, FLUX_FileList queue) data)
+        public static Optional<MCodePartProgram> GetPartProgram(this (RRF_ObjectModelJob job, RRF_GlobalModel global, FLUX_FileList storage, FLUX_FileList queue) data)
         {
             try
             {
                 if (!data.global.TryGetValue("queue_pos", out var queue_pos_obj))
                     return default;
 
-                var queue_pos = ((short?)Convert.ChangeType(queue_pos_obj, typeof(short))).ToOptional();
-                if (!queue_pos.HasValue)
-                    return default;
-
+                var queue_pos = (QueuePosition)queue_pos_obj.ToObject<short>();
                 if (queue_pos.Value < 0)
                     return default;
 
