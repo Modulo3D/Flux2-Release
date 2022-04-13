@@ -103,8 +103,10 @@ namespace Flux.ViewModels
 
             MoveButtons = new SourceList<CmdButton>();
             MoveButtons.Add(move_tool_button(1));
-            MoveButtons.Add(move_tool_button(0.05));
-            MoveButtons.Add(move_tool_button(-0.05));
+            MoveButtons.Add(move_tool_button(0.1));
+            MoveButtons.Add(move_tool_button(0.01));
+            MoveButtons.Add(move_tool_button(-0.01));
+            MoveButtons.Add(move_tool_button(-0.1));
             MoveButtons.Add(move_tool_button(-1));
             MoveButtons.DisposeWith(Disposables);
 

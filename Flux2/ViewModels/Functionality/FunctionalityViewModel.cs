@@ -333,7 +333,8 @@ namespace Flux.ViewModels
                     AddCommand(
                          "setLowCurrentAsync",
                          Flux.ConnectionProvider.SetLowCurrentAsync,
-                         can_execute: IS_IEHS);
+                         can_execute: IS_IEHS,
+                         visible: advanced_mode);
 
                     AddCommand(
                         "setMagazineLimits",
