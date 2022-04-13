@@ -104,6 +104,23 @@ namespace Flux.ViewModels
 
                 AXIS_ENDSTOP = RegisterVariable(endstops.Create<bool, bool>("AXIS ENDSTOP", VariableUnit.Range("X", "Y", "Z"), (c, triggered) => triggered));
                 ENABLE_DRIVERS = RegisterVariable(axes.Create<bool, bool>("ENABLE DRIVERS", VariableUnit.Range("X", "Y", "Z", "C"), (c, m) => m.IsEnabledDriver(), EnableDriverAsync));
+
+                var material_mixing = tools.CreateArray(tools =>
+                {
+                    var material_mixing = new Dictionary<VariableUnit, double>();
+                    var ordered_tools = tools.OrderBy(t => t.Number.ValueOr(() => 0));
+                    foreach (var tool in ordered_tools)
+                    {
+                        if (!tool.Mix.HasValue)
+                            continue;
+                        var tool_number = tool.Number.ValueOr(() => 0);
+                        foreach (var mixing in tool.Mix.Value.Select((value, index) => (value, index)))
+                            material_mixing.Add($"{tool_number + (mixing.index * tools.Count)}", mixing.value);
+                    }
+                    return material_mixing.ToOptional();
+                });
+
+                MATERIAL_ENABLED = RegisterVariable(material_mixing.Create<bool, bool>("MATERIAL ENABLED", VariableUnit.Range(0, 4), (c, m) => m == 1));
             }
             catch (Exception ex)
             {

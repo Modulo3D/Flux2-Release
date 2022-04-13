@@ -1085,14 +1085,14 @@ namespace Flux.ViewModels
         //[JsonProperty("heaters")]
         //public Optional<List<double>> Heaters { get; set; }
 
-        //[JsonProperty("mix")]
-        //public Optional<List<double>> Mix { get; set; }
+        [JsonProperty("mix")]
+        public Optional<List<double>> Mix { get; set; }
 
         //[JsonProperty("name")]
         //public Optional<string> Name { get; set; }
 
-        //[JsonProperty("number")]
-        //public Optional<double> Number { get; set; }
+        [JsonProperty("number")]
+        public Optional<int> Number { get; set; }
 
         //[JsonProperty("offsets")]
         //public Optional<List<double>> Offsets { get; set; }

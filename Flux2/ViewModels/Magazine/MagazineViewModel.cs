@@ -9,10 +9,8 @@ namespace Flux.ViewModels
 {
     public class MagazineViewModel : FluxRoutableViewModel<MagazineViewModel>
     {
-        public IObservableCache<MagazineItemViewModel, ushort> Magazine { get; private set; }
-
         [RemoteContent(true)]
-        public IObservableList<MagazineItemViewModel> SortedMagazine { get; private set; }
+        public IObservableCache<MagazineItemViewModel, ushort> Magazine { get; private set; }
 
         [RemoteCommand]
         public ReactiveCommand<Unit, Unit> ResetMagazineCommand { get; internal set; }
@@ -22,13 +20,6 @@ namespace Flux.ViewModels
             Magazine = Flux.Feeders.Feeders.Connect()
                 .Transform(f => new MagazineItemViewModel(Flux, f))
                 .AsObservableCache();
-
-            var comparer = SortExpressionComparer<MagazineItemViewModel>.Ascending(m => m.Feeder.Position);
-
-            SortedMagazine = Magazine.Connect()
-                .RemoveKey()
-                .Sort(comparer)
-                .AsObservableList();
 
             var is_idle = Flux.StatusProvider.IsIdle
                 .ValueOrDefault();

@@ -203,7 +203,8 @@ namespace Flux.ViewModels
 
                 var print_temp = Flux.Feeders.Feeders.Connect()
                     .WatchOptional(e)
-                    .ConvertMany(f => f.ToolMaterial.WhenAnyValue(tm => tm.Document))
+                    .ConvertMany(f => f.WhenAnyValue(f => f.SelectedToolMaterial))
+                    .ConvertMany(tm => tm.WhenAnyValue(tm => tm.Document))
                     .Convert(tm => tm.PrintTemperature);
 
                 var tool_offset = Flux.Calibration.Offsets.Connect()
@@ -224,9 +225,11 @@ namespace Flux.ViewModels
 
                 async Task select_tool()
                 {
-                    var feeder = Flux.Feeders.Feeders.Lookup(e);
-                    var tool_material = feeder.Convert(f => f.ToolMaterial.Document);
-                    var print_temperature = tool_material.Convert(tm => tm.PrintTemperature);
+                    var print_temperature = Flux.Feeders.Feeders
+                        .Lookup(e)
+                        .Convert(f => f.SelectedToolMaterial)
+                        .Convert(tm => tm.Document)
+                        .Convert(tm => tm.PrintTemperature);
                     if (!print_temperature.HasValue)
                         return;
 

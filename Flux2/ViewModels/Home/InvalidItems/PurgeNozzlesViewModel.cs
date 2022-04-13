@@ -21,9 +21,11 @@ namespace Flux.ViewModels
 
         public PurgeNozzleViewModel(FeederEvaluator eval) : base($"{typeof(PurgeNozzleViewModel).GetRemoteControlName()}??{eval.Feeder.Position}", eval)
         {
+            var tool_material = eval.Feeder.WhenAnyValue(f => f.SelectedToolMaterial);
+
             _InvalidItemBrush = Observable.CombineLatest(
                eval.Feeder.ToolNozzle.WhenAnyValue(m => m.Temperature),
-               eval.Feeder.ToolMaterial.WhenAnyValue(m => m.ExtrusionTemp).ValueOr(() => 0),
+               tool_material.ConvertMany(tm => tm.WhenAnyValue(m => m.ExtrusionTemp)).ValueOr(() => 0),
                (current_temp, expected_temp) =>
                {
                    if (!current_temp.HasValue)
@@ -55,8 +57,9 @@ namespace Flux.ViewModels
         }
         public override IObservable<Optional<string>> GetExpectedValue(FeederEvaluator evaluation)
         {
-            return evaluation.Feeder.ToolMaterial
-                .WhenAnyValue(t => t.ExtrusionTemp)
+            return evaluation.Feeder
+                .WhenAnyValue(f => f.SelectedToolMaterial)
+                .ConvertMany(tm => tm.WhenAnyValue(t => t.ExtrusionTemp))
                 .Select(t => $"{t:0}°C")
                 .Select(t => t.ToOptional());
         }

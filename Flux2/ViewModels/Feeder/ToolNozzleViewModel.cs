@@ -14,7 +14,6 @@ namespace Flux.ViewModels
     public class ToolNozzleViewModel : TagViewModel<ToolNozzleViewModel, NFCToolNozzle, (Optional<Tool> tool, Optional<Nozzle> nozzle), ToolNozzleState>, IFluxToolNozzleViewModel
     {
         public override ushort VirtualTagId => 2;
-        public override ushort VirtualTagPosition => Feeder.Position;
 
         public override OdometerViewModel<NFCToolNozzle> Odometer { get; }
 
@@ -34,7 +33,7 @@ namespace Flux.ViewModels
 
         public ReactiveCommand<Unit, Unit> ChangeCommand { get; private set; }
 
-        public ToolNozzleViewModel(FeederViewModel feeder) : base(feeder, s => s.ToolNozzles, (db, tn) =>
+        public ToolNozzleViewModel(FeederViewModel feeder) : base(feeder, feeder.Position, s => s.ToolNozzles, (db, tn) =>
         {
             return (tn.GetDocument<Tool>(db, tn => tn.ToolGuid),
                 tn.GetDocument<Nozzle>(db, tn => tn.NozzleGuid));
@@ -42,7 +41,7 @@ namespace Flux.ViewModels
         {
             Odometer = new OdometerViewModel<NFCToolNozzle>(this, Observable.Return(1.0));
 
-            var tool_key = Flux.ConnectionProvider.VariableStore.GetArrayUnit(m => m.TEMP_TOOL, Feeder.Position);
+            var tool_key = Flux.ConnectionProvider.VariableStore.GetArrayUnit(m => m.TEMP_TOOL, Position);
             _Temperature = Flux.ConnectionProvider
                 .ObserveVariable(m => m.TEMP_TOOL, tool_key.ValueOr(() => ""))
                 .ToProperty(this, v => v.Temperature)
@@ -51,10 +50,12 @@ namespace Flux.ViewModels
 
         public override void Initialize()
         {
+            base.Initialize();
+
             _State = FindToolState()
                 .ToProperty(this, v => v.State);
 
-            var material = Feeder.Materials.SelectedValueChanged;
+            var material = Feeder.WhenAnyValue(f => f.SelectedMaterial);
 
             var can_load_unload_tool = Observable.CombineLatest(
                 Flux.StatusProvider.CanSafeCycle,
@@ -102,19 +103,19 @@ namespace Flux.ViewModels
                 .ConvertOr(t => t.Current > -100 && t.Current < 1000, () => false)
                 .DistinctUntilChanged();
 
-            var mem_magazine_key = Flux.ConnectionProvider.VariableStore.GetArrayUnit(m => m.MEM_TOOL_IN_MAGAZINE, Feeder.Position).ValueOr(() => "");
+            var mem_magazine_key = Flux.ConnectionProvider.VariableStore.GetArrayUnit(m => m.MEM_TOOL_IN_MAGAZINE, Position).ValueOr(() => "");
             var mem_magazine = Flux.ConnectionProvider.ObserveVariable(m => m.MEM_TOOL_IN_MAGAZINE, mem_magazine_key)
                 .DistinctUntilChanged();
 
-            var mem_trailer_key = Flux.ConnectionProvider.VariableStore.GetArrayUnit(m => m.MEM_TOOL_ON_TRAILER, Feeder.Position).ValueOr(() => "");
+            var mem_trailer_key = Flux.ConnectionProvider.VariableStore.GetArrayUnit(m => m.MEM_TOOL_ON_TRAILER, Position).ValueOr(() => "");
             var mem_trailer = Flux.ConnectionProvider.ObserveVariable(m => m.MEM_TOOL_ON_TRAILER, mem_trailer_key)
                 .DistinctUntilChanged();
 
-            var input_magazine_key = Flux.ConnectionProvider.VariableStore.GetArrayUnit(m => m.TOOL_IN_MAGAZINE, Feeder.Position).ValueOr(() => "");
+            var input_magazine_key = Flux.ConnectionProvider.VariableStore.GetArrayUnit(m => m.TOOL_IN_MAGAZINE, Position).ValueOr(() => "");
             var input_magazine = Flux.ConnectionProvider.ObserveVariable(m => m.TOOL_IN_MAGAZINE, input_magazine_key)
                 .DistinctUntilChanged();
 
-            var input_trailer_key = Flux.ConnectionProvider.VariableStore.GetArrayUnit(m => m.TOOL_ON_TRAILER, Feeder.Position).ValueOr(() => "");
+            var input_trailer_key = Flux.ConnectionProvider.VariableStore.GetArrayUnit(m => m.TOOL_ON_TRAILER, Position).ValueOr(() => "");
             var input_trailer = Flux.ConnectionProvider.ObserveVariable(m => m.TOOL_ON_TRAILER, input_trailer_key)
                 .DistinctUntilChanged();
 
@@ -128,7 +129,7 @@ namespace Flux.ViewModels
                 .Select(nfc => nfc.Tag.ConvertOr(t => t.PrinterGuid == printer_guid, () => false));
 
             var loaded = this.WhenAnyValue(v => v.Nfc)
-                .Select(nfc => nfc.Tag.ConvertOr(t => t.Loaded == Feeder.Position, () => false));
+                .Select(nfc => nfc.Tag.ConvertOr(t => t.Loaded == Position, () => false));
 
             var in_mateinance = this.WhenAnyValue(v => v.InMaintenance);
 
@@ -164,7 +165,7 @@ namespace Flux.ViewModels
 
             var tool_option = ComboOption.Create("tool", "Utensile:", tools);
             var tool_result = await Flux.ShowSelectionAsync(
-                $"UTENSILE N.{Feeder.Position + 1}",
+                $"UTENSILE N.{Position + 1}",
                 Observable.Return(true),
                 tool_option);
 
@@ -211,7 +212,7 @@ namespace Flux.ViewModels
             }, converter: typeof(WeightConverter));
 
             var nozzle_result = await Flux.ShowSelectionAsync(
-                $"UGELLO N.{Feeder.Position + 1}",
+                $"UGELLO N.{Position + 1}",
                 Observable.Return(true),
                 nozzle_option, max_weight_option, cur_weight_option);
 

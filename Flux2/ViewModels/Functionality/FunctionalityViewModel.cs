@@ -11,35 +11,35 @@ namespace Flux.ViewModels
 {
     public class NFCInnerViewModel : NavPanelViewModel<NFCInnerViewModel>
     {
-        public NFCInnerViewModel(string name, IFluxTagViewModel tag_vm) : base((FluxViewModel)tag_vm.Feeder.Flux, $"{name.ToCamelCase()}??{tag_vm.VirtualTagPosition + 1}")
+        public NFCInnerViewModel(string name, IFluxTagViewModel tag_vm) : base((FluxViewModel)tag_vm.Feeder.Flux, $"{name.ToCamelCase()}??{tag_vm.Position + 1}")
         {
             var can_lock = Observable.CombineLatest(
                 is_unlocked_tag(tag_vm),
                 is_unloaded_tag(tag_vm),
                 (l, un) => l && un).ToOptional();
-            AddCommand($"lock{name}Tag??{tag_vm.VirtualTagPosition + 1}", () => lock_tag_async(tag_vm), can_lock);
+            AddCommand($"lock{name}Tag??{tag_vm.Position + 1}", () => lock_tag_async(tag_vm), can_lock);
 
             var can_unlock = Observable.CombineLatest(
                 is_locked_tag(tag_vm),
                 is_unloaded_tag(tag_vm),
                 (l, un) => l && un).ToOptional();
-            AddCommand($"unlock{name}Tag??{tag_vm.VirtualTagPosition + 1}", () => unlock_tag_async(tag_vm), can_unlock);
+            AddCommand($"unlock{name}Tag??{tag_vm.Position + 1}", () => unlock_tag_async(tag_vm), can_unlock);
 
             var can_load = Observable.CombineLatest(
                 is_locked_tag(tag_vm),
                 is_unloaded_tag(tag_vm),
                 (l, un) => l && un).ToOptional();
-            AddCommand($"load{name}Tag??{tag_vm.VirtualTagPosition + 1}", () => load_tag(tag_vm), can_load);
+            AddCommand($"load{name}Tag??{tag_vm.Position + 1}", () => load_tag(tag_vm), can_load);
 
             var can_unload = Observable.CombineLatest(
                 is_locked_tag(tag_vm),
                 is_loaded_tag(tag_vm),
                 (l, lo) => l && lo).ToOptional();
-            AddCommand($"unload{name}Tag??{tag_vm.VirtualTagPosition + 1}", () =>  unload_tag(tag_vm), can_unload);
+            AddCommand($"unload{name}Tag??{tag_vm.Position + 1}", () =>  unload_tag(tag_vm), can_unload);
         }
         private void load_tag(IFluxTagViewModel tag_vm)
         {
-            tag_vm.StoreTag(t => t.SetLoaded(tag_vm.VirtualTagPosition));
+            tag_vm.StoreTag(t => t.SetLoaded(tag_vm.Position));
         }
         private void unload_tag(IFluxTagViewModel tag_vm)
         {
@@ -75,7 +75,7 @@ namespace Flux.ViewModels
         private IObservable<bool> is_loaded_tag(IFluxTagViewModel tag_vm)
         {
             return tag_vm.WhenAnyValue(t => t.Nfc)
-                .Select(nfc => nfc.Tag.Convert(t => t.Loaded.HasValue && t.Loaded.Value == tag_vm.VirtualTagPosition))
+                .Select(nfc => nfc.Tag.Convert(t => t.Loaded.HasValue && t.Loaded.Value == tag_vm.Position))
                 .ValueOr(() => false);
         }
     }
@@ -96,14 +96,10 @@ namespace Flux.ViewModels
                             var feeder = flux.Feeders.Feeders.Lookup(extr);
                             if (!feeder.HasValue)
                                 continue;
-                            AddModal(new NFCInnerViewModel("Tool", feeder.Value.ToolNozzle));
 
-                            foreach (var material in feeder.Value.Materials.ItemsSource.Items)
-                            {
-                                if (!material.HasValue)
-                                    continue;
-                                AddModal(new NFCInnerViewModel("Material", material.Value));
-                            }
+                            AddModal(new NFCInnerViewModel("Tool", feeder.Value.ToolNozzle));
+                            foreach (var material in feeder.Value.Materials.Items)
+                                AddModal(new NFCInnerViewModel("Material", material));
                         }
                     }
                 });

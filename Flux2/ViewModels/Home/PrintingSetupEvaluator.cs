@@ -167,7 +167,7 @@ namespace Flux.ViewModels
         
         public MaterialEvaluator(FeederEvaluator feeder_eval) : base(feeder_eval)
         {
-            _TagViewModel = FeederEvaluator.Feeder.Materials.SelectedValueChanged
+            _TagViewModel = FeederEvaluator.Feeder.WhenAnyValue(f => f.SelectedMaterial)
                 .Convert(m => (IFluxTagViewModel<NFCMaterial, Optional<Material>, MaterialState>)m)
                 .ToProperty(this, v => v.TagViewModel);
         }
@@ -345,10 +345,12 @@ namespace Flux.ViewModels
                 InvalidProbe)
                 .ToProperty(this, e => e.IsInvalidProbe);
 
+            var tool_material = Feeder.WhenAnyValue(f => f.SelectedToolMaterial);
+
             _HasColdNozzle = Observable.CombineLatest(
                 Status.WhenAnyValue(s => s.PrintingEvaluation),
                 Feeder.ToolNozzle.WhenAnyValue(t => t.Temperature),
-                Feeder.ToolMaterial.WhenAnyValue(t => t.ExtrusionTemp),
+                tool_material.ConvertMany(tm => tm.WhenAnyValue(t => t.ExtrusionTemp)),
                 ColdNozzle)
                 .ToProperty(this, e => e.HasColdNozzle);
 

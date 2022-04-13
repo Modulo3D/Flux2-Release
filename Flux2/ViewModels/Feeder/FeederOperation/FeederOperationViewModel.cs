@@ -40,6 +40,9 @@ namespace Flux.ViewModels
         public ReactiveCommand<Unit, Unit> CancelOperationCommand { get; private set; }
         [RemoteCommand]
         public ReactiveCommand<Unit, Unit> ExecuteOperationCommand { get; private set; }
+        [RemoteCommand]
+        public ReactiveCommand<Unit, Unit> UpdateNFCCommand { get; private set; }
+
 
         private ObservableAsPropertyHelper<bool> _AllConditionsTrue;
         public bool AllConditionsTrue => _AllConditionsTrue.Value;
@@ -63,31 +66,29 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public double TemperaturePercentage => _TemperaturePercentage.Value;
 
-        [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> UpdateNFCCommand { get; }
-
         public FeederOperationViewModel(FeederViewModel feeder) : base(feeder.Flux)
         {
-            Feeder = feeder;
+            Feeder = feeder; 
+        }
 
+        public void Initialize()
+        {
             Conditions = new SourceList<IConditionViewModel>();
             Conditions.Edit(innerList =>
             {
                 innerList.AddRange(FindConditions());
             });
 
-            var is_idle = feeder.Flux.StatusProvider.IsIdle
+            var is_idle = Feeder.Flux.StatusProvider.IsIdle
                 .ValueOrDefault();
-
-            var comparer = SortExpressionComparer<IConditionViewModel>.Ascending(o =>
-                o.Name.Split("?").ElementAtOrDefault(1) ?? "");
 
             FilteredConditions = Conditions.Connect()
                 .Filter(is_idle.Select(idle =>
                 {
                     return (Func<IConditionViewModel, bool>)filter;
                     bool filter(IConditionViewModel condition) => idle;
-                })).Sort(comparer).AsObservableList();
+                }))
+                .AsObservableList();
 
             _AllConditionsTrue = Conditions.Connect()
                 .AddKey(c => c.Label)

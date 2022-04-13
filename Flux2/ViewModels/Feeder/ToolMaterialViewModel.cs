@@ -9,8 +9,10 @@ namespace Flux.ViewModels
 {
     public class ToolMaterialViewModel : ReactiveObject, IFluxToolMaterialViewModel
     {
+        public ushort Position { get; }
         public FluxViewModel Flux { get; }
-        public FeederViewModel Feeder { get; }
+        public MaterialViewModel Material { get; }
+        public ToolNozzleViewModel ToolNozzle { get; }
 
         private ObservableAsPropertyHelper<Optional<ToolMaterial>> _Document;
         public Optional<ToolMaterial> Document => _Document.Value;
@@ -24,41 +26,40 @@ namespace Flux.ViewModels
         private ObservableAsPropertyHelper<ToolMaterialState> _State;
         public ToolMaterialState State => _State.Value;
 
-        public ToolMaterialViewModel(FeederViewModel feeder)
+        public ToolMaterialViewModel(ToolNozzleViewModel tool_nozzle, MaterialViewModel material)
         {
-            Feeder = feeder;
-            Flux = feeder.Flux;
+            Material = material;
+            Flux = material.Flux;
+            ToolNozzle = tool_nozzle;
         }
 
         public void Initialize()
         {
-            var material = Feeder.Materials.SelectedValueChanged;
-
             _Document = Observable.CombineLatest(
-                material.ConvertMany(m => m.WhenAnyValue(v => v.Document)),
-                Feeder.ToolNozzle.WhenAnyValue(v => v.Document),
+                Material.WhenAnyValue(v => v.Document),
+                ToolNozzle.WhenAnyValue(v => v.Document),
                 Flux.DatabaseProvider.WhenAnyValue(v => v.Database),
                 FindToolMaterial)
                 .ToProperty(this, v => v.Document)
-                .DisposeWith(Feeder.Disposables);
+                .DisposeWith(Material.Disposables);
 
             _State = Observable.CombineLatest(
-                material.ConvertMany(m => m.WhenAnyValue(v => v.Document)),
-                Feeder.ToolNozzle.WhenAnyValue(v => v.Document),
+                Material.WhenAnyValue(v => v.Document),
+                ToolNozzle.WhenAnyValue(v => v.Document),
                 this.WhenAnyValue(v => v.Document),
                 (m, tn, tm) => new ToolMaterialState(tn.tool.HasValue && tn.nozzle.HasValue, m.HasValue, tm.HasValue))
                 .ToProperty(this, v => v.State)
-                .DisposeWith(Feeder.Disposables);
+                .DisposeWith(Material.Disposables);
 
             _ExtrusionTemp = this.WhenAnyValue(f => f.Document)
                 .Select(d => d.Convert(d => d.PrintTemperature).ToOptional(t => t > 150))
                 .ToProperty(this, v => v.ExtrusionTemp)
-                .DisposeWith(Feeder.Disposables);
+                .DisposeWith(Material.Disposables);
 
             _BreakTemp = this.WhenAnyValue(f => f.Document)
                 .Select(d => d.Convert(d => d.BreakTemperature).ToOptional(t => t > 150))
                 .ToProperty(this, v => v.BreakTemp)
-                .DisposeWith(Feeder.Disposables);
+                .DisposeWith(Material.Disposables);
         }
 
         public Optional<ToolMaterial> FindToolMaterial(Optional<Material> material, (Optional<Tool> tool, Optional<Nozzle> nozzle) feeder, Optional<ILocalDatabase> database)

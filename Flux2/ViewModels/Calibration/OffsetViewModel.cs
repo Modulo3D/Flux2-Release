@@ -174,7 +174,7 @@ namespace Flux.ViewModels
                 .ToProperty(this, v => v.UserOffsetKey)
                 .DisposeWith(Disposables);
 
-            var material = Feeder.Materials.SelectedValueChanged;
+            var material = Feeder.WhenAnyValue(m => m.SelectedMaterial);
 
             _ProbeOffsetKey = Observable.CombineLatest(
                 Flux.DatabaseProvider.WhenAnyValue(v => v.Database),

@@ -31,11 +31,11 @@ namespace Flux.ViewModels
 
     public class ComboOption<TValue, TKey> : DialogOption<ComboOption<TValue, TKey>, Optional<TValue>>
     {
-        public SelectableCache<TValue, TKey> Items { get; }
+        public SelectableCache<Optional<TValue>, TKey> Items { get; }
         [RemoteOutput(true)]
         public override Optional<TValue> Value
         {
-            get => Items?.SelectedValue ?? default;
+            get => Items?.SelectedValue.Convert(v => v) ?? default;
             set => throw new Exception();
         }
         private ObservableAsPropertyHelper<bool> _HasValue;

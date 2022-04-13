@@ -15,7 +15,6 @@ namespace Flux.ViewModels
     {
         [RemoteContent(true)]
         public IObservableCache<IFluxFeederViewModel, ushort> Feeders { get; private set; }
-        public IObservableList<IFluxFeederViewModel> SortedFeeders { get; private set; }
 
         public ObservableAsPropertyHelper<short> _SelectedExtruder;
         public short SelectedExtruder => _SelectedExtruder.Value;
@@ -48,16 +47,10 @@ namespace Flux.ViewModels
                 .ToProperty(this, f => f.HasInvalidStates)
                 .DisposeWith(Disposables);
 
-            var comparer = SortExpressionComparer<IFluxFeederViewModel>.Ascending(f => f.Position);
-            SortedFeeders = Feeders.Connect()
-                .RemoveKey()
-                .Sort(comparer)
-                .AsObservableList()
-                .DisposeWith(Disposables);
-
+            // TODO
             Materials = Feeders.Connect()
-                .AutoRefresh(f => f.Materials.SelectedValueChanged)
-                .Transform(f => f.Materials.SelectedValue, true)
+                .AutoRefresh(f => f.SelectedMaterial)
+                .Transform(f => f.SelectedMaterial, true)
                 .Transform(f => f.Convert(f => f.Document))
                 .AsObservableCache()
                 .DisposeWith(Disposables);

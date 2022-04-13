@@ -22,12 +22,18 @@ namespace Flux.ViewModels
         private ObservableAsPropertyHelper<EFeederState> _FeederState;
         public EFeederState FeederState => _FeederState.Value;
 
+        [RemoteContent(false)]
         public ToolNozzleViewModel ToolNozzle { get; }
-        public ToolMaterialViewModel ToolMaterial { get; }
-        public SelectableCache<IFluxMaterialViewModel, ushort> Materials { get; }
+        private ObservableAsPropertyHelper<Optional<IFluxMaterialViewModel>> _SelectedMaterial;
+        public Optional<IFluxMaterialViewModel> SelectedMaterial => _SelectedMaterial.Value;
+        private ObservableAsPropertyHelper<Optional<IFluxToolMaterialViewModel>> _SelectedToolMaterial;
+        public Optional<IFluxToolMaterialViewModel> SelectedToolMaterial => _SelectedToolMaterial.Value;
+
+        [RemoteContent(true)]
+        public IObservableCache<IFluxMaterialViewModel, ushort> Materials { get; }
+        public IObservableCache<IFluxToolMaterialViewModel, ushort> ToolMaterials { get; }
 
         IFluxToolNozzleViewModel IFluxFeederViewModel.ToolNozzle => ToolNozzle;
-        IFluxToolMaterialViewModel IFluxFeederViewModel.ToolMaterial => ToolMaterial;
 
         private ObservableAsPropertyHelper<bool> _HasInvalidState;
         public bool HasInvalidState => _HasInvalidState.Value;
@@ -50,14 +56,6 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public string ToolNozzleBrush => _ToolNozzleBrush.Value;
 
-        private ObservableAsPropertyHelper<string> _MaterialBrush;
-        [RemoteOutput(true)]
-        public string MaterialBrush => _MaterialBrush.Value;
-
-        private ObservableAsPropertyHelper<Optional<ushort>> _MaterialLoaded;
-        [RemoteOutput(true)]
-        public Optional<ushort> MaterialLoaded => _MaterialLoaded.Value;
-
 
         // CONSTRUCTOR
         public FeederViewModel(FeedersViewModel feeders, ushort position) : base($"{typeof(FeederViewModel).GetRemoteControlName()}??{position}")
@@ -67,11 +65,44 @@ namespace Flux.ViewModels
             Position = position;
 
             ToolNozzle = new ToolNozzleViewModel(this);
-            ToolMaterial = new ToolMaterialViewModel(this);
-            Materials = new SelectableCache<IFluxMaterialViewModel, ushort>(default);
 
-            ToolMaterial.Initialize();
+            // TODO
+            Materials = new SourceCache<IFluxMaterialViewModel, ushort>(m => m.Position);
+            ((SourceCache<IFluxMaterialViewModel, ushort>)Materials).AddOrUpdate(new MaterialViewModel(this, (ushort)((position * 2) + 0)));
+            ((SourceCache<IFluxMaterialViewModel, ushort>)Materials).AddOrUpdate(new MaterialViewModel(this, (ushort)((position * 2) + 1)));
+
+
+            ToolMaterials = Materials.Connect()
+                .Transform(m => (MaterialViewModel)m)
+                .Transform(m => new ToolMaterialViewModel(ToolNozzle, m))
+                .Transform(tm => (IFluxToolMaterialViewModel)tm)
+                .AsObservableCache();
+
+            var selected_positions = Flux.ConnectionProvider
+                .ObserveVariable(c => c.MATERIAL_ENABLED)
+                .QueryWhenChanged();
+
+            var tool_materials = ToolMaterials.Connect()
+                .QueryWhenChanged();
+
+            _SelectedToolMaterial = Observable.CombineLatest(
+               tool_materials, selected_positions, FindSelectedViewModel)
+                .ToProperty(this, v => v.SelectedToolMaterial);
+
+            var materials = Materials.Connect()
+                .QueryWhenChanged();
+
+            _SelectedMaterial = Observable.CombineLatest(
+               materials, selected_positions, FindSelectedViewModel)
+                .ToProperty(this, v => v.SelectedMaterial);
+
+            foreach (ToolMaterialViewModel tm in ToolMaterials.Items)
+                tm.Initialize();
+
             ToolNozzle.Initialize();
+
+            foreach (MaterialViewModel m in Materials.Items)
+                m.Initialize();
 
             _FeederState = ToolNozzle.WhenAnyValue(v => v.State)
                 .Select(FindFeederState)
@@ -81,13 +112,6 @@ namespace Flux.ViewModels
             _HasInvalidState = this.WhenAnyValue(f => f.FeederState)
                 .Select(f => f == EFeederState.ERROR)
                 .ToProperty(this, v => v.HasInvalidState)
-                .DisposeWith(Disposables);
-
-            _MaterialLoaded = Materials.ItemsSource.Connect()
-                .AutoRefreshOnObservable(m => m.ConvertOr(m => m.WhenAnyValue(m => m.State), () => Observable.Return(new MaterialState())))
-                .QueryWhenChanged(m => m.Items.SingleOrDefault(m => m.HasValue && m.Value.State.IsLoaded()))
-                .Convert(m => m.Position)
-                .ToProperty(this, v => v.MaterialLoaded)
                 .DisposeWith(Disposables);
 
             FeederStateChanged = this.WhenAnyValue(f => f.FeederState);
@@ -130,29 +154,24 @@ namespace Flux.ViewModels
                 })
                 .ToProperty(this, v => v.ToolNozzleBrush)
                 .DisposeWith(Disposables);
+        }
 
-            var material = Materials.SelectedValueChanged;
-
-            _MaterialBrush = Observable.CombineLatest(
-                material.ConvertMany(m => m.WhenAnyValue(v => v.State)),
-                ToolMaterial.WhenAnyValue(v => v.State),
-                (m, tm) =>
-                {
-                    if (!m.HasValue || !tm.KnownNozzle)
-                        return FluxColors.Empty;
-                    if (tm.KnownMaterial && !tm.Compatible)
-                        return FluxColors.Error;
-                    if (m.Value.IsNotLoaded())
-                        return FluxColors.Empty;
-                    if (!m.Value.Known)
-                        return FluxColors.Warning;
-                    if (!m.Value.IsLoaded())
-                        return FluxColors.Inactive;
-                    if (!m.Value.Locked)
-                        return FluxColors.Error;
-                    return FluxColors.Active;
-                }).ToProperty(this, v => v.MaterialBrush)
-                .DisposeWith(Disposables);
+        private Optional<TViewModel> FindSelectedViewModel<TViewModel>(IQuery<TViewModel, ushort> viewmodels, IQuery<Optional<bool>, VariableUnit> selected_viewmodels)
+        {
+            foreach (var selected_viewmodel in selected_viewmodels.KeyValues)
+            {
+                if (!selected_viewmodel.Value.HasValue)
+                    continue;
+                if (!selected_viewmodel.Value.Value)
+                    continue;
+                if (!ushort.TryParse(selected_viewmodel.Key.Value, out var position))
+                    continue;
+                var viewmodel = viewmodels.Lookup(position);
+                if (!viewmodel.HasValue)
+                    continue;
+                return viewmodel;
+            }
+            return default;
         }
 
         // FEEDER

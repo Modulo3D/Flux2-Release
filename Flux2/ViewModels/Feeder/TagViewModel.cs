@@ -19,12 +19,12 @@ namespace Flux.ViewModels
         where TTagViewModel : TagViewModel<TTagViewModel, TNFCTag, TDocument, TState>
         where TNFCTag : INFCOdometerTag<TNFCTag>
     {
+        public ushort Position { get; }
         public FluxViewModel Flux { get; }
         public abstract TState State { get; }
         public FeederViewModel Feeder { get; }
         public abstract ushort VirtualTagId { get; }
-        public abstract ushort VirtualTagPosition { get; }
-        public string VirtualCardId => $"00-00-{VirtualTagId:00}-{VirtualTagId:00}";
+        public string VirtualCardId => $"00-00-{VirtualTagId:00}-{Position:00}";
         IFluxFeederViewModel IFluxTagViewModel.Feeder => Feeder;
         public abstract OdometerViewModel<TNFCTag> Odometer { get; }
 
@@ -52,13 +52,15 @@ namespace Flux.ViewModels
         public ReactiveCommand<Unit, Unit> UpdateTagCommand { get; internal set; }
 
         public TagViewModel(
-            FeederViewModel feeder,
+            FeederViewModel feeder, ushort position,
             Func<FluxUserSettings, SourceCache<NFCReading, ushort>> get_tag_storage,
             Func<ILocalDatabase, TNFCTag, TDocument> find_document,
-            Func<TNFCTag, Guid> check_tag)
+            Func<TNFCTag, Guid> check_tag,
+            Optional<string> name = default) : base(name)
         {
             Feeder = feeder;
             Flux = feeder.Flux;
+            Position = position;
             CheckTag = check_tag;
 
             _Document = Observable.CombineLatest(
@@ -91,31 +93,15 @@ namespace Flux.ViewModels
                         var card_id = nfc.CardId.Value;
                         if (tag.PrinterGuid == printer_guid)
                         {
-                            tag_storage.AddOrUpdate(new NFCReading(card_id, Feeder.Position));
+                            tag_storage.AddOrUpdate(new NFCReading(card_id, Position));
                         }
                     }
                     else
                     {
-                        tag_storage.RemoveKey(Feeder.Position);
+                        tag_storage.RemoveKey(Position);
                     }
                     user_settings.PersistLocalSettings();
                 });
-
-            var stored_reading = tag_storage.Lookup(Feeder.Position);
-            if (!stored_reading.HasValue)
-                return;
-
-            var backup_reading = stored_reading.Value.CardId.Convert(id => ReadBackupTag(id, check_tag));
-            if (backup_reading.HasValue)
-            {
-                var backup = backup_reading.Value;
-                if (backup.Tag.HasValue)
-                {
-                    var tag = backup.Tag.Value;
-                    if (tag.PrinterGuid == printer_guid)
-                        Nfc = backup;
-                }
-            }
 
             UpdateTagCommand = ReactiveCommand.CreateFromTask(async () =>
                 {
@@ -139,6 +125,22 @@ namespace Flux.ViewModels
                 Flux.StatusProvider.CanSafeCycle,
                 RxApp.MainThreadScheduler)
                 .DisposeWith(Disposables);
+
+            var stored_reading = tag_storage.Lookup(Position);
+            if (stored_reading.HasValue)
+            { 
+                var backup_reading = stored_reading.Value.CardId.Convert(id => ReadBackupTag(id, check_tag));
+                if (backup_reading.HasValue)
+                {
+                    var backup = backup_reading.Value;
+                    if (backup.Tag.HasValue)
+                    {
+                        var tag = backup.Tag.Value;
+                        if (tag.PrinterGuid == printer_guid)
+                            Nfc = backup;
+                    }
+                }
+            }
         }
 
         public virtual void Initialize() 
@@ -240,7 +242,7 @@ namespace Flux.ViewModels
             foreach (var feeder in Feeder.Feeders.Feeders.Items)
             {
                 var nozzle = feeder.ToolNozzle.Nfc;
-                var result = check_tag(nozzle, feeder.Position);
+                var result = check_tag(nozzle, Position);
                 if (result.HasValue)
                 {
                     if (result.Value)
@@ -252,18 +254,17 @@ namespace Flux.ViewModels
 
             foreach (var feeder in Feeder.Feeders.Feeders.Items)
             {
-                var material = feeder.Materials.SelectedValue;
-                if (!material.HasValue)
+                if (!feeder.SelectedMaterial.HasValue)
                     continue;
-                var material_nfc = material.Value.Nfc;
-                var result = check_tag(material_nfc, feeder.Position);
+                var material_nfc = feeder.SelectedMaterial.Value.Nfc;
+                var result = check_tag(material_nfc, Position);
                 if (result.HasValue)
                 {
                     if (result.Value)
                         continue;
                     return nfc;
                 }
-                await material.Value.DisconnectAsync();
+                await feeder.SelectedMaterial.Value.DisconnectAsync();
             }
 
             Nfc = nfc;
@@ -278,7 +279,7 @@ namespace Flux.ViewModels
                 if (reading.CardId != nfc.CardId)
                     return true;
 
-                if (position == Feeder.Position)
+                if (position == Position)
                     return true;
 
                 if (!reading.Tag.HasValue || reading.Tag.Value.Loaded.HasValue || reading.Tag.Value.PrinterGuid != Guid.Empty)
@@ -346,7 +347,7 @@ namespace Flux.ViewModels
             {
                 if (!operator_usb.ConvertOr(o => o.RewriteNFC, () => false))
                     return default;
-                return $"00-00-{VirtualTagId:00}-{Feeder.Position:00}";
+                return $"00-00-{VirtualTagId:00}-{Position:00}";
             }
 
             return card_id;
@@ -524,7 +525,7 @@ namespace Flux.ViewModels
                     return default;
 
                 virtual_tag = true;
-                card_id = $"00-00-{VirtualTagId:00}-{Feeder.Position:00}";
+                card_id = $"00-00-{VirtualTagId:00}-{Position:00}";
             }
 
             if (virtual_tag || read_from_backup)

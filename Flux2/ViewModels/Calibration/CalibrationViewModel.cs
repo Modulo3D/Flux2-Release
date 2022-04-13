@@ -17,7 +17,6 @@ namespace Flux.ViewModels
     {
         IFlux IFluxCalibrationViewModel.Flux => Flux;
 
-        public IObservableList<IFluxOffsetViewModel> SortedOffsets { get; }
         [RemoteContent(true)]
         public IObservableCache<IFluxOffsetViewModel, ushort> Offsets { get; }
 
@@ -88,16 +87,7 @@ namespace Flux.ViewModels
                 .Transform(f => (IFluxOffsetViewModel)new OffsetViewModel(this, f))
                 .DisposeMany()
                 .AsObservableCache()
-                .DisposeWith(Disposables);
-
-            var comparer = SortExpressionComparer<IFluxOffsetViewModel>.Ascending(o =>
-                o.Feeder.Position);
-
-            SortedOffsets = Offsets.Connect()
-                .RemoveKey()
-                .Sort(comparer)
-                .AsObservableList()
-                .DisposeWith(Disposables);
+                .DisposeWith(Disposables);;
 
             var can_safe_start = Flux.StatusProvider
              .WhenAnyValue(s => s.StatusEvaluation)
@@ -181,7 +171,10 @@ namespace Flux.ViewModels
 
         public async Task ProbeOffsetsAsync(bool hard_probe)
         {
-            var sorted_valid_offsets = SortedOffsets.Items.Where(o => o.ProbeState != FluxProbeState.ERROR_PROBE);
+            var sorted_valid_offsets = Offsets.Items
+                .OrderBy(o => o.Feeder.Position)
+                .Where(o => o.ProbeState != FluxProbeState.ERROR_PROBE);
+            
             if (!hard_probe)
             {
                 if (sorted_valid_offsets.Any(o => o.ProbeState == FluxProbeState.VALID_PROBE))

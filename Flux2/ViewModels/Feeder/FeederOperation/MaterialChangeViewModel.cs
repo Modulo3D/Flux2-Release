@@ -14,10 +14,12 @@ namespace Flux.ViewModels
     public abstract class MaterialChangeViewModel<T> : FeederOperationViewModel<T>
         where T : MaterialChangeViewModel<T>
     {
+        public MaterialViewModel Material { get; }
         private bool IsCanceled { get; set; }
-
-        public MaterialChangeViewModel(FeederViewModel feeder) : base(feeder)
+        
+        public MaterialChangeViewModel(MaterialViewModel material) : base(material.Feeder)
         {
+            Material = material;
         }
 
         protected override IObservable<bool> CanCancelOperation()
@@ -69,7 +71,11 @@ namespace Flux.ViewModels
                     return (false, default);
                 var nozzle = Feeder.ToolNozzle.Document.nozzle.Value;
 
-                var current_break_temp = Feeder.ToolMaterial.BreakTemp;
+                var tool_material = Feeder.ToolMaterials.Lookup(Material.Position);
+                if (!tool_material.HasValue)
+                    return (false, default);
+
+                var current_break_temp = tool_material.Value.BreakTemp;
                 if (!current_break_temp.HasValue)
                     return (false, current_break_temp);
 
@@ -107,7 +113,7 @@ namespace Flux.ViewModels
 
     public class LoadMaterialViewModel : MaterialChangeViewModel<LoadMaterialViewModel>
     {
-        public LoadMaterialViewModel(FeederViewModel feeder) : base(feeder)
+        public LoadMaterialViewModel(MaterialViewModel material) : base(material)
         {
         }
 
@@ -128,13 +134,21 @@ namespace Flux.ViewModels
                 return false;
             }
 
-            var material = Feeder.Materials.SelectedValue;
+            var material = Feeder.Materials
+                .Lookup(Material.Position);
+
             if (!material.HasValue)
                 return false;
 
             material.Value.StoreTag(t => t.SetLoaded(Feeder.Position));
 
-            var break_temp = Feeder.ToolMaterial.BreakTemp;
+            var tool_material = Feeder.ToolMaterials
+                .Lookup(Material.Position);
+
+            if (!tool_material.HasValue)
+                return false;
+
+            var break_temp = tool_material.Value.BreakTemp;
             if (!break_temp.HasValue)
             {
                 Flux.Messages.LogMessage(MaterialChangeResult.MATERIAL_CHANGE_ERROR_INVALID_BREAK_TEMP, default);
@@ -143,7 +157,7 @@ namespace Flux.ViewModels
 
             Feeder.ToolNozzle.StoreTag(t => t.SetLastBreakTemp(break_temp.Value));
 
-            var extrusion_temp = Feeder.ToolMaterial.ExtrusionTemp;
+            var extrusion_temp = tool_material.Value.ExtrusionTemp;
             if (!extrusion_temp.HasValue)
             {
                 Flux.Messages.LogMessage(MaterialChangeResult.MATERIAL_CHANGE_ERROR_INVALID_EXTRUSION_TEMP, default);
@@ -177,18 +191,22 @@ namespace Flux.ViewModels
                 yield return Flux.StatusProvider.ChamberLockClosed;
             }
 
-            var material = Feeder.Materials.SelectedValueChanged;
+            var material = Feeder.Materials.Connect()
+                .WatchOptional(Material.Position);
+
+            var tool_material = Feeder.ToolMaterials.Connect()
+                .WatchOptional(Material.Position);
 
             yield return ConditionViewModel.Create("materialKnown??0",
-                material.ConvertMany(m => m.WhenAnyValue(m => m.Document)).Select(d => d.ToOptional()), m => m.HasValue,
-                (m, valid) => m.Convert(m => m.Convert(m => $"MATERIALE LETTO: {m.Name}")).ValueOr(() => "LEGGI UN MATERIALE"));
+                material.ConvertMany(m => m.WhenAnyValue(m => m.Document)), m => true,
+                (m, valid) => m.ConvertOr(m => $"MATERIALE LETTO: {m.Name}", () => "LEGGI UN MATERIALE"));
 
             yield return ConditionViewModel.Create("materialReady??1",
-                material.ConvertMany(m => m.WhenAnyValue(f => f.State)).Select(s => s.ToOptional()), state => state.HasValue && state.Value.Locked,
+                material.ConvertMany(m => m.WhenAnyValue(f => f.State)), state => state.Locked,
                 (value, valid) => valid ? "MATERIALE PRONTO AL CARICAMENTO" : "BLOCCA IL MATERIALE");
 
             yield return ConditionViewModel.Create("toolMaterialCompatible??2",
-                Feeder.ToolMaterial.WhenAnyValue(m => m.State).Select(d => d.ToOptional()),
+                tool_material.ConvertMany(tm => tm.WhenAnyValue(m => m.State)),
                 m =>
                 {
                     return m.KnownNozzle && m.KnownMaterial && m.Compatible;
@@ -209,7 +227,9 @@ namespace Flux.ViewModels
 
         public override async Task<bool> UpdateNFCAsync()
         {
-            var material = Feeder.Materials.SelectedValue;
+            var material = Feeder.Materials
+                .Lookup(Material.Position);
+
             if (!material.HasValue)
                 return false;
 
@@ -241,7 +261,9 @@ namespace Flux.ViewModels
         }
         protected override IObservable<bool> FindCanUpdateNFC()
         {
-            var material = Feeder.Materials.SelectedValueChanged;
+            var material = Feeder.Materials.Connect()
+                .WatchOptional(Material.Position);
+
             var state = material.ConvertMany(m => m.WhenAnyValue(m => m.State));
             return state.ConvertOr(s =>
             {
@@ -254,7 +276,8 @@ namespace Flux.ViewModels
         }
         protected override IObservable<string> FindUpdateNFCText()
         {
-            var material = Feeder.Materials.SelectedValueChanged;
+            var material = Feeder.Materials.Connect()
+                .WatchOptional(Material.Position);
 
             return Observable.CombineLatest(
                 material.ConvertMany(m => m.WhenAnyValue(m => m.Document)),
@@ -265,7 +288,7 @@ namespace Flux.ViewModels
 
     public class UnloadMaterialViewModel : MaterialChangeViewModel<UnloadMaterialViewModel>
     {
-        public UnloadMaterialViewModel(FeederViewModel feeder) : base(feeder)
+        public UnloadMaterialViewModel(MaterialViewModel material) : base(material)
         {
         }
 
@@ -279,7 +302,9 @@ namespace Flux.ViewModels
         }
         protected override async Task<bool> ExecuteOperationAsync()
         {
-            var material = Feeder.Materials.SelectedValue;
+            var material = Feeder.Materials
+                .Lookup(Material.Position);
+
             if (!material.HasValue)
                 return false;
 
@@ -321,38 +346,40 @@ namespace Flux.ViewModels
                 yield return Flux.StatusProvider.ChamberLockClosed;
             }
 
-            var material = Feeder.Materials.SelectedValueChanged;
+            var material = Feeder.Materials.Connect()
+                .WatchOptional(Material.Position);
+
+            var tool_material = Feeder.ToolMaterials.Connect()
+                .WatchOptional(Material.Position);
 
             yield return ConditionViewModel.Create("materialKnown??0",
-                material.ConvertMany(m => m.WhenAnyValue(m => m.Document)).Select(d => d.ToOptional()), m => m.HasValue,
-                (m, valid) => m.Convert(m => m.Convert(m => $"MATERIALE LETTO: {m.Name}")).ValueOr(() => "LEGGI UN MATERIALE"));
+                material.ConvertMany(m => m.WhenAnyValue(m => m.Document)), m => true,
+                (m, valid) => m.ConvertOr(m => $"MATERIALE LETTO: {m.Name}", () => "LEGGI UN MATERIALE"));
 
             yield return ConditionViewModel.Create("materialReady??1",
-                material.ConvertMany(m => m.WhenAnyValue(f => f.State)).Select(s => s.ToOptional()),
+                material.ConvertMany(m => m.WhenAnyValue(f => f.State)),
                 s =>
                 {
-                    if (!s.HasValue)
+                    if (!s.Known)
                         return false;
-                    if (!s.Value.Known)
-                        return false;
-                    if (s.Value.Loaded && s.Value.Locked)
+                    if (s.Loaded && s.Locked)
                         return true;
-                    if (!s.Value.Loaded && !s.Value.Locked)
+                    if (!s.Loaded && !s.Locked)
                         return true;
                     return false;
                 },
                 (value, valid) =>
                 {
-                    if (!value.HasValue || !value.Value.HasValue)
+                    if (!value.HasValue)
                         return "IMPOSSIBILE BLOCCARE IL MATERIALE";
-                    if (value.Value.Value.Loaded)
+                    if (value.Value.Loaded)
                         return valid ? "MATERIALE PRONTO ALLO SCARICAMENTO" : "BLOCCA IL MATERIALE";
                     else
                         return valid ? "MATERIALE SCARICATO" : "SBLOCCA IL MATERALE";
                 });
 
             yield return ConditionViewModel.Create("toolMaterialCompatible??2",
-                Feeder.ToolMaterial.WhenAnyValue(m => m.State).Select(d => d.ToOptional()),
+                tool_material.ConvertMany(tm => tm.WhenAnyValue(tm => tm.State)),
                 m =>
                 {
                     return m.KnownNozzle && m.KnownMaterial && m.Compatible;
@@ -372,7 +399,9 @@ namespace Flux.ViewModels
         }
         public override async Task<bool> UpdateNFCAsync()
         {
-            var material = Feeder.Materials.SelectedValue;
+            var material = Feeder.Materials
+                .Lookup(Material.Position);
+            
             if (!material.HasValue)
                 return false;
 
@@ -408,7 +437,8 @@ namespace Flux.ViewModels
         }
         protected override IObservable<bool> FindCanUpdateNFC()
         {
-            var material = Feeder.Materials.SelectedValueChanged;
+            var material = Feeder.Materials.Connect()
+                .WatchOptional(Material.Position);
 
             var state = material.ConvertMany(m => m.WhenAnyValue(m => m.State));
             return state.Select(s =>
@@ -426,7 +456,9 @@ namespace Flux.ViewModels
         }
         protected override IObservable<string> FindUpdateNFCText()
         {
-            var material = Feeder.Materials.SelectedValueChanged;
+            var material = Feeder.Materials.Connect()
+                .WatchOptional(Material.Position);
+
             return Observable.CombineLatest(
                 material.ConvertMany(m => m.WhenAnyValue(m => m.State)),
                 this.WhenAnyValue(v => v.CanUpdateNFC),

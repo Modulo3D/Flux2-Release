@@ -192,26 +192,18 @@ namespace Flux.ViewModels
                 .ToObservableChangeSet(e => e.Feeder.Position)
                 .AsObservableCache();
 
-            var material_comparer = SortExpressionComparer<MaterialEvaluator>
-                .Descending(p => p.FeederEvaluator.Feeder.Position);
-
             ExpectedMaterialsQueue = FeederEvaluators.Connect()
                 .RemoveKey()
                 .Transform(f => f.Material)
-                .Sort(material_comparer)
                 .AutoRefresh(f => f.ExpectedDocumentQueue)
                 .Transform(f => f.ExpectedDocumentQueue, true)
                 .Filter(m => m.HasValue)
                 .Transform(m => m.Value)
                 .AsObservableList();
 
-            var nozzle_comparer = SortExpressionComparer<ToolNozzleEvaluator>
-                .Descending(p => p.FeederEvaluator.Feeder.Position);
-
             ExpectedNozzlesQueue = FeederEvaluators.Connect()
                 .RemoveKey()
                 .Transform(f => f.ToolNozzle)
-                .Sort(nozzle_comparer)
                 .AutoRefresh(f => f.ExpectedDocumentQueue)
                 .Transform(f => f.ExpectedDocumentQueue, true)
                 .Filter(m => m.HasValue)
