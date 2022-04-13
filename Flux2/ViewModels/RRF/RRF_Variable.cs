@@ -417,16 +417,23 @@ namespace Flux.ViewModels
     {
         public bool Stored { get; }
         public string Variable { get; }
+        public Optional<TData> DefaultValue { get; }
         public override string Group => "Global";
         public string LoadVariableMacro => $"load_{Variable}.g";
 
-        public RRF_VariableGlobalModel(IObservable<Optional<RRF_Connection>> connection, string variable, bool stored, Func<object, TData> convert_data = default)
+        public RRF_VariableGlobalModel(
+            IObservable<Optional<RRF_Connection>> connection,
+            string variable,
+            bool stored,
+            Optional<TData> default_value = default,
+            Func<object, TData> convert_data = default)
             : base(connection, variable, FluxMemReadPriority.DISABLED,
                 read_func: c => read_variable(c, variable, convert_data),
                 write_func: (c, v) => write_variable(c, variable, v, stored))
         {
             Stored = stored;
             Variable = variable;
+            DefaultValue = default_value;
             connection.Convert(c => c.MemoryBuffer)
                 .ConvertMany(c => c.ObserveGlobalModel(m => get_data(m, variable, convert_data)))
                 .BindTo(this, v => v.Value);
@@ -481,7 +488,7 @@ namespace Flux.ViewModels
 
         public async Task<bool> InitializeVariableAsync(CancellationToken ct) 
         {
-            var gcode = WriteVariableString(Variable, default).ToOptional();
+            var gcode = WriteVariableString(Variable, DefaultValue.ValueOrDefault()).ToOptional();
             return await Connection.ConvertOrAsync(c => c.PutFileAsync(c => ((RRF_Connection)c).GlobalPath, LoadVariableMacro, ct, gcode), () => false);
         }
 
@@ -499,10 +506,17 @@ namespace Flux.ViewModels
     {
         public bool Stored { get; }
         public string Variable { get; }
+        public Optional<TData> DefaultValue { get; }
         public override string Group => "Global";
         public string LoadVariableMacro => $"load_{Variable}_{Unit.Value.Value.ToLower()}.g";
 
-        public RRF_ArrayVariableGlobalModel(IObservable<Optional<RRF_Connection>> connection, string variable, VariableUnit unit, bool stored, Func<object, TData> convert_data = default)
+        public RRF_ArrayVariableGlobalModel(
+            IObservable<Optional<RRF_Connection>> connection,
+            string variable,
+            VariableUnit unit, 
+            bool stored,
+            Optional<TData> default_value = default,
+            Func<object, TData> convert_data = default)
             : base(
                 connection,
                 $"{variable} {unit.Value}",
@@ -513,6 +527,7 @@ namespace Flux.ViewModels
         {
             Stored = stored;
             Variable = variable;
+            DefaultValue = default_value;
             connection
                 .Convert(c => c.MemoryBuffer)
                 .ConvertMany(c => c.ObserveGlobalModel(m => get_data(m, variable, unit, convert_data)))
@@ -571,7 +586,7 @@ namespace Flux.ViewModels
 
         public async Task<bool> InitializeVariableAsync(CancellationToken ct)
         {
-            var gcode = WriteVariableString(Variable, Unit.Value, default).ToOptional();
+            var gcode = WriteVariableString(Variable, Unit.Value, DefaultValue.ValueOrDefault()).ToOptional();
             return await Connection.ConvertOrAsync(c => c.PutFileAsync(c => ((RRF_Connection)c).GlobalPath, LoadVariableMacro, ct, gcode), () => false);
         }
         public static IEnumerable<string> WriteVariableString(string variable, VariableUnit unit, TData value)
@@ -589,7 +604,13 @@ namespace Flux.ViewModels
     {
         public override string Group => "Global";
 
-        public RRF_ArrayGlobalModel(IObservable<Optional<RRF_Connection>> connection, string name, IObservable<IEnumerable<VariableUnit>> variable_units, bool stored, Func<object, TData> convert_data = default)
+        public RRF_ArrayGlobalModel(
+            IObservable<Optional<RRF_Connection>> connection, 
+            string name,
+            IObservable<IEnumerable<VariableUnit>> variable_units,
+            bool stored,
+            Optional<TData> default_value = default,
+            Func<object, TData> convert_data = default)
             : base(name, FluxMemReadPriority.DISABLED)
         {
             Variables = ObservableChangeSet.Create<IFLUX_Variable<TData, TData>, VariableUnit>(v =>
@@ -602,7 +623,7 @@ namespace Flux.ViewModels
             }, v => v.Unit.ValueOr(() => ""))
             .AsObservableCache();
 
-            RRF_ArrayVariableGlobalModel<TData> get_variable(VariableUnit unit) => new RRF_ArrayVariableGlobalModel<TData>(connection, name, unit, stored, convert_data);
+            RRF_ArrayVariableGlobalModel<TData> get_variable(VariableUnit unit) => new RRF_ArrayVariableGlobalModel<TData>(connection, name, unit, stored, default_value, convert_data);
         }
 
         public override VariableUnit GetArrayUnit(ushort position)
