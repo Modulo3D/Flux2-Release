@@ -1,6 +1,7 @@
 ﻿using DynamicData.Kernel;
 using Modulo3DStandard;
 using ReactiveUI;
+using System;
 using System.Linq;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
@@ -46,8 +47,8 @@ namespace Flux.ViewModels
             _State = Observable.CombineLatest(
                 Material.WhenAnyValue(v => v.Document),
                 ToolNozzle.WhenAnyValue(v => v.Document),
-                this.WhenAnyValue(v => v.Document),
-                (m, tn, tm) => new ToolMaterialState(tn.tool.HasValue && tn.nozzle.HasValue, m.HasValue, tm.HasValue))
+                Flux.DatabaseProvider.WhenAnyValue(v => v.Database),
+                FindToolMaterialState)
                 .ToProperty(this, v => v.State)
                 .DisposeWith(Material.Disposables);
 
@@ -62,7 +63,31 @@ namespace Flux.ViewModels
                 .DisposeWith(Material.Disposables);
         }
 
-        public Optional<ToolMaterial> FindToolMaterial(Optional<Material> material, (Optional<Tool> tool, Optional<Nozzle> nozzle) feeder, Optional<ILocalDatabase> database)
+        private ToolMaterialState FindToolMaterialState(Optional<Material> material, (Optional<Tool> tool, Optional<Nozzle> nozzle) tool_nozzle, Optional<ILocalDatabase> database)
+        {
+            if (!database.HasValue)
+                return new ToolMaterialState(default);
+
+            if (!material.HasValue)
+                return new ToolMaterialState(default);
+
+            if (!tool_nozzle.tool.HasValue)
+                return new ToolMaterialState(default);
+
+            if (!tool_nozzle.nozzle.HasValue)
+                return new ToolMaterialState(default);
+
+            var toolmaterials = CompositeQuery.Create(database.Value,
+                db => _ => db.Find(material.Value, ToolMaterial.SchemaInstance), db => db.GetTarget,
+                db => tm => db.Find(tool_nozzle.nozzle.Value, tm), db => db.GetTarget)
+                .Execute()
+                .Convert<ToolMaterial>();
+
+            var tool_material = toolmaterials.Documents.FirstOrDefault().ToOptional();
+            return new ToolMaterialState(tool_material.HasValue);
+        }
+
+        public Optional<ToolMaterial> FindToolMaterial(Optional<Material> material, (Optional<Tool> tool, Optional<Nozzle> nozzle) tool_nozzle, Optional<ILocalDatabase> database)
         {
             if (!database.HasValue)
                 return default;
@@ -70,15 +95,15 @@ namespace Flux.ViewModels
             if (!material.HasValue)
                 return default;
 
-            if (!feeder.tool.HasValue)
+            if (!tool_nozzle.tool.HasValue)
                 return default;
 
-            if (!feeder.nozzle.HasValue)
+            if (!tool_nozzle.nozzle.HasValue)
                 return default;
 
             var toolmaterials = CompositeQuery.Create(database.Value,
                 db => _ => db.Find(material.Value, ToolMaterial.SchemaInstance), db => db.GetTarget,
-                db => tm => db.Find(feeder.nozzle.Value, tm), db => db.GetTarget)
+                db => tm => db.Find(tool_nozzle.nozzle.Value, tm), db => db.GetTarget)
                 .Execute()
                 .Convert<ToolMaterial>();
 

@@ -1,66 +1,71 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
 using Modulo3DStandard;
+using Newtonsoft.Json;
 using ReactiveUI;
 using System;
 using System.Reactive.Linq;
+using System.Runtime.Serialization;
 
 namespace Flux.ViewModels
 {
+    public struct ConditionState
+    {
+        [JsonProperty("message")]
+        public string Message { get; set; }
+        [JsonProperty("valid")]
+        [JsonConverter(typeof(JsonConverters.OptionalConverter<bool>))]
+        public Optional<bool> Valid { get; set; }
+        public ConditionState(Optional<bool> valid, string message)
+        {
+            Valid = valid;
+            Message = message;
+        }
+    }
+
     public interface IConditionViewModel : IRemoteControl
     {
-        string Label { get; }
-        public Optional<bool> IsValid { get; }
-        public IObservable<Optional<bool>> IsValidChanged { get; }
+        public ConditionState State { get; }
+        public IObservable<ConditionState> StateChanged { get; }
     }
 
     public class ConditionViewModel<T> : RemoteControl<ConditionViewModel<T>>, IConditionViewModel
     {
-        private ObservableAsPropertyHelper<string> _Label;
+        private ObservableAsPropertyHelper<ConditionState> _State;
         [RemoteOutput(true)]
-        public string Label => _Label.Value;
-
-        protected ObservableAsPropertyHelper<Optional<bool>> _IsValid;
-        [RemoteOutput(true)]
-        public Optional<bool> IsValid => _IsValid.Value;
+        public ConditionState State => _State.Value;
 
         private ObservableAsPropertyHelper<Optional<T>> _Value;
         [RemoteOutput(true)]
         public Optional<T> Value => _Value.Value;
 
         public IObservable<Optional<T>> ValueChanged { get; }
-        public IObservable<Optional<bool>> IsValidChanged { get; }
+        public IObservable<ConditionState> StateChanged { get; }
 
-        public ConditionViewModel(string name, IObservable<Optional<T>> value_changed, Func<T, bool> isValid, Func<Optional<T>, bool, string> label, Optional<TimeSpan> throttle = default) : base($"condition??{name}")
+        public ConditionViewModel(string name, IObservable<Optional<T>> value_changed, Func<Optional<T>, ConditionState> get_state, Optional<TimeSpan> throttle = default) : base($"condition??{name}")
         {
             ValueChanged = value_changed;
 
             _Value = ValueChanged
                 .ToProperty(this, v => v.Value);
 
-            var is_valid = value_changed.Convert(isValid);
+            var current_state = value_changed.Select(get_state);
             if (throttle.HasValue)
-                is_valid = is_valid.DistinctUntilChanged()
+                current_state = current_state.DistinctUntilChanged()
                     .Throttle(throttle.Value, RxApp.MainThreadScheduler);
 
-            _IsValid = is_valid
+            _State = current_state
                 .DistinctUntilChanged()
-                .ToProperty(this, e => e.IsValid);
+                .ToProperty(this, e => e.State);
 
-            _Label = Observable.CombineLatest(
-                this.WhenAnyValue(v => v.Value),
-                this.WhenAnyValue(v => v.IsValid),
-                (value, valid) => valid.ConvertOr(v => label(value, v), () => "ERROR"))
-                .ToProperty(this, v => v.Label);
-
-            IsValidChanged = this.WhenAnyValue(v => v.IsValid);
+            StateChanged = this.WhenAnyValue(v => v.State);
         }
     }
 
     public class ConditionsViewModel<TIn, TOut> : ConditionViewModel<(TIn @in, TOut @out)>
     {
-        public ConditionsViewModel(string name, IObservable<Optional<(TIn @in, TOut @out)>> value_changed, Func<TIn, TOut, bool> isValid, Func<Optional<(TIn @in, TOut @out)>, bool, string> label, Optional<TimeSpan> throttle = default)
-            : base(name, value_changed, tuple => isValid(tuple.@in, tuple.@out), label, throttle)
+        public ConditionsViewModel(string name, IObservable<Optional<(TIn @in, TOut @out)>> value_changed, Func<Optional<(TIn @in, TOut @out)>, ConditionState> get_state, Optional<TimeSpan> throttle = default)
+            : base(name, value_changed, get_state, throttle)
         {
         }
     }
@@ -70,32 +75,41 @@ namespace Flux.ViewModels
         // Single
         public static ConditionViewModel<TIn> Create<TIn>(
             string name,
-            IObservable<Optional<TIn>> value_changed,
-            Func<TIn, bool> valid_func,
-            Func<Optional<TIn>, bool, string> name_func,
+            IObservable<TIn> value_changed,
+            Func<TIn, ConditionState> get_state,
             Optional<TimeSpan> throttle = default)
-            => new ConditionViewModel<TIn>(name, value_changed, valid_func, name_func, throttle);
+            => new ConditionViewModel<TIn>(name, value_changed.Select(v => v.ToOptional()), v => get_state(v.Value), throttle);
+
+        public static ConditionViewModel<TIn> Create<TIn>(
+            string name,
+            IObservable<Optional<TIn>> value_changed,
+            Func<Optional<TIn>, ConditionState> get_state,
+            Optional<TimeSpan> throttle = default)
+            => new ConditionViewModel<TIn>(name, value_changed, get_state, throttle);
 
         public static ConditionViewModel<bool> Create(
             string name,
             IObservable<Optional<bool>> value_changed,
-            Func<Optional<bool>, bool, string> name_func,
+            Func<Optional<bool>, ConditionState> get_state,
             Optional<TimeSpan> throttle = default)
-            => new ConditionViewModel<bool>(name, value_changed, v => v, name_func, throttle);
+            => new ConditionViewModel<bool>(name, value_changed, get_state, throttle);
 
         // double
         public static ConditionsViewModel<TIn, TOut> Create<TIn, TOut>(
             string name,
             IObservable<Optional<TIn>> in_value,
             IObservable<Optional<TOut>> out_value,
-            Func<TIn, TOut, bool> valid_func,
-            Func<Optional<(TIn @in, TOut @out)>, bool, string> name_func,
+            Func<Optional<(TIn @in, TOut @out)>, ConditionState> get_state,
             Optional<TimeSpan> throttle = default)
-            => new ConditionsViewModel<TIn, TOut>(name, Observable.CombineLatest(in_value, out_value, (@in, @out) =>
+        {
+            var value_changed = Observable.CombineLatest(in_value, out_value, (@in, @out) =>
             {
                 if (@in.HasValue && @out.HasValue)
                     return Optional.Some<(TIn @in, TOut @out)>((@in.Value, @out.Value));
                 return default;
-            }), valid_func, name_func, throttle);
+            });
+
+            return new ConditionsViewModel<TIn, TOut>(name, value_changed, get_state, throttle);
+        }
     }
 }

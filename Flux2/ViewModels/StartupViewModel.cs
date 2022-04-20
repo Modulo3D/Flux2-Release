@@ -101,7 +101,8 @@ namespace Flux.ViewModels
 
         private void MagazineAsync()
         {
-            var navigate_back = Flux.StatusProvider.ClampClosed.IsValidChanged
+            var navigate_back = Flux.StatusProvider.ClampClosed.StateChanged
+                .Select(s => s.Valid)
                 .ValueOr(() => true)
                 .ToOptional();
 

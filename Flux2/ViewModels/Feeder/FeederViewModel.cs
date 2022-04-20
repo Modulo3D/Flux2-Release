@@ -99,10 +99,10 @@ namespace Flux.ViewModels
             foreach (ToolMaterialViewModel tm in ToolMaterials.Items)
                 tm.Initialize();
 
-            ToolNozzle.Initialize();
-
             foreach (MaterialViewModel m in Materials.Items)
                 m.Initialize();
+
+            ToolNozzle.Initialize();
 
             _FeederState = ToolNozzle.WhenAnyValue(v => v.State)
                 .Select(FindFeederState)

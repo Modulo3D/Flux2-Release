@@ -83,6 +83,8 @@ namespace Flux.ViewModels
                 .ValueOrDefault();
 
             FilteredConditions = Conditions.Connect()
+                .AutoRefresh(c => c.State)
+                .Filter(c => c.State.Valid.HasValue)
                 .Filter(is_idle.Select(idle =>
                 {
                     return (Func<IConditionViewModel, bool>)filter;
@@ -90,14 +92,14 @@ namespace Flux.ViewModels
                 }))
                 .AsObservableList();
 
-            _AllConditionsTrue = Conditions.Connect()
-                .AddKey(c => c.Label)
-                .TrueForAll(c => c.IsValidChanged, valid => valid.HasValue && valid.Value)
+            _AllConditionsTrue = FilteredConditions.Connect()
+                .AddKey(c => c.Name)
+                .TrueForAll(c => c.StateChanged, state => state.Valid.Value)
                 .ToProperty(this, v => v.AllConditionsTrue);
 
-            _AllConditionsFalse = Conditions.Connect()
-                .AddKey(c => c.Label)
-                .TrueForAll(c => c.IsValidChanged, valid => valid.HasValue && !valid.Value)
+            _AllConditionsFalse = FilteredConditions.Connect()
+                .AddKey(c => c.Name)
+                .TrueForAll(c => c.StateChanged, state => !state.Valid.Value)
                 .ToProperty(this, v => v.AllConditionsFalse);
 
             _TitleText = is_idle.Select(i => FindTitleText(i))

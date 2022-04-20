@@ -20,8 +20,10 @@ namespace Flux.ViewModels
             Conditions = new SourceList<IConditionViewModel>();
 
             _HasSafeStart = Conditions.Connect()
-                .AddKey(c => c.Label)
-                .TrueForAll(line => line.IsValidChanged, valid => valid.HasValue && valid.Value)
+                .AddKey(c => c.Name)
+                .AutoRefresh(c => c.State)
+                .Filter(c => c.State.Valid.HasValue)
+                .TrueForAll(line => line.StateChanged, state => state.Valid.HasValue && state.Valid.Value)
                 .StartWith(true)
                 .ToProperty(this, e => e.HasSafeStart);
         }

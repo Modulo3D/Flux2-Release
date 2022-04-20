@@ -35,7 +35,8 @@ namespace Flux.ViewModels
                 .DistinctUntilChanged()
                 .StartWithEmpty();
 
-            var low = Flux.StatusProvider.VacuumPresence.IsValidChanged
+            var low = Flux.StatusProvider.VacuumPresence.StateChanged
+                .Select(v => v.Valid)
                 .Convert(v => !v)
                 .DistinctUntilChanged()
                 .StartWithEmpty();

@@ -11,7 +11,7 @@ namespace Flux.ViewModels
 {
     public class NFCInnerViewModel : NavPanelViewModel<NFCInnerViewModel>
     {
-        public NFCInnerViewModel(string name, IFluxTagViewModel tag_vm) : base((FluxViewModel)tag_vm.Feeder.Flux, $"{name.ToCamelCase()}??{tag_vm.Position + 1}")
+        public NFCInnerViewModel(string name, IFluxTagViewModel tag_vm, ushort load_position) : base((FluxViewModel)tag_vm.Feeder.Flux, $"{name.ToCamelCase()}??{tag_vm.Position + 1}")
         {
             var can_lock = Observable.CombineLatest(
                 is_unlocked_tag(tag_vm),
@@ -29,7 +29,7 @@ namespace Flux.ViewModels
                 is_locked_tag(tag_vm),
                 is_unloaded_tag(tag_vm),
                 (l, un) => l && un).ToOptional();
-            AddCommand($"load{name}Tag??{tag_vm.Position + 1}", () => load_tag(tag_vm), can_load);
+            AddCommand($"load{name}Tag??{tag_vm.Position + 1}", () => load_tag(tag_vm, load_position), can_load);
 
             var can_unload = Observable.CombineLatest(
                 is_locked_tag(tag_vm),
@@ -37,9 +37,9 @@ namespace Flux.ViewModels
                 (l, lo) => l && lo).ToOptional();
             AddCommand($"unload{name}Tag??{tag_vm.Position + 1}", () =>  unload_tag(tag_vm), can_unload);
         }
-        private void load_tag(IFluxTagViewModel tag_vm)
+        private void load_tag(IFluxTagViewModel tag_vm, ushort load_position)
         {
-            tag_vm.StoreTag(t => t.SetLoaded(tag_vm.Position));
+            tag_vm.StoreTag(t => t.SetLoaded(load_position));
         }
         private void unload_tag(IFluxTagViewModel tag_vm)
         {
@@ -93,13 +93,15 @@ namespace Flux.ViewModels
                     {
                         for (ushort extr = 0; extr < extruders.Value; extr++)
                         {
+                            var e = extr;
+
                             var feeder = flux.Feeders.Feeders.Lookup(extr);
                             if (!feeder.HasValue)
                                 continue;
 
-                            AddModal(new NFCInnerViewModel("Tool", feeder.Value.ToolNozzle));
+                            AddModal(new NFCInnerViewModel("Tool", feeder.Value.ToolNozzle, e));
                             foreach (var material in feeder.Value.Materials.Items)
-                                AddModal(new NFCInnerViewModel("Material", material));
+                                AddModal(new NFCInnerViewModel("Material", material, e));
                         }
                     }
                 });
@@ -166,7 +168,8 @@ namespace Flux.ViewModels
                 .ValueOr(() => false)
                 .ToOptional();
 
-            var can_naviagate_back = Flux.StatusProvider.ClampClosed.IsValidChanged
+            var can_naviagate_back = Flux.StatusProvider.ClampClosed.StateChanged
+                .Select(s => s.Valid)
                 .ValueOr(() => true)
                 .ToOptional();
 

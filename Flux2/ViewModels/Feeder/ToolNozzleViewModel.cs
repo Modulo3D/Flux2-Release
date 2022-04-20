@@ -133,13 +133,17 @@ namespace Flux.ViewModels
 
             var in_mateinance = this.WhenAnyValue(v => v.InMaintenance);
 
+            var material_loaded = Feeder.Materials.Connect()
+                .AutoRefresh(m => m.State)
+                .QueryWhenChanged(m => m.Items.FirstOrOptional(m => m.State.IsLoaded()));
+
             return Observable.CombineLatest(
-                in_change_error, inserted, mem_trailer, input_trailer, mem_magazine, input_magazine, known, locked, loaded, in_mateinance,
-                (in_change_error, inserted, mem_trailer, input_trailer, mem_magazine, input_magazine, known, locked, loaded, in_mateinance) =>
+                in_change_error, inserted, mem_trailer, input_trailer, mem_magazine, input_magazine, known, locked, loaded, in_mateinance, material_loaded,
+                 (in_change_error, inserted, mem_trailer, input_trailer, mem_magazine, input_magazine, known, locked, loaded, in_mateinance, material_loaded) =>
                 {
                     var on_trailer = mem_trailer.Convert(t => t && t == input_trailer.ValueOr(() => t)).ValueOr(() => false);
                     var in_magazine = mem_magazine.Convert(t => t && t == input_magazine.ValueOr(() => t)).ValueOr(() => false);
-                    return new ToolNozzleState(inserted, known, locked, loaded, on_trailer, in_magazine, in_mateinance, in_change_error.ValueOr(() => false));
+                    return new ToolNozzleState(inserted, known, locked, loaded, on_trailer, in_magazine, in_mateinance, in_change_error.ValueOr(() => false), material_loaded);
                 });
         }
 

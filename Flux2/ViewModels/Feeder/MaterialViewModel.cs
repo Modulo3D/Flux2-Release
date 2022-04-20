@@ -94,29 +94,30 @@ namespace Flux.ViewModels
                 on_head_key.ValueOr(() => ""))
                 .ToProperty(this, v => v.WirePresence3)
                 .DisposeWith(Disposables);
-
-            _State = FindMaterialState()
-                .ToProperty(this, v => v.State)
-                .DisposeWith(Disposables); 
         }
 
         public override void Initialize()
         {
             base.Initialize();
 
-            var tool_material = Feeder.WhenAnyValue(f => f.SelectedToolMaterial);
+            _State = FindMaterialState()
+                .ToProperty(this, v => v.State)
+                .DisposeWith(Disposables);
+
+            var tool_material = Feeder
+                .WhenAnyValue(f => f.SelectedToolMaterial);
 
             _MaterialBrush = Observable.CombineLatest(
                 this.WhenAnyValue(v => v.State),
                 tool_material.ConvertMany(tm => tm.WhenAnyValue(v => v.State)),
                 (m, tm) =>
                 {
-                    if (!tm.HasValue || !tm.Value.KnownNozzle)
+                    if (!tm.HasValue)
                         return FluxColors.Empty;
-                    if (tm.Value.KnownMaterial && !tm.Value.Compatible)
-                        return FluxColors.Error;
                     if (m.IsNotLoaded())
                         return FluxColors.Empty;
+                    if (tm.Value.Compatible.HasValue && !tm.Value.Compatible.Value)
+                        return FluxColors.Error;
                     if (!m.Known)
                         return FluxColors.Warning;
                     if (!m.IsLoaded())
@@ -130,14 +131,13 @@ namespace Flux.ViewModels
 
             var material = Observable.CombineLatest(
                 this.WhenAnyValue(v => v.State),
-                Feeder.ToolNozzle.WhenAnyValue(v => v.State),
                 tool_material.ConvertMany(tm => tm.WhenAnyValue(v => v.State)),
                 Flux.StatusProvider.CanSafeCycle,
-                (ms, tn, tm, si) => new
+                (material, tool_material, idle) => new
                 {
-                    can_purge = CanPurgeMaterial(ms, tn, tm, si),
-                    can_load = CanLoadMaterial(ms, tn, tm, si),
-                    can_unload = CanUnloadMaterial(ms, tn, tm, si),
+                    can_purge = idle && CanPurgeMaterial(material, tool_material),
+                    can_load = idle && CanLoadMaterial(material, tool_material),
+                    can_unload = idle && CanUnloadMaterial(material, tool_material),
                 });
 
             UnloadMaterialCommand = ReactiveCommand.CreateFromTask(UnloadAsync, material.Select(m => m.can_unload))
@@ -173,54 +173,45 @@ namespace Flux.ViewModels
                 tag_printer_guid,
                 (p_guid, t_guid) => t_guid.ConvertOr(t => t == p_guid, () => false));
 
+            var selected = Feeder.SelectedMaterial
+                .ConvertOr(m => m.Position == Position, () => false);
+
             var compatible = Feeder.WhenAnyValue(f => f.SelectedToolMaterial)
                 .ConvertMany(tm => tm.WhenAnyValue(tm => tm.Document))
                 .Select(d => d.HasValue);
 
             return Observable.CombineLatest(inserted, known, locked, loaded,
-                 (inserted, known, locked, loaded) => new MaterialState(inserted, known, locked, loaded));
+                 (inserted, known, locked, loaded) => new MaterialState(inserted, known, selected, locked, loaded));
         }
-        private bool CanUnloadMaterial(MaterialState material, ToolNozzleState tool_nozzle, Optional<ToolMaterialState> tool_material, bool safe_idle)
+        private bool CanUnloadMaterial(MaterialState material, Optional<ToolMaterialState> tool_material)
         {
-            if (!tool_nozzle.IsLoaded())
-                return false;
             if (material.IsNotLoaded())
                 return false;
             if (!tool_material.HasValue)
                 return false;
-            if (!tool_material.Value.KnownNozzle)
+            if (tool_material.Value.Compatible.HasValue && !tool_material.Value.Compatible.Value)
                 return false;
-            if (!tool_material.Value.KnownMaterial)
-                return safe_idle;
-            return safe_idle && tool_material.Value.Compatible;
+            return true;
         }
-        private bool CanLoadMaterial(MaterialState material, ToolNozzleState tool_nozzle, Optional<ToolMaterialState> tool_material, bool safe_idle)
+        private bool CanLoadMaterial(MaterialState material, Optional<ToolMaterialState> tool_material)
         {
-            if (!tool_nozzle.IsLoaded())
-                return false;
             if (material.IsLoaded())
                 return false;
             if (!tool_material.HasValue)
                 return false;
-            if (!tool_material.Value.KnownNozzle)
+            if (tool_material.Value.Compatible.HasValue && !tool_material.Value.Compatible.Value)
                 return false;
-            if (!tool_material.Value.KnownMaterial)
-                return safe_idle;
-            return safe_idle && tool_material.Value.Compatible;
+            return true;
         }
-        private bool CanPurgeMaterial(MaterialState material, ToolNozzleState tool_nozzle, Optional<ToolMaterialState> tool_material, bool safe_idle)
+        private bool CanPurgeMaterial(MaterialState material, Optional<ToolMaterialState> tool_material)
         {
-            if (!tool_nozzle.IsLoaded())
-                return false;
             if (!material.IsLoaded())
                 return false;
             if (!tool_material.HasValue)
                 return false;
-            if (!tool_material.Value.KnownNozzle)
+            if (tool_material.Value.Compatible.HasValue && !tool_material.Value.Compatible.Value)
                 return false;
-            if (!tool_material.Value.KnownMaterial)
-                return false;
-            return safe_idle && tool_material.Value.Compatible;
+            return true;
         }
 
         public Task UnloadAsync()

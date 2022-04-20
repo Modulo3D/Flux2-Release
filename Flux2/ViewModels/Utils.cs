@@ -31,7 +31,7 @@ namespace Flux.ViewModels
 
     public class ComboOption<TValue, TKey> : DialogOption<ComboOption<TValue, TKey>, Optional<TValue>>
     {
-        public SelectableCache<Optional<TValue>, TKey> Items { get; }
+        public OptionalSelectableCache<TValue, TKey> Items { get; }
         [RemoteOutput(true)]
         public override Optional<TValue> Value
         {
@@ -44,7 +44,7 @@ namespace Flux.ViewModels
 
         public ComboOption(string name, string title, IObservableCache<TValue, TKey> items_source, Optional<TKey> key = default, Action<Optional<TKey>> selection_changed = default, Type converter = default) : base(name, title)
         {
-            Items = SelectableCache.Create(items_source.Connect().Transform(v => v.ToOptional()))
+            Items = OptionalSelectableCache.Create(items_source.Connect().Transform(v => v.ToOptional()))
                 .DisposeWith(Disposables);
 
             if (key.HasValue)

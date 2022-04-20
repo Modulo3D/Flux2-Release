@@ -198,30 +198,51 @@ namespace Flux.ViewModels
                 .WatchOptional(Material.Position);
 
             yield return ConditionViewModel.Create("materialKnown??0",
-                material.ConvertMany(m => m.WhenAnyValue(m => m.Document)), m => true,
-                (m, valid) => m.ConvertOr(m => $"MATERIALE LETTO: {m.Name}", () => "LEGGI UN MATERIALE"));
+                material.ConvertMany(m => m.WhenAnyValue(m => m.Document)),
+                value =>
+                {
+                    if (!value.HasValue || value.Value.Id == 0)
+                        return new ConditionState(false, "LEGGI UN MATERIALE");
+                    return new ConditionState(true, $"MATERIALE LETTO: {value.Value}");
+                });
 
-            yield return ConditionViewModel.Create("materialReady??1",
-                material.ConvertMany(m => m.WhenAnyValue(f => f.State)), state => state.Locked,
-                (value, valid) => valid ? "MATERIALE PRONTO AL CARICAMENTO" : "BLOCCA IL MATERIALE");
-
-            yield return ConditionViewModel.Create("toolMaterialCompatible??2",
+            yield return ConditionViewModel.Create("toolMaterialCompatible??1",
                 tool_material.ConvertMany(tm => tm.WhenAnyValue(m => m.State)),
-                m =>
+                value =>
                 {
-                    return m.KnownNozzle && m.KnownMaterial && m.Compatible;
-                },
-                (s, valid) =>
+                    if (!value.HasValue)
+                        return new ConditionState(default, "");
+                    if(!value.Value.Compatible.HasValue)
+                        return new ConditionState(default, "");
+                    if (!value.Value.Compatible.Value)
+                        return new ConditionState(false, "MATERIALE NON COMPATIBILE");
+                    return new ConditionState(true, "MATERIALE COMPATIBILE");
+                });
+
+            yield return ConditionViewModel.Create("materialReady??2",
+                material.ConvertMany(m => m.WhenAnyValue(f => f.State)), 
+                value => 
                 {
-                    if (!s.HasValue)
-                        return "";
-                    if (!s.Value.KnownNozzle)
-                        return "LEGGERE UN UTENSILE";
-                    if (!s.Value.KnownMaterial)
-                        return "LEGGERE UN MATERIALE";
-                    if (!s.Value.Compatible)
-                        return "MATERIALE NON COMPATIBILE";
-                    return "MATERIALE COMPATIBILE";
+                    if (!value.HasValue)
+                        return new ConditionState(default, "");
+                    if(value.Value.Loaded)
+                        return new ConditionState(default, "");
+                    if (!value.Value.Locked)
+                        return new ConditionState(false, "BLOCCA IL MATERIALE");
+                    return new ConditionState(true, "MATERIALE BLOCCATO");
+                });
+
+            yield return ConditionViewModel.Create("toolNozzleFree??3",
+                Feeder.ToolNozzle.WhenAnyValue(f => f.State),
+                value =>
+                {
+                    if (value.MaterialLoaded.HasValue)
+                    {
+                        var mat = value.MaterialLoaded.Value.Document;
+                        var pos = value.MaterialLoaded.Value.Position;
+                        return new ConditionState(false, $"MATERIALE GIA' CARICATO ({mat} POS. {pos + 1})");
+                    }
+                    return new ConditionState(true, "MATERIALE PRONTO AL CARICAMENTO");
                 });
         }
 
@@ -353,48 +374,38 @@ namespace Flux.ViewModels
                 .WatchOptional(Material.Position);
 
             yield return ConditionViewModel.Create("materialKnown??0",
-                material.ConvertMany(m => m.WhenAnyValue(m => m.Document)), m => true,
-                (m, valid) => m.ConvertOr(m => $"MATERIALE LETTO: {m.Name}", () => "LEGGI UN MATERIALE"));
-
-            yield return ConditionViewModel.Create("materialReady??1",
-                material.ConvertMany(m => m.WhenAnyValue(f => f.State)),
-                s =>
+                material.ConvertMany(m => m.WhenAnyValue(m => m.Document)),
+                value =>
                 {
-                    if (!s.Known)
-                        return false;
-                    if (s.Loaded && s.Locked)
-                        return true;
-                    if (!s.Loaded && !s.Locked)
-                        return true;
-                    return false;
-                },
-                (value, valid) =>
-                {
-                    if (!value.HasValue)
-                        return "IMPOSSIBILE BLOCCARE IL MATERIALE";
-                    if (value.Value.Loaded)
-                        return valid ? "MATERIALE PRONTO ALLO SCARICAMENTO" : "BLOCCA IL MATERIALE";
-                    else
-                        return valid ? "MATERIALE SCARICATO" : "SBLOCCA IL MATERALE";
+                    if (!value.HasValue || value.Value.Id == 0)
+                        return new ConditionState(false, "LEGGI UN MATERIALE");
+                    return new ConditionState(true, $"MATERIALE LETTO: {value.Value}");
                 });
 
-            yield return ConditionViewModel.Create("toolMaterialCompatible??2",
-                tool_material.ConvertMany(tm => tm.WhenAnyValue(tm => tm.State)),
-                m =>
+            yield return ConditionViewModel.Create("toolMaterialCompatible??1",
+                tool_material.ConvertMany(tm => tm.WhenAnyValue(m => m.State)),
+                value =>
                 {
-                    return m.KnownNozzle && m.KnownMaterial && m.Compatible;
-                },
-                (s, valid) =>
+                    if (!value.HasValue)
+                        return new ConditionState(default, "");
+                    if (!value.Value.Compatible.HasValue)
+                        return new ConditionState(default, "");
+                    if (!value.Value.Compatible.Value)
+                        return new ConditionState(false, "MATERIALE NON COMPATIBILE");
+                    return new ConditionState(true, "MATERIALE COMPATIBILE");
+                });
+
+            yield return ConditionViewModel.Create("materialReady??2",
+                material.ConvertMany(m => m.WhenAnyValue(f => f.State)),
+                value => 
                 {
-                    if (!s.HasValue)
-                        return "";
-                    if (!s.Value.KnownNozzle)
-                        return "LEGGERE UN UTENSILE";
-                    if (!s.Value.KnownMaterial)
-                        return "LEGGERE UN MATERIALE";
-                    if (!s.Value.Compatible)
-                        return "MATERIALE NON COMPATIBILE";
-                    return "MATERIALE COMPATIBILE";
+                    if (!value.HasValue)
+                        return new ConditionState(default, "");
+                    if (value.Value.Loaded)
+                        return new ConditionState(default, "");
+                    if (value.Value.Locked)
+                        return new ConditionState(false, "SBLOCCA IL MATERIALE");
+                    return new ConditionState(true, "MATERIALE SBLOCCATO");
                 });
         }
         public override async Task<bool> UpdateNFCAsync()

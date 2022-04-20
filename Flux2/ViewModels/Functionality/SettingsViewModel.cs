@@ -15,10 +15,10 @@ namespace Flux.ViewModels
     public class SettingsViewModel : FluxRoutableNavBarViewModel<SettingsViewModel>
     {
         [RemoteInput]
-        public SelectableCache<Optional<Printer>, int> Printers { get; }
+        public OptionalSelectableCache<Printer, int> Printers { get; }
 
         [RemoteInput]
-        public SelectableCache<Optional<(IPAddress address, int id)>, int> HostAddress { get; }
+        public OptionalSelectableCache<(IPAddress address, int id), int> HostAddress { get; }
 
         private Optional<string> _PlcAddress = "";
         [RemoteInput]
@@ -61,12 +61,12 @@ namespace Flux.ViewModels
 
             var printer_cache = database_changed.Select(FindPrinters)
                 .ToObservableChangeSet(p => p.ConvertOr(p => p.Id, () => 0));
-            Printers = SelectableCache.Create(printer_cache);
+            Printers = OptionalSelectableCache.Create(printer_cache);
 
             var host = Dns.GetHostEntry(Dns.GetHostName());
             var host_address_cache = host.AddressList.Select((ip, id) => (ip, id).ToOptional())
                 .AsObservableChangeSet(t => t.ConvertOr(t => t.id, () => -1));
-            HostAddress = SelectableCache.Create(host_address_cache);
+            HostAddress = OptionalSelectableCache.Create(host_address_cache);
 
             var user_settings = Flux.SettingsProvider.UserSettings.Local;
             var core_settings = Flux.SettingsProvider.CoreSettings.Local;
