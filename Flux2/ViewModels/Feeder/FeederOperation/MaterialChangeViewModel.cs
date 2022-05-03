@@ -45,7 +45,7 @@ namespace Flux.ViewModels
                 using var wait_cancel_filament_op_cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
                 if (!await Flux.ConnectionProvider.ExecuteParamacroAsync(f => cancel_filament_operation(f)(Feeder.Position), put_cancel_filament_op_cts.Token, true, wait_cancel_filament_op_cts.Token))
                 {
-                    Flux.Messages.LogMessage(MaterialChangeResult.MATERIAL_CHANGE_ERROR_PARAMACRO, Feeder.Material.State);
+                    Flux.Messages.LogMessage(MaterialChangeResult.MATERIAL_CHANGE_ERROR_PARAMACRO, default);
                     return false;
                 }
 
@@ -130,15 +130,6 @@ namespace Flux.ViewModels
         }
         protected override async Task<bool> ExecuteOperationAsync()
         {
-            Feeder.Material.StoreTag(t => t.SetLoaded(Feeder.Position));
-            
-            var operation = await ExecuteFilamentOperation(c => c.GetLoadFilamentGCode, true);
-            if (operation.result == false)
-            {
-                Flux.Messages.LogMessage(MaterialChangeResult.MATERIAL_CHANGE_ERROR_PARAMACRO, default);
-                return false;
-            }
-
             var material = Feeder.Materials
                 .Lookup(Material.Position);
 
@@ -146,6 +137,13 @@ namespace Flux.ViewModels
                 return false;
 
             material.Value.StoreTag(t => t.SetLoaded(Feeder.Position));
+            
+            var operation = await ExecuteFilamentOperation(c => c.GetLoadFilamentGCode, true);
+            if (operation.result == false)
+            {
+                Flux.Messages.LogMessage(MaterialChangeResult.MATERIAL_CHANGE_ERROR_PARAMACRO, default);
+                return false;
+            }
 
             var tool_material = Feeder.ToolMaterials
                 .Lookup(Material.Position);
