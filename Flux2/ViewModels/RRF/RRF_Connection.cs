@@ -644,7 +644,6 @@ namespace Flux.ViewModels
                 yield return $"T{position}";
                 foreach (var line in gcode.Value)
                     yield return line;
-                yield return "T-1";
             }
         }
         public override Optional<IEnumerable<string>> GetUnloadFilamentGCode(ushort position, Nozzle nozzle, double temperature)
@@ -747,6 +746,24 @@ namespace Flux.ViewModels
         public override Optional<IEnumerable<string>> GetProbeMagazineGCode()
         {
             return new[] { "M98 P\"/macros/probe_magazine\"" };
+        }
+
+        public override Optional<IEnumerable<string>> GetCancelLoadFilamentGCode(ushort position)
+        {
+            return new[] 
+            {
+                $"G10 P{position} S0 R0",
+                "T-1"
+            };
+        }
+
+        public override Optional<IEnumerable<string>> GetCancelUnloadFilamentGCode(ushort position)
+        {
+            return new[]
+             {
+                $"G10 P{position} S0 R0",
+                "T-1"
+            };
         }
     }
 }

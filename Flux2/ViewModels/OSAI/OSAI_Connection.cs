@@ -1135,5 +1135,15 @@ namespace Flux.ViewModels
         {
             throw new NotImplementedException();
         }
+
+        public override Optional<IEnumerable<string>> GetCancelLoadFilamentGCode(ushort position)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override Optional<IEnumerable<string>> GetCancelUnloadFilamentGCode(ushort position)
+        {
+            throw new NotImplementedException();
+        }
     }
 }

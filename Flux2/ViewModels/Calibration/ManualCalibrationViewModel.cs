@@ -29,7 +29,9 @@ namespace Flux.ViewModels
         public double TemperaturePercentage => _TemperaturePercentage.Value;
 
         [RemoteContent(true)]
-        public ISourceList<CmdButton> MoveButtons { get; }
+        public ISourceList<CmdButton> MoveUpButtons { get; }
+        [RemoteContent(true)]
+        public ISourceList<CmdButton> MoveDownButtons { get; }
 
         [RemoteContent(true)]
         public IObservableList<CmdButton> ToolButtons { get; }
@@ -101,19 +103,33 @@ namespace Flux.ViewModels
             var can_execute = Flux.StatusProvider.IsIdle
                 .ValueOrDefault();
 
-            MoveButtons = new SourceList<CmdButton>();
-            MoveButtons.Add(move_tool_button(1));
-            MoveButtons.Add(move_tool_button(0.1));
-            MoveButtons.Add(move_tool_button(0.01));
-            MoveButtons.Add(move_tool_button(-0.01));
-            MoveButtons.Add(move_tool_button(-0.1));
-            MoveButtons.Add(move_tool_button(-1));
-            MoveButtons.DisposeWith(Disposables);
+            MoveUpButtons = new SourceList<CmdButton>();
+            MoveUpButtons.Add(move_tool_button(-1));
+            MoveUpButtons.Add(move_tool_button(-0.1));
+            MoveUpButtons.Add(move_tool_button(-0.01));
+            MoveUpButtons.DisposeWith(Disposables);
 
-            MoveButtons.Connect()
+            MoveDownButtons = new SourceList<CmdButton>();
+            MoveDownButtons.Add(move_tool_button(1));
+            MoveDownButtons.Add(move_tool_button(0.1));
+            MoveDownButtons.Add(move_tool_button(0.01));
+            MoveDownButtons.DisposeWith(Disposables);
+
+            var move_up_executing = MoveUpButtons.Connect()
                 .AddKey(b => b.Name)
                 .Transform(m => m.Command, true)
                 .TrueForAll(c => c.IsExecuting, e => !e)
+                .StartWith(false);
+
+            var move_down_executing = MoveDownButtons.Connect()
+                .AddKey(b => b.Name)
+                .Transform(m => m.Command, true)
+                .TrueForAll(c => c.IsExecuting, e => !e)
+                .StartWith(false);
+
+            Observable.CombineLatest(
+                move_up_executing, move_down_executing, 
+                (up, down) => up || down)
                 .Throttle(TimeSpan.FromSeconds(1))
                 .Subscribe(async e =>
                 {
@@ -149,7 +165,7 @@ namespace Flux.ViewModels
                     (tool, temp) => tool.HasValue && Math.Abs(temp) > 85)
                     .ToOptional();
 
-                var button = new CmdButton($"Z??{(distance > 0 ? $"+{distance:0.00mm}" : $"{distance:0.00}")}", () => move_tool(distance), can_execute);
+                var button = new CmdButton($"Z??{(distance > 0 ? $"+{distance:0.00mm}" : $"{distance:0.00mm}")}", () => move_tool(distance), can_execute);
                 button.InitializeRemoteView();
                 button.DisposeWith(Disposables);
                 return button;
