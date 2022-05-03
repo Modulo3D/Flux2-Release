@@ -33,19 +33,22 @@ namespace Flux.ViewModels
                 Flux.StatusProvider.CanSafeCycle,
                 (c, s) => c && s);
         }
-
-        protected override async Task<bool> CancelOperationAsync()
-        {
+        protected async Task<bool> CancelFilamentOperationAsync(Func<IFLUX_Connection, Func<ushort, Optional<IEnumerable<string>>>> cancel_filament_operation)
+        { 
             try
             {
                 IsCanceled = true;
                 if (!await Flux.ConnectionProvider.ResetAsync())
                     return false;
-                var unit = Flux.ConnectionProvider.VariableStore.GetArrayUnit(m => m.TEMP_TOOL, Feeder.Position);
-                if (!unit.HasValue)
+
+                using var put_cancel_filament_op_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                using var wait_cancel_filament_op_cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
+                if (!await Flux.ConnectionProvider.ExecuteParamacroAsync(f => cancel_filament_operation(f)(Feeder.Position), put_cancel_filament_op_cts.Token, true, wait_cancel_filament_op_cts.Token))
+                {
+                    Flux.Messages.LogMessage(MaterialChangeResult.MATERIAL_CHANGE_ERROR_PARAMACRO, Feeder.Material.State);
                     return false;
-                if (!await Flux.ConnectionProvider.WriteVariableAsync(m => m.TEMP_TOOL, unit.Value, 0))
-                    return false;
+                }
+
                 Flux.Navigator.NavigateBack();
                 return true;
             }
@@ -67,9 +70,9 @@ namespace Flux.ViewModels
                 if (!await Flux.ConnectionProvider.ResetAsync())
                     return (false, default);
 
-                if (!Feeder.ToolNozzle.Document.nozzle.HasValue)
+                var nozzle = Feeder.ToolNozzle.Document.nozzle;
+                if (!nozzle.HasValue)
                     return (false, default);
-                var nozzle = Feeder.ToolNozzle.Document.nozzle.Value;
 
                 var tool_material = Feeder.ToolMaterials.Lookup(Material.Position);
                 if (!tool_material.HasValue)
@@ -95,7 +98,7 @@ namespace Flux.ViewModels
 
                 using var put_filament_op_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 using var wait_filament_op_cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
-                if (!await Flux.ConnectionProvider.ExecuteParamacroAsync(f => filament_operation(f)(Feeder.Position, nozzle, break_temp), put_filament_op_cts.Token, true, wait_filament_op_cts.Token))
+                if (!await Flux.ConnectionProvider.ExecuteParamacroAsync(f => filament_operation(f)(Feeder.Position, nozzle.Value, break_temp), put_filament_op_cts.Token, true, wait_filament_op_cts.Token))
                 {
                     Flux.Messages.LogMessage(MaterialChangeResult.MATERIAL_CHANGE_ERROR_PARAMACRO, default);
                     return (false, current_break_temp);
@@ -127,6 +130,8 @@ namespace Flux.ViewModels
         }
         protected override async Task<bool> ExecuteOperationAsync()
         {
+            Feeder.Material.StoreTag(t => t.SetLoaded(Feeder.Position));
+            
             var operation = await ExecuteFilamentOperation(c => c.GetLoadFilamentGCode, true);
             if (operation.result == false)
             {
@@ -305,6 +310,11 @@ namespace Flux.ViewModels
                 this.WhenAnyValue(v => v.CanUpdateNFC),
                 (d, nfc) => d.HasValue ? (nfc ? "BLOCCA" : "✔") : "LEGGI");
         }
+
+        protected override Task<bool> CancelOperationAsync()
+        {
+            return CancelFilamentOperationAsync(c => c.GetCancelLoadFilamentGCode);
+        }
     }
 
     public class UnloadMaterialViewModel : MaterialChangeViewModel<UnloadMaterialViewModel>
@@ -474,6 +484,11 @@ namespace Flux.ViewModels
                 material.ConvertMany(m => m.WhenAnyValue(m => m.State)),
                 this.WhenAnyValue(v => v.CanUpdateNFC),
                 (s, nfc) => s.HasValue && s.Value.Loaded ? (nfc ? "BLOCCA" : "✔") : (nfc ? "SBLOCCA" : "✔"));
+        }
+
+        protected override Task<bool> CancelOperationAsync()
+        {
+            return CancelFilamentOperationAsync(c => c.GetCancelUnloadFilamentGCode);
         }
     }
 }
