@@ -11,7 +11,6 @@ namespace Flux.ViewModels
 {
     public class FeederViewModel : RemoteControl<FeederViewModel>, IFluxFeederViewModel
     {
-        IFlux IFluxFeederViewModel.Flux => Flux;
         IFluxFeedersViewModel IFluxFeederViewModel.Feeders => Feeders;
 
         public FluxViewModel Flux { get; }

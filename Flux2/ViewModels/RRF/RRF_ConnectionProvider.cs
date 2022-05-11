@@ -46,11 +46,11 @@ namespace Flux.ViewModels
 
         public FluxViewModel Flux { get; }
         public override IFlux IFlux => Flux;
+        public override RRF_VariableStore VariableStore => new RRF_VariableStore(this);
 
         public RRF_ConnectionProvider(FluxViewModel flux)
         {
             Flux = flux;
-            VariableStore = new RRF_VariableStore(this);
 
             var connection = this.WhenAnyValue(v => v.Connection);
             var full_memory_read = connection.Convert(c => c.MemoryBuffer)

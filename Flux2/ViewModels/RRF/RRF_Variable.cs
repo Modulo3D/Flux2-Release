@@ -410,7 +410,7 @@ namespace Flux.ViewModels
         bool Stored { get; }
         string Variable { get; }
         string LoadVariableMacro { get; }
-        Task<bool> InitializeVariableAsync(CancellationToken ct);
+        Task<bool> CreateVariableAsync(CancellationToken ct);
     }
 
     public class RRF_VariableGlobalModel<TData> : FLUX_VariableGP<RRF_Connection, TData, TData>, IRRF_VariableGlobalModel
@@ -486,13 +486,20 @@ namespace Flux.ViewModels
             return true;
         }
 
-        public async Task<bool> InitializeVariableAsync(CancellationToken ct) 
+        public async Task<bool> CreateVariableAsync(CancellationToken ct) 
         {
-            var gcode = WriteVariableString(Variable, DefaultValue.ValueOrDefault()).ToOptional();
-            return await Connection.ConvertOrAsync(c => c.PutFileAsync(c => ((RRF_Connection)c).GlobalPath, LoadVariableMacro, ct, gcode), () => false);
+            if (!Connection.HasValue)
+                return false;
+
+            var gcode = WriteVariableString(Variable, DefaultValue.ValueOrDefault());
+
+            return await Connection.Value.PutFileAsync(
+                c => ((RRF_Connection)c).GlobalPath,
+                LoadVariableMacro,
+                ct, gcode.ToOptional());
         }
 
-        public static IEnumerable<string> WriteVariableString(string variable, TData value)
+        private static IEnumerable<string> WriteVariableString(string variable, TData value)
         {
             var s_value = sanitize_value(value);
             yield return $"if (!exists(global.{variable}))";
@@ -584,12 +591,19 @@ namespace Flux.ViewModels
             return true;
         }
 
-        public async Task<bool> InitializeVariableAsync(CancellationToken ct)
+        public async Task<bool> CreateVariableAsync(CancellationToken ct)
         {
-            var gcode = WriteVariableString(Variable, Unit.Value, DefaultValue.ValueOrDefault()).ToOptional();
-            return await Connection.ConvertOrAsync(c => c.PutFileAsync(c => ((RRF_Connection)c).GlobalPath, LoadVariableMacro, ct, gcode), () => false);
+            if (!Connection.HasValue)
+                return false;
+
+            var gcode = WriteVariableString(Variable, Unit.Value, DefaultValue.ValueOrDefault());
+
+            return await Connection.Value.PutFileAsync(
+                c => ((RRF_Connection)c).GlobalPath,
+                LoadVariableMacro, 
+                ct, gcode.ToOptional());
         }
-        public static IEnumerable<string> WriteVariableString(string variable, VariableUnit unit, TData value)
+        private static IEnumerable<string> WriteVariableString(string variable, VariableUnit unit, TData value)
         {
             var s_value = sanitize_value(value);
             var lower_unit = unit.Value.ToLower();

@@ -51,13 +51,13 @@ namespace Flux.ViewModels
 
         public void Initialize()
         {
-            var partprogram = FeederEvaluator.Feeder.Flux.ConnectionProvider.ObserveVariable(c => c.PART_PROGRAM);
-            var queue_pos = FeederEvaluator.Feeder.Flux.ConnectionProvider.ObserveVariable(c => c.QUEUE_POS);
+            var partprogram = FeederEvaluator.Status.Flux.ConnectionProvider.ObserveVariable(c => c.PART_PROGRAM);
+            var queue_pos = FeederEvaluator.Status.Flux.ConnectionProvider.ObserveVariable(c => c.QUEUE_POS);
 
             var queue_key = Observable.CombineLatest(partprogram, queue_pos, (pp, q) => 
                 pp.Convert(pp => q.Convert(q => new QueueKey(pp.MCodeGuid, q))));
 
-            var db_changed = FeederEvaluator.Feeder.Flux.DatabaseProvider.WhenAnyValue(v => v.Database);
+            var db_changed = FeederEvaluator.Status.Flux.DatabaseProvider.WhenAnyValue(v => v.Database);
             var eval_changed = FeederEvaluator.WhenAnyValue(e => e.FeederReportQueue);
 
             _ExpectedDocumentQueue = Observable.CombineLatest(
@@ -79,7 +79,7 @@ namespace Flux.ViewModels
                 .ToProperty(this, e => e.IsInvalid);
 
             _ExpectedWeight = FeederEvaluator.WhenAnyValue(f => f.ExtrusionQueue)
-                .Convert(e => e.Values.Sum(e => e.ConvertOr(e => (double)e.WeightG, () => 0)))
+                .Convert(e => e.Values.Sum(e => e.WeightG))
                 .ToProperty(this, v => v.ExpectedWeight);
 
             _CurrentWeight = TagViewModel.Odometer.WhenAnyValue(v => v.Value)
@@ -251,8 +251,8 @@ namespace Flux.ViewModels
         private ObservableAsPropertyHelper<bool> _HasColdNozzle;
         public bool HasColdNozzle => _HasColdNozzle.Value;
 
-        private ObservableAsPropertyHelper<Optional<Dictionary<QueueKey, Optional<Extrusion>>>> _ExtrusionQueue;
-        public Optional<Dictionary<QueueKey, Optional<Extrusion>>> ExtrusionQueue => _ExtrusionQueue.Value;
+        private ObservableAsPropertyHelper<Optional<Dictionary<QueueKey, Extrusion>>> _ExtrusionQueue;
+        public Optional<Dictionary<QueueKey, Extrusion>> ExtrusionQueue => _ExtrusionQueue.Value;
 
         public FeederEvaluator(StatusProvider status, IFluxFeederViewModel feeder)
         {
@@ -264,7 +264,7 @@ namespace Flux.ViewModels
 
         public void Initialize()
         {
-            var queue_pos = Feeder.Flux.ConnectionProvider
+            var queue_pos = Status.Flux.ConnectionProvider
                 .ObserveVariable(c => c.QUEUE_POS)
                 .StartWithEmpty()
                 .DistinctUntilChanged();
@@ -294,12 +294,12 @@ namespace Flux.ViewModels
                 }
             }
 
-            var queue = Feeder.Flux.ConnectionProvider
+            var queue = Status.Flux.ConnectionProvider
                 .ObserveVariable(c => c.QUEUE)
                 .StartWithEmpty()
                 .DistinctUntilChanged(compare_queue);
 
-            var mcodes = Feeder.Flux.MCodes.AvaiableMCodes
+            var mcodes = Status.Flux.MCodes.AvaiableMCodes
                 .Connect()
                 .QueryWhenChanged();
 
@@ -312,10 +312,10 @@ namespace Flux.ViewModels
 
             _ExtrusionQueue = Status.WhenAnyValue(s => s.PrintingEvaluation)
                 .Select(e => e.ExtrusionSetQueue)
-                .Convert(e => e.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.Extrusions.Lookup(Feeder.Position)))
+                .Convert(e => e.ToDictionary(kvp => kvp.Key, kvp => kvp.Value[Feeder.Position]))
                 .ToProperty(this, v => v.ExtrusionQueue);
 
-            _Offset = Feeder.Flux.Calibration.Offsets.Connect()
+            _Offset = Status.Flux.Calibration.Offsets.Connect()
                 .QueryWhenChanged(FindOffset)
                 .ToProperty(this, v => v.Offset);
 
@@ -396,7 +396,7 @@ namespace Flux.ViewModels
                         continue;
 
                     var analyzer = mcode_vm.Value.Analyzer;
-                    var feeder_report = analyzer.MCode.Feeders.Lookup(Feeder.Position);
+                    var feeder_report = analyzer.MCode.FeederReports.Lookup(Feeder.Position);
                     if (!feeder_report.HasValue)
                         continue;
 

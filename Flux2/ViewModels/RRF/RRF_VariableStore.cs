@@ -104,6 +104,9 @@ namespace Flux.ViewModels
 
                 AXIS_ENDSTOP = RegisterVariable(endstops.Create<bool, bool>("AXIS ENDSTOP", VariableUnit.Range("X", "Y", "Z"), (c, triggered) => triggered));
                 ENABLE_DRIVERS = RegisterVariable(axes.Create<bool, bool>("ENABLE DRIVERS", VariableUnit.Range("X", "Y", "Z", "C"), (c, m) => m.IsEnabledDriver(), EnableDriverAsync));
+
+                var extruders = move.CreateArray(m => m.Extruders.Convert(e => e.Select((e, i) => (e, $"{i}")).ToDictionary(e => e.Item2, e => e.e)));
+                EXTRUSIONS = RegisterVariable(extruders.Create<double, Unit>("EXTRUSION_SET", VariableUnit.Range(0, 4), (c, e) => e.Position));
             }
             catch (Exception ex)
             {

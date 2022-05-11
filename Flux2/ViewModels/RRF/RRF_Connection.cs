@@ -167,12 +167,8 @@ namespace Flux.ViewModels
             return await PostGCodeAsync("M98 P\"/sys/global/initialize_variables.g\"", ct);
         }
 
-        public async Task<bool> CreateVariablesAsync(CancellationToken ct)
+        private async Task<(bool result, IEnumerable<IRRF_VariableGlobalModel> variables)> FindMissingVariables(CancellationToken ct)
         {
-            var files = await ListFilesAsync(GlobalPath, ct);
-            if (!files.HasValue)
-                return false;
-
             var variables = VariableStore.Variables.Values
                 .SelectMany(v => v switch
                 {
@@ -183,34 +179,53 @@ namespace Flux.ViewModels
                 .Where(v => v is IRRF_VariableGlobalModel global)
                 .Select(v => (IRRF_VariableGlobalModel)v);
 
-            var file_set = files.Value.Files.Select(f => f.Name).ToHashSet();
-            var files_to_create = variables
+            var files = await ListFilesAsync(GlobalPath, ct);
+            if (!files.HasValue)
+                return (false, Array.Empty<IRRF_VariableGlobalModel>());
+
+            var file_set = files.Value.Files
+                .Select(f => f.Name)
+                .ToHashSet();
+
+            var missing_variables = VariableStore.Variables.Values
+                .SelectMany(v => v switch
+                {
+                    IFLUX_Array array => array.Variables.Items,
+                    IFLUX_Variable variable => new[] { variable },
+                    _ => throw new NotImplementedException()
+                })
+                .Where(v => v is IRRF_VariableGlobalModel global)
+                .Select(v => (IRRF_VariableGlobalModel)v)
                 .Where(v => !file_set.Contains(v.LoadVariableMacro))
                 .Select(v => v);
-            
-            if (files_to_create.Any())
-            {
-                var advanced_mode = Flux.MCodes.OperatorUSB
-                    .ConvertOr(usb => usb.AdvancedSettings, () => false);
-                if (!advanced_mode)
-                    return false;
-                
-                var files_str = string.Join(Environment.NewLine, files_to_create);
-                var result = await Flux.ShowConfirmDialogAsync("Creare file di variabile?", files_str);
 
-                switch(result)
-                {
-                    case ContentDialogResult.Primary:
-                        foreach (var variable in variables)
-                            if (!file_set.Contains(variable.LoadVariableMacro))
-                                if (!await variable.InitializeVariableAsync(ct))
-                                    return false;
-                        break;
-                    default:
-                        return false;
-                }    
-            }
-            
+            return (true, missing_variables);
+        }
+
+        public async Task<bool> CreateVariablesAsync(CancellationToken ct)
+        {
+            var missing_variables = await FindMissingVariables(ct);
+            if (!missing_variables.result)
+                return false;
+
+            if (!missing_variables.variables.Any())
+                return true;
+
+            var advanced_mode = Flux.MCodes.OperatorUSB
+                .ConvertOr(usb => usb.AdvancedSettings, () => false);
+            if (!advanced_mode)
+                return false;
+                
+            var files_str = string.Join(Environment.NewLine, missing_variables.variables.Select(v => v.LoadVariableMacro));
+            var create_variables_result = await Flux.ShowConfirmDialogAsync("Creare file di variabile?", files_str);
+
+            if (create_variables_result != ContentDialogResult.Primary)
+                return false;
+
+            foreach (var variable in missing_variables.variables)
+                if (!await variable.CreateVariableAsync(ct))
+                    return false;
+
             return true;
         }
 
