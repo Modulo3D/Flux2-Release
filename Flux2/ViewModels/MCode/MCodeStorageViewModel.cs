@@ -141,7 +141,7 @@ namespace Flux.ViewModels
             var duration = analyzer.MCode.Duration;
             AddOutput("duration", duration, typeof(TimeSpanConverter));
 
-            var quantities = analyzer.MCode.Feeders.Select(f => f.Value.WeightG);
+            var quantities = analyzer.MCode.FeederReports.Select(f => new Extrusion(f.Value)).Select(e => e.WeightG);
             AddOutput("quantities", quantities, typeof(EnumerableConverter<WeightConverter, double>));
 
             var quality = analyzer.MCode.PrintQuality;
@@ -186,7 +186,7 @@ namespace Flux.ViewModels
         {
             if (!database.HasValue)
                 yield break;
-            foreach (var feeder in Analyzer.MCode.Feeders)
+            foreach (var feeder in Analyzer.MCode.FeederReports)
             {
                 var result = database.Value.FindById<TDocument>(get_id(feeder.Value));
                 if (result.HasDocuments)

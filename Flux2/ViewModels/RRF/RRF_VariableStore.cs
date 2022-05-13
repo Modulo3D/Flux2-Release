@@ -121,6 +121,9 @@ namespace Flux.ViewModels
                 });
 
                 MATERIAL_ENABLED = RegisterVariable(material_mixing.Create<bool, bool>("MATERIAL ENABLED", VariableUnit.Range(0, 4), (c, m) => m == 1));
+
+                var extruders = move.CreateArray(m => m.Extruders.Convert(e => e.Select((e, i) => (e, $"{i}")).ToDictionary(e => e.Item2, e => e.e)));
+                EXTRUSIONS = RegisterVariable(extruders.Create<double, Unit>("EXTRUSION_SET", VariableUnit.Range(0, 4), (c, e) => e.Position));
             }
             catch (Exception ex)
             {

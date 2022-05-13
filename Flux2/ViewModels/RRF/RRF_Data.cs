@@ -639,8 +639,8 @@ namespace Flux.ViewModels
         //[JsonProperty("nozzleName")]
         //public Optional<string> NozzleName { get; set; }
 
-        //[JsonProperty("position")]
-        //public Optional<double> Position { get; set; }
+        [JsonProperty("position")]
+        public Optional<double> Position { get; set; }
 
         //[JsonProperty("pressureAdvance")]
         //public Optional<double> PressureAdvance { get; set; }
@@ -717,8 +717,8 @@ namespace Flux.ViewModels
         //[JsonProperty("daa")]
         //public RRF_ObjectModelDaa Daa { get; set; }
 
-        //[JsonProperty("extruders")]
-        //public Optional<List<RRF_ObjectModelExtruder>> Extruders { get; set; }
+        [JsonProperty("extruders")]
+        public Optional<List<RRF_ObjectModelExtruder>> Extruders { get; set; }
 
         //[JsonProperty("idle")]
         //public RRF_ObjectModelIdle Idle { get; set; }

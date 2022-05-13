@@ -27,6 +27,9 @@ namespace Flux.ViewModels
     {
         public FluxViewModel Flux { get; }
 
+        private ObservableAsPropertyHelper<(bool has_mcode, Extrusion[] extrusions)> _Extrusions;
+        public (bool has_mcode, Extrusion[] extrusions) Extrusions => _Extrusions.Value;
+
         public IObservableCache<FeederEvaluator, ushort> FeederEvaluators { get; private set; }
         public IObservableList<Dictionary<QueueKey, Material>> ExpectedMaterialsQueue { get; private set; }
         public IObservableList<Dictionary<QueueKey, Nozzle>> ExpectedNozzlesQueue { get; private set; }
@@ -397,30 +400,69 @@ namespace Flux.ViewModels
                 .StartWith(new Dictionary<Guid, IFluxMCodeStorageViewModel>())
                 .DistinctUntilChanged(distinct_mcodes);
 
-            bool distinct_odometers(Dictionary<QueueKey, OdometerReading> d1, Dictionary<QueueKey, OdometerReading> d2)
-            {
-                try
-                {
-                    return string.Join(";", d1.Select(kvp => $"{kvp.Key}:{kvp.Value.Line}")) ==
-                        string.Join(";", d2.Select(kvp => $"{kvp.Key}:{kvp.Value.Line}"));
-                }
-                catch (Exception ex)
-                {
-                    return false;
-                }
-            }
-
-            var odometer_readings = Flux.Feeders.OdometerManager.Readings.Connect()
-                .AutoRefresh(r => r.Line)
+            var extrusions = Flux.ConnectionProvider
+                .ObserveVariable(c => c.EXTRUSIONS)
                 .QueryWhenChanged()
-                .Select(q => q.Items.ToDictionary(i => i.Key))
-                .StartWith(new Dictionary<QueueKey, OdometerReading>())
-                .DistinctUntilChanged(distinct_odometers);
+                .ThrottleMax(TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(15));
+
+            _Extrusions = Observable.CombineLatest(extrusions, selected_mcode, (extrusions, selected_mcode) =>
+                {
+                    var extrusion_set = new Extrusion[16];
+                    if (!selected_mcode.HasValue)
+                        return (false, extrusion_set);
+
+                    foreach (var extrusion in extrusions.KeyValues)
+                    {
+                        if (!ushort.TryParse(extrusion.Key.Value, out var extruder))
+                            continue;
+                        if (!extrusion.Value.HasValue)
+                            continue;
+                        var report = selected_mcode.Value.FeederReports.Lookup(extruder);
+                        if (!report.HasValue)
+                            continue;
+                        extrusion_set[extruder] = new Extrusion(report.Value, extrusion.Value.Value);
+                    }
+
+                    return (true, extrusion_set);
+                })
+                .ToProperty(this, v => v.Extrusions);
+
+            this.WhenAnyValue(v => v.Extrusions)
+                .PairWithPreviousValue()
+                .Subscribe(extrusions =>
+                {
+                    if (!extrusions.OldValue.has_mcode)
+                        return;
+                    if (!extrusions.NewValue.has_mcode)
+                        return;
+                    if (extrusions.OldValue.extrusions == null)
+                        return;
+                    if (extrusions.NewValue.extrusions == null)
+                        return;
+
+                    // reset extrusion value
+                    for (int e = 0; e < extrusions.OldValue.extrusions.Length; e++)
+                        if (extrusions.OldValue.extrusions[e].WeightG > extrusions.NewValue.extrusions[e].WeightG)
+                            extrusions.OldValue.extrusions[e] = new Extrusion(0);
+
+                    var feeders = Flux.Feeders.Feeders;
+                    foreach (var feeder in feeders.Items)
+                    {
+                        var extrusion_diff = extrusions.NewValue.extrusions[feeder.Position] - extrusions.OldValue.extrusions[feeder.Position];
+                        if (extrusion_diff.WeightG > 0)
+                        { 
+                            feeder.Material.Odometer.AccumulateValue(extrusion_diff);
+                            feeder.ToolNozzle.Odometer.AccumulateValue(extrusion_diff);
+                        }
+                    }
+                });
+
+            var extrusion_set = this.WhenAnyValue(v => v.Extrusions);
 
             var extrusion_set_queue = Observable.CombineLatest(
                 queue_pos,
                 mcode_queue,
-                odometer_readings,
+                extrusion_set,
                 mcodes,
                 GetExtrusionSetQueue)
                 .StartWithEmpty()
@@ -469,11 +511,8 @@ namespace Flux.ViewModels
                 .DistinctUntilChanged();
 
             _PrintProgress = Observable.CombineLatest(
-                queue_pos,
-                mcode_queue,
                 this.WhenAnyValue(v => v.PrintingEvaluation),
                 block_nr,
-                odometer_readings,
                 GetPrintProgress)
                 .DistinctUntilChanged()
                 .ToProperty(this, v => v.PrintProgress);
@@ -651,33 +690,19 @@ namespace Flux.ViewModels
         }
 
         // Progress and extrusion
-        private PrintProgress GetPrintProgress(Optional<QueuePosition> queue_pos, Dictionary<QueuePosition, Guid> queue, PrintingEvaluation evaluation, Optional<LineNumber> line_nr, Dictionary<QueueKey, OdometerReading> odometer_readings)
+        private PrintProgress GetPrintProgress(PrintingEvaluation evaluation, Optional<LineNumber> line_nr)
         {
             var selected_mcode = evaluation.SelectedMCode;
             // update job remaining time
             if (!selected_mcode.HasValue)
                 return new PrintProgress(0, TimeSpan.Zero);
-            var default_value = new PrintProgress(0, selected_mcode.Value.Duration);
 
-            float progress;
+            // return last line_nr
+            if ((!line_nr.HasValue || line_nr.Value == 0) && PrintProgress.Percentage > 0)
+                return PrintProgress;
+            
             var blocks = selected_mcode.Value.BlockCount;
-            if (line_nr.HasValue && line_nr.Value != 0)
-            {
-                progress = Math.Max(0, Math.Min(1, (float)line_nr.Value / blocks));
-            }
-            else 
-            {
-                if (!queue_pos.HasValue)
-                    return default_value;
-
-                var queue_key = new QueueKey(selected_mcode.Value.MCodeGuid, queue_pos.Value);
-                var odometer_reading = odometer_readings.Lookup(queue_key);
-                if (!odometer_reading.HasValue)
-                    return default_value;
-
-                progress = Math.Max(0, Math.Min(1, (float)odometer_reading.Value.Line / blocks));
-            }
-
+            var progress = Math.Max(0, Math.Min(1, (float)line_nr.ValueOr(() => new LineNumber(0)) / blocks));
             if (float.IsNaN(progress))
                 progress = 0;
 
@@ -695,14 +720,14 @@ namespace Flux.ViewModels
                 yield return evaluator;
             }
         }
-        private Optional<Dictionary<QueueKey, ExtrusionSet>> GetExtrusionSetQueue(Optional<QueuePosition> queue_pos, Dictionary<QueuePosition, Guid> queue, Dictionary<QueueKey, OdometerReading> odometer_readings, Dictionary<Guid, IFluxMCodeStorageViewModel> mcodes)
+        private Optional<Dictionary<QueueKey, Extrusion[]>> GetExtrusionSetQueue(Optional<QueuePosition> queue_pos, Dictionary<QueuePosition, Guid> queue, (bool has_mcode, Extrusion[] extrusions) odometer_extrusion_set, Dictionary<Guid, IFluxMCodeStorageViewModel> mcodes)
         {
             try
             {
                 if (!queue_pos.HasValue)
                     return default;
 
-                var extrusion_set_queue = new Dictionary<QueueKey, ExtrusionSet>();
+                var extrusion_set_queue = new Dictionary<QueueKey, Extrusion[]>();
                 foreach (var mcode_queue in queue)
                 {
                     var queue_key = new QueueKey(mcode_queue.Value, mcode_queue.Key);
@@ -715,16 +740,11 @@ namespace Flux.ViewModels
 
                     var mcode_analyzer = mcode_vm.Value.Analyzer;
 
-                    uint start_line = 0;
-                    if (queue_pos.Value == mcode_queue.Key)
-                    {
-                        var odometer_reading = odometer_readings.Lookup(queue_key);
-                        if (odometer_reading.HasValue)
-                            start_line = odometer_reading.Value.Line;
-                    }
+                    var extrusion_set = new Extrusion[16];
+                    if (queue_pos.Value == mcode_queue.Key && odometer_extrusion_set.has_mcode && odometer_extrusion_set.extrusions != null)
+                        for (int e = 0; e < extrusion_set.Length; e++)
+                            extrusion_set[e] = mcode_analyzer.Extrusions[e] - odometer_extrusion_set.extrusions[e];
 
-                    var extrusion_set_span = new LineSpan(start_line, mcode_analyzer.MCode.BlockCount);
-                    var extrusion_set = mcode_analyzer.MCodeReader.GetFilamentExtrusionSet(extrusion_set_span);
                     extrusion_set_queue.Add(queue_key, extrusion_set);
                 }
                 return extrusion_set_queue;

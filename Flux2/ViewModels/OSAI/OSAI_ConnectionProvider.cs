@@ -23,7 +23,6 @@ namespace Flux.ViewModels
         INITIALIZED_AXIS_REFERENCE = 7,
         END_PHASE = 8
     }
-
     public class OSAI_ConnectionProvider : FLUX_ConnectionProvider<OSAI_Connection, OSAI_VariableStore>
     {
         private ObservableAsPropertyHelper<Optional<bool>> _IsInitializing;
@@ -44,11 +43,11 @@ namespace Flux.ViewModels
 
         public FluxViewModel Flux { get; }
         public override IFlux IFlux => Flux;
+        public override OSAI_VariableStore VariableStore => new OSAI_VariableStore(this);
 
         public OSAI_ConnectionProvider(FluxViewModel flux)
         {
             Flux = flux;
-            VariableStore = new OSAI_VariableStore(this);
 
             var connection = this.WhenAnyValue(v => v.Connection);
             var full_memory_read = connection.Convert(c => c.MemoryBuffer)

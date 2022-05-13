@@ -25,9 +25,6 @@ namespace Flux.ViewModels
         public ObservableAsPropertyHelper<bool> _HasInvalidStates;
         public bool HasInvalidStates => _HasInvalidStates.Value;
 
-        IFlux IFluxFeedersViewModel.Flux => Flux;
-        public OdometerManager OdometerManager { get; private set; }
-
         public IObservableCache<Optional<Material>, ushort> Materials { get; }
         public IObservableCache<Optional<Nozzle>, ushort> Nozzles { get; }
         public IObservableCache<Optional<Tool>, ushort> Tools { get; }
@@ -82,8 +79,6 @@ namespace Flux.ViewModels
                 .Switch()
                 .ToProperty(this, v => v.SelectedFeeder)
                 .DisposeWith(Disposables);
-
-            OdometerManager = new OdometerManager(this, TimeSpan.FromSeconds(30));
         }
 
         private IObservable<Optional<IFluxFeederViewModel>> FindSelectedFeeder(short selected_extruder)

@@ -1,4 +1,5 @@
-﻿using DynamicData.Kernel;
+﻿using DynamicData;
+using DynamicData.Kernel;
 using Modulo3DStandard;
 using System;
 using System.Collections.Generic;
@@ -8,17 +9,17 @@ using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
-    internal class Dummy_ConnectionProvider : FLUX_ConnectionProvider<Dummy_Connection, Dummy_VariableStore>
+    public class Dummy_ConnectionProvider : FLUX_ConnectionProvider<Dummy_Connection, Dummy_VariableStore>
     {
         public FluxViewModel Flux { get; }
         public override IFlux IFlux => Flux;
         public override double ConnectionProgress => 0;
         public override Optional<bool> IsConnecting => true;
         public override Optional<bool> IsInitializing => true;
+        public override Dummy_VariableStore VariableStore => new Dummy_VariableStore(this);
         public Dummy_ConnectionProvider(FluxViewModel flux)
         {
             Flux = flux;
-            VariableStore = new Dummy_VariableStore(this);
         }
 
         public override void Initialize()
@@ -33,7 +34,7 @@ namespace Flux.ViewModels
         public override Optional<IEnumerable<string>> GenerateEndMCodeLines(MCode mcode, Optional<ushort> queue_size) => default;
     }
 
-    internal class Dummy_VariableStore : FLUX_VariableStore<Dummy_VariableStore>
+    public class Dummy_VariableStore : FLUX_VariableStore<Dummy_VariableStore>
     {
         public Dummy_ConnectionProvider ConnectionProvider { get; }
         public Dummy_VariableStore(Dummy_ConnectionProvider connectionProvider)
@@ -41,7 +42,7 @@ namespace Flux.ViewModels
             ConnectionProvider = connectionProvider;
         }
     }
-    internal class Dummy_Connection : FLUX_Connection<Dummy_VariableStore, Unit, Dummy_MemoryBuffer>
+    public class Dummy_Connection : FLUX_Connection<Dummy_VariableStore, Unit, Dummy_MemoryBuffer>
     {
         public override Dummy_MemoryBuffer MemoryBuffer { get; }
 
@@ -236,7 +237,7 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
     }
-    internal class Dummy_MemoryBuffer : FLUX_MemoryBuffer
+    public class Dummy_MemoryBuffer : FLUX_MemoryBuffer
     {
         public override Dummy_Connection Connection { get; }
         public Dummy_MemoryBuffer(Dummy_Connection connection)
