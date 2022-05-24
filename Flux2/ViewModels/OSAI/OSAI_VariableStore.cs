@@ -13,7 +13,7 @@ using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
-    public class OSAI_VariableStore : FLUX_VariableStore<OSAI_VariableStore>
+    public class OSAI_VariableStore : FLUX_VariableStore<OSAI_VariableStore, OSAI_ConnectionProvider>
     {
         public Optional<IFLUX_Variable<OSAI_ProcessMode, OSAI_ProcessMode>> PROCESS_MODE { get; }
         public Optional<IFLUX_Variable<OSAI_BootPhase, Unit>> BOOT_PHASE { get; }
@@ -31,9 +31,9 @@ namespace Flux.ViewModels
         public Optional<IFLUX_Variable<short, short>> HOLD_TOOL { get; }
         public Optional<IFLUX_Variable<double, double>> HOLD_BLK_NUM { get; }
 
-        public OSAI_VariableStore(OSAI_ConnectionProvider connection_provider)
+        public OSAI_VariableStore(OSAI_ConnectionProvider connection_provider) : base(connection_provider)
         {
-            var bump_unit = new VariableUnit[] { "x", "z" };
+            /*var bump_unit = new VariableUnit[] { "x", "z" };
             var drivers_unit = new VariableUnit[] { "xyz", "e" };
             var lock_unit = new VariableUnit[] { "chamber", "top" };
             var pid_unit = new VariableUnit[] { "kp", "ki", "kd" };
@@ -122,8 +122,8 @@ namespace Flux.ViewModels
                     Optional<short> hold_tool,
                     Optional<double> hold_blk_num,
                     Optional<MCodePartProgram> hold_part_program,
-                    IQuery<double, VariableUnit> hold_temp,
-                    IQuery<double, VariableUnit> hold_pos,
+                    IQuery<double, string> hold_temp,
+                    IQuery<double, string> hold_pos,
                     Optional<MCodePartProgram> selected_pp)
                 {
                     try
@@ -254,9 +254,9 @@ namespace Flux.ViewModels
             TOOL_ON_TRAILER = RegisterVariable(new OSAI_ArrayBool(connection, "TOOL ON TRAILER", 4, new OSAI_BitIndexAddress(OSAI_VARCODE.MW_CODE, 10202, 0), FluxMemReadPriority.HIGH, new OSAI_BitIndexAddress(OSAI_VARCODE.IW_CODE, 3, 4)));
             UPS_STATUS = RegisterVariable(new OSAI_ArrayBool(connection, "UPS STATUS", 6, new OSAI_BitIndexAddress(OSAI_VARCODE.MW_CODE, 10203, 0), FluxMemReadPriority.DISABLED));
 
-            WIRE_PRESENCE_BEFORE_GEAR = RegisterVariable(new OSAI_ArrayBool(connection, "WIRE PRESENCE BEFORE GEAR", 4, new OSAI_BitIndexAddress(OSAI_VARCODE.MW_CODE, 10204, 0), FluxMemReadPriority.HIGH, new OSAI_BitIndexAddress(OSAI_VARCODE.IW_CODE, 4, 0)));
-            WIRE_PRESENCE_AFTER_GEAR = RegisterVariable(new OSAI_ArrayBool(connection, "WIRE PRESENCE AFTER GEAR", 4, new OSAI_BitIndexAddress(OSAI_VARCODE.MW_CODE, 10205, 0), FluxMemReadPriority.HIGH, new OSAI_BitIndexAddress(OSAI_VARCODE.IW_CODE, 4, 4)));
-            WIRE_PRESENCE_ON_HEAD = RegisterVariable(new OSAI_ArrayBool(connection, "WIRE PRESENCE ON HEAD", 4, new OSAI_BitIndexAddress(OSAI_VARCODE.MW_CODE, 10206, 0), FluxMemReadPriority.HIGH, new OSAI_BitIndexAddress(OSAI_VARCODE.IW_CODE, 4, 8)));
+            FILAMENT_BEFORE_GEAR = RegisterVariable(new OSAI_ArrayBool(connection, "WIRE PRESENCE BEFORE GEAR", 4, new OSAI_BitIndexAddress(OSAI_VARCODE.MW_CODE, 10204, 0), FluxMemReadPriority.HIGH, new OSAI_BitIndexAddress(OSAI_VARCODE.IW_CODE, 4, 0)));
+            FILAMENT_AFTER_GEAR = RegisterVariable(new OSAI_ArrayBool(connection, "WIRE PRESENCE AFTER GEAR", 4, new OSAI_BitIndexAddress(OSAI_VARCODE.MW_CODE, 10205, 0), FluxMemReadPriority.HIGH, new OSAI_BitIndexAddress(OSAI_VARCODE.IW_CODE, 4, 4)));
+            FILAMENT_ON_HEAD = RegisterVariable(new OSAI_ArrayBool(connection, "WIRE PRESENCE ON HEAD", 4, new OSAI_BitIndexAddress(OSAI_VARCODE.MW_CODE, 10206, 0), FluxMemReadPriority.HIGH, new OSAI_BitIndexAddress(OSAI_VARCODE.IW_CODE, 4, 8)));
             TOOL_IN_MAGAZINE = RegisterVariable(new OSAI_ArrayBool(connection, "TOOL IN MAGAZINE", 4, new OSAI_BitIndexAddress(OSAI_VARCODE.MW_CODE, 10207, 0), FluxMemReadPriority.HIGH, new OSAI_BitIndexAddress(OSAI_VARCODE.IW_CODE, 5, 0)));
             PISTON_LOW = RegisterVariable(new OSAI_ArrayBool(connection, "PISTON LOW", 4, new OSAI_BitIndexAddress(OSAI_VARCODE.MW_CODE, 10208, 0), FluxMemReadPriority.HIGH, new OSAI_BitIndexAddress(OSAI_VARCODE.IW_CODE, 5, 4)));
 
@@ -285,7 +285,7 @@ namespace Flux.ViewModels
             ENABLE_HOLDING_FAN = RegisterVariable(new OSAI_ArrayBool(connection, "ENABLE HOLDING FAN", 4, new OSAI_BitIndexAddress(OSAI_VARCODE.MW_CODE, 10759, 0), FluxMemReadPriority.LOW, new OSAI_BitIndexAddress(OSAI_VARCODE.OW_CODE, 2, 0)));
             RAISE_PNEUMATIC_PISTON = RegisterVariable(new OSAI_ArrayBool(connection, "RAISE PNEUMATIC PISTON", 4, new OSAI_BitIndexAddress(OSAI_VARCODE.MW_CODE, 10760, 0), FluxMemReadPriority.LOW, new OSAI_BitIndexAddress(OSAI_VARCODE.OW_CODE, 2, 4)));
             LOWER_PNEUMATIC_PISTON = RegisterVariable(new OSAI_ArrayBool(connection, "LOWER PNEUMATIC PISTON", 4, new OSAI_BitIndexAddress(OSAI_VARCODE.MW_CODE, 10761, 0), FluxMemReadPriority.LOW, new OSAI_BitIndexAddress(OSAI_VARCODE.OW_CODE, 2, 8)));
-
+            */
 
         }
 

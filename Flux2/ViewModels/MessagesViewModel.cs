@@ -328,8 +328,6 @@ namespace Flux.ViewModels
         }
         public void LogMessage<TRData, TWData>(Func<IFLUX_VariableStore, IFLUX_Variable<TRData, TWData>> get_plc_var, bool reading)
         {
-            var variable = get_plc_var(Flux.ConnectionProvider.VariableStore);
-            LogMessage(variable, reading);
         }
         public void LogMessage<TRData, TWData>(IFLUX_Array<TRData, TWData> plc_array, ushort position, bool reading)
         {
@@ -339,8 +337,6 @@ namespace Flux.ViewModels
         }
         public void LogMessage<TRData, TWData>(Func<IFLUX_VariableStore, IFLUX_Array<TRData, TWData>> get_plc_array, ushort position, bool reading)
         {
-            var array = get_plc_array(Flux.ConnectionProvider.VariableStore);
-            LogMessage(array, position, reading);
         }
 
         public void LogMessage<TRData, TWData>(Optional<IFLUX_Variable<TRData, TWData>> plc_var, bool reading)
@@ -350,9 +346,6 @@ namespace Flux.ViewModels
         }
         public void LogMessage<TRData, TWData>(Func<IFLUX_VariableStore, Optional<IFLUX_Variable<TRData, TWData>>> get_plc_var, bool reading)
         {
-            var variable = get_plc_var(Flux.ConnectionProvider.VariableStore);
-            if (variable.HasValue)
-                LogMessage(variable.Value, reading);
         }
         public void LogMessage<TRData, TWData>(Optional<IFLUX_Array<TRData, TWData>> plc_array, ushort position, bool reading)
         {
@@ -361,9 +354,6 @@ namespace Flux.ViewModels
         }
         public void LogMessage<TRData, TWData>(Func<IFLUX_VariableStore, Optional<IFLUX_Array<TRData, TWData>>> get_plc_array, ushort position, bool reading)
         {
-            var array = get_plc_array(Flux.ConnectionProvider.VariableStore);
-            if (array.HasValue)
-                LogMessage(array.Value, position, reading);
         }
 
         public FileResponse LogMessage(FileResponse file_response, IFluxMCodeStorageViewModel file, Optional<Exception> ex = default)

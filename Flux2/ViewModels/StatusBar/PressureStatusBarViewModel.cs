@@ -21,7 +21,7 @@ namespace Flux.ViewModels
                 .StartWith(true);
 
             var not_found = Flux.StatusProvider.PressurePresence.ValueChanged
-                .Convert(v => float.IsNaN(v.pressure.Kpa))
+                .Convert(v => double.IsNaN(v.pressure.Kpa))
                 .DistinctUntilChanged()
                 .StartWithEmpty();
 

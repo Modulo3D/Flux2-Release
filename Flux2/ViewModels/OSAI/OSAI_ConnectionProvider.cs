@@ -43,7 +43,7 @@ namespace Flux.ViewModels
 
         public FluxViewModel Flux { get; }
         public override IFlux IFlux => Flux;
-        public override OSAI_VariableStore VariableStore => new OSAI_VariableStore(this);
+        protected override OSAI_VariableStore VariableStore => new OSAI_VariableStore(this);
 
         public OSAI_ConnectionProvider(FluxViewModel flux)
         {

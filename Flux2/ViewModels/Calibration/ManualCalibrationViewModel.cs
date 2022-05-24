@@ -60,11 +60,11 @@ namespace Flux.ViewModels
                     if (!t.HasValue)
                         return Observable.Return(Optional<double>.None);
 
-                    var tool_key = Flux.ConnectionProvider.VariableStore.GetArrayUnit(m => m.TEMP_TOOL, t.Value);
+                    var tool_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TEMP_TOOL, t.Value);
                     if (!tool_key.HasValue)
                         return Observable.Return(Optional<double>.None);
 
-                    return Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_TOOL, tool_key.Value)
+                    return Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_TOOL, tool_key.Value.Alias)
                         .Convert(t => t.Current);
                 })
                 .Switch()
@@ -77,11 +77,11 @@ namespace Flux.ViewModels
                     if (!t.HasValue)
                         return Observable.Return(0.0);
 
-                    var tool_key = Flux.ConnectionProvider.VariableStore.GetArrayUnit(m => m.TEMP_TOOL, t.Value);
+                    var tool_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TEMP_TOOL, t.Value);
                     if (!tool_key.HasValue)
                         return Observable.Return(0.0);
 
-                    return Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_TOOL, tool_key.Value)
+                    return Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_TOOL, tool_key.Value.Alias)
                         .ConvertOr(t =>
                         {
                             if (t.Current > t.Target)
@@ -210,12 +210,12 @@ namespace Flux.ViewModels
             Flux.Navigator.NavigateBack();
         }
 
-        private IEnumerable<CmdButton> FindToolButtons(Optional<ushort> extruders)
+        private IEnumerable<CmdButton> FindToolButtons(Optional<(ushort machine_extruders, ushort mixing_extruders)> extruders)
         {
             if (!extruders.HasValue)
                 yield break;
 
-            for (ushort extruder = 0; extruder < extruders.Value; extruder++)
+            for (ushort extruder = 0; extruder < extruders.Value.machine_extruders; extruder++)
             {
                 var e = extruder;
 

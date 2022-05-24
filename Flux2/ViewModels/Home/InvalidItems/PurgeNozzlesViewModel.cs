@@ -24,7 +24,7 @@ namespace Flux.ViewModels
             var tool_material = eval.Feeder.WhenAnyValue(f => f.SelectedToolMaterial);
 
             _InvalidItemBrush = Observable.CombineLatest(
-               eval.Feeder.ToolNozzle.WhenAnyValue(m => m.Temperature),
+               eval.Feeder.ToolNozzle.WhenAnyValue(m => m.NozzleTemperature),
                tool_material.ConvertMany(tm => tm.WhenAnyValue(m => m.ExtrusionTemp)).ValueOr(() => 0),
                (current_temp, expected_temp) =>
                {
@@ -51,7 +51,7 @@ namespace Flux.ViewModels
         public override IObservable<Optional<string>> GetCurrentValue(FeederEvaluator evaluation)
         {
             return evaluation.Feeder.ToolNozzle
-                .WhenAnyValue(t => t.Temperature)
+                .WhenAnyValue(t => t.NozzleTemperature)
                 .ConvertOr(t => $"{t.Current:0}°C", () => "Err")
                 .Select(t => t.ToOptional());
         }

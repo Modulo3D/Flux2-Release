@@ -45,7 +45,7 @@ namespace Flux.ViewModels
         public IFLUX_VariableBase VariableBase => Array;
 
         [RemoteContent(true)]
-        public IObservableCache<MemoryVariableViewModel, VariableUnit> Variables { get; }
+        public IObservableCache<MemoryVariableViewModel, string> Variables { get; }
 
         [RemoteOutput(false)]
         public override string VariableName => Array.Name;

@@ -47,8 +47,6 @@ namespace Flux.ViewModels
 
             _Value = Variable.IValueChanged
                 .ToProperty(this, v => v.Value);
-
-
         }
 
         private async Task SetValueAsync()

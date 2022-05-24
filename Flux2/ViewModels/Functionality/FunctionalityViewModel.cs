@@ -11,7 +11,7 @@ namespace Flux.ViewModels
 {
     public class NFCInnerViewModel : NavPanelViewModel<NFCInnerViewModel>
     {
-        public NFCInnerViewModel(string name, IFluxTagViewModel tag_vm, ushort load_position) : base((FluxViewModel)tag_vm.Feeder.Flux, $"{name.ToCamelCase()}??{tag_vm.Position + 1}")
+        public NFCInnerViewModel(FluxViewModel flux, string name, IFluxTagViewModel tag_vm, ushort load_position) : base(flux, $"{name.ToCamelCase()}??{tag_vm.Position + 1}")
         {
             var can_lock = Observable.CombineLatest(
                 is_unlocked_tag(tag_vm),
@@ -91,17 +91,16 @@ namespace Flux.ViewModels
                     Clear();
                     if (extruders.HasValue)
                     {
-                        for (ushort extr = 0; extr < extruders.Value; extr++)
+                        for (ushort machine_e = 0; machine_e < extruders.Value.machine_extruders; machine_e++)
                         {
-                            var e = extr;
-
-                            var feeder = flux.Feeders.Feeders.Lookup(extr);
+                            var current_machine_e = machine_e;
+                            var feeder = flux.Feeders.Feeders.Lookup(current_machine_e);
                             if (!feeder.HasValue)
                                 continue;
-
-                            AddModal(new NFCInnerViewModel("Tool", feeder.Value.ToolNozzle, e));
-                            foreach (var material in feeder.Value.Materials.Items)
-                                AddModal(new NFCInnerViewModel("Material", material, e));
+                            AddModal(new NFCInnerViewModel(flux, "Tool", feeder.Value.ToolNozzle, current_machine_e));
+                            
+                            foreach(var material in feeder.Value.Materials.Items)
+                                AddModal(new NFCInnerViewModel(flux, "Material", material, current_machine_e));
                         }
                     }
                 });
@@ -110,14 +109,12 @@ namespace Flux.ViewModels
 
     public class ManageViewModel : NavPanelViewModel<ManageViewModel>
     {
-        public MoveViewModel Movement { get; }
         public MemoryViewModel Memory { get; }
         public FilesViewModel Files { get; }
         public TemperaturesViewModel Temperatures { get; }
 
         public ManageViewModel(FluxViewModel flux) : base(flux)
         {
-            Movement = new MoveViewModel(Flux);
             Memory = new MemoryViewModel(Flux);
             Files = new FilesViewModel(Flux);
             Temperatures = new TemperaturesViewModel(Flux);
@@ -173,12 +170,15 @@ namespace Flux.ViewModels
                 .ValueOr(() => true)
                 .ToOptional();
 
-            AddModal(
-                Flux.Magazine,
-                can_navigate: IS_IDLE,
-                navigate_back: can_naviagate_back);
+            if (Flux.ConnectionProvider.HasToolChange)
+            { 
+                AddModal(
+                    Flux.Magazine,
+                    can_navigate: IS_IDLE,
+                    navigate_back: can_naviagate_back);
+            }
 
-            if (Flux.ConnectionProvider.VariableStore.HasVariable(c => c.DISABLE_24V))
+            if (Flux.ConnectionProvider.HasVariable(c => c.DISABLE_24V))
                 AddCommand("power", ShutdownAsync, can_execute: IS_IDLE);
 
             AddCommand("cleanPlate", CleanPlate);
@@ -223,11 +223,10 @@ namespace Flux.ViewModels
             AddModal(Temperatures);
             AddCommand("reloadDatabase", () => Flux.DatabaseProvider.Initialize(), can_execute: IS_IDLE, visible: advanced_mode);
             AddCommand("resetPrinter", Flux.Startup.ResetPrinter, visible: advanced_mode);
-            AddCommand("vacuumPump", m => m.VariableStore.ENABLE_VACUUM, can_execute: IS_IDLE, visible: advanced_mode);
-            AddCommand("openClamp", m => m.VariableStore.OPEN_HEAD_CLAMP, can_execute: IS_IDLE, visible: advanced_mode);
+            AddCommand("vacuumPump", m => m.ENABLE_VACUUM, can_execute: IS_IDLE, visible: advanced_mode);
+            AddCommand("openClamp", m => m.OPEN_HEAD_CLAMP, can_execute: IS_IDLE, visible: advanced_mode);
             //AddCommand("createArray", () => array = new byte[1024 * 1024 * 200]);
 
-            AddModal(Movement, visible: advanced_mode);
             AddModal(Memory, visible: advanced_mode);
             AddModal(Files, visible: advanced_mode);
         }
@@ -243,7 +242,7 @@ namespace Flux.ViewModels
         {
             foreach (var feeder in Flux.Feeders.Feeders.Items)
             {
-                if (feeder.ToolNozzle.Temperature.ConvertOr(t => t.Current > 60, () => false))
+                if (feeder.ToolNozzle.NozzleTemperature.ConvertOr(t => t.Current > 60, () => false))
                 {
                     Flux.Messages.LogMessage("Estrusori caldi", "Aspetta che tutti gli estrusori si siano raffreddati", MessageLevel.ERROR, 100);
                     return;
@@ -316,22 +315,6 @@ namespace Flux.ViewModels
                         can_execute: IS_IEHS);
 
                     AddCommand(
-                         "setLowCurrentAsync",
-                         Flux.ConnectionProvider.SetLowCurrentAsync,
-                         can_execute: IS_IEHS,
-                         visible: advanced_mode);
-
-                    AddCommand(
-                        "setMagazineLimits",
-                        () =>
-                        {
-                            using var put_mag_limits_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                            Flux.ConnectionProvider.ExecuteParamacroAsync(m => new[] { "M98 P\"/macros/magazine_limits\"" }, put_mag_limits_cts.Token);
-                        },
-                        can_execute: IS_IEHS,
-                        visible: advanced_mode);
-
-                    AddCommand(
                         "parkTool",
                         Flux.ConnectionProvider.ParkToolAsync,
                         can_execute: IS_IEHS,
@@ -339,7 +322,7 @@ namespace Flux.ViewModels
 
                     if (extruders.HasValue)
                     {
-                        for (ushort extruder = 0; extruder < extruders.Value; extruder++)
+                        for (ushort extruder = 0; extruder < extruders.Value.machine_extruders; extruder++)
                         {
                             var extr = extruder;
                             AddCommand(
@@ -352,14 +335,17 @@ namespace Flux.ViewModels
 
                     if (extruders.HasValue)
                     {
-                        for (ushort extruder = 0; extruder < extruders.Value; extruder++)
+                        if (Flux.ConnectionProvider.HasToolChange)
                         {
-                            var extr = extruder;
-                            AddCommand(
-                                $"probeMagazine??{extr + 1}",
-                                () => Flux.ConnectionProvider.ProbeMagazineAsync(extr),
-                                can_execute: IS_IEHS,
-                                visible: advanced_mode);
+                            for (ushort extruder = 0; extruder < extruders.Value.machine_extruders; extruder++)
+                            {
+                                var extr = extruder;
+                                AddCommand(
+                                    $"probeMagazine??{extr + 1}",
+                                    () => Flux.ConnectionProvider.ProbeMagazineAsync(extr),
+                                    can_execute: IS_IEHS,
+                                    visible: advanced_mode);
+                            }
                         }
                     }
                 });

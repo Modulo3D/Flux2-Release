@@ -67,12 +67,11 @@ namespace Flux.ViewModels
 
         public void AddCommand(
             string name,
-            Func<IFLUX_ConnectionProvider, Optional<IFLUX_Variable<bool, bool>>> get_variable,
+            Func<IFLUX_VariableStore, Optional<IFLUX_Variable<bool, bool>>> get_variable,
             Optional<IObservable<bool>> can_execute = default,
             Optional<IObservable<bool>> visible = default)
         {
-            var memory = Flux.ConnectionProvider;
-            var variable = get_variable(memory);
+            var variable = Flux.ConnectionProvider.GetVariable(get_variable);
             if (variable.HasValue)
                 AddCommand(name, variable.Value, can_execute, visible);
         }

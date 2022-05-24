@@ -21,7 +21,7 @@ namespace Flux.ViewModels
                 .StartWith(true);
 
             var temp = Flux.ConnectionProvider
-                .ObserveVariable(f => f.TEMP_CHAMBER)
+                .ObserveVariable(f => f.TEMP_CHAMBER, "main")
                 .DistinctUntilChanged();
 
             var open = Flux.StatusProvider.ChamberLockClosed.ValueChanged

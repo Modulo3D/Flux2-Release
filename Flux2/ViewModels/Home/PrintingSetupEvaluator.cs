@@ -349,7 +349,7 @@ namespace Flux.ViewModels
 
             _HasColdNozzle = Observable.CombineLatest(
                 Status.WhenAnyValue(s => s.PrintingEvaluation),
-                Feeder.ToolNozzle.WhenAnyValue(t => t.Temperature),
+                Feeder.ToolNozzle.WhenAnyValue(t => t.NozzleTemperature),
                 tool_material.ConvertMany(tm => tm.WhenAnyValue(t => t.ExtrusionTemp)),
                 ColdNozzle)
                 .ToProperty(this, e => e.HasColdNozzle);

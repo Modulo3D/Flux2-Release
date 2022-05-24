@@ -16,7 +16,7 @@ namespace Flux.ViewModels
         public override double ConnectionProgress => 0;
         public override Optional<bool> IsConnecting => true;
         public override Optional<bool> IsInitializing => true;
-        public override Dummy_VariableStore VariableStore => new Dummy_VariableStore(this);
+        protected override Dummy_VariableStore VariableStore => new Dummy_VariableStore(this);
         public Dummy_ConnectionProvider(FluxViewModel flux)
         {
             Flux = flux;
@@ -34,12 +34,10 @@ namespace Flux.ViewModels
         public override Optional<IEnumerable<string>> GenerateEndMCodeLines(MCode mcode, Optional<ushort> queue_size) => default;
     }
 
-    public class Dummy_VariableStore : FLUX_VariableStore<Dummy_VariableStore>
+    public class Dummy_VariableStore : FLUX_VariableStore<Dummy_VariableStore, Dummy_ConnectionProvider>
     {
-        public Dummy_ConnectionProvider ConnectionProvider { get; }
-        public Dummy_VariableStore(Dummy_ConnectionProvider connectionProvider)
+        public Dummy_VariableStore(Dummy_ConnectionProvider connection_provider) : base(connection_provider)
         {
-            ConnectionProvider = connectionProvider;
         }
     }
     public class Dummy_Connection : FLUX_Connection<Dummy_VariableStore, Unit, Dummy_MemoryBuffer>
@@ -92,11 +90,6 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override Optional<IEnumerable<string>> GetLoadFilamentGCode(ushort position, Nozzle nozzle, double temperature)
-        {
-            throw new NotImplementedException();
-        }
-
         public override Optional<IEnumerable<string>> GetLowerPlateGCode()
         {
             throw new NotImplementedException();
@@ -116,12 +109,6 @@ namespace Flux.ViewModels
         {
             throw new NotImplementedException();
         }
-
-        public override Optional<IEnumerable<string>> GetPurgeToolGCode(ushort position, Nozzle nozzle, double temperature)
-        {
-            throw new NotImplementedException();
-        }
-
         public override Optional<IEnumerable<string>> GetRaisePlateGCode()
         {
             throw new NotImplementedException();
@@ -161,12 +148,6 @@ namespace Flux.ViewModels
         {
             throw new NotImplementedException();
         }
-
-        public override Optional<IEnumerable<string>> GetUnloadFilamentGCode(ushort position, Nozzle nozzle, double temperature)
-        {
-            throw new NotImplementedException();
-        }
-
         public override Task<Optional<FLUX_FileList>> ListFilesAsync(string folder, CancellationToken ct)
         {
             throw new NotImplementedException();

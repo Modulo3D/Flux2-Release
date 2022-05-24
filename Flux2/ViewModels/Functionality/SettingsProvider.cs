@@ -41,8 +41,8 @@ namespace Flux.ViewModels
             }
         }
 
-        private ObservableAsPropertyHelper<Optional<ushort>> _ExtrudersCount;
-        public Optional<ushort> ExtrudersCount => _ExtrudersCount.Value;
+        private ObservableAsPropertyHelper<Optional<(ushort machine_extruders, ushort mixing_extruders)>> _ExtrudersCount;
+        public Optional<(ushort machine_extruders, ushort mixing_extruders)> ExtrudersCount => _ExtrudersCount.Value;
 
         public SettingsProvider(FluxViewModel flux)
         {
@@ -60,7 +60,14 @@ namespace Flux.ViewModels
                 .ToProperty(this, v => v.HostAddress);
 
             _ExtrudersCount = this.WhenAnyValue(v => v.Printer)
-                .Select(GetExtruderCount)
+                .Convert(p => 
+                {
+                    if (!p.MachineExtruderCount.HasValue)
+                        return default;
+                    if (!p.MixingExtruderCount.HasValue)
+                        return default;
+                    return (p.MachineExtruderCount.Value, p.MixingExtruderCount.Value);
+                })
                 .ToProperty(this, v => v.ExtrudersCount);
         }
 
@@ -84,7 +91,7 @@ namespace Flux.ViewModels
                 return false;
             }
 
-            var enable_drivers = Flux.ConnectionProvider.VariableStore.GetVariables(m => m.ENABLE_DRIVERS);
+            var enable_drivers = Flux.ConnectionProvider.GetVariables(m => m.ENABLE_DRIVERS);
             if (enable_drivers.HasValue)
             {
                 foreach (var variable in enable_drivers.Value.Items)
@@ -113,7 +120,7 @@ namespace Flux.ViewModels
                 return false;
             }
 
-            var tool_on_trailer = Flux.ConnectionProvider.VariableStore.GetVariables(m => m.MEM_TOOL_ON_TRAILER);
+            var tool_on_trailer = Flux.ConnectionProvider.GetVariables(m => m.MEM_TOOL_ON_TRAILER);
             if (tool_on_trailer.HasValue)
             {
                 foreach (var variable in tool_on_trailer.Value.Items)
@@ -126,7 +133,7 @@ namespace Flux.ViewModels
                 }
             }
 
-            var tool_on_magazine = Flux.ConnectionProvider.VariableStore.GetVariables(m => m.MEM_TOOL_IN_MAGAZINE);
+            var tool_on_magazine = Flux.ConnectionProvider.GetVariables(m => m.MEM_TOOL_IN_MAGAZINE);
             if (tool_on_magazine.HasValue)
             {
                 foreach (var variable in tool_on_magazine.Value.Items)
@@ -139,13 +146,13 @@ namespace Flux.ViewModels
                 }
             }
 
-            for (ushort extruder = 0; extruder < ExtrudersCount.Value; extruder++)
+            for (ushort extruder = 0; extruder < ExtrudersCount.Value.machine_extruders; extruder++)
             {
-                var extr_key = Flux.ConnectionProvider.VariableStore.GetArrayUnit(m => m.MEM_TOOL_IN_MAGAZINE, extruder);
+                var extr_key = Flux.ConnectionProvider.GetArrayUnit(m => m.MEM_TOOL_IN_MAGAZINE, extruder);
                 if (!extr_key.HasValue)
                     return false;
 
-                if (!await Flux.ConnectionProvider.WriteVariableAsync(m => m.MEM_TOOL_IN_MAGAZINE, extr_key.Value, true))
+                if (!await Flux.ConnectionProvider.WriteVariableAsync(m => m.MEM_TOOL_IN_MAGAZINE, extr_key.Value.Alias, true))
                 {
                     Flux.Messages.LogMessage("Errore resetta magazzino", "Tool non nel magazzino", MessageLevel.ERROR, 0);
                     return false;
@@ -156,13 +163,6 @@ namespace Flux.ViewModels
         }
 
         // GET EXTRUDERS
-        private Optional<ushort> GetExtruderCount(Optional<Printer> printer)
-        {
-            if (!printer.HasValue)
-                return default;
-            return printer.Value["machine_extruder_count"].TryGetValue<ushort>();
-        }
-
         public bool PersistLocalSettings()
         {
             var result = CoreSettings.PersistLocalSettings() && UserSettings.PersistLocalSettings();

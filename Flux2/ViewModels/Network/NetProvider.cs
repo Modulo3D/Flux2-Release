@@ -413,25 +413,24 @@ namespace Flux.ViewModels
         }
         [Route(HttpVerbs.Get, "/memory")]
         public async Task GetMemory()
-        {
-            var memory = Flux.ConnectionProvider.VariableStore;
-            var variables = memory.Variables.Values.SelectMany(v =>
+        {;
+            var variables = Flux.ConnectionProvider.Variables.SelectMany(v =>
             {
-                switch (v)
+                switch (v.Value)
                 {
-                    case IOSAI_Variable pvar:
+                    case IFLUX_Variable pvar:
                         return new[] { pvar };
-                    case IOSAI_Array parr:
+                    case IFLUX_Array parr:
                         return parr.Variables.Items;
                     default:
-                        return new IOSAI_Variable[0];
+                        return new IFLUX_Variable[0];
                 }
             });
 
             var sb = new StringBuilder();
             var text_format = "{0, -35} {1,-20} {2,-10}";
             foreach (var variable in variables)
-                sb.AppendLine(string.Format(text_format, variable.Name, variable.LogicalAddress, variable.IValue));
+                sb.AppendLine(string.Format(text_format, variable.Name, variable.Unit, variable.IValue));
 
             await HttpContext.SendStringAsync(sb.ToString(), "text/plain", Encoding.UTF8);
         }

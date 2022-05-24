@@ -52,25 +52,25 @@ namespace Flux.ViewModels
                 .ValueOr(() => false);
             RaiseMagazineCommand = ReactiveCommand.CreateFromTask(RaiseMagazineAsync, can_raise);
 
-            if (Flux.ConnectionProvider.VariableStore.HasVariable(m => m.RAISE_PNEUMATIC_PISTON))
+            if (Flux.ConnectionProvider.HasVariable(m => m.RAISE_PNEUMATIC_PISTON))
                 AddCommand("raiseMagazine", RaiseMagazineCommand);
         }
 
         private async Task RaiseMagazineAsync()
         {
-            var lower_key = Flux.ConnectionProvider.VariableStore.GetArrayUnit(m => m.LOWER_PNEUMATIC_PISTON, Feeder.Position);
+            var lower_key = Flux.ConnectionProvider.GetArrayUnit(m => m.LOWER_PNEUMATIC_PISTON, Feeder.Position);
             if (!lower_key.HasValue)
                 return;
 
-            var raise_key = Flux.ConnectionProvider.VariableStore.GetArrayUnit(m => m.RAISE_PNEUMATIC_PISTON, Feeder.Position);
+            var raise_key = Flux.ConnectionProvider.GetArrayUnit(m => m.RAISE_PNEUMATIC_PISTON, Feeder.Position);
             if (!raise_key.HasValue)
                 return;
 
-            await Flux.ConnectionProvider.WriteVariableAsync(m => m.LOWER_PNEUMATIC_PISTON, lower_key.Value, false);
-            await Flux.ConnectionProvider.WriteVariableAsync(m => m.RAISE_PNEUMATIC_PISTON, lower_key.Value, true);
+            await Flux.ConnectionProvider.WriteVariableAsync(m => m.LOWER_PNEUMATIC_PISTON, lower_key.Value.Alias, false);
+            await Flux.ConnectionProvider.WriteVariableAsync(m => m.RAISE_PNEUMATIC_PISTON, lower_key.Value.Alias, true);
 
             await Task.Delay(TimeSpan.FromSeconds(1));
-            await Flux.ConnectionProvider.WriteVariableAsync(m => m.RAISE_PNEUMATIC_PISTON, raise_key.Value, false);
+            await Flux.ConnectionProvider.WriteVariableAsync(m => m.RAISE_PNEUMATIC_PISTON, raise_key.Value.Alias, false);
         }
     }
 }

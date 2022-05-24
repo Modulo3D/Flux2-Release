@@ -139,7 +139,7 @@ namespace Flux.ViewModels
                     if (!v.@out)
                         return new ConditionState(default, "");
                     if (v.@in.pressure.Kpa > v.@in.level)
-                        return new ConditionState(true, "INSERIRE UN FOGLIO");
+                        return new ConditionState(false, "INSERIRE UN FOGLIO");
                     return new ConditionState(true, "FOGLIO INSERITO");
                 },
                 () => new ConditionState(default, "")),
@@ -413,7 +413,7 @@ namespace Flux.ViewModels
 
                     foreach (var extrusion in extrusions.KeyValues)
                     {
-                        if (!ushort.TryParse(extrusion.Key.Value, out var extruder))
+                        if (!ushort.TryParse(extrusion.Key, out var extruder))
                             continue;
                         if (!extrusion.Value.HasValue)
                             continue;
@@ -451,8 +451,9 @@ namespace Flux.ViewModels
                         var extrusion_diff = extrusions.NewValue.extrusions[feeder.Position] - extrusions.OldValue.extrusions[feeder.Position];
                         if (extrusion_diff.WeightG > 0)
                         { 
-                            feeder.Material.Odometer.AccumulateValue(extrusion_diff);
                             feeder.ToolNozzle.Odometer.AccumulateValue(extrusion_diff);
+                            if(feeder.SelectedMaterial.HasValue)
+                                feeder.SelectedMaterial.Value.Odometer.AccumulateValue(extrusion_diff);
                         }
                     }
                 });

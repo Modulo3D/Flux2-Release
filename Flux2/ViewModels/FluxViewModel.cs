@@ -210,10 +210,10 @@ namespace Flux.ViewModels
                         .ValueOrDefault();
 
                     // COMMANDS
-                    if (ConnectionProvider.VariableStore.HasVariable(s => s.CHAMBER_LIGHT))
+                    if (ConnectionProvider.HasVariable(s => s.CHAMBER_LIGHT))
                         RightButtonCommand = ReactiveCommand.CreateFromTask(async () => { await ConnectionProvider.ToggleVariableAsync(m => m.CHAMBER_LIGHT); });
 
-                    if (ConnectionProvider.VariableStore.HasVariable(s => s.OPEN_LOCK, "chamber"))
+                    if (ConnectionProvider.HasVariable(s => s.OPEN_LOCK, "chamber"))
                         LeftButtonCommand = ReactiveCommand.CreateFromTask(async () => { await ConnectionProvider.ToggleVariableAsync(m => m.OPEN_LOCK, "chamber"); }, is_idle);
 
                     var status_bar_nav = new NavModalViewModel(this, StatusBar);

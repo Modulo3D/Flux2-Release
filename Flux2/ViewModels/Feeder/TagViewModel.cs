@@ -274,12 +274,12 @@ namespace Flux.ViewModels
 
             return nfc;
 
-            Optional<bool> check_tag<TNFCTag2>(INFCReading<TNFCTag2> reading, ushort position) where TNFCTag2 : INFCTag
+            Optional<bool> check_tag<TNFCTag2>(INFCReading<TNFCTag2> reading, ushort tag_position) where TNFCTag2 : INFCTag
             {
                 if (reading.CardId != nfc.CardId)
                     return true;
 
-                if (position == Position)
+                if (tag_position == Position)
                     return true;
 
                 if (!reading.Tag.HasValue || reading.Tag.Value.Loaded.HasValue || reading.Tag.Value.PrinterGuid != Guid.Empty)

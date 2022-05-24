@@ -50,12 +50,12 @@ namespace Flux.ViewModels
 
         public HomeViewModel(FluxViewModel flux) : base(flux)
         {
-            WelcomePhase = new WelcomeViewModel(Flux);
+            WelcomePhase = new WelcomeViewModel(Flux); // ok
             RecoveryPhase = new RecoveryViewModel(Flux);
             PrintingPhase = new PrintingViewModel(Flux);
             ColdNozzlesPhase = new PurgeNozzlesViewModel(Flux);
             PreparePrintPhase = new PreparePrintViewModel(Flux);
-            InvalidToolsPhase = new InvalidToolsViewModel(Flux);
+            InvalidToolsPhase = new InvalidToolsViewModel(Flux); // ok
             LowMaterialsPhase = new LowMaterialsViewModel(Flux);
             InvalidProbesPhase = new InvalidProbesViewModel(Flux);
             InvalidMaterialsPhase = new InvalidMaterialsViewModel(Flux);

@@ -30,15 +30,13 @@ namespace Flux.ViewModels
 
         public override void Initialize()
         {
-            // TODO
-            if (Flux.ConnectionProvider.VariableStore.HasVariable(m => m.LOCK_CLOSED))
-            {
-                Conditions.Add(Flux.StatusProvider.TopLockClosed);
-                Conditions.Add(Flux.StatusProvider.ChamberLockClosed);
-            }
-
-            if (Flux.ConnectionProvider.VariableStore.HasVariable(m => m.VACUUM_PRESENCE))
+            if (Flux.ConnectionProvider.HasVariable(m => m.VACUUM_PRESENCE))
                 Conditions.Add(Flux.StatusProvider.VacuumPresence);
+            // TODO
+            if (Flux.ConnectionProvider.HasVariable(m => m.LOCK_CLOSED, "top"))
+                Conditions.Add(Flux.StatusProvider.TopLockClosed);
+            if (Flux.ConnectionProvider.HasVariable(m => m.LOCK_CLOSED, "chamber"))
+                Conditions.Add(Flux.StatusProvider.ChamberLockClosed);
 
             InitializeRemoteView();
         }

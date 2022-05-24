@@ -11,12 +11,12 @@ namespace Flux.ViewModels
 {
     public interface IOSAI_Array : IOSAI_VariableBase, IFLUX_Array
     {
-        new IObservableCache<IOSAI_Variable, VariableUnit> Variables { get; }
+        new IObservableCache<IOSAI_Variable, string> Variables { get; }
     }
 
     public interface IOSAI_Array<TRData, TWData> : IOSAI_Array, IFLUX_Array<TRData, TWData>
     {
-        new IObservableCache<IOSAI_Variable<TRData, TWData>, VariableUnit> Variables { get; }
+        new IObservableCache<IOSAI_Variable<TRData, TWData>, string> Variables { get; }
     }
 
     public abstract class OSAI_Array<TVariable, TAddress, TRData, TWData> : FLUX_Array<TRData, TWData>, IOSAI_Array<TRData, TWData>, IEnumerable<TVariable>
@@ -31,10 +31,10 @@ namespace Flux.ViewModels
         public TAddress LogicalAddress { get; }
         IOSAI_Address IOSAI_VariableBase.LogicalAddress => LogicalAddress;
 
-        public new ISourceCache<TVariable, VariableUnit> Variables { get; }
+        public new ISourceCache<TVariable, string> Variables { get; }
 
-        private IObservableCache<IOSAI_Variable<TRData, TWData>, VariableUnit> _InnerVariables1;
-        IObservableCache<IOSAI_Variable<TRData, TWData>, VariableUnit> IOSAI_Array<TRData, TWData>.Variables
+        private IObservableCache<IOSAI_Variable<TRData, TWData>, string> _InnerVariables1;
+        IObservableCache<IOSAI_Variable<TRData, TWData>, string> IOSAI_Array<TRData, TWData>.Variables
         {
             get
             {
@@ -47,8 +47,8 @@ namespace Flux.ViewModels
                 return _InnerVariables1;
             }
         }
-        private IObservableCache<IOSAI_Variable, VariableUnit> _InnerVariables2;
-        IObservableCache<IOSAI_Variable, VariableUnit> IOSAI_Array.Variables
+        private IObservableCache<IOSAI_Variable, string> _InnerVariables2;
+        IObservableCache<IOSAI_Variable, string> IOSAI_Array.Variables
         {
             get
             {
@@ -70,14 +70,14 @@ namespace Flux.ViewModels
             FluxMemReadPriority priority,
             Func<string, TAddress, FluxMemReadPriority, VariableUnit, ushort, Optional<TAddress>, TVariable> create_var,
             Optional<TAddress> s_physical_address = default,
-            Optional<IEnumerable<VariableUnit>> custom_unit = default)
+            Optional<HashSet<VariableUnit>> custom_unit = default)
             : base(name, priority)
         {
 
             Connection = connection;
             LogicalAddress = s_logical_address;
 
-            Variables = new SourceCache<TVariable, VariableUnit>(v => v.Unit.ValueOr(() => ""));
+            Variables = new SourceCache<TVariable, string>(v => v.Unit.Alias);
             base.Variables = Variables.Connect()
                 .Transform(v => (IFLUX_Variable<TRData, TWData>)v)
                 .AsObservableCache();
@@ -89,8 +89,9 @@ namespace Flux.ViewModels
             {
                 var unit = GetArrayUnit(i);
 
+                // TODO
                 var i_name = $"{name} {unit}";
-                var i_var = create_var(i_name, i_logical_address, priority, unit, i, i_physical_address);
+                var i_var = create_var(i_name, i_logical_address, priority, default, i, i_physical_address);
 
                 i_logical_address = i_logical_address.Increment();
                 i_physical_address = i_physical_address.Convert(a => a.Increment());
@@ -104,13 +105,12 @@ namespace Flux.ViewModels
         public IEnumerator<TVariable> GetEnumerator() => Variables.Items.GetEnumerator();
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
-        public override VariableUnit GetArrayUnit(ushort position)
+        public override Optional<VariableUnit> GetArrayUnit(ushort position)
         {
             return Variables.Items
                 .ElementAtOrDefault(position)
                 .ToOptional(v => v != null)
-                .Convert(v => v.Unit)
-                .ValueOr(() => $"{position + 1}");
+                .Convert(v => v.Unit);
         }
     }
 
@@ -123,7 +123,7 @@ namespace Flux.ViewModels
             OSAI_BitIndexAddress s_logical_address,
             FluxMemReadPriority priority,
             Optional<OSAI_BitIndexAddress> s_physical_address = default,
-            Optional<IEnumerable<VariableUnit>> custom_unit = default)
+            Optional<HashSet<VariableUnit>> custom_unit = default)
             : base(connection, name, count, s_logical_address, priority, (name, l_addr, p, unit, i, p_addr) => new OSAI_VariableBool(connection, name, l_addr, p, p_addr, unit), s_physical_address, custom_unit)
         {
         }
@@ -138,7 +138,7 @@ namespace Flux.ViewModels
             OSAI_IndexAddress s_logical_address,
             FluxMemReadPriority priority,
             Optional<OSAI_IndexAddress> s_physical_address = default,
-            Optional<IEnumerable<VariableUnit>> custom_unit = default)
+            Optional<HashSet<VariableUnit>> custom_unit = default)
             : base(connection, name, count, s_logical_address, priority, (name, l_addr, p, unit, i, p_addr) => new OSAI_VariableWord(connection, name, l_addr, p, p_addr, unit), s_physical_address, custom_unit)
         {
         }
@@ -153,7 +153,7 @@ namespace Flux.ViewModels
             OSAI_IndexAddress s_logical_address,
             FluxMemReadPriority priority,
             Optional<OSAI_IndexAddress> s_physical_address = default,
-            Optional<IEnumerable<VariableUnit>> custom_unit = default)
+            Optional<HashSet<VariableUnit>> custom_unit = default)
             : base(connection, name, count, s_logical_address, priority, (name, l_addr, p, unit, i, p_addr) => new OSAI_VariableDouble(connection, name, l_addr, p, p_addr, unit), s_physical_address, custom_unit)
         {
         }
@@ -167,7 +167,7 @@ namespace Flux.ViewModels
             ushort count,
             OSAI_IndexAddress s_logical_address,
             FluxMemReadPriority priority,
-            Optional<IEnumerable<VariableUnit>> custom_unit = default)
+            Optional<HashSet<VariableUnit>> custom_unit = default)
             : base(connection, name, count, s_logical_address, priority, (name, l_addr, p, unit, i, p_addr) => new OSAI_VariableText(connection, name, l_addr, p, unit), default, custom_unit)
         {
         }
@@ -182,7 +182,7 @@ namespace Flux.ViewModels
             OSAI_IndexAddress s_logical_address,
             FluxMemReadPriority priority,
             Func<ushort, double, string> write_temp,
-            Optional<IEnumerable<VariableUnit>> custom_unit = default)
+            Optional<HashSet<VariableUnit>> custom_unit = default)
             : base(connection, name, count, s_logical_address, priority, (name, l_addr, p, unit, i, p_addr) => new OSAI_VariableTemp(connection, name, l_addr, p, t => write_temp(i, t), unit), default, custom_unit)
         {
         }
@@ -198,7 +198,7 @@ namespace Flux.ViewModels
             OSAI_NamedAddress s_logical_address,
             FluxMemReadPriority priority,
             Func<string, OSAI_NamedAddress, FluxMemReadPriority, VariableUnit, TVariable> create_var,
-            Optional<IEnumerable<VariableUnit>> custom_unit = default)
+            Optional<HashSet<VariableUnit>> custom_unit = default)
             : base(connection, name, count, s_logical_address, priority, (name, l_addr, p, unit, i, p_addr) => create_var(name, l_addr, p, unit), default, custom_unit)
         {
         }
@@ -212,7 +212,7 @@ namespace Flux.ViewModels
             ushort count,
             OSAI_NamedAddress s_logical_address,
             FluxMemReadPriority priority,
-            Optional<IEnumerable<VariableUnit>> custom_unit = default)
+            Optional<HashSet<VariableUnit>> custom_unit = default)
             : base(connection, name, count, s_logical_address, priority, (name, l_addr, p, unit) => new OSAI_VariableNamedDouble(connection, name, l_addr, p, unit), custom_unit)
         {
         }

@@ -90,11 +90,11 @@ namespace Flux.ViewModels
                 .Select(f => Optional<IFluxFeederViewModel>.Create(f));
         }
 
-        private IEnumerable<IFluxFeederViewModel> CreateFeeders(Optional<ushort> extruders)
+        private IEnumerable<IFluxFeederViewModel> CreateFeeders(Optional<(ushort machine_extruders, ushort mixing_extruders)> extruders)
         {
             if (!extruders.HasValue)
                 yield break;
-            for (ushort position = 0; position < extruders.Value; position++)
+            for (ushort position = 0; position < extruders.Value.machine_extruders; position++)
                 yield return new FeederViewModel(this, position);
         }
     }

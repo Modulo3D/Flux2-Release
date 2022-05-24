@@ -21,29 +21,37 @@ namespace Flux.ViewModels
                 .AsObservableCache();
         }
 
-        private IEnumerable<TemperatureViewModel> FindTemperatures(Optional<ushort> extruders)
+        private IEnumerable<TemperatureViewModel> FindTemperatures(Optional<(ushort machine_extruders, ushort mixing_extruders)> extruders)
         {
-            if (extruders.HasValue && Flux.ConnectionProvider.VariableStore.HasVariable(m => m.TEMP_TOOL))
+            if (extruders.HasValue && Flux.ConnectionProvider.HasVariable(m => m.TEMP_TOOL))
             {
-                for (ushort i = 0; i < extruders.Value; i++)
+                for (ushort i = 0; i < extruders.Value.machine_extruders; i++)
                 {
                     var extruder = i;
-                    var extr_key = Flux.ConnectionProvider.VariableStore.GetArrayUnit(m => m.TEMP_TOOL, i);
+                    var extr_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TEMP_TOOL, i);
                     if (!extr_key.HasValue)
                         continue;
 
-                    var extr_temp = Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_TOOL, extr_key.Value);
-                    yield return new TemperatureViewModel(this, $"Estrusore {i + 1}", $"{i}", t => Flux.ConnectionProvider.WriteVariableAsync(m => m.TEMP_TOOL, extr_key.Value, t), extr_temp);
+                    var extr_temp = Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_TOOL, extr_key.Value.Alias);
+                    yield return new TemperatureViewModel(this, $"Estrusore {i + 1}", $"{i}", t => Flux.ConnectionProvider.WriteVariableAsync(m => m.TEMP_TOOL, extr_key.Value.Alias, t), extr_temp);
                 }
             }
 
-            if (Flux.ConnectionProvider.VariableStore.HasVariable(m => m.TEMP_CHAMBER))
+            // TODO
+
+            if (Flux.ConnectionProvider.HasVariable(m => m.TEMP_CHAMBER, "main"))
             {
-                var chamber_temp = Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_CHAMBER);
-                yield return new TemperatureViewModel(this, "Camera", $"chamber", t => Flux.ConnectionProvider.WriteVariableAsync(m => m.TEMP_CHAMBER, t), chamber_temp);
+                var chamber_temp = Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_CHAMBER, "main");
+                yield return new TemperatureViewModel(this, "Camera", $"chamber", t => Flux.ConnectionProvider.WriteVariableAsync(m => m.TEMP_CHAMBER, "main", t), chamber_temp);
             }
 
-            if (Flux.ConnectionProvider.VariableStore.HasVariable(m => m.TEMP_PLATE))
+            if (Flux.ConnectionProvider.HasVariable(m => m.TEMP_CHAMBER, "spools"))
+            {
+                var chamber_temp = Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_CHAMBER, "spools");
+                yield return new TemperatureViewModel(this, "Portabobine", $"spools", t => Flux.ConnectionProvider.WriteVariableAsync(m => m.TEMP_CHAMBER, "spools", t), chamber_temp);
+            }
+
+            if (Flux.ConnectionProvider.HasVariable(m => m.TEMP_PLATE))
             {
                 var plate_temp = Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_PLATE);
                 yield return new TemperatureViewModel(this, "Piatto", $"plate", t => Flux.ConnectionProvider.WriteVariableAsync(m => m.TEMP_PLATE, t), plate_temp);

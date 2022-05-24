@@ -7,6 +7,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
@@ -235,14 +238,6 @@ namespace Flux.ViewModels
         [JsonProperty("heaters")]
         [JsonConverter(typeof(JsonConverters.OptionalConverter<List<RRF_ObjectModelHeater>>))]
         public Optional<List<RRF_ObjectModelHeater>> Heaters { get; set; }
-
-        public Optional<FLUX_Temp> GetPlateTemperature()
-        {
-            if (!Heaters.HasValue)
-                return default;
-            return Heaters.Value[0]
-                .GetTemperature();
-        }
     }
 
     public class RRF_ObjectModelInput
@@ -761,8 +756,8 @@ namespace Flux.ViewModels
 
     public class RRF_ObjectModelAnalog
     {
-        //[JsonProperty("lastReading")]
-        //public Optional<double> LastReading { get; set; }
+        [JsonProperty("lastReading")]
+        public Optional<double> LastReading { get; set; }
 
         //[JsonProperty("name")]
         //public Optional<string> Name { get; set; }
@@ -782,8 +777,14 @@ namespace Flux.ViewModels
 
     public class RRF_ObjectModelGpIn
     {
-        //[JsonProperty("value")]
-        //public Optional<double> Value { get; set; }
+        [JsonProperty("value")]
+        public Optional<double> Value { get; set; }
+    }
+
+    public class RRF_ObjectModelGpOut
+    {
+        [JsonProperty("pwm")]
+        public Optional<double> Pwm { get; set; }
     }
 
     public class RRF_ObjectModelProbe
@@ -842,18 +843,18 @@ namespace Flux.ViewModels
 
     public class RRF_ObjectModelSensors
     {
-        //[JsonProperty("analog")]
-        //public Optional<List<RRF_ObjectModelAnalog>> Analog { get; set; }
+        [JsonProperty("analog")]
+        public Optional<List<RRF_ObjectModelAnalog>> Analog { get; set; }
 
         [JsonProperty("endstops")]
         [JsonConverter(typeof(JsonConverters.OptionalConverter<List<RRF_ObjectModelEndstop>>))]
         public Optional<List<RRF_ObjectModelEndstop>> Endstops { get; set; }
 
-        //[JsonProperty("filamentMonitors")]
-        //public Optional<List<object>> FilamentMonitors { get; set; }
+        [JsonProperty("filamentMonitors")]
+        public Optional<List<RRF_FilamentMonitor>> FilamentMonitors { get; set; }
 
-        //[JsonProperty("gpIn")]
-        //public Optional<List<RRF_ObjectModelGpIn>> GpIn { get; set; }
+        [JsonProperty("gpIn")]
+        public Optional<List<RRF_ObjectModelGpIn>> GpIn { get; set; }
 
         [JsonProperty("probes")]
         [JsonConverter(typeof(JsonConverters.OptionalConverter<List<RRF_ObjectModelProbe>>))]
@@ -865,6 +866,13 @@ namespace Flux.ViewModels
                 return default;
             return Probes.Value[probe].Value;
         }
+    }
+
+    public class RRF_FilamentMonitor
+    {
+        [JsonProperty("status")]
+        [JsonConverter(typeof(JsonConverters.OptionalConverter<string>))]
+        public Optional<string> Status { get; set; }
     }
 
     public class RRF_ObjectModelSeqs
@@ -975,8 +983,8 @@ namespace Flux.ViewModels
         //[JsonProperty("displayMessage")]
         //public Optional<string> DisplayMessage { get; set; }
 
-        //[JsonProperty("gpOut")]
-        //public Optional<List<object>> GpOut { get; set; }
+        [JsonProperty("gpOut")]
+        public Optional<List<RRF_ObjectModelGpOut>> GpOut { get; set; }
 
         //[JsonProperty("laserPwm")]
         //public object LaserPwm { get; set; }
@@ -1110,14 +1118,14 @@ namespace Flux.ViewModels
         //public Optional<string> State { get; set; }
     }
 
-    public class RRF_GlobalModelConverter : JsonConverter<RRF_GlobalModel>
+    public class RRF_GlobalModelConverter : JsonConverter<RRF_ObjectModelGlobal>
     {
-        public override RRF_GlobalModel ReadJson(JsonReader reader, Type objectType, RRF_GlobalModel existingValue, bool hasExistingValue, JsonSerializer serializer)
+        public override RRF_ObjectModelGlobal ReadJson(JsonReader reader, Type objectType, RRF_ObjectModelGlobal existingValue, bool hasExistingValue, JsonSerializer serializer)
         {
             try
             {
                 var model = serializer.Deserialize<JObject>(reader);
-                return new RRF_GlobalModel(model);
+                return new RRF_ObjectModelGlobal(model);
             }
             catch (Exception)
             {
@@ -1125,7 +1133,7 @@ namespace Flux.ViewModels
             }
         }
 
-        public override void WriteJson(JsonWriter writer, RRF_GlobalModel value, JsonSerializer serializer)
+        public override void WriteJson(JsonWriter writer, RRF_ObjectModelGlobal value, JsonSerializer serializer)
         {
             throw new NotImplementedException();
         }
@@ -1133,9 +1141,9 @@ namespace Flux.ViewModels
 
 
     [JsonConverter(typeof(RRF_GlobalModelConverter))]
-    public class RRF_GlobalModel : JObject
+    public class RRF_ObjectModelGlobal : JObject
     {
-        public RRF_GlobalModel(JObject model) : base(model) { }
+        public RRF_ObjectModelGlobal(JObject model) : base(model) { }
     }
 
     public class RRF_ObjectModel : ReactiveObject
@@ -1173,8 +1181,8 @@ namespace Flux.ViewModels
         private Optional<List<RRF_ObjectModelTool>> _Tools;
         public Optional<List<RRF_ObjectModelTool>> Tools { get => _Tools; set => this.RaiseAndSetIfChanged(ref _Tools, value); }
 
-        private Optional<RRF_GlobalModel> _Global;
-        public Optional<RRF_GlobalModel> Global { get => _Global; set => this.RaiseAndSetIfChanged(ref _Global, value); }
+        private Optional<RRF_ObjectModelGlobal> _Global;
+        public Optional<RRF_ObjectModelGlobal> Global { get => _Global; set => this.RaiseAndSetIfChanged(ref _Global, value); }
 
         private Optional<FLUX_FileList> _Queue;
         public Optional<FLUX_FileList> Queue { get => _Queue; set => this.RaiseAndSetIfChanged(ref _Queue, value); }
@@ -1232,7 +1240,7 @@ namespace Flux.ViewModels
             }
         }
 
-        public static Optional<MCodePartProgram> GetPartProgram(this (RRF_ObjectModelJob job, RRF_GlobalModel global, FLUX_FileList storage, FLUX_FileList queue) data)
+        public static Optional<MCodePartProgram> GetPartProgram(this (RRF_ObjectModelJob job, RRF_ObjectModelGlobal global, FLUX_FileList storage, FLUX_FileList queue) data)
         {
             try
             {
@@ -1244,11 +1252,11 @@ namespace Flux.ViewModels
                     return default;
 
                 var queue_dict = data.queue.GetGuidDictionaryFromQueue();
-                if (!queue_dict.TryGetValue(queue_pos.Value, out var current_guid))
+                if (!queue_dict.HasValue || !queue_dict.Value.TryGetValue(queue_pos.Value, out var current_guid))
                     return default;
 
                 var storage_dict = data.storage.GetPartProgramDictionaryFromStorage();
-                if (!storage_dict.ContainsKey(current_guid))
+                if (!storage_dict.HasValue || !storage_dict.Value.ContainsKey(current_guid))
                     return default;
 
                 // Full part program from filename
@@ -1260,12 +1268,12 @@ namespace Flux.ViewModels
                 if (MCodePartProgram.TryParse(partprogram_filename, out var full_part_program) && 
                     full_part_program.MCodeGuid == current_guid)
                 { 
-                    if (storage_dict.TryGetValue(full_part_program.MCodeGuid, out var part_programs) &&
+                    if (storage_dict.Value.TryGetValue(full_part_program.MCodeGuid, out var part_programs) &&
                         part_programs.TryGetValue(full_part_program.StartBlock, out var part_program))
                         return part_program;
                 }
 
-                return storage_dict.FirstOrOptional(kvp => kvp.Key == current_guid)
+                return storage_dict.Value.FirstOrOptional(kvp => kvp.Key == current_guid)
                     .Convert(p => p.Value.Values.FirstOrDefault());
             }
             catch
@@ -1285,14 +1293,122 @@ namespace Flux.ViewModels
                 yield return part_program;
             }
         }
-        public static Dictionary<Guid, Dictionary<BlockNumber, MCodePartProgram>> GetPartProgramDictionaryFromStorage(this FLUX_FileList storage)
+
+
+        public static async Task<Optional<IFLUX_MCodeRecovery>> GetMCodeRecoveryAsync(this FLUX_FileList files, RRF_Connection connection)
+        {
+            if (!files.Files.Any(f => f.Name == "resurrect.g"))
+                return default;
+
+            var get_resurrect_cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            var resurrect_source = await connection.DownloadFileAsync(f => f.StoragePath, "resurrect.g", get_resurrect_cts.Token);
+            if (!resurrect_source.HasValue)
+                return default;
+
+            var hold_file = resurrect_source.Match("M23 \"(.*)\"")
+                .Convert(m => m.Groups.Lookup(1));
+            if (!hold_file.HasValue)
+                return default;
+
+            var hold_mcode_partprogram = hold_file
+                .Convert(m => MCodePartProgram.Parse(m.Value));
+            if (!hold_mcode_partprogram.HasValue)
+                return default;
+
+            var hold_mcode_vm = connection.Flux.MCodes.AvaiableMCodes.Lookup(hold_mcode_partprogram.Value.MCodeGuid);
+            if (!hold_mcode_vm.HasValue)
+                return default;
+
+            var hold_byte_offset = resurrect_source.Match("M26 S([+-]?[0-9]+)")
+                .Convert(m => m.Groups.Lookup(1))
+                .Convert(o => uint.TryParse(o.Value, out var offset) ? offset : default);
+            if (!hold_byte_offset.HasValue)
+                return default;
+
+            var hold_tool = resurrect_source.Matches("T([+-]?[0-9]+) P([+-]?[0-9]+)")
+                .Convert(m => m[1].Groups.Lookup(1))
+                .Convert(t => short.TryParse(t.Value, out var tool) ? tool : default);
+            if (!hold_tool.HasValue)
+                return default;
+
+            var mcode_recovery = new RRF_MCodeRecovery(
+                hold_mcode_partprogram.Value.MCodeGuid,
+                hold_byte_offset.Value,
+                hold_tool.Value);
+
+            if (!files.Files.Any(f => f.Name == mcode_recovery.FileName))
+            {
+                // upload file
+
+                var hold_plate_temp = resurrect_source.Match("M140 P([+-]?[0-9]+) S([+-]?[0-9]*[.]?[0-9]+)")
+                    .Convert(m => m.Groups.Lookup(2))
+                    .Convert(m => m.Value);
+                if (!hold_plate_temp.HasValue)
+                    return default;
+
+                var hold_e_pos = resurrect_source.Match("G92 E([+-]?[0-9]*[.]?[0-9]+)")
+                    .Convert(m => m.Groups.Lookup(1))
+                    .Convert(e => e.Value);
+                if (!hold_e_pos.HasValue)
+                    return default;
+
+                var hold_moves = resurrect_source.Matches("G0 ([a-zA-Z0-9. ]*)");
+                if (!hold_moves.HasValue)
+                    return default;
+
+                var hold_temps = resurrect_source.Matches("G10 P([+-]?[0-9]+) S([+-]?[0-9]*[.]?[0-9]+) R([+-]?[0-9]*[.]?[0-9]+)");
+                if (!hold_temps.HasValue)
+                    return default;
+
+                var hold_feedrate = resurrect_source.Match("G1 F([+-]?[0-9]*[.]?[0-9]+) P([+-]?[0-9]+)")
+                    .Convert(m => m.Groups.Lookup(1))
+                    .Convert(m => m.Value);
+                if (!hold_feedrate.HasValue)
+                    return default;
+
+                var put_resurrect_cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+                if (!await connection.PutFileAsync(
+                    f => f.StoragePath,
+                    mcode_recovery.FileName,
+                    put_resurrect_cts.Token,
+                    get_recovery_lines().ToOptional()))
+                    return default;
+
+                IEnumerable<string> get_recovery_lines()
+                {
+                    yield return $"M140 S{hold_plate_temp}";
+                    foreach (Match hold_temp in hold_temps.Value)
+                        yield return hold_temp.Value;
+
+                    yield return $"T{hold_tool}";
+                    yield return "M98 P\"resurrect-prologue.g\"";
+                    yield return $"G92 E{hold_e_pos}";
+
+                    yield return "M116";
+
+                    yield return $"M23 \"{hold_file}\"";
+                    yield return $"M26 S{hold_byte_offset}";
+
+                    foreach (Match hold_move in hold_moves.Value)
+                        yield return hold_move.Value;
+
+                    yield return $"G1 F{hold_feedrate} P0";
+
+                    yield return "M24";
+                }
+            }
+
+            return mcode_recovery;
+        }
+
+        public static Optional<Dictionary<Guid, Dictionary<BlockNumber, MCodePartProgram>>> GetPartProgramDictionaryFromStorage(this FLUX_FileList storage)
         {
             return storage.GetPartProgramFromStorage()
                 .GroupBy(s => s.MCodeGuid)
                 .ToDictionary(g => g.Key, g => g.ToDictionary(m => m.StartBlock));
         }
 
-        public static Dictionary<QueuePosition, Guid> GetGuidDictionaryFromQueue(this FLUX_FileList queue)
+        public static Optional<Dictionary<QueuePosition, Guid>> GetGuidDictionaryFromQueue(this FLUX_FileList queue)
         {
             return queue.GetGuidFromQueue()
                 .GroupBy(s => s.queue_pos)

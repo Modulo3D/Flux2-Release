@@ -315,7 +315,7 @@ namespace Flux.ViewModels
                     if (!await Flux.ConnectionProvider.PreparePartProgramAsync(analyzer, recovery, select, PrepareMCodeCTS.Token, report_progress_internal))
                         return false;
 
-                if (Flux.ConnectionProvider.VariableStore.HasVariable(c => c.ENABLE_VACUUM))
+                if (Flux.ConnectionProvider.HasVariable(c => c.ENABLE_VACUUM))
                 {
                     if (!await Flux.ConnectionProvider.WriteVariableAsync(m => m.ENABLE_VACUUM, true))
                     {

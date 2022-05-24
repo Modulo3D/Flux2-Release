@@ -74,24 +74,24 @@ namespace Flux.ViewModels
             var multiplier = Observable.Return(1.0);
             Odometer = new OdometerViewModel<NFCMaterial>(this, multiplier);
 
-            var before_gear_key = Flux.ConnectionProvider.VariableStore.GetArrayUnit(m => m.WIRE_PRESENCE_BEFORE_GEAR, Feeder.Position);
+            var before_gear_key = Flux.ConnectionProvider.GetArrayUnit(m => m.FILAMENT_BEFORE_GEAR, Feeder.Position);
             _WirePresence1 = Flux.ConnectionProvider.ObserveVariable(
-                m => m.WIRE_PRESENCE_BEFORE_GEAR,
-                before_gear_key.ValueOr(() => ""))
+                m => m.FILAMENT_BEFORE_GEAR,
+                before_gear_key.ConvertOr(u => u.Alias, () => ""))
                 .ToProperty(this, v => v.WirePresence1)
                 .DisposeWith(Disposables);
 
-            var after_gear_key = Flux.ConnectionProvider.VariableStore.GetArrayUnit(m => m.WIRE_PRESENCE_AFTER_GEAR, Feeder.Position);
+            var after_gear_key = Flux.ConnectionProvider.GetArrayUnit(m => m.FILAMENT_AFTER_GEAR, Feeder.Position);
             _WirePresence2 = Flux.ConnectionProvider.ObserveVariable(
-                m => m.WIRE_PRESENCE_AFTER_GEAR,
-                after_gear_key.ValueOr(() => ""))
+                m => m.FILAMENT_AFTER_GEAR,
+                after_gear_key.ConvertOr(u => u.Alias, () => ""))
                 .ToProperty(this, v => v.WirePresence2)
                 .DisposeWith(Disposables);
 
-            var on_head_key = Flux.ConnectionProvider.VariableStore.GetArrayUnit(m => m.WIRE_PRESENCE_ON_HEAD, Feeder.Position);
+            var on_head_key = Flux.ConnectionProvider.GetArrayUnit(m => m.FILAMENT_ON_HEAD, Feeder.Position);
             _WirePresence3 = Flux.ConnectionProvider.ObserveVariable(
-                m => m.WIRE_PRESENCE_ON_HEAD,
-                on_head_key.ValueOr(() => ""))
+                m => m.FILAMENT_ON_HEAD,
+                on_head_key.ConvertOr(u => u.Alias, () => ""))
                 .ToProperty(this, v => v.WirePresence3)
                 .DisposeWith(Disposables);
         }
@@ -104,40 +104,56 @@ namespace Flux.ViewModels
                 .ToProperty(this, v => v.State)
                 .DisposeWith(Disposables);
 
-            var tool_material = Feeder
-                .WhenAnyValue(f => f.SelectedToolMaterial);
+            var tool_nozzle = Feeder.ToolNozzle
+                .WhenAnyValue(t => t.State);
+
+            var tool_material = Feeder.ToolMaterials.Connect()
+                .WatchOptional(Position);
+
+            var is_selected = Feeder.WhenAnyValue(f => f.SelectedMaterial)
+                .Convert(m => m == this)
+                .ValueOr(() => false);
 
             _MaterialBrush = Observable.CombineLatest(
+                is_selected,
+                tool_nozzle,
                 this.WhenAnyValue(v => v.State),
                 tool_material.ConvertMany(tm => tm.WhenAnyValue(v => v.State)),
-                (m, tm) =>
+                (s, tn, m, tm) =>
                 {
-                    if (!tm.HasValue)
+                    if (!tn.IsLoaded())
                         return FluxColors.Empty;
                     if (m.IsNotLoaded())
                         return FluxColors.Empty;
+                    if (!m.Known)
+                        return FluxColors.Error;
+                    if (!tm.HasValue)
+                        return FluxColors.Error;
                     if (tm.Value.Compatible.HasValue && !tm.Value.Compatible.Value)
                         return FluxColors.Error;
-                    if (!m.Known)
-                        return FluxColors.Warning;
-                    if (!m.IsLoaded())
+                    if (!m.Inserted)
+                        return FluxColors.Empty;
+                    if (!m.Loaded)
                         return FluxColors.Inactive;
                     if (!m.Locked)
-                        return FluxColors.Error;
-                    return FluxColors.Active;
+                        return FluxColors.Warning;
+                    if (!s)
+                        return FluxColors.Active;
+                    return FluxColors.Selected;
                 })
                 .ToProperty(this, v => v.MaterialBrush)
                 .DisposeWith(Disposables);
 
             var material = Observable.CombineLatest(
+                tool_nozzle,
                 this.WhenAnyValue(v => v.State),
                 tool_material.ConvertMany(tm => tm.WhenAnyValue(v => v.State)),
                 Flux.StatusProvider.CanSafeCycle,
-                (material, tool_material, idle) => new
+                (tool_nozzle, material, tool_material, idle) => new
                 {
-                    can_purge = idle && CanPurgeMaterial(material, tool_material),
-                    can_load = idle && CanLoadMaterial(material, tool_material),
-                    can_unload = idle && CanUnloadMaterial(material, tool_material),
+                    can_purge = idle && CanPurgeMaterial(tool_nozzle, material, tool_material),
+                    can_load = idle && CanLoadMaterial(tool_nozzle, material, tool_material),
+                    can_unload = idle && CanUnloadMaterial(tool_nozzle, material, tool_material),
                 });
 
             UnloadMaterialCommand = ReactiveCommand.CreateFromTask(UnloadAsync, material.Select(m => m.can_unload))
@@ -176,15 +192,18 @@ namespace Flux.ViewModels
             var selected = Feeder.SelectedMaterial
                 .ConvertOr(m => m.Position == Position, () => false);
 
-            var compatible = Feeder.WhenAnyValue(f => f.SelectedToolMaterial)
+            var compatible = Feeder.ToolMaterials.Connect()
+                .WatchOptional(Position)
                 .ConvertMany(tm => tm.WhenAnyValue(tm => tm.Document))
                 .Select(d => d.HasValue);
 
             return Observable.CombineLatest(inserted, known, locked, loaded,
                  (inserted, known, locked, loaded) => new MaterialState(inserted, known, selected, locked, loaded));
         }
-        private bool CanUnloadMaterial(MaterialState material, Optional<ToolMaterialState> tool_material)
+        private bool CanUnloadMaterial(ToolNozzleState tool_nozzle, MaterialState material,  Optional<ToolMaterialState> tool_material)
         {
+            if (!tool_nozzle.IsLoaded())
+                return false;
             if (material.IsNotLoaded())
                 return false;
             if (!tool_material.HasValue)
@@ -193,8 +212,10 @@ namespace Flux.ViewModels
                 return false;
             return true;
         }
-        private bool CanLoadMaterial(MaterialState material, Optional<ToolMaterialState> tool_material)
+        private bool CanLoadMaterial(ToolNozzleState tool_nozzle, MaterialState material,  Optional<ToolMaterialState> tool_material)
         {
+            if (!tool_nozzle.IsLoaded())
+                return false;
             if (material.IsLoaded())
                 return false;
             if (!tool_material.HasValue)
@@ -203,8 +224,10 @@ namespace Flux.ViewModels
                 return false;
             return true;
         }
-        private bool CanPurgeMaterial(MaterialState material, Optional<ToolMaterialState> tool_material)
+        private bool CanPurgeMaterial(ToolNozzleState tool_nozzle, MaterialState material, Optional<ToolMaterialState> tool_material)
         {
+            if (!tool_nozzle.IsLoaded())
+                return false;
             if (!material.IsLoaded())
                 return false;
             if (!tool_material.HasValue)
@@ -223,20 +246,30 @@ namespace Flux.ViewModels
         {
             if (State.Loaded && State.Locked)
             {
-                var tool_material = Feeder.SelectedToolMaterial;
+                var tool_material = Feeder.ToolMaterials.Lookup(Position);
                 if (!tool_material.HasValue)
-                {
-                    Flux.Messages.LogMessage(MaterialChangeResult.MATERIAL_CHANGE_ERROR_INVALID_BREAK_TEMP, default);
                     return;
-                }
 
                 var extrusion_temp = tool_material.Value.ExtrusionTemp;
                 if (!extrusion_temp.HasValue)
-                {
-                    Flux.Messages.LogMessage(MaterialChangeResult.MATERIAL_CHANGE_ERROR_INVALID_BREAK_TEMP, default);
                     return;
-                }
-                await Flux.ConnectionProvider.PurgeAsync(Feeder.Position, extrusion_temp.Value);
+
+                var break_temp = tool_material.Value.BreakTemp;
+                if (!break_temp.HasValue)
+                    return;
+
+                var filament_settings = new FilamentOperationSettings()
+                {
+                    Mixing = Position,
+                    Extruder = Feeder.Position,
+                    BreakTemperature = break_temp.Value,
+                    ExtrusionTemperature = extrusion_temp.Value,
+                    FilamentOnHead = Flux.ConnectionProvider.GetArrayUnit(c => c.FILAMENT_ON_HEAD, Feeder.Position),
+                    FilamentAfterGear = Flux.ConnectionProvider.GetArrayUnit(c => c.FILAMENT_AFTER_GEAR, Position),
+                    FilamentBeforeGear = Flux.ConnectionProvider.GetArrayUnit(c => c.FILAMENT_BEFORE_GEAR, Position),
+                };
+
+                await Flux.ConnectionProvider.PurgeAsync(filament_settings);
             }
             else
             {

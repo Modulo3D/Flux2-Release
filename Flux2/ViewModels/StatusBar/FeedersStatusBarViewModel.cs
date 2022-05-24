@@ -33,20 +33,20 @@ namespace Flux.ViewModels
                 .StartWith(false);
 
             var not_found = Flux.Feeders.WhenAnyValue(v => v.SelectedFeeder)
-                   .ConvertMany(f => f.WhenAnyValue(f => f.ToolNozzle.Temperature))
+                   .ConvertMany(f => f.WhenAnyValue(f => f.ToolNozzle.NozzleTemperature))
                    .Select(t => t.ConvertOr(t => t.Current > 1000, () => false))
                    .DistinctUntilChanged()
                    .StartWith(false);
 
             var hot = Flux.Feeders.WhenAnyValue(v => v.SelectedFeeder)
-                .ConvertMany(f => f.WhenAnyValue(f => f.ToolNozzle.Temperature))
+                .ConvertMany(f => f.WhenAnyValue(f => f.ToolNozzle.NozzleTemperature))
                 .Select(t => t.ConvertOr(t =>
                 t.Current > 50, () => false))
                 .DistinctUntilChanged()
                 .StartWith(false);
 
             var on = Flux.Feeders.WhenAnyValue(v => v.SelectedFeeder)
-                .ConvertMany(f => f.WhenAnyValue(f => f.ToolNozzle.Temperature))
+                .ConvertMany(f => f.WhenAnyValue(f => f.ToolNozzle.NozzleTemperature))
                 .Select(t => t.ConvertOr(t => t.Target > 0, () => false))
                 .DistinctUntilChanged()
                 .StartWith(false);

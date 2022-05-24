@@ -154,7 +154,7 @@ namespace Flux.ViewModels
         }
         private (ushort start_addr, ushort end_addr) GetRange(OSAI_VARCODE varcode)
         {
-            var variables = Connection.VariableStore.Variables.Values
+            var variables = Connection.Variables.Values
                 .Select(v => v as IOSAI_VariableBase)
                 .Where(v => v?.LogicalAddress.VarCode == varcode);
 

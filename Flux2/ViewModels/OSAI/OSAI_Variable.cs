@@ -50,7 +50,7 @@ namespace Flux.ViewModels
             TAddress logicalAddress,
             FluxMemReadPriority priority,
             Optional<TAddress> physicalAddress = default,
-            Optional<VariableUnit> unit = default)
+            VariableUnit unit = default)
             : base(name, priority, unit)
         {
             _Connection = connection
@@ -70,7 +70,7 @@ namespace Flux.ViewModels
             OSAI_BitIndexAddress logicalAddress,
             FluxMemReadPriority priority,
             Optional<OSAI_BitIndexAddress> physicalAddress = default,
-            Optional<VariableUnit> unit = default)
+            VariableUnit unit = default)
             : base(connection, name, logicalAddress, priority, physicalAddress, unit)
         {
             connection.Convert(c => c.MemoryBuffer)
@@ -91,7 +91,7 @@ namespace Flux.ViewModels
             OSAI_IndexAddress logicalAddress,
             FluxMemReadPriority priority,
             Optional<OSAI_IndexAddress> physicalAddress = default,
-            Optional<VariableUnit> unit = default)
+            VariableUnit unit = default)
             : base(connection, name, logicalAddress, priority, physicalAddress, unit)
         {
             connection.Convert(c => c.MemoryBuffer)
@@ -110,7 +110,7 @@ namespace Flux.ViewModels
             string name,
             OSAI_IndexAddress logicalAddress,
             FluxMemReadPriority priority,
-            Optional<VariableUnit> unit = default,
+            VariableUnit unit = default,
             Optional<OSAI_IndexAddress> physicalAddress = default)
             : base(connection, name, logicalAddress, priority, physicalAddress, unit)
         {
@@ -132,7 +132,7 @@ namespace Flux.ViewModels
             OSAI_IndexAddress logicalAddress,
             FluxMemReadPriority priority,
             Optional<OSAI_IndexAddress> physicalAddress = default,
-            Optional<VariableUnit> unit = default)
+            VariableUnit unit = default)
             : base(connection, name, logicalAddress, priority, physicalAddress, unit)
         {
             connection.Convert(c => c.MemoryBuffer)
@@ -151,7 +151,7 @@ namespace Flux.ViewModels
             string name,
             OSAI_IndexAddress logicalAddress,
             FluxMemReadPriority priority,
-            Optional<VariableUnit> unit = default)
+            VariableUnit unit = default)
             : base(connection, name, logicalAddress, priority, unit: unit) { }
 
         public override async Task<bool> UpdateAsync()
@@ -177,7 +177,7 @@ namespace Flux.ViewModels
             OSAI_IndexAddress logicalAddress,
             FluxMemReadPriority priority,
             Func<double, string> write_temp,
-            Optional<VariableUnit> unit = default)
+            VariableUnit unit = default)
             : base(connection, name, logicalAddress, priority, unit: unit)
         {
             WriteTemp = write_temp;
@@ -211,7 +211,7 @@ namespace Flux.ViewModels
             string name,
             OSAI_NamedAddress address,
             FluxMemReadPriority priority,
-            Optional<VariableUnit> unit = default)
+            VariableUnit unit = default)
             : base(connection, name, address, priority, unit: unit)
         {
         }
@@ -225,7 +225,7 @@ namespace Flux.ViewModels
             string name,
             OSAI_NamedAddress address,
             FluxMemReadPriority priority,
-            Optional<VariableUnit> unit = default)
+            VariableUnit unit = default)
             : base(connection, name, address, priority, unit) { }
 
         public override Task<Optional<double>> ReadAsync() => Connection.ConvertAsync(c => c.ReadNamedDoubleAsync(LogicalAddress));
@@ -240,7 +240,7 @@ namespace Flux.ViewModels
             string name,
             OSAI_NamedAddress address,
             FluxMemReadPriority priority,
-            Optional<VariableUnit> unit = default)
+            VariableUnit unit = default)
             : base(connection, name, address, priority, unit)
         {
         }
@@ -260,7 +260,7 @@ namespace Flux.ViewModels
             OSAI_NamedAddress address,
             FluxMemReadPriority priority,
             ushort lenght,
-            Optional<VariableUnit> unit = default)
+            VariableUnit unit = default)
             : base(connection, name, address, priority, unit)
         {
             Lenght = lenght;
@@ -278,7 +278,7 @@ namespace Flux.ViewModels
             string name,
             OSAI_NamedAddress address,
             FluxMemReadPriority priority,
-            Optional<VariableUnit> unit = default)
+            VariableUnit unit = default)
             : base(connection, name, address, priority, unit) { }
 
         public override Task<Optional<bool>> ReadAsync() => Connection.ConvertAsync(c => c.ReadNamedBoolAsync(LogicalAddress));
@@ -296,7 +296,7 @@ namespace Flux.ViewModels
             OSAI_IndexAddress logicalAddress,
             FluxMemReadPriority priority,
             Optional<OSAI_IndexAddress> physicalAddress = default,
-            Optional<VariableUnit> unit = default)
+            VariableUnit unit = default)
             : base(connection, name, logicalAddress, priority, physicalAddress, unit)
         {
             Sensor = new TSensor();
@@ -323,7 +323,7 @@ namespace Flux.ViewModels
             IObservable<Optional<OSAI_Connection>> connection,
             string name,
             OSAI_IndexAddress address,
-            Optional<VariableUnit> unit = default)
+            VariableUnit unit = default)
             : base(connection, name, address, FluxMemReadPriority.DISABLED, unit: unit)
         {
             Observable.CombineLatest(
@@ -364,7 +364,7 @@ namespace Flux.ViewModels
             IObservable<Optional<OSAI_Connection>> connection,
             string name,
             OSAI_IndexAddress address,
-            Optional<VariableUnit> unit = default)
+            VariableUnit unit = default)
             : base(connection, name, address, FluxMemReadPriority.DISABLED, unit: unit)
         {
             Observable.CombineLatest(
@@ -395,7 +395,7 @@ namespace Flux.ViewModels
             IObservable<Optional<OSAI_Connection>> connection,
             string name,
             OSAI_IndexAddress address,
-            Optional<VariableUnit> unit = default)
+            VariableUnit unit = default)
             : base(connection, name, address, FluxMemReadPriority.DISABLED, unit: unit)
         {
             Observable.CombineLatest(

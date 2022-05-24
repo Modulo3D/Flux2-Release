@@ -176,7 +176,7 @@ namespace Flux.ViewModels
                 { typeof(RRF_ObjectModelMove), "move" },
                 { typeof(RRF_ObjectModelHeat), "heat" },
                 { typeof(RRF_ObjectModelJob), "job" },
-                { typeof(RRF_GlobalModel), "global" },
+                { typeof(RRF_ObjectModelGlobal), "global" },
             };
 
             MemoryReaders = new SourceCache<RRF_MemoryReaderGroup, TimeSpan>(f => f.Period);
@@ -185,7 +185,7 @@ namespace Flux.ViewModels
             
             AddModelReader<List<RRF_ObjectModelTool>>(fast, timeout, s => RRFObjectModel.Tools = s);
             AddModelReader<RRF_ObjectModelSensors>(fast, timeout, s => RRFObjectModel.Sensors = s);
-            AddModelReader<RRF_GlobalModel>(fast, timeout, g => RRFObjectModel.Global = g);
+            AddModelReader<RRF_ObjectModelGlobal>(fast, timeout, g => RRFObjectModel.Global = g);
             
             AddModelReader<List<RRF_ObjectModelInput>>(medium, timeout, i => RRFObjectModel.Inputs = i);
             AddModelReader<RRF_ObjectModelMove>(medium, timeout, m => RRFObjectModel.Move = m);
@@ -246,7 +246,12 @@ namespace Flux.ViewModels
             return response.GetContent<RRF_ObjectModelResponse<T>>()
                 .Convert(r => r.Result);
         }
-
+        public IObservable<Optional<TModel>> ObserveModel<TModel>(
+            Func<RRF_ObjectModel, IObservable<Optional<TModel>>> get_model)
+        {
+            return get_model(RRFObjectModel)
+                .DistinctUntilChanged();
+        }
         public IObservable<Optional<TRData>> ObserveModel<TModel, TRData>(
             Func<RRF_ObjectModel, IObservable<Optional<TModel>>> get_model,
             Func<RRF_Connection, TModel, Optional<TRData>> get_data)
@@ -266,7 +271,7 @@ namespace Flux.ViewModels
         }
 
         public IObservable<Optional<TRData>> ObserveGlobalModel<TRData>(
-            Func<RRF_GlobalModel, Optional<TRData>> get_data)
+            Func<RRF_ObjectModelGlobal, Optional<TRData>> get_data)
         {
             return RRFObjectModel
                 .WhenAnyValue(m => m.Global)
@@ -274,7 +279,7 @@ namespace Flux.ViewModels
                 .DistinctUntilChanged();
         }
         public IObservable<Optional<TRData>> ObserveGlobalModel<TRData>(
-            Func<RRF_GlobalModel, Task<Optional<TRData>>> get_data)
+            Func<RRF_ObjectModelGlobal, Task<Optional<TRData>>> get_data)
         {
             return RRFObjectModel
                 .WhenAnyValue(m => m.Global)

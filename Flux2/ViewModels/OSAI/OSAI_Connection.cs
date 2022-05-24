@@ -965,7 +965,7 @@ namespace Flux.ViewModels
             yield return $"#!REQ_HOLD = 0.0";
             yield return $"#!IS_HOLD = 0.0";
             yield return $"G500 T{recovery.ToolNumber + 1}";
-            yield return $"M4999 [{{WIRE_ENDSTOP_1_RESET}}, {recovery.ToolNumber + 1}, 0, 1]";
+            yield return $"M4999 [{{FILAMENT_ENDSTOP_1_RESET}}, {recovery.ToolNumber + 1}, 0, 1]";
 
             for (int tool = 0; tool < recovery.Temperatures.Count; tool++)
             {
@@ -1082,7 +1082,7 @@ namespace Flux.ViewModels
         {
             return new[] { $"G402 T{position + 1} S{temperature}" };
         }
-        public override Optional<IEnumerable<string>> GetPurgeToolGCode(ushort position, Nozzle nozzle, double temperature)
+        /*public override Optional<IEnumerable<string>> GetPurgeToolGCode(ushort position, Nozzle nozzle, double temperature)
         {
             return new[] { $"G507 T{position + 1} S{temperature}" };
         }
@@ -1093,7 +1093,7 @@ namespace Flux.ViewModels
         public override Optional<IEnumerable<string>> GetUnloadFilamentGCode(ushort position, Nozzle nozzle, double temperature)
         {
             return new[] { $"G506 T{position + 1} S{temperature}" };
-        }
+        }*/
         public override Optional<IEnumerable<string>> GetRelativeXMovementGCode(double distance, double feedrate) => new[] { $"G1 X>>{distance / 2} Y>>{distance / 2} F{feedrate}".Replace(",", ".") };
         public override Optional<IEnumerable<string>> GetRelativeYMovementGCode(double distance, double feedrate) => new[] { $"G1 X>>{distance / 2} Y>>{distance / 2} F{feedrate}".Replace(",", ".") };
         public override Optional<IEnumerable<string>> GetRelativeZMovementGCode(double distance, double feedrate) => new[] { $"G1 Z>>{distance} F{feedrate}".Replace(",", ".") };

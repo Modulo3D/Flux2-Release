@@ -37,7 +37,7 @@ namespace Flux.ViewModels
             set => this.RaiseAndSetIfChanged(ref _GlobalZOffset, value);
         }
 
-        public bool HasZProbe => Flux.ConnectionProvider.VariableStore.HasVariable(m => m.AXIS_PROBE, "tool_z");
+        public bool HasZProbe => Flux.ConnectionProvider.HasVariable(m => m.AXIS_PROBE, "tool_z");
 
         private ManualCalibrationViewModel ManualCalibration { get; set; }
 
@@ -191,8 +191,8 @@ namespace Flux.ViewModels
                 }
             }
 
-            var temp_chamber = Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_CHAMBER);
-            if (!await Flux.ConnectionProvider.WriteVariableAsync(m => m.TEMP_CHAMBER, 40) ||
+            var temp_chamber = Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_CHAMBER, "main");
+            if (!await Flux.ConnectionProvider.WriteVariableAsync(m => m.TEMP_CHAMBER, "main", 40) ||
                 !await WaitUtils.WaitForOptionalAsync(temp_chamber, t => t.Current >= t.Target, TimeSpan.FromMinutes(30)))
             {
                 await Flux.ConnectionProvider.CancelPrintAsync(true);

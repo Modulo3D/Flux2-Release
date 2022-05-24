@@ -125,15 +125,15 @@ namespace Flux.ViewModels
             _UpdateNFCText = FindUpdateNFCText()
                 .ToProperty(this, v => v.UpdateNFCText);
 
-            var tool_key = Flux.ConnectionProvider.VariableStore.GetArrayUnit(m => m.TEMP_TOOL, Feeder.Position);
+            var tool_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TEMP_TOOL, Feeder.Position);
             if (!tool_key.HasValue)
                 return;
 
-            _CurrentTemperature = Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_TOOL, tool_key.Value)
+            _CurrentTemperature = Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_TOOL, tool_key.Value.Alias)
                .Convert(t => t.Current)
                .ToProperty(this, v => v.CurrentTemperature);
 
-            _TemperaturePercentage = Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_TOOL, tool_key.Value)
+            _TemperaturePercentage = Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_TOOL, tool_key.Value.Alias)
                 .ConvertOr(t =>
                 {
                     if (t.Current > t.Target)

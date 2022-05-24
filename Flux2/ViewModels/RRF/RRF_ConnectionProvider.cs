@@ -26,7 +26,7 @@ namespace Flux.ViewModels
         END_PHASE = 7,
     }
 
-    public class RRF_ConnectionProvider : FLUX_ConnectionProvider<RRF_Connection, RRF_VariableStore>
+    public class RRF_ConnectionProvider : FLUX_ConnectionProvider<RRF_Connection, RRF_VariableStoreMP500>
     {
         private ObservableAsPropertyHelper<Optional<bool>> _IsConnecting;
         public override Optional<bool> IsConnecting => _IsConnecting.Value;
@@ -46,7 +46,7 @@ namespace Flux.ViewModels
 
         public FluxViewModel Flux { get; }
         public override IFlux IFlux => Flux;
-        public override RRF_VariableStore VariableStore => new RRF_VariableStore(this);
+        protected override RRF_VariableStoreMP500 VariableStore => new RRF_VariableStoreMP500(this);
 
         public RRF_ConnectionProvider(FluxViewModel flux)
         {

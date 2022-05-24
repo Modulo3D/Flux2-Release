@@ -3,6 +3,7 @@ using DynamicData.Kernel;
 using Modulo3DStandard;
 using ReactiveUI;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Disposables;
@@ -66,10 +67,13 @@ namespace Flux.ViewModels
             ToolNozzle = new ToolNozzleViewModel(this);
 
             // TODO
-            Materials = new SourceCache<IFluxMaterialViewModel, ushort>(m => m.Position);
-            ((SourceCache<IFluxMaterialViewModel, ushort>)Materials).AddOrUpdate(new MaterialViewModel(this, (ushort)((position * 2) + 0)));
-            ((SourceCache<IFluxMaterialViewModel, ushort>)Materials).AddOrUpdate(new MaterialViewModel(this, (ushort)((position * 2) + 1)));
-
+            Materials = Flux.SettingsProvider
+                .WhenAnyValue(v => v.ExtrudersCount)
+                .Select(CreateMaterials)
+                .ToObservableChangeSet(f => f.Position)
+                .DisposeMany()
+                .AsObservableCache()
+                .DisposeWith(Disposables);
 
             ToolMaterials = Materials.Connect()
                 .Transform(m => (MaterialViewModel)m)
@@ -77,8 +81,9 @@ namespace Flux.ViewModels
                 .Transform(tm => (IFluxToolMaterialViewModel)tm)
                 .AsObservableCache();
 
+
             var selected_positions = Flux.ConnectionProvider
-                .ObserveVariable(c => c.MATERIAL_ENABLED)
+                .ObserveVariable(c => c.FILAMENT_AFTER_GEAR)
                 .QueryWhenChanged();
 
             var tool_materials = ToolMaterials.Connect()
@@ -95,12 +100,13 @@ namespace Flux.ViewModels
                materials, selected_positions, FindSelectedViewModel)
                 .ToProperty(this, v => v.SelectedMaterial);
 
+
             foreach (ToolMaterialViewModel tm in ToolMaterials.Items)
                 tm.Initialize();
 
             foreach (MaterialViewModel m in Materials.Items)
                 m.Initialize();
-
+            
             ToolNozzle.Initialize();
 
             _FeederState = ToolNozzle.WhenAnyValue(v => v.State)
@@ -155,22 +161,20 @@ namespace Flux.ViewModels
                 .DisposeWith(Disposables);
         }
 
-        private Optional<TViewModel> FindSelectedViewModel<TViewModel>(IQuery<TViewModel, ushort> viewmodels, IQuery<Optional<bool>, VariableUnit> selected_viewmodels)
+        private IEnumerable<IFluxMaterialViewModel> CreateMaterials(Optional<(ushort machine_extruders, ushort mixing_extruders)> extruders)
         {
-            foreach (var selected_viewmodel in selected_viewmodels.KeyValues)
-            {
-                if (!selected_viewmodel.Value.HasValue)
-                    continue;
-                if (!selected_viewmodel.Value.Value)
-                    continue;
-                if (!ushort.TryParse(selected_viewmodel.Key.Value, out var position))
-                    continue;
-                var viewmodel = viewmodels.Lookup(position);
-                if (!viewmodel.HasValue)
-                    continue;
-                return viewmodel;
-            }
-            return default;
+            if (!extruders.HasValue)
+                yield break;
+            for (ushort position = 0; position < extruders.Value.mixing_extruders; position++)
+                yield return new MaterialViewModel(this, (ushort)((Position * extruders.Value.mixing_extruders) + position));
+        }
+
+        private Optional<TViewModel> FindSelectedViewModel<TViewModel>(IQuery<TViewModel, ushort> viewmodels, IQuery<Optional<bool>, string> wire_presence)
+        {
+            var selected_wire = wire_presence.Items.IndexOfOptional(true);
+            if (!selected_wire.HasValue)
+                return default;
+            return viewmodels.Lookup((ushort)selected_wire.Value.Index);
         }
 
         // FEEDER
@@ -182,9 +186,9 @@ namespace Flux.ViewModels
                 return EFeederState.FEEDER_EMPTY;
             if (tool.InMateinance)
                 return EFeederState.FEEDER_WAIT;
-            if (tool.InMagazine && !tool.OnTrailer)
+            if (!tool.Selected || tool.IsInMagazine())
                 return EFeederState.FEEDER_WAIT;
-            if (!tool.InMagazine && tool.OnTrailer)
+            if (tool.Selected && tool.IsOnTrailer())
                 return EFeederState.FEEDER_SELECTED;
             return EFeederState.ERROR;
         }
