@@ -197,11 +197,13 @@ namespace Flux.ViewModels
                     Navigator = new FluxNavigatorViewModel(this);
 
                     _LeftIconForeground = ConnectionProvider.ObserveVariable(m => m.OPEN_LOCK, "chamber")
+                        .ObservableOrDefault()
                         .Convert(l => l ? FluxColors.Active : FluxColors.Inactive)
                         .ValueOr(() => FluxColors.Empty)
                         .ToProperty(this, v => v.LeftIconForeground);
 
                     _RightIconForeground = ConnectionProvider.ObserveVariable(m => m.CHAMBER_LIGHT)
+                        .ObservableOrDefault()
                         .Convert(l => l ? FluxColors.Active : FluxColors.Inactive)
                         .ValueOr(() => FluxColors.Empty)
                         .ToProperty(this, v => v.RightIconForeground);
@@ -226,9 +228,9 @@ namespace Flux.ViewModels
 
                     _StatusText = Observable.CombineLatest(
                         StatusProvider.WhenAnyValue(v => v.FluxStatus),
-                        ConnectionProvider.ObserveVariable(m => m.RUNNING_MACRO),
-                        ConnectionProvider.ObserveVariable(m => m.RUNNING_MCODE),
-                        ConnectionProvider.ObserveVariable(m => m.RUNNING_GCODE),
+                        ConnectionProvider.ObserveVariable(m => m.RUNNING_MACRO).ObservableOrDefault(),
+                        ConnectionProvider.ObserveVariable(m => m.RUNNING_MCODE).ObservableOrDefault(),
+                        ConnectionProvider.ObserveVariable(m => m.RUNNING_GCODE).ObservableOrDefault(),
                         GetStatusText)
                         .ToProperty(this, v => v.StatusText);
 

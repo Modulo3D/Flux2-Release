@@ -71,7 +71,7 @@ namespace Flux.ViewModels
                         if (cb_virtual_memory.Value == BoolSelection.True)
                             @bool.SetMemoryValue(value);
                         else
-                            await Flux.ConnectionProvider.WriteVariableAsync(@bool, value);
+                            await @bool.WriteAsync(value);
                     }
                     break;
 
@@ -95,7 +95,7 @@ namespace Flux.ViewModels
                         if (cb_virtual_memory.Value == BoolSelection.True)
                             @double.SetMemoryValue(double_value);
                         else
-                            await Flux.ConnectionProvider.WriteVariableAsync(@double, double_value);
+                            await @double.WriteAsync(double_value);
                     }
                     break;
 
@@ -115,7 +115,7 @@ namespace Flux.ViewModels
                         if (cb_virtual_memory.Value == BoolSelection.True)
                             @short.SetMemoryValue(short_value);
                         else
-                            await Flux.ConnectionProvider.WriteVariableAsync(@short, short_value);
+                            await @short.WriteAsync(short_value);
                     }
                     break;
 
@@ -135,7 +135,7 @@ namespace Flux.ViewModels
                         if (cb_virtual_memory.Value == BoolSelection.True)
                             word.SetMemoryValue(word_value);
                         else
-                            await Flux.ConnectionProvider.WriteVariableAsync(word, word_value);
+                            await word.WriteAsync(word_value);
                     }
                     break;
 
@@ -155,29 +155,9 @@ namespace Flux.ViewModels
                         if (cb_virtual_memory.Value == BoolSelection.True)
                             @string.SetMemoryValue(tb_string_value.Value);
                         else
-                            await Flux.ConnectionProvider.WriteVariableAsync(@string, tb_string_value.Value);
+                            await @string.WriteAsync(tb_string_value.Value);
                     }
                     break;
-            }
-        }
-
-        private async Task SetValueAsync(Func<ContentDialog, bool, Task> show_content_dialog)
-        {
-            try
-            {
-                using var dialog = new ContentDialog(Flux, Variable.Name,
-                    cancel: () => Task.CompletedTask,
-                    confirm: () => Task.CompletedTask);
-
-                var cb_virtual_memory = ComboOption.Create("cbVirtual", "MEMORIA VIRTUALE?", Enum.GetValues<BoolSelection>(), b => (uint)b);
-                dialog.AddContent(cb_virtual_memory);
-                var is_virtual = cb_virtual_memory.Value.ValueOr(() => BoolSelection.False) == BoolSelection.True;
-
-                await show_content_dialog(dialog, is_virtual);
-            }
-            catch (Exception ex)
-            {
-                Flux.Messages.LogException(this, ex);
             }
         }
     }

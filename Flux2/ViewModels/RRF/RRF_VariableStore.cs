@@ -253,20 +253,21 @@ namespace Flux.ViewModels
                 FILAMENT_ON_HEAD        = filaments.CreateArray<bool, bool>("FILAMENT_ON_HEAD",     (c, m) => m.Status == "ok", VariableRange.Range(8, 2));
 
 
-                VACUUM_LEVEL            = Global.CreateVariable("vacuum_level",     true,   -70.0);
-                X_USER_OFFSET_T         = Global.CreateArray("x_user_offset",       false,  0.0,    VariableUnit.Range(0, 2));
-                Y_USER_OFFSET_T         = Global.CreateArray("y_user_offset",       false,  0.0,    VariableUnit.Range(0, 2));
-                Z_USER_OFFSET_T         = Global.CreateArray("z_user_offset",       false,  0.0,    VariableUnit.Range(0, 2));
-                X_PROBE_OFFSET_T        = Global.CreateArray("x_probe_offset",      false,  0.0,    VariableUnit.Range(0, 2));
-                Y_PROBE_OFFSET_T        = Global.CreateArray("y_probe_offset",      false,  0.0,    VariableUnit.Range(0, 2));
-                Z_PROBE_OFFSET_T        = Global.CreateArray("z_probe_offset",      false,  0.0,    VariableUnit.Range(0, 2));
-                PURGE_POSITION          = Global.CreateArray("purge_position",      true,   0.0,    VariableUnit.Range(0, "X", "Y"));
-                HOME_OFFSET             = Global.CreateArray("home_offset",         true,   0.0,    VariableUnit.Range(0, "X", "Y", "Z"));
-            
-                QUEUE_SIZE              = Global.CreateVariable("queue_size",       true,   (ushort)1);
-                DEBUG                   = Global.CreateVariable("debug",            false,  false);
-                QUEUE_POS               = Global.CreateVariable("queue_pos",        false,  new QueuePosition(-1), v => new QueuePosition((short)Convert.ChangeType(v, typeof(short))));
+                Z_BED_HEIGHT            = Global.CreateVariable("z_bed_height",         true,   0.0);
+                Z_PROBE_CORRECTION      = Global.CreateVariable("z_probe_correction",   true,   0.0);
+                VACUUM_LEVEL            = Global.CreateVariable("vacuum_level",         true,   -70.0);
+                QUEUE_SIZE              = Global.CreateVariable("queue_size",           true,   (ushort)1);
+                DEBUG                   = Global.CreateVariable("debug",                false,  false);
+                QUEUE_POS               = Global.CreateVariable("queue_pos",            false,  new QueuePosition(-1), v => new QueuePosition((short)Convert.ChangeType(v, typeof(short))));
 
+                X_USER_OFFSET_T         = Global.CreateArray("x_user_offset",           false,  0.0,    VariableUnit.Range(0, 2));
+                Y_USER_OFFSET_T         = Global.CreateArray("y_user_offset",           false,  0.0,    VariableUnit.Range(0, 2));
+                Z_USER_OFFSET_T         = Global.CreateArray("z_user_offset",           false,  0.0,    VariableUnit.Range(0, 2));
+                X_PROBE_OFFSET_T        = Global.CreateArray("x_probe_offset",          false,  0.0,    VariableUnit.Range(0, 2));
+                Y_PROBE_OFFSET_T        = Global.CreateArray("y_probe_offset",          false,  0.0,    VariableUnit.Range(0, 2));
+                Z_PROBE_OFFSET_T        = Global.CreateArray("z_probe_offset",          false,  0.0,    VariableUnit.Range(0, 2));
+                HOME_OFFSET_X           = Global.CreateArray("home_offset_x",           true,   0.0,    VariableUnit.Range(0, 2));
+                HOME_OFFSET_Y           = Global.CreateArray("home_offset_y",           true,   0.0,    VariableUnit.Range(0, 2));
             }
             catch (Exception ex)
             {

@@ -26,91 +26,83 @@ namespace Flux.ViewModels
 
         public void AddRoute(
             IFluxRoutableViewModel route,
-            Optional<IObservable<bool>> can_navigate = default,
-            Optional<IObservable<bool>> visible = default)
+            OptionalObservable<bool> can_navigate = default,
+            OptionalObservable<bool> visible = default)
         {
-            var nav_button = new NavButton(Flux, route, false, can_navigate, visible);
-            Buttons.Add(nav_button);
+            Buttons.Add(new NavButton(Flux, route, false, can_navigate, visible));
         }
 
         public void AddModal(
             IFluxRoutableViewModel modal,
-            Optional<IObservable<bool>> can_navigate = default,
-            Optional<IObservable<bool>> visible = default,
-            Optional<IObservable<bool>> navigate_back = default,
-            Optional<IObservable<bool>> show_navbar = default)
+            OptionalObservable<bool> can_navigate = default,
+            OptionalObservable<bool> visible = default,
+            OptionalObservable<bool> navigate_back = default,
+            OptionalObservable<bool> show_navbar = default)
         {
-            var nav_modal = new NavModalViewModel(Flux, modal, navigate_back, show_navbar);
-            var nav_button = new NavButton(Flux, nav_modal, false, can_navigate, visible);
-            Buttons.Add(nav_button);
+            Buttons.Add(new NavButton(Flux, new NavModalViewModel(Flux, modal, navigate_back, show_navbar), false, can_navigate, visible));
         }
 
         public void AddCommand(
             string name,
             Func<Task> task,
-            Optional<IObservable<bool>> can_execute = default,
-            Optional<IObservable<bool>> visible = default)
+            OptionalObservable<bool> can_execute = default,
+            OptionalObservable<bool> visible = default)
         {
-            var cmd_button = new CmdButton(name, task, can_execute, visible);
-            Buttons.Add(cmd_button);
+            Buttons.Add(new CmdButton(name, task, can_execute, visible));
         }
 
         public void AddCommand(
             string name,
             Action action,
-            Optional<IObservable<bool>> can_execute = default,
-            Optional<IObservable<bool>> visible = default)
+            OptionalObservable<bool> can_execute = default,
+            OptionalObservable<bool> visible = default)
         {
-            var cmd_button = new CmdButton(name, action, can_execute, visible);
-            Buttons.Add(cmd_button);
+            Buttons.Add(new CmdButton(name, action, can_execute, visible));
         }
 
         public void AddCommand(
             string name,
             Func<IFLUX_VariableStore, Optional<IFLUX_Variable<bool, bool>>> get_variable,
-            Optional<IObservable<bool>> can_execute = default,
-            Optional<IObservable<bool>> visible = default)
+            OptionalObservable<bool> can_execute = default,
+            OptionalObservable<bool> visible = default)
         {
             var variable = Flux.ConnectionProvider.GetVariable(get_variable);
+            if(variable.HasValue)
+                Buttons.Add(new ToggleButton(name, Flux, variable.Value, can_execute, visible));
+        }
+
+        public void AddCommand(
+            string name,
+            Func<IFLUX_VariableStore, IFLUX_Variable<bool, bool>> get_variable,
+            OptionalObservable<bool> can_execute = default,
+            OptionalObservable<bool> visible = default)
+        {
+            var variable = Flux.ConnectionProvider.GetVariable(get_variable);
+            Buttons.Add(new ToggleButton(name, Flux, variable, can_execute, visible));
+        }
+
+        public void AddCommand(
+            string name,
+            Func<IFLUX_VariableStore, Optional<IFLUX_Array<bool, bool>>> get_array,
+            string alias,
+            OptionalObservable<bool> can_execute = default,
+            OptionalObservable<bool> visible = default)
+        {
+            var variable = Flux.ConnectionProvider.GetVariable(get_array, alias);
             if (variable.HasValue)
-                AddCommand(name, variable.Value, can_execute, visible);
+                Buttons.Add(new ToggleButton(name, Flux, variable.Value, can_execute, visible));
         }
 
         public void AddCommand(
             string name,
-            IFLUX_Variable<bool, bool> variable,
-            Optional<IObservable<bool>> can_execute = default,
-            Optional<IObservable<bool>> visible = default)
+            Func<IFLUX_VariableStore, IFLUX_Array<bool, bool>> get_array,
+            string alias,
+            OptionalObservable<bool> can_execute = default,
+            OptionalObservable<bool> visible = default)
         {
-            if (variable.ReadOnly)
-                return;
-
-            var toggle_button = new ToggleButton(name, Flux, variable, can_execute, visible);
-            Buttons.Add(toggle_button);
-        }
-
-        public void AddCommand(
-            string name,
-            Func<IFLUX_ConnectionProvider, Optional<IFLUX_Array<bool, bool>>> get_array,
-            ushort position,
-            Optional<IObservable<bool>> can_execute = default,
-            Optional<IObservable<bool>> visible = default)
-        {
-            var memory = Flux.ConnectionProvider;
-            var array = get_array(memory);
-            if (array.HasValue)
-                AddCommand(name, array.Value, position, can_execute, visible);
-        }
-
-        public void AddCommand(
-            string name,
-            IFLUX_Array<bool, bool> array,
-            ushort position,
-            Optional<IObservable<bool>> can_execute = default,
-            Optional<IObservable<bool>> visible = default)
-        {
-            var variable = array.Variables.Items.ElementAt(position);
-            AddCommand(name, variable, can_execute, visible);
+            var variable = Flux.ConnectionProvider.GetVariable(get_array, alias);
+            if (variable.HasValue)
+                Buttons.Add(new ToggleButton(name, Flux, variable.Value, can_execute, visible));
         }
         public void AddCommand(CmdButton button)
         {

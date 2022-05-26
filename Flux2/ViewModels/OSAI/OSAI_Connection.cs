@@ -665,7 +665,7 @@ namespace Flux.ViewModels
         }
         public override async Task<bool> HoldAsync()
         {
-            return await WriteVariableAsync(VariableStore.REQ_HOLD, true);
+            return await WriteVariableAsync(c => c.REQ_HOLD, true);
         }
         public override async Task<bool> SelectPartProgramAsync(string filename, bool from_drive, bool wait, CancellationToken ct = default)
         {
@@ -1142,6 +1142,11 @@ namespace Flux.ViewModels
         }
 
         public override Optional<IEnumerable<string>> GetCancelUnloadFilamentGCode(ushort position)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override Optional<IEnumerable<string>> GetCenterPositionGCode()
         {
             throw new NotImplementedException();
         }

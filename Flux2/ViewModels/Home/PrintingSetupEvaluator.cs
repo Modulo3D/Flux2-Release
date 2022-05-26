@@ -280,7 +280,7 @@ namespace Flux.ViewModels
         {
             var queue_pos = Status.Flux.ConnectionProvider
                 .ObserveVariable(c => c.QUEUE_POS)
-                .StartWithEmpty()
+                .StartWithDefault()
                 .DistinctUntilChanged();
 
             bool compare_queue(Optional<Dictionary<QueuePosition, Guid>> q1, Optional<Dictionary<QueuePosition, Guid>> q2)
@@ -310,7 +310,7 @@ namespace Flux.ViewModels
 
             var queue = Status.Flux.ConnectionProvider
                 .ObserveVariable(c => c.QUEUE)
-                .StartWithEmpty()
+                .StartWithDefault()
                 .DistinctUntilChanged(compare_queue);
 
             var mcodes = Status.Flux.MCodes.AvaiableMCodes

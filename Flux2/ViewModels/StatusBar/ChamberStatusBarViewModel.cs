@@ -22,10 +22,13 @@ namespace Flux.ViewModels
 
             var temp = Flux.ConnectionProvider
                 .ObserveVariable(f => f.TEMP_CHAMBER, "main")
+                .ObservableOrDefault()
                 .DistinctUntilChanged();
 
-            var open = Flux.StatusProvider.ChamberLockClosed.ValueChanged
-                .ConvertOr(t => !t.@in, () => false)
+            var open = Flux.StatusProvider.ChamberLockClosed
+                .ConvertToObservable(c => c.ValueChanged)
+                .ConvertToObservable(t => !t.@in)
+                .ObservableOr(() => false)
                 .DistinctUntilChanged()
                 .StartWith(false);
 
@@ -70,10 +73,13 @@ namespace Flux.ViewModels
 
             var temp = Flux.ConnectionProvider
                 .ObserveVariable(f => f.TEMP_PLATE)
+                .ObservableOrDefault()
                 .DistinctUntilChanged();
 
-            var open = Flux.StatusProvider.ChamberLockClosed.ValueChanged
-                .ConvertOr(t => !t.@in, () => false)
+            var open = Flux.StatusProvider.ChamberLockClosed
+                .ConvertToObservable(c => c.ValueChanged)
+                .ConvertToObservable(t => !t.@in)
+                .ObservableOr(() => false)
                 .DistinctUntilChanged()
                 .StartWith(false);
 

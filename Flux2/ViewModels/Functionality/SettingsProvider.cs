@@ -92,15 +92,12 @@ namespace Flux.ViewModels
             }
 
             var enable_drivers = Flux.ConnectionProvider.GetVariables(m => m.ENABLE_DRIVERS);
-            if (enable_drivers.HasValue)
+            foreach (var variable in enable_drivers.Items)
             {
-                foreach (var variable in enable_drivers.Value.Items)
+                if (!await variable.WriteAsync(false))
                 {
-                    if (!await Flux.ConnectionProvider.WriteVariableAsync(variable, false))
-                    {
-                        Flux.Messages.LogMessage("Errore resetta magazzino", $"Asse {variable.Unit} non disabilitato", MessageLevel.ERROR, 0);
-                        return false;
-                    }
+                    Flux.Messages.LogMessage("Errore resetta magazzino", $"Asse {variable.Unit} non disabilitato", MessageLevel.ERROR, 0);
+                    return false;
                 }
             }
 
@@ -125,7 +122,7 @@ namespace Flux.ViewModels
             {
                 foreach (var variable in tool_on_trailer.Value.Items)
                 {
-                    if (!await Flux.ConnectionProvider.WriteVariableAsync(variable, false))
+                    if (!await variable.WriteAsync(false))
                     {
                         Flux.Messages.LogMessage("Errore resetta magazzino", "Tool sul carrello", MessageLevel.ERROR, 0);
                         return false;
@@ -138,7 +135,7 @@ namespace Flux.ViewModels
             {
                 foreach (var variable in tool_on_magazine.Value.Items)
                 {
-                    if (!await Flux.ConnectionProvider.WriteVariableAsync(variable, false))
+                    if (!await variable.WriteAsync(false))
                     {
                         Flux.Messages.LogMessage("Errore resetta magazzino", "Tool nel magazzino", MessageLevel.ERROR, 0);
                         return false;

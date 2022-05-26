@@ -64,9 +64,6 @@ namespace Flux.ViewModels
             {
                 IsCanceled = false;
 
-                if (!await Flux.ConnectionProvider.MGuard_PurgePosition())
-                    return (false, default);
-
                 if (!await Flux.ConnectionProvider.ResetAsync())
                     return (false, default);
 
@@ -164,10 +161,10 @@ namespace Flux.ViewModels
         protected override IEnumerable<IConditionViewModel> FindConditions()
         {
             // TODO
-            if (Flux.ConnectionProvider.HasVariable(c => c.LOCK_CLOSED, "top"))
-                yield return Flux.StatusProvider.TopLockClosed;
-            if (Flux.ConnectionProvider.HasVariable(c => c.LOCK_CLOSED, "chamber"))
-                yield return Flux.StatusProvider.ChamberLockClosed;
+            if (Flux.StatusProvider.TopLockClosed.HasValue)
+                yield return Flux.StatusProvider.TopLockClosed.Value;
+            if (Flux.StatusProvider.ChamberLockClosed.HasValue)
+                yield return Flux.StatusProvider.ChamberLockClosed.Value;
 
             var material = Feeder.Materials.Connect()
                 .WatchOptional(Material.Position);
@@ -347,11 +344,11 @@ namespace Flux.ViewModels
         protected override IEnumerable<IConditionViewModel> FindConditions()
         {
             // TODO
-            if (Flux.ConnectionProvider.HasVariable(c => c.LOCK_CLOSED))
-            {
-                yield return Flux.StatusProvider.TopLockClosed;
-                yield return Flux.StatusProvider.ChamberLockClosed;
-            }
+            if(Flux.StatusProvider.TopLockClosed.HasValue)
+                yield return Flux.StatusProvider.TopLockClosed.Value;
+
+            if (Flux.StatusProvider.ChamberLockClosed.HasValue)
+                yield return Flux.StatusProvider.ChamberLockClosed.Value;
 
             var material = Feeder.Materials.Connect()
                 .WatchOptional(Material.Position);

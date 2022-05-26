@@ -14,9 +14,8 @@ namespace Flux.ViewModels
         [JsonProperty("message")]
         public string Message { get; set; }
         [JsonProperty("valid")]
-        [JsonConverter(typeof(JsonConverters.OptionalConverter<bool>))]
-        public Optional<bool> Valid { get; set; }
-        public ConditionState(Optional<bool> valid, string message)
+        public bool Valid { get; set; }
+        public ConditionState(bool valid, string message)
         {
             Valid = valid;
             Message = message;
@@ -35,14 +34,14 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public ConditionState State => _State.Value;
 
-        private ObservableAsPropertyHelper<Optional<T>> _Value;
+        private ObservableAsPropertyHelper<T> _Value;
         [RemoteOutput(true)]
-        public Optional<T> Value => _Value.Value;
+        public T Value => _Value.Value;
 
-        public IObservable<Optional<T>> ValueChanged { get; }
+        public IObservable<T> ValueChanged { get; }
         public IObservable<ConditionState> StateChanged { get; }
 
-        public ConditionViewModel(string name, IObservable<Optional<T>> value_changed, Func<Optional<T>, ConditionState> get_state, Optional<TimeSpan> throttle = default) : base($"condition??{name}")
+        public ConditionViewModel(string name, IObservable<T> value_changed, Func<T, ConditionState> get_state, Optional<TimeSpan> throttle = default) : base($"condition??{name}")
         {
             ValueChanged = value_changed;
 
@@ -62,54 +61,19 @@ namespace Flux.ViewModels
         }
     }
 
-    public class ConditionsViewModel<TIn, TOut> : ConditionViewModel<(TIn @in, TOut @out)>
-    {
-        public ConditionsViewModel(string name, IObservable<Optional<(TIn @in, TOut @out)>> value_changed, Func<Optional<(TIn @in, TOut @out)>, ConditionState> get_state, Optional<TimeSpan> throttle = default)
-            : base(name, value_changed, get_state, throttle)
-        {
-        }
-    }
-
     public class ConditionViewModel
     {
-        // Single
         public static ConditionViewModel<TIn> Create<TIn>(
             string name,
             IObservable<TIn> value_changed,
             Func<TIn, ConditionState> get_state,
             Optional<TimeSpan> throttle = default)
-            => new ConditionViewModel<TIn>(name, value_changed.Select(v => v.ToOptional()), v => get_state(v.Value), throttle);
-
-        public static ConditionViewModel<TIn> Create<TIn>(
-            string name,
-            IObservable<Optional<TIn>> value_changed,
-            Func<Optional<TIn>, ConditionState> get_state,
-            Optional<TimeSpan> throttle = default)
             => new ConditionViewModel<TIn>(name, value_changed, get_state, throttle);
-
-        public static ConditionViewModel<bool> Create(
+        public static Optional<ConditionViewModel<TIn>> Create<TIn>(
             string name,
-            IObservable<Optional<bool>> value_changed,
-            Func<Optional<bool>, ConditionState> get_state,
+            OptionalObservable<TIn> value_changed,
+            Func<TIn, ConditionState> get_state,
             Optional<TimeSpan> throttle = default)
-            => new ConditionViewModel<bool>(name, value_changed, get_state, throttle);
-
-        // double
-        public static ConditionsViewModel<TIn, TOut> Create<TIn, TOut>(
-            string name,
-            IObservable<Optional<TIn>> in_value,
-            IObservable<Optional<TOut>> out_value,
-            Func<Optional<(TIn @in, TOut @out)>, ConditionState> get_state,
-            Optional<TimeSpan> throttle = default)
-        {
-            var value_changed = Observable.CombineLatest(in_value, out_value, (@in, @out) =>
-            {
-                if (@in.HasValue && @out.HasValue)
-                    return Optional.Some<(TIn @in, TOut @out)>((@in.Value, @out.Value));
-                return default;
-            });
-
-            return new ConditionsViewModel<TIn, TOut>(name, value_changed, get_state, throttle);
-        }
+            => value_changed.Convert(v => new ConditionViewModel<TIn>(name, v, get_state, throttle));
     }
 }

@@ -30,10 +30,12 @@ namespace Flux.ViewModels
                 .DistinctUntilChanged()
                 .StartWith(false);
 
-            var top = Flux.StatusProvider.TopLockClosed.ValueChanged
+            var top = Flux.StatusProvider.TopLockClosed
+                .ConvertToObservable(c => c.ValueChanged)
                 .DistinctUntilChanged();
 
-            var chamber = Flux.StatusProvider.ChamberLockClosed.ValueChanged
+            var chamber = Flux.StatusProvider.ChamberLockClosed
+                .ConvertToObservable(c => c.ValueChanged)
                 .DistinctUntilChanged();
 
             var debug = Flux.ConnectionProvider.ObserveVariable(m => m.DEBUG)
@@ -46,21 +48,21 @@ namespace Flux.ViewModels
                 .DistinctUntilChanged();
 
             locks.Throttle(TimeSpan.FromSeconds(5))
-                .Where(l => l.connecting.HasValue && !l.connecting.Value && l.cycle.HasValue && l.cycle.Value && !l.debug && (l.top.HasValue && !l.top.Value.@in || l.chamber.HasValue && !l.chamber.Value.@in))
+                .Where(l => l.connecting.HasValue && !l.connecting.Value && l.cycle.HasValue && l.cycle.Value && !l.debug && (l.top.HasChange && !l.top.Change.@in || l.chamber.HasChange && !l.chamber.Change.@in))
                 .Subscribe(_ => Flux.Messages.LogMessage("Portella", "Portella aperta durante operazione", MessageLevel.EMERG, 31001));
 
             locks.Throttle(TimeSpan.FromSeconds(60))
-                .Where(l => l.connecting.HasValue && !l.connecting.Value && !l.in_mateinance && l.cycle.HasValue && l.cycle.Value && (l.top.HasValue && !l.top.Value.@in || l.chamber.HasValue && !l.chamber.Value.@in))
+                .Where(l => l.connecting.HasValue && !l.connecting.Value && !l.in_mateinance && l.cycle.HasValue && l.cycle.Value && (l.top.HasChange && !l.top.Change.@in || l.chamber.HasChange && !l.chamber.Change.@in))
                 .Subscribe(_ => Flux.Messages.LogMessage("Portella", "Chiudere la portella", MessageLevel.WARNING, 31002));
 
             return locks.Select(
                 locks =>
                 {
-                    if (!locks.connecting.HasValue || locks.connecting.Value || !locks.cycle.HasValue || (!locks.chamber.HasValue && !locks.chamber.HasValue))
+                    if (!locks.connecting.HasValue || locks.connecting.Value || !locks.cycle.HasValue || (!locks.chamber.HasChange && !locks.chamber.HasChange))
                         return StatusBarState.Hidden;
-                    if (locks.top.HasValue && !locks.top.Value.@in || locks.chamber.HasValue && !locks.chamber.Value.@in)
+                    if (locks.top.HasChange && !locks.top.Change.@in || locks.chamber.HasChange && !locks.chamber.Change.@in)
                         return locks.cycle.Value ? StatusBarState.Error : StatusBarState.Warning;
-                    if (locks.top.HasValue && locks.top.Value.@out || locks.chamber.HasValue && locks.chamber.Value.@out)
+                    if (locks.top.HasChange && locks.top.Change.@out || locks.chamber.HasChange && locks.chamber.Change.@out)
                         return locks.cycle.Value ? StatusBarState.Error : StatusBarState.Disabled;
                     return StatusBarState.Stable;
                 });

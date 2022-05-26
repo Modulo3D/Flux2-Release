@@ -83,8 +83,8 @@ namespace Flux.ViewModels
 
         public void NavigateModal(
             IFluxRoutableViewModel route,
-            Optional<IObservable<bool>> navigate_back = default,
-            Optional<IObservable<bool>> show_navbar = default)
+            OptionalObservable<bool> navigate_back = default,
+            OptionalObservable<bool> show_navbar = default)
         {
             Navigate(new NavModalViewModel(Flux, route, navigate_back, show_navbar), false);
         }
@@ -126,12 +126,12 @@ namespace Flux.ViewModels
 
         public FluxRoutableViewModel(
             FluxViewModel flux,
-            Optional<IObservable<bool>> show_navbar = default,
+            OptionalObservable<bool> show_navbar = default,
             Optional<string> name = default) : base(name)
         {
             Flux = flux;
             UrlPathSegment = this.GetRemoteControlName();
-            ShowNavBar = show_navbar.ValueOr(() => Observable.Return(false));
+            ShowNavBar = show_navbar.ObservableOr(() => false);
         }
 
         public virtual Task OnNavigatedFromAsync()
@@ -150,7 +150,7 @@ namespace Flux.ViewModels
         public FluxRoutableNavBarViewModel(
             FluxViewModel flux,
             Optional<string> name = default)
-            : base(flux, Observable.Return(true).ToOptional(), name)
+            : base(flux, OptionalObservable.Some(true), name)
         {
         }
     }

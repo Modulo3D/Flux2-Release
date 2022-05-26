@@ -49,6 +49,7 @@ namespace Flux.ViewModels
                 .ToProperty(this, v => v.Nozzle);
 
             var can_raise = Flux.ConnectionProvider.ObserveVariable(m => m.OPEN_HEAD_CLAMP)
+                .ObservableOr(() => false)
                 .ValueOr(() => false);
             RaiseMagazineCommand = ReactiveCommand.CreateFromTask(RaiseMagazineAsync, can_raise);
 

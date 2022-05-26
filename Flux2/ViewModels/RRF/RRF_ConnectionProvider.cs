@@ -276,9 +276,6 @@ namespace Flux.ViewModels
             if (position.Value == -1)
                 return false;
 
-            if (!await MGuard_MagazinePositionAsync((ushort)position.Value))
-                return false;
-
             using var put_park_tool_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             using var wait_park_tool_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             return await ExecuteParamacroAsync(c => c.GetParkToolGCode(), put_park_tool_ctk.Token, true, wait_park_tool_ctk.Token);

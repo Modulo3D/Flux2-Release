@@ -143,9 +143,15 @@ namespace Flux.ViewModels
             ProbeOffsetsCommand = ReactiveCommand.CreateFromTask(async () =>
             {
                 if (HasZProbe)
+                {
                     await ProbeOffsetsAsync(false);
+                }
                 else
+                {
+                    if (Flux.ConnectionProvider.HasVariable(c => c.ENABLE_VACUUM))
+                        await Flux.ConnectionProvider.WriteVariableAsync(c => c.ENABLE_VACUUM, true);
                     Flux.Navigator.Navigate(ManualCalibration);
+                }
             }, can_probe)
                 .DisposeWith(Disposables);
 
@@ -192,20 +198,22 @@ namespace Flux.ViewModels
             }
 
             var temp_chamber = Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_CHAMBER, "main");
-            if (!await Flux.ConnectionProvider.WriteVariableAsync(m => m.TEMP_CHAMBER, "main", 40) ||
-                !await WaitUtils.WaitForOptionalAsync(temp_chamber, t => t.Current >= t.Target, TimeSpan.FromMinutes(30)))
-            {
-                await Flux.ConnectionProvider.CancelPrintAsync(true);
-                Flux.Messages.LogMessage("Errore di tastatura", "Camera ancora calda o operazione annullata", MessageLevel.ERROR, 0);
-                return;
+            if (temp_chamber.HasObservable)
+            { 
+                if (!await Flux.ConnectionProvider.WriteVariableAsync(m => m.TEMP_CHAMBER, "main", 40) ||
+                    !await WaitUtils.WaitForOptionalAsync(temp_chamber.Observable, t => t.Current >= t.Target, TimeSpan.FromMinutes(30)))
+                {
+                    await Flux.ConnectionProvider.CancelPrintAsync(true);
+                    Flux.Messages.LogMessage("Errore di tastatura", "Camera ancora calda o operazione annullata", MessageLevel.ERROR, 0);
+                    return;
+                }
             }
 
-            var has_plate = await Flux.ConnectionProvider.ReadVariableAsync(m => m.HAS_PLATE);
-            if (has_plate.HasValue && has_plate.Value)
-            {
-                var temp_plate = Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_PLATE);
+            var temp_plate = Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_PLATE);
+            if (temp_plate.HasObservable)
+            { 
                 if (!await Flux.ConnectionProvider.WriteVariableAsync(m => m.TEMP_PLATE, 40) ||
-                    !await WaitUtils.WaitForOptionalAsync(temp_plate, t => t.Current >= t.Target, TimeSpan.FromMinutes(30)))
+                    !await WaitUtils.WaitForOptionalAsync(temp_plate.Observable, t => t.Current >= t.Target, TimeSpan.FromMinutes(30)))
                 {
                     await Flux.ConnectionProvider.CancelPrintAsync(true);
                     Flux.Messages.LogMessage("Errore di tastatura", "Piatto ancora caldo o operazione annullata", MessageLevel.ERROR, 0);

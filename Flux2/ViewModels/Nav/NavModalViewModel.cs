@@ -18,14 +18,14 @@ namespace Flux.ViewModels
         public NavModalViewModel(
             FluxViewModel flux,
             IFluxRoutableViewModel route,
-            Optional<IObservable<bool>> can_navigate_back = default,
-            Optional<IObservable<bool>> show_navbar = default)
+            OptionalObservable<bool> can_navigate_back = default,
+            OptionalObservable<bool> show_navbar = default)
             : base(flux, show_navbar, $"navModal??{route.Name}")
         {
             Content = route;
             NavigateBackCommand = ReactiveCommand.Create(
                 () => { Flux.Navigator.NavigateBack(); },
-                can_navigate_back.ValueOr(() => Observable.Return(true)));
+                can_navigate_back.ObservableOr(() => true));
         }
     }
 }

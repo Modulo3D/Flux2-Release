@@ -27,14 +27,14 @@ namespace Flux.ViewModels
                 connecting, emergency, (connecting, emergency) => (connecting, emergency));
 
             driver.Throttle(TimeSpan.FromSeconds(5))
-                .Where(p => p.connecting.HasValue && !p.connecting.Value && p.emergency)
+                .Where(p => p.connecting.HasValue && !p.connecting.Value && p.emergency.HasChange && p.emergency.Change)
                 .Subscribe(_ => Flux.Messages.LogMessage("Driver assi", "Assi in emergenza", MessageLevel.EMERG, 38001));
 
             return driver.Select(d =>
             {
                 if (!d.connecting.HasValue || d.connecting.Value)
                     return StatusBarState.Hidden;
-                if (!d.emergency)
+                if (!d.emergency.HasChange || !d.emergency.Change)
                     return StatusBarState.Hidden;
                 return StatusBarState.Error;
             });

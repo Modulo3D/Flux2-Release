@@ -68,15 +68,17 @@ namespace Flux.ViewModels
 
             var selected_extruder = Flux.ConnectionProvider
                 .ObserveVariable(m => m.TOOL_ON_TRAILER)
-                .QueryWhenChanged(q => (short)q.Items.IndexOf(true));
+                .ConvertToObservable(c => c.QueryWhenChanged(q => (short)q.Items.IndexOf(true)));
 
             _SelectedExtruder = selected_extruder
+                .ObservableOr(() => (short)-1)
                 .ToProperty(this, v => v.SelectedExtruder)
                 .DisposeWith(Disposables);
 
             _SelectedFeeder = selected_extruder
-                .Select(FindSelectedFeeder)
-                .Switch()
+                .ConvertToObservable(FindSelectedFeeder)
+                .ConvertToObservable(o => o.Switch())
+                .ObservableOrDefault()
                 .ToProperty(this, v => v.SelectedFeeder)
                 .DisposeWith(Disposables);
         }

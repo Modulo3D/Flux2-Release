@@ -69,10 +69,9 @@ namespace Flux.ViewModels
 
         private void MagazineAsync()
         {
-            var navigate_back = Flux.StatusProvider.ClampClosed.StateChanged
-                .Select(s => s.Valid)
-                .ValueOr(() => true)
-                .ToOptional();
+            var navigate_back = Flux.StatusProvider.ClampClosed
+                .ConvertToObservable(c => c.StateChanged)
+                .ConvertToObservable(s => s.Valid);
 
             Flux.Navigator.NavigateModal(Flux.Magazine, navigate_back: navigate_back);
         }

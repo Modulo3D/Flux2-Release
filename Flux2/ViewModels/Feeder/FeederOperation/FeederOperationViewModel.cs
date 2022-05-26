@@ -84,7 +84,6 @@ namespace Flux.ViewModels
 
             FilteredConditions = Conditions.Connect()
                 .AutoRefresh(c => c.State)
-                .Filter(c => c.State.Valid.HasValue)
                 .Filter(is_idle.Select(idle =>
                 {
                     return (Func<IConditionViewModel, bool>)filter;
@@ -94,12 +93,12 @@ namespace Flux.ViewModels
 
             _AllConditionsTrue = FilteredConditions.Connect()
                 .AddKey(c => c.Name)
-                .TrueForAll(c => c.StateChanged, state => state.Valid.Value)
+                .TrueForAll(c => c.StateChanged, state => state.Valid)
                 .ToProperty(this, v => v.AllConditionsTrue);
 
             _AllConditionsFalse = FilteredConditions.Connect()
                 .AddKey(c => c.Name)
-                .TrueForAll(c => c.StateChanged, state => !state.Valid.Value)
+                .TrueForAll(c => c.StateChanged, state => !state.Valid)
                 .ToProperty(this, v => v.AllConditionsFalse);
 
             _TitleText = is_idle.Select(i => FindTitleText(i))
@@ -130,10 +129,12 @@ namespace Flux.ViewModels
                 return;
 
             _CurrentTemperature = Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_TOOL, tool_key.Value.Alias)
-               .Convert(t => t.Current)
-               .ToProperty(this, v => v.CurrentTemperature);
+                .ObservableOrDefault()
+                .Convert(t => t.Current)
+                .ToProperty(this, v => v.CurrentTemperature);
 
             _TemperaturePercentage = Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_TOOL, tool_key.Value.Alias)
+                .ObservableOrDefault()
                 .ConvertOr(t =>
                 {
                     if (t.Current > t.Target)

@@ -56,16 +56,16 @@ namespace Flux.ViewModels
         private ObservableAsPropertyHelper<StartEvaluation> _StartEvaluation;
         public StartEvaluation StartEvaluation => _StartEvaluation.Value;
 
-        public ConditionViewModel<bool> ClampOpen { get; private set; }
-        public ConditionViewModel<bool> NotInChange { get; private set; }
-        public ConditionViewModel<bool> ClampClosed { get; private set; }
-        public ConditionViewModel<bool> TopLockOpen { get; private set; }
-        public ConditionViewModel<bool> RaisedPistons { get; private set; }
-        public ConditionViewModel<bool> ChamberLockOpen { get; private set; }
-        public ConditionsViewModel<bool, bool> TopLockClosed { get; private set; }
-        public ConditionsViewModel<bool, bool> ChamberLockClosed { get; private set; }
-        public ConditionViewModel<(Pressure pressure, double level)> PressurePresence { get; private set; }
-        public ConditionsViewModel<(Pressure pressure, double level), bool> VacuumPresence { get; private set; }
+        public Optional<ConditionViewModel<bool>> ClampOpen { get; private set; }
+        public Optional<ConditionViewModel<bool>> NotInChange { get; private set; }
+        public Optional<ConditionViewModel<bool>> ClampClosed { get; private set; }
+        public Optional<ConditionViewModel<bool>> RaisedPistons { get; private set; }
+        public Optional<ConditionViewModel<(bool @in, bool @out)>> TopLockOpen { get; private set; }
+        public Optional<ConditionViewModel<(bool @in, bool @out)>> TopLockClosed { get; private set; }
+        public Optional<ConditionViewModel<(bool @in, bool @out)>> ChamberLockOpen { get; private set; }
+        public Optional<ConditionViewModel<(bool @in, bool @out)>> ChamberLockClosed { get; private set; }
+        public Optional<ConditionViewModel<(Pressure @in, double level)>> PressurePresence { get; private set; }
+        public Optional<ConditionViewModel<(Pressure @in, double level, bool @out)>> VacuumPresence { get; private set; }
 
         public IObservable<Optional<bool>> IsIdle { get; }
         public IObservable<Optional<bool>> IsCycle { get; }
@@ -79,141 +79,147 @@ namespace Flux.ViewModels
             Flux = flux;
 
             // Safety
-            var pressure_in = Observable.CombineLatest(
+            var pressure_in = OptionalObservable.CombineLatest(
                 Flux.ConnectionProvider.ObserveVariable(m => m.PRESSURE_PRESENCE),
                 Flux.ConnectionProvider.ObserveVariable(m => m.PRESSURE_LEVEL),
                 (pressure, level) =>
                 {
-                    if (pressure.HasValue && level.HasValue)
-                        return Optional.Some<(Pressure pressure, double level)>((pressure.Value, level.Value));
-                    return default;
+                    if(pressure.HasValue && level.HasValue)
+                        return (pressure.Value, level.Value);
+                    return (new Pressure(0), 0);
                 });
 
             PressurePresence = ConditionViewModel.Create("pressure", pressure_in,
                 value =>
                 {
-                    if (!value.HasValue)
-                        return new ConditionState(default, "");
-                    if (value.Value.pressure.Kpa < value.Value.level)
+                    if (value.Item1.Kpa < value.Item2)
                         return new ConditionState(false, "ATTIVARE L'ARIA COMPRESSA");
                     return new ConditionState(true, "ARIA COMPRESSA ATTIVA");
                 });
 
-            ClampOpen = ConditionViewModel.Create("clampOpen",
-                Flux.ConnectionProvider.ObserveVariable(m => m.OPEN_HEAD_CLAMP),
+            var clamp_open = Flux.ConnectionProvider.ObserveVariable(m => m.OPEN_HEAD_CLAMP)
+                .ValueOr(() => false);
+
+            ClampOpen = ConditionViewModel.Create("clampOpen", clamp_open,
                 value =>
                 {
-                    if (!value.HasValue)
-                        return new ConditionState(default, "");
-                    if (!value.Value)
+                    if (!value)
                         return new ConditionState(false, "APRIRE LA PINZA");
                     return new ConditionState(true, "PINZA APERTA");
                 });
 
-            ClampClosed = ConditionViewModel.Create("clampClosed",
-                Flux.ConnectionProvider.ObserveVariable(m => m.OPEN_HEAD_CLAMP),
+            ClampClosed = ConditionViewModel.Create("clampClosed", clamp_open,
                 value =>
                 {
-                    if (!value.HasValue)
-                        return new ConditionState(default, "");
-                    if (value.Value)
+                    if (value)
                         return new ConditionState(false, "CHIUDERE LA PINZA");
                     return new ConditionState(true, "PINZA CHIUSA");
                 });
 
-            var vacuum_in = Observable.CombineLatest(
+            var vacuum = OptionalObservable.CombineLatest(
                 Flux.ConnectionProvider.ObserveVariable(m => m.VACUUM_PRESENCE),
                 Flux.ConnectionProvider.ObserveVariable(m => m.VACUUM_LEVEL),
-                (pressure, level) =>
+                Flux.ConnectionProvider.ObserveVariable(m => m.ENABLE_VACUUM),
+                (pressure, level, enable) =>
                 {
-                    if (pressure.HasValue && level.HasValue)
-                        return Optional.Some<(Pressure pressure, double level)>((pressure.Value, level.Value));
-                    return default;
+                    if (pressure.HasValue && level.HasValue && enable.HasValue)
+                        return (pressure.Value, level.Value, enable.Value);
+                    return (new Pressure(0), 0, false);
                 });
 
-            VacuumPresence = ConditionViewModel.Create("vacuum",
-                vacuum_in,
-                Flux.ConnectionProvider.ObserveVariable(m => m.ENABLE_VACUUM),
-                value => value.ConvertOr(v =>
+            VacuumPresence = ConditionViewModel.Create("vacuum", vacuum,
+                value =>
                 {
-                    if (!v.@out)
-                        return new ConditionState(default, "");
-                    if (v.@in.pressure.Kpa > v.@in.level)
+                    if (!value.Item3 || value.Item1.Kpa > value.Item2)
                         return new ConditionState(false, "INSERIRE UN FOGLIO");
                     return new ConditionState(true, "FOGLIO INSERITO");
                 },
-                () => new ConditionState(default, "")),
                 TimeSpan.FromSeconds(1));
 
-            TopLockClosed = ConditionViewModel.Create("topLockClosed",
+            var top_lock = OptionalObservable.CombineLatest(
                 Flux.ConnectionProvider.ObserveVariable(m => m.LOCK_CLOSED, "top"),
                 Flux.ConnectionProvider.ObserveVariable(m => m.OPEN_LOCK, "top"),
-                value => value.ConvertOr(v => 
+                (closed, open) =>
                 {
-                    if (!v.@in || v.@out)
+                    if (closed.HasValue && open.HasValue)
+                        return (closed.Value, open.Value);
+                    return (false, false);
+                });
+
+            TopLockClosed = ConditionViewModel.Create("topLockClosed", top_lock,
+                value =>
+                {
+                    if (!value.Item1 || value.Item2)
                         return new ConditionState(false, "CHIUDERE IL CAPPELLO");
                     return new ConditionState(true, "CAPPELLO CHIUSO");
-                }, () => new ConditionState(default, "")));
+                });
 
-            ChamberLockClosed = ConditionViewModel.Create("chamberLockClosed",
-                Flux.ConnectionProvider.ObserveVariable(m => m.LOCK_CLOSED, "chamber"),
-                Flux.ConnectionProvider.ObserveVariable(m => m.OPEN_LOCK, "chamber"),
-                value => value.ConvertOr(v =>
+            TopLockOpen = ConditionViewModel.Create("topLockOpen", top_lock,
+                value =>
                 {
-                    if (!v.@in || v.@out)
-                        return new ConditionState(false, "CHIUDERE LA PORTELLA");
-                    return new ConditionState(true, "PORTELLA CHIUSA");
-                }, () => new ConditionState(default, "")));
-
-            ChamberLockOpen = ConditionViewModel.Create("chamberLockOpen",
-                ChamberLockClosed.StateChanged.Select(s => s.Valid),
-                value => value.ConvertOr(v =>
-                {
-                    if (v)
-                        return new ConditionState(false, "APRIRE LA PORTELLA");
-                    return new ConditionState(true, "PORTELLA APERTA");
-                }, () => new ConditionState(default, "")));
-
-            TopLockOpen = ConditionViewModel.Create("topLockOpen",
-                TopLockClosed.StateChanged.Select(c => c.Valid),
-                value => value.ConvertOr(v =>
-                {
-                    if (v)
+                    if (value.Item1)
                         return new ConditionState(false, "APRIRE IL CAPPELLO");
                     return new ConditionState(true, "CAPPELLO APERTO");
-                }, () => new ConditionState(default, "")));
+                });
 
-            RaisedPistons = ConditionViewModel.Create("raisedPiston",
-                Flux.ConnectionProvider.ObserveVariable(m => m.PISTON_LOW)
-                .QueryWhenChanged(low => low.Items.All(low => low.HasValue && !low.Value))
-                .Select(v => Optional.Some(v)),
-                value => value.ConvertOr(v =>
+            var chamber_lock = OptionalObservable.CombineLatest(
+                Flux.ConnectionProvider.ObserveVariable(m => m.LOCK_CLOSED, "chamber"),
+                Flux.ConnectionProvider.ObserveVariable(m => m.OPEN_LOCK, "chamber"),
+                (closed, open) =>
                 {
-                    if (!v)
+                    if (closed.HasValue && open.HasValue)
+                        return (closed.Value, open.Value);
+                    return (false, false);
+                });
+
+            ChamberLockClosed = ConditionViewModel.Create("chamberLockClosed", chamber_lock,
+                value =>
+                {
+                    if (!value.Item1 || value.Item2)
+                        return new ConditionState(false, "CHIUDERE LA PORTELLA");
+                    return new ConditionState(true, "PORTELLA CHIUSA");
+                });
+
+            ChamberLockOpen = ConditionViewModel.Create("chamberLockOpen", chamber_lock,
+                value =>
+                {
+                    if (value.Item1)
+                        return new ConditionState(false, "APRIRE LA PORTELLA");
+                    return new ConditionState(true, "PORTELLA APERTA");
+                });
+
+            var raised_pistions = Flux.ConnectionProvider.ObserveVariable(m => m.PISTON_LOW)
+                .ConvertToObservable(c => c.QueryWhenChanged(low => low.Items.All(low => low.HasValue && !low.Value)));
+
+            RaisedPistons = ConditionViewModel.Create("raisedPiston", raised_pistions,
+                value =>
+                {
+                    if (!value)
                         return new ConditionState(false, "ALZARE TUTTI I PISTONI");
                     return new ConditionState(true, "STATO PISTONI CORRETTO");
-                }, () => new ConditionState(default, "")));
+                });
 
-            NotInChange = ConditionViewModel.Create("notInChange",
-                Flux.ConnectionProvider.ObserveVariable(m => m.IN_CHANGE)
-                    .Convert(c => !c),
-            value => value.ConvertOr(v =>
-            {
-                if (!v)
-                    return new ConditionState(false, "STAMPANTE IN CHANGE");
-                return new ConditionState(true, "STAMPANTE NON IN CHANGE");
-            }, () => new ConditionState(default, "")));
+            var not_in_change = Flux.ConnectionProvider.ObserveVariable(m => m.IN_CHANGE)
+                .ValueOr(() => false);
+
+            NotInChange = ConditionViewModel.Create("notInChange", not_in_change,
+                value =>
+                {
+                    if (value)
+                        return new ConditionState(false, "STAMPANTE IN CHANGE");
+                    return new ConditionState(true, "STAMPANTE NON IN CHANGE");
+                });
 
             var has_safe_state = Observable.CombineLatest(
                 Flux.ConnectionProvider.WhenAnyValue(v => v.IsInitializing),
                 Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS),
-                RaisedPistons.StateChanged,
-                PressurePresence.StateChanged,
-                TopLockClosed.StateChanged,
-                ChamberLockClosed.StateChanged,
+                RaisedPistons.ConvertToObservable(c => c.StateChanged),
+                PressurePresence.ConvertToObservable(c => c.StateChanged),
+                TopLockClosed.ConvertToObservable(c => c.StateChanged),
+                ChamberLockClosed.ConvertToObservable(c => c.StateChanged),
                 Flux.Feeders.WhenAnyValue(f => f.HasInvalidStates),
                 Flux.Feeders.WhenAnyValue(f => f.SelectedExtruder),
-                ClampClosed.StateChanged,
+                ClampClosed.ConvertToObservable(c => c.StateChanged),
                 CanPrinterSafeCycle)
                 .StartWith(false)
                 .DistinctUntilChanged();
@@ -221,16 +227,13 @@ namespace Flux.ViewModels
             // Status
             IsIdle = Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS)
                 .Convert(data => data == FLUX_ProcessStatus.IDLE)
-                .StartWithEmpty()
                 .DistinctUntilChanged();
 
             IsCycle = Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS)
                 .Convert(data => data == FLUX_ProcessStatus.CYCLE)
-                .StartWithEmpty()
                 .DistinctUntilChanged();
 
             var is_homed = Flux.ConnectionProvider.ObserveVariable(m => m.IS_HOMED)
-                .StartWithEmpty()
                 .DistinctUntilChanged();
 
             var is_enabled_axis = Flux.ConnectionProvider.ObserveVariable(m => m.ENABLE_DRIVERS)
@@ -240,7 +243,6 @@ namespace Flux.ViewModels
                         return Optional<bool>.None;
                     return e.Items.All(e => e.Value);
                 })
-                .StartWithEmpty()
                 .DistinctUntilChanged();
 
             FeederEvaluators = Flux.Feeders.Feeders.Connect()
@@ -301,18 +303,18 @@ namespace Flux.ViewModels
             var selected_part_program = Flux.ConnectionProvider
                 .ObserveVariable(m => m.PART_PROGRAM)
                 .DistinctUntilChanged()
-                .StartWithEmpty();
+                .StartWithDefault();
 
             var selected_guid = selected_part_program
                 .Convert(pp => pp.MCodeGuid)
                 .DistinctUntilChanged()
-                .StartWithEmpty();
+                .StartWithDefault();
 
             var selected_mcode = Observable.CombineLatest(
-                Flux.ConnectionProvider.ObserveVariable(m => m.ENABLE_VACUUM),
+                Flux.ConnectionProvider.ObserveVariable(m => m.ENABLE_VACUUM).ObservableOrDefault(),
                 Flux.MCodes.AvaiableMCodes.Connect().WatchOptional(selected_guid),
                 FindSelectedMCode)
-                .StartWithEmpty()
+                .StartWithDefault()
                 .DistinctUntilChanged();
 
             CanSafeCycle = Observable.CombineLatest(
@@ -324,14 +326,14 @@ namespace Flux.ViewModels
 
             CanSafePrint = Observable.CombineLatest(
                 CanSafeCycle,
-                VacuumPresence.StateChanged,
+                VacuumPresence.ConvertToObservable(v => v.StateChanged),
                 CanPrinterSafePrint);
 
             // TODO
             var is_safe_stop = Observable.CombineLatest(
-                Flux.ConnectionProvider.ObserveVariable(m => m.RUNNING_MACRO),
-                Flux.ConnectionProvider.ObserveVariable(m => m.RUNNING_GCODE),
-                Flux.ConnectionProvider.ObserveVariable(m => m.RUNNING_MCODE),
+                Flux.ConnectionProvider.ObserveVariable(m => m.RUNNING_MACRO).ObservableOrDefault(),
+                Flux.ConnectionProvider.ObserveVariable(m => m.RUNNING_GCODE).ObservableOrDefault(),
+                Flux.ConnectionProvider.ObserveVariable(m => m.RUNNING_MCODE).ObservableOrDefault(),
                 IsSafeStop);
 
             CanSafeStop = Observable.CombineLatest(
@@ -344,9 +346,9 @@ namespace Flux.ViewModels
 
             // TODO
             var is_safe_hold = Observable.CombineLatest(
-                Flux.ConnectionProvider.ObserveVariable(m => m.RUNNING_MACRO),
-                Flux.ConnectionProvider.ObserveVariable(m => m.RUNNING_GCODE),
-                Flux.ConnectionProvider.ObserveVariable(m => m.RUNNING_MCODE),
+                Flux.ConnectionProvider.ObserveVariable(m => m.RUNNING_MACRO).ObservableOrDefault(),
+                Flux.ConnectionProvider.ObserveVariable(m => m.RUNNING_GCODE).ObservableOrDefault(),
+                Flux.ConnectionProvider.ObserveVariable(m => m.RUNNING_MCODE).ObservableOrDefault(),
                 IsSafePause);
 
             CanSafeHold = Observable.CombineLatest(
@@ -359,7 +361,6 @@ namespace Flux.ViewModels
 
             var queue_pos = Flux.ConnectionProvider
                 .ObserveVariable(c => c.QUEUE_POS)
-                .StartWithEmpty()
                 .DistinctUntilChanged();
 
             bool distinct_queue(Dictionary<QueuePosition, Guid> d1, Dictionary<QueuePosition, Guid> d2)
@@ -466,7 +467,7 @@ namespace Flux.ViewModels
                 extrusion_set,
                 mcodes,
                 GetExtrusionSetQueue)
-                .StartWithEmpty()
+                .StartWithDefault()
                 .DistinctUntilChanged();
 
             _StartEvaluation = Observable.CombineLatest(
@@ -483,7 +484,7 @@ namespace Flux.ViewModels
 
             var recovery = Flux.ConnectionProvider
                 .ObserveVariable(c => c.MCODE_RECOVERY)
-                .StartWithEmpty()
+                .StartWithDefault()
                 .DistinctUntilChanged();
 
             _PrintingEvaluation = Observable.CombineLatest(
@@ -650,13 +651,13 @@ namespace Flux.ViewModels
         private bool CanPrinterSafeCycle(
             Optional<bool> is_initializing,
             Optional<FLUX_ProcessStatus> status,
-            ConditionState raised_pistons,
-            ConditionState pressure,
-            ConditionState top_lock,
-            ConditionState chamber_lock,
+            OptionalChange<ConditionState> raised_pistons,
+            OptionalChange<ConditionState> pressure,
+            OptionalChange<ConditionState> top_lock,
+            OptionalChange<ConditionState> chamber_lock,
             bool has_feeder_error,
             short selected_extruder,
-            ConditionState clamp_closed)
+            OptionalChange<ConditionState> clamp_closed)
         {
             if (!is_initializing.HasValue || is_initializing.Value)
                 return false;
@@ -666,26 +667,26 @@ namespace Flux.ViewModels
                 return false;
             if (status.Value == FLUX_ProcessStatus.ERROR)
                 return false;
-            if (raised_pistons.Valid.HasValue && !raised_pistons.Valid.Value)
+            if (raised_pistons.HasChange && raised_pistons.Change.Valid)
                 return false;
-            if (pressure.Valid.HasValue && !pressure.Valid.Value)
+            if (pressure.HasChange && !pressure.Change.Valid)
                 return false;
-            if (top_lock.Valid.HasValue && !top_lock.Valid.Value)
+            if (top_lock.HasChange && !top_lock.Change.Valid)
                 return false;
-            if (chamber_lock.Valid.HasValue && !chamber_lock.Valid.Value)
+            if (chamber_lock.HasChange && !chamber_lock.Change.Valid)
                 return false;
-            if (selected_extruder > -1 && clamp_closed.Valid.HasValue && !clamp_closed.Valid.Value)
+            if (selected_extruder > -1 && clamp_closed.HasChange && !clamp_closed.Change.Valid)
                 return false;
             if (has_feeder_error)
                 return false;
             return true;
         }
 
-        private bool CanPrinterSafePrint(bool can_safe_cycle, ConditionState vacuum)
+        private bool CanPrinterSafePrint(bool can_safe_cycle, OptionalChange<ConditionState> vacuum)
         {
             if (!can_safe_cycle)
                 return false;
-            if (vacuum.Valid.HasValue && !vacuum.Valid.Value)
+            if (vacuum.HasChange && !vacuum.Change.Valid)
                 return false;
             return true;
         }

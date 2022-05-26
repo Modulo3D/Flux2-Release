@@ -84,7 +84,7 @@ namespace Flux.ViewModels
 
             var selected_positions = Flux.ConnectionProvider
                 .ObserveVariable(c => c.FILAMENT_AFTER_GEAR)
-                .QueryWhenChanged();
+                .ConvertToObservable(c => c.QueryWhenChanged());
 
             var tool_materials = ToolMaterials.Connect()
                 .QueryWhenChanged();
@@ -169,9 +169,11 @@ namespace Flux.ViewModels
                 yield return new MaterialViewModel(this, (ushort)((Position * extruders.Value.mixing_extruders) + position));
         }
 
-        private Optional<TViewModel> FindSelectedViewModel<TViewModel>(IQuery<TViewModel, ushort> viewmodels, IQuery<Optional<bool>, string> wire_presence)
+        private Optional<TViewModel> FindSelectedViewModel<TViewModel>(IQuery<TViewModel, ushort> viewmodels, OptionalChange<IQuery<Optional<bool>, string>> wire_presence)
         {
-            var selected_wire = wire_presence.Items.IndexOfOptional(true);
+            if (!wire_presence.HasChange)
+                return default;
+            var selected_wire = wire_presence.Change.Items.IndexOfOptional(true);
             if (!selected_wire.HasValue)
                 return default;
             return viewmodels.Lookup((ushort)selected_wire.Value.Index);

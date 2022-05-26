@@ -21,53 +21,48 @@ namespace Flux.ViewModels
                 .DistinctUntilChanged()
                 .StartWith(true);
 
-            var watch = Flux.ConnectionProvider.ObserveVariable(m => m.WATCH_VACUUM)
+            var cycle = Flux.StatusProvider.IsCycle
                 .DistinctUntilChanged()
-                .StartWithEmpty();
+                .StartWith(false);
 
-            var not_found = Flux.StatusProvider.VacuumPresence.ValueChanged
-                .Convert(v => double.IsNaN(v.@in.pressure.Kpa))
+            var not_found = Flux.StatusProvider.VacuumPresence.Value.ValueChanged
+                .Select(v => double.IsNaN(v.@in.Kpa))
+                .DistinctUntilChanged();
+
+            var enabled = Flux.StatusProvider.VacuumPresence.Value.ValueChanged
+                .Select(vacuum => vacuum.@out)
+                .DistinctUntilChanged();
+
+            var low = Flux.StatusProvider.VacuumPresence.Value.StateChanged
+                .Select(v => !v.Valid)
                 .DistinctUntilChanged()
-                .StartWithEmpty();
+                .StartWith(false);
 
-            var enabled = Flux.StatusProvider.VacuumPresence.ValueChanged
-                .Convert(vacuum => vacuum.@out)
-                .DistinctUntilChanged()
-                .StartWithEmpty();
-
-            var low = Flux.StatusProvider.VacuumPresence.StateChanged
-                .Select(v => v.Valid)
-                .Convert(v => !v)
-                .DistinctUntilChanged()
-                .StartWithEmpty();
-
-            var vacuum = Observable.CombineLatest(connecting, watch, not_found, enabled, low,
-                (connecting, watch, not_found, enabled, low) => (connecting, watch, not_found, enabled, low))
+            var vacuum = Observable.CombineLatest(connecting, cycle, not_found, enabled, low,
+                (connecting, cycle, not_found, enabled, low) => (connecting, cycle, not_found, enabled, low))
                 .DistinctUntilChanged();
 
             vacuum.Throttle(TimeSpan.FromSeconds(5))
-                .Where(v => v.connecting.HasValue && !v.connecting.Value && v.not_found.HasValue && v.not_found.Value)
+                .Where(v => v.connecting.HasValue && !v.connecting.Value && v.not_found)
                 .Subscribe(_ => Flux.Messages.LogMessage("Vuoto", "Sensore del vuoto non trovato", MessageLevel.EMERG, 32001));
 
             vacuum.Throttle(TimeSpan.FromSeconds(5))
-               .Where(v => v.connecting.HasValue && !v.connecting.Value && v.low.HasValue && v.low.Value && v.watch.HasValue && v.watch.Value)
+               .Where(v => v.connecting.HasValue && !v.connecting.Value && v.enabled && v.low && v.cycle.HasValue && v.cycle.Value)
                .Subscribe(_ => Flux.Messages.LogMessage("Vuoto", "Vuoto perso durante la lavorazione", MessageLevel.EMERG, 32002));
 
             vacuum.Throttle(TimeSpan.FromSeconds(60))
-                .Where(v => v.connecting.HasValue && !v.connecting.Value && v.enabled.HasValue && v.enabled.Value && v.low.HasValue && v.low.Value && v.watch.HasValue && !v.watch.Value)
+                .Where(v => v.connecting.HasValue && !v.connecting.Value && v.enabled && v.low)
                 .Subscribe(_ => Flux.Messages.LogMessage("Vuoto", "Inserire un foglio", MessageLevel.WARNING, 32003));
 
             return vacuum.Select(
                 vacuum =>
                 {
-                    if (!vacuum.connecting.HasValue || vacuum.connecting.Value || !vacuum.watch.HasValue)
+                    if (!vacuum.connecting.HasValue || vacuum.connecting.Value)
                         return StatusBarState.Hidden;
-                    if (vacuum.not_found.HasValue && vacuum.not_found.Value)
+                    if (vacuum.not_found)
                         return StatusBarState.Error;
-                    if (vacuum.watch.HasValue && vacuum.watch.Value)
-                        return vacuum.low.HasValue ? (vacuum.low.Value ? StatusBarState.Error : StatusBarState.Stable) : StatusBarState.Hidden;
-                    if (vacuum.enabled.HasValue && vacuum.enabled.Value)
-                        return vacuum.low.HasValue ? (vacuum.low.Value ? StatusBarState.Warning : StatusBarState.Stable) : StatusBarState.Hidden;
+                    if (vacuum.enabled)
+                        return vacuum.low ? StatusBarState.Warning : StatusBarState.Stable;
                     return StatusBarState.Disabled;
                 });
         }

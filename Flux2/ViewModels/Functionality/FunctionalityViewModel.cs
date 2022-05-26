@@ -165,9 +165,10 @@ namespace Flux.ViewModels
                 .ValueOr(() => false)
                 .ToOptional();
 
-            var can_naviagate_back = Flux.StatusProvider.ClampClosed.StateChanged
-                .Select(s => s.Valid)
-                .ValueOr(() => true)
+            var can_naviagate_back = Flux.StatusProvider.ClampClosed
+                .ConvertToObservable(c => c.StateChanged)
+                .ConvertToObservable(s => s.Valid)
+                .ObservableOr(() => true)
                 .ToOptional();
 
             if (Flux.ConnectionProvider.HasToolChange)

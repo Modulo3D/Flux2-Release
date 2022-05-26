@@ -659,7 +659,7 @@ namespace Flux.ViewModels
         }
         public override Optional<IEnumerable<string>> GetProbePlateGCode()
         {
-            throw new NotImplementedException();
+            return new[] { "M98 P\"/macros/probe_plate\"" };
         }
         public override Optional<IEnumerable<string>> GetLowerPlateGCode()
         {
@@ -668,6 +668,10 @@ namespace Flux.ViewModels
         public override Optional<IEnumerable<string>> GetRaisePlateGCode()
         {
             return new[] { "M98 P\"/macros/raise_plate\"" };
+        }
+        public override Optional<IEnumerable<string>> GetCenterPositionGCode()
+        {
+            return new[] { "M98 P\"/macros/center_position\"" };
         }
         public override Optional<IEnumerable<string>> GetSetLowCurrentGCode()
         {

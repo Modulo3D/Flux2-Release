@@ -78,6 +78,7 @@ namespace Flux.ViewModels
             _WirePresence1 = Flux.ConnectionProvider.ObserveVariable(
                 m => m.FILAMENT_BEFORE_GEAR,
                 before_gear_key.ConvertOr(u => u.Alias, () => ""))
+                .ObservableOrDefault()
                 .ToProperty(this, v => v.WirePresence1)
                 .DisposeWith(Disposables);
 
@@ -85,6 +86,7 @@ namespace Flux.ViewModels
             _WirePresence2 = Flux.ConnectionProvider.ObserveVariable(
                 m => m.FILAMENT_AFTER_GEAR,
                 after_gear_key.ConvertOr(u => u.Alias, () => ""))
+                .ObservableOrDefault()
                 .ToProperty(this, v => v.WirePresence2)
                 .DisposeWith(Disposables);
 
@@ -92,6 +94,7 @@ namespace Flux.ViewModels
             _WirePresence3 = Flux.ConnectionProvider.ObserveVariable(
                 m => m.FILAMENT_ON_HEAD,
                 on_head_key.ConvertOr(u => u.Alias, () => ""))
+                .ObservableOrDefault()
                 .ToProperty(this, v => v.WirePresence3)
                 .DisposeWith(Disposables);
         }

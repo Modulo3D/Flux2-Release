@@ -20,37 +20,36 @@ namespace Flux.ViewModels
                 .DistinctUntilChanged()
                 .StartWith(true);
 
-            var not_found = Flux.StatusProvider.PressurePresence.ValueChanged
-                .Convert(v => double.IsNaN(v.pressure.Kpa))
-                .DistinctUntilChanged()
-                .StartWithEmpty();
+            var not_found = Flux.StatusProvider.PressurePresence
+                .ConvertToObservable(c => c.ValueChanged)
+                .ConvertToObservable(v => double.IsNaN(v.@in.Kpa))
+                .DistinctUntilChanged();
 
-            var low = Flux.StatusProvider.PressurePresence.StateChanged
-                .Select(s => s.Valid)
-                .Convert(v => !v)
-                .DistinctUntilChanged()
-                .StartWithEmpty();
+            var low = Flux.StatusProvider.PressurePresence
+                .ConvertToObservable(c => c.StateChanged)
+                .ConvertToObservable(s => !s.Valid)
+                .DistinctUntilChanged();
 
             var pressure = Observable.CombineLatest(connecting, not_found, low,
                 (connecting, not_found, low) => (connecting, not_found, low))
                 .DistinctUntilChanged();
 
             pressure.Throttle(TimeSpan.FromSeconds(5))
-                .Where(p => p.connecting.HasValue && !p.connecting.Value && p.not_found.HasValue && p.not_found.Value)
+                .Where(p => p.connecting.HasValue && !p.connecting.Value && p.not_found.HasChange && p.not_found.Change)
                 .Subscribe(_ => Flux.Messages.LogMessage("Pressione", "Sensore della pressione non trovato", MessageLevel.EMERG, 28001));
 
             pressure.Throttle(TimeSpan.FromSeconds(5))
-                .Where(p => p.connecting.HasValue && !p.connecting.Value && p.low.HasValue && p.low.Value)
+                .Where(p => p.connecting.HasValue && !p.connecting.Value && p.low.HasChange && p.low.Change)
                 .Subscribe(_ => Flux.Messages.LogMessage("Pressione", "Livello di pressione troppo basso", MessageLevel.EMERG, 28002));
 
             return pressure.Select(
                 pressure =>
                 {
-                    if (!pressure.connecting.HasValue || pressure.connecting.Value || !pressure.not_found.HasValue || !pressure.low.HasValue)
+                    if (!pressure.connecting.HasValue || pressure.connecting.Value || !pressure.not_found.HasChange || !pressure.low.HasChange)
                         return StatusBarState.Hidden;
-                    if (pressure.not_found.HasValue && pressure.not_found.Value)
+                    if (pressure.not_found.HasChange && pressure.not_found.Change)
                         return StatusBarState.Error;
-                    if (pressure.low.HasValue && pressure.low.Value)
+                    if (pressure.low.HasChange && pressure.low.Change)
                         return StatusBarState.Error;
                     return StatusBarState.Stable;
                 });

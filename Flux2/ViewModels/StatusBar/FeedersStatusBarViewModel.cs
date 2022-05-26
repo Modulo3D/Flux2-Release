@@ -51,8 +51,10 @@ namespace Flux.ViewModels
                 .DistinctUntilChanged()
                 .StartWith(false);
 
-            var open = Flux.StatusProvider.ChamberLockClosed.ValueChanged
-                .ConvertOr(t => !t.@in, () => false)
+            var open = Flux.StatusProvider.ChamberLockClosed
+                .ConvertToObservable(c => c.ValueChanged)
+                .ConvertToObservable(t => !t.@in)
+                .ObservableOr(() => false)
                 .DistinctUntilChanged()
                 .StartWith(false);
 

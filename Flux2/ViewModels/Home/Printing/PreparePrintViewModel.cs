@@ -5,7 +5,6 @@ using System.Reactive.Linq;
 
 namespace Flux.ViewModels
 {
-
     public class PreparePrintViewModel : HomePhaseViewModel<PreparePrintViewModel>
     {
         [RemoteContent(true)]
@@ -15,28 +14,28 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public bool HasSafeStart => _HasSafeStart?.Value ?? false;
 
-        public PreparePrintViewModel(FluxViewModel flux) : base(flux, "prepare")
+        public PreparePrintViewModel(FluxViewModel flux) : base(flux)
         {
             Conditions = new SourceList<IConditionViewModel>();
 
             _HasSafeStart = Conditions.Connect()
                 .AddKey(c => c.Name)
                 .AutoRefresh(c => c.State)
-                .Filter(c => c.State.Valid.HasValue)
-                .TrueForAll(line => line.StateChanged, state => state.Valid.HasValue && state.Valid.Value)
+                .Filter(c => c.State.Valid)
+                .TrueForAll(line => line.StateChanged, state => state.Valid)
                 .StartWith(true)
                 .ToProperty(this, e => e.HasSafeStart);
         }
 
         public override void Initialize()
         {
-            if (Flux.ConnectionProvider.HasVariable(m => m.VACUUM_PRESENCE))
-                Conditions.Add(Flux.StatusProvider.VacuumPresence);
+            if (Flux.StatusProvider.VacuumPresence.HasValue)
+                Conditions.Add(Flux.StatusProvider.VacuumPresence.Value);
             // TODO
-            if (Flux.ConnectionProvider.HasVariable(m => m.LOCK_CLOSED, "top"))
-                Conditions.Add(Flux.StatusProvider.TopLockClosed);
-            if (Flux.ConnectionProvider.HasVariable(m => m.LOCK_CLOSED, "chamber"))
-                Conditions.Add(Flux.StatusProvider.ChamberLockClosed);
+            if (Flux.StatusProvider.TopLockClosed.HasValue)
+                Conditions.Add(Flux.StatusProvider.TopLockClosed.Value);
+            if (Flux.StatusProvider.ChamberLockClosed.HasValue)
+                Conditions.Add(Flux.StatusProvider.ChamberLockClosed.Value);
 
             InitializeRemoteView();
         }

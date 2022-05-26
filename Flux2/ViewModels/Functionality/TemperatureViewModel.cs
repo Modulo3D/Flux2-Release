@@ -41,7 +41,7 @@ namespace Flux.ViewModels
         [RemoteOutput(false)]
         public string Label { get; }
 
-        public TemperatureViewModel(TemperaturesViewModel temperatures, string label, string key, Func<double, Task<bool>> set_temp, IObservable<Optional<FLUX_Temp>> temperature) : base($"temperature??{key}")
+        public TemperatureViewModel(TemperaturesViewModel temperatures, string label, string key, Func<double, Task<bool>> set_temp, OptionalObservable<Optional<FLUX_Temp>> temperature) : base($"temperature??{key}")
         {
             Label = label;
             Flux = temperatures.Flux;
@@ -53,6 +53,7 @@ namespace Flux.ViewModels
             SelectTargetCommand = ReactiveCommand.CreateFromTask(async () => { await set_temp(TargetTemperature); }, is_idle);
 
             _Temperature = temperature
+                .ObservableOrDefault()
                 .ToProperty(this, v => v.Temperature);
         }
     }

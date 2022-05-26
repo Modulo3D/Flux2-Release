@@ -18,33 +18,33 @@ namespace Flux.ViewModels
         public CmdButton(
             string name,
             Action command,
-            Optional<IObservable<bool>> can_execute = default,
-            Optional<IObservable<bool>> visible = default,
-            Optional<IObservable<Optional<bool>>> active = default)
+            OptionalObservable<bool> can_execute = default,
+            OptionalObservable<bool> visible = default,
+            OptionalObservable<Optional<bool>> active = default)
             : base(name)
         {
             _Visible = visible
-                .ValueOr(() => Observable.Return(true))
+                .ObservableOr(() => true)
                 .ToProperty(this, v => v.Visible);
 
-            Command = ReactiveCommand.Create(command, can_execute.ValueOr(() => Observable.Return(true)));
-            AddCommand("command", Command, active.ValueOrDefault());
+            Command = ReactiveCommand.Create(command, can_execute.ObservableOr(() => true));
+            AddCommand("command", Command, active.ObservableOrDefault());
         }
 
         public CmdButton(
             string name,
             Func<Task> command,
-            Optional<IObservable<bool>> can_execute = default,
-            Optional<IObservable<bool>> visible = default,
-            Optional<IObservable<Optional<bool>>> active = default)
+            OptionalObservable<bool> can_execute = default,
+            OptionalObservable<bool> visible = default,
+            OptionalObservable<Optional<bool>> active = default)
             : base(name)
         {
             _Visible = visible
-               .ValueOr(() => Observable.Return(true))
+               .ObservableOr(() => true)
                .ToProperty(this, v => v.Visible);
 
-            Command = ReactiveCommand.CreateFromTask(command, can_execute.ValueOr(() => Observable.Return(true)));
-            AddCommand("command", Command, active.ValueOrDefault());
+            Command = ReactiveCommand.CreateFromTask(command, can_execute.ObservableOr(() => true));
+            AddCommand("command", Command, active.ObservableOrDefault());
         }
     }
 
@@ -54,8 +54,8 @@ namespace Flux.ViewModels
             string name,
             Action toggle,
             IObservable<Optional<bool>> is_active,
-            Optional<IObservable<bool>> can_execute = default,
-            Optional<IObservable<bool>> visible = default)
+            OptionalObservable<bool> can_execute = default, 
+            OptionalObservable<bool> visible = default)
             : base(name, toggle, can_execute, visible, is_active.ToOptional())
         {
         }
@@ -64,8 +64,8 @@ namespace Flux.ViewModels
             string name,
             Func<Task> toggle,
             IObservable<Optional<bool>> is_active,
-            Optional<IObservable<bool>> can_execute = default,
-            Optional<IObservable<bool>> visible = default)
+            OptionalObservable<bool> can_execute = default,
+            OptionalObservable<bool> visible = default)
             : base(name, toggle, can_execute, visible, is_active.ToOptional())
         {
         }
@@ -74,11 +74,11 @@ namespace Flux.ViewModels
             string name,
             FluxViewModel flux,
             IFLUX_Variable<bool, bool> @bool,
-            Optional<IObservable<bool>> can_execute = default,
-            Optional<IObservable<bool>> visible = default)
+            OptionalObservable<bool> can_execute = default,
+            OptionalObservable<bool> visible = default)
             : this(
                 name,
-                () => flux.ConnectionProvider.ToggleVariableAsync(@bool),
+                () => @bool.WriteAsync(!@bool.Value.ValueOr(() => false)),
                 @bool.ValueChanged,
                 can_execute,
                 visible)
@@ -95,8 +95,8 @@ namespace Flux.ViewModels
             IFlux flux,
             IFluxRoutableViewModel route,
             bool reset,
-            Optional<IObservable<bool>> can_navigate = default,
-            Optional<IObservable<bool>> visible = default) :
+            OptionalObservable<bool> can_navigate = default,
+            OptionalObservable<bool> visible = default) :
             base(route.Name, () => flux.Navigator.Navigate(route, reset), can_navigate, visible)
         {
             Route = route;
@@ -106,8 +106,8 @@ namespace Flux.ViewModels
         public NavButton(
             IFlux flux,
             NavModalViewModel modal,
-            Optional<IObservable<bool>> can_navigate = default,
-            Optional<IObservable<bool>> visible = default) :
+            OptionalObservable<bool> can_navigate = default,
+            OptionalObservable<bool> visible = default) :
             base(modal.Content.Name, () => flux.Navigator.Navigate(modal, false), can_navigate, visible)
         {
             Route = modal;

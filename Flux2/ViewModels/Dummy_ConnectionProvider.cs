@@ -217,6 +217,11 @@ namespace Flux.ViewModels
         {
             throw new NotImplementedException();
         }
+
+        public override Optional<IEnumerable<string>> GetCenterPositionGCode()
+        {
+            throw new NotImplementedException();
+        }
     }
     public class Dummy_MemoryBuffer : FLUX_MemoryBuffer
     {

@@ -51,6 +51,7 @@ namespace Flux.ViewModels
             var tool_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TEMP_TOOL, Position);
             _NozzleTemperature = Flux.ConnectionProvider
                 .ObserveVariable(m => m.TEMP_TOOL, tool_key.ConvertOr(u => u.Alias, () => ""))
+                .ObservableOrDefault()
                 .ToProperty(this, v => v.NozzleTemperature)
                 .DisposeWith(Disposables);
 
@@ -125,6 +126,7 @@ namespace Flux.ViewModels
                 .DistinctUntilChanged();
 
             var in_change = Flux.ConnectionProvider.ObserveVariable(m => m.IN_CHANGE)
+                .ObservableOrDefault()
                 .DistinctUntilChanged();
 
             var in_change_error = Observable.CombineLatest(
@@ -138,19 +140,23 @@ namespace Flux.ViewModels
                 .DistinctUntilChanged();
 
             var mem_magazine_key = Flux.ConnectionProvider.GetArrayUnit(m => m.MEM_TOOL_IN_MAGAZINE, Position).ConvertOr(u => u.Alias, () => "");
-            var mem_magazine = Flux.ConnectionProvider.ObserveVariable(m => m.MEM_TOOL_IN_MAGAZINE, mem_magazine_key)
+            var mem_magazine = Flux.ConnectionProvider
+                .ObserveVariable(m => m.MEM_TOOL_IN_MAGAZINE, mem_magazine_key)
                 .DistinctUntilChanged();
 
             var mem_trailer_key = Flux.ConnectionProvider.GetArrayUnit(m => m.MEM_TOOL_ON_TRAILER, Position).ConvertOr(u => u.Alias, () => "");
-            var mem_trailer = Flux.ConnectionProvider.ObserveVariable(m => m.MEM_TOOL_ON_TRAILER, mem_trailer_key)
+            var mem_trailer = Flux.ConnectionProvider
+                .ObserveVariable(m => m.MEM_TOOL_ON_TRAILER, mem_trailer_key)
                 .DistinctUntilChanged();
 
             var input_magazine_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TOOL_IN_MAGAZINE, Position).ConvertOr(u => u.Alias, () => "");
-            var input_magazine = Flux.ConnectionProvider.ObserveVariable(m => m.TOOL_IN_MAGAZINE, input_magazine_key)
+            var input_magazine = Flux.ConnectionProvider
+                .ObserveVariable(m => m.TOOL_IN_MAGAZINE, input_magazine_key)
                 .DistinctUntilChanged();
 
             var input_trailer_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TOOL_ON_TRAILER, Position).ConvertOr(u => u.Alias, () => "");
-            var input_trailer = Flux.ConnectionProvider.ObserveVariable(m => m.TOOL_ON_TRAILER, input_trailer_key)
+            var input_trailer = Flux.ConnectionProvider
+                .ObserveVariable(m => m.TOOL_ON_TRAILER, input_trailer_key)
                 .DistinctUntilChanged();
 
             var known = this.WhenAnyValue(v => v.Document)
@@ -171,8 +177,8 @@ namespace Flux.ViewModels
                 in_change_error, tool_cur, inserted, mem_trailer, input_trailer, mem_magazine, input_magazine, known, locked, loaded, in_mateinance,
                 (in_change_error, tool_cur, inserted, mem_trailer, input_trailer, mem_magazine, input_magazine, known, locked, loaded, in_mateinance) =>
                 {
-                    var on_trailer = mem_trailer.Convert(t => t && t == input_trailer.ValueOr(() => t)).ValueOr(() => false);
-                    var in_magazine = mem_magazine.Convert(t => t && t == input_magazine.ValueOr(() => t)).ValueOr(() => false);
+                    var on_trailer = !mem_trailer.HasChange || !input_trailer.HasChange || mem_trailer.Change.Convert(t => t && t == input_trailer.Change.ValueOr(() => t)).ValueOr(() => false);
+                    var in_magazine = mem_magazine.HasChange && input_magazine.HasChange && mem_magazine.Change.Convert(t => t && t == input_magazine.Change.ValueOr(() => t)).ValueOr(() => false);
                     var selected = tool_cur.Convert(t => t.ToOptional(t => t > -1)).Convert(t => Position == (ushort)t).ValueOr(() => false);
                     return new ToolNozzleState(has_tool_change, selected, inserted, known, locked, loaded, on_trailer, in_magazine, in_mateinance, in_change_error.ValueOr(() => false));
                 });

@@ -23,7 +23,7 @@ namespace Flux.ViewModels
 
         private IEnumerable<TemperatureViewModel> FindTemperatures(Optional<(ushort machine_extruders, ushort mixing_extruders)> extruders)
         {
-            if (extruders.HasValue && Flux.ConnectionProvider.HasVariable(m => m.TEMP_TOOL))
+            if (extruders.HasValue)
             {
                 for (ushort i = 0; i < extruders.Value.machine_extruders; i++)
                 {
