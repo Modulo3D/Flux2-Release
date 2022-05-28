@@ -54,27 +54,27 @@ namespace Flux.ViewModels
         protected Task<bool> SetPlateTemperature(RRF_Connection connection, double temperature, VariableUnit unit)
         {
             var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-            return connection.PostGCodeAsync($"M140 S{temperature}", cts.Token);
+            return connection.PostGCodeAsync(new[] { $"M140 S{temperature}" }, cts.Token);
         }
         protected Task<bool> SetChamberTemperature(RRF_Connection connection, double temperature, VariableUnit unit)
         {
             var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-            return connection.PostGCodeAsync($"M141 P{unit.Index} S{temperature}", cts.Token);
+            return connection.PostGCodeAsync(new[] { $"M141 P{unit.Index} S{temperature}" }, cts.Token);
         }
         protected Task<bool> EnableDriverAsync(RRF_Connection connection, bool enable, VariableUnit unit)
         {
             var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-            return connection.PostGCodeAsync($"{(enable ? "M17" : "M18")} {unit}", cts.Token);
+            return connection.PostGCodeAsync(new[] { $"{(enable ? "M17" : "M18")} {unit.Alias}" }, cts.Token);
         }
         protected Task<bool> SetToolTemperatureAsync(RRF_Connection connection, double temperature, VariableUnit unit)
         {
             var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-            return connection.PostGCodeAsync($"M104 T{unit.Index} S{temperature}", cts.Token);
+            return connection.PostGCodeAsync(new[] { $"M104 T{unit.Index} S{temperature}" }, cts.Token);
         }
         protected Task<bool> WriteGpOutAsync(RRF_Connection connection, bool pwm, VariableUnit unit)
         {
             var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-            return connection.PostGCodeAsync($"M42 P{unit.Index} S{(pwm ? 1 : 0)}", cts.Token);
+            return connection.PostGCodeAsync(new[] { $"M42 P{unit.Address} S{(pwm ? 1 : 0)}" }, cts.Token);
         }
     }
 
@@ -190,33 +190,32 @@ namespace Flux.ViewModels
         {
             try
             {
-                var heater_variables = new HashSet<VariableUnit>()
+                var heater_units = new[]
                 {
-                    new VariableUnit("bed",     0),
-                    new VariableUnit("main",    0),
-                    new VariableUnit("spools",  1),
-                    new VariableUnit("T0",      0),
-                    new VariableUnit("T1",      1) 
-                };
+                    new VariableUnit("bed",     0, 0),
+                    new VariableUnit("main",    1, 0),
+                    new VariableUnit("spools",  2, 1),
+                    new VariableUnit("T0",      3, 0),
+                    new VariableUnit("T1",      4, 1) 
+                }.ToDictionary(u => u.Alias);
 
-                var extruder_units      = VariableUnit.Range(0, "T0", "T1");
-                var extruders_variables = VariableUnit.Range(0, "T0", "T1");
-                var gpin_variables      = VariableUnit.Range(0, "top", "chamber", "spools");
-                var axes_variables      = VariableUnit.Range(0, "X0", "Y0", "Z", "X1", "Y1");
-                var endstops_variables  = VariableUnit.Range(0, "X0", "Y0", "Z", "X1", "Y1");
-                var gpout_variables     = VariableUnit.Range(0, "chamber", "spools", "light", "vacuum");
-                var analog_variables    = VariableUnit.Range(0, "bed", "chamber", "spools", "T0", "T1", "vacuum");
-                var filament_variables  = VariableUnit.Range(1, 10);
+                var extruders_units     = VariableUnit.Range(0, "T1", "T2");
+                var filament_units      = VariableUnit.Range(2, "M1", "M2", "M3", "M4");
+                var axes_units          = VariableUnit.Range(0, "X", "Y", "Z", "U", "V");
+                var endstops_units      = VariableUnit.Range(0, "X", "Y", "Z", "U", "V");
+                var gpout_units         = VariableUnit.Range(0, "chamber", "spools", "light", "vacuum");
+                var analog_units        = VariableUnit.Range(0, "bed", "chamber", "spools", "T1", "T2", "vacuum");
+                var gpin_units          = VariableUnit.Range(0, "chamber", "spools", "M1", "M2", "M3", "M4", "T1", "T2" );
 
                 var connection          = connection_provider.WhenAnyValue(v => v.Connection);
-                var gpIn                = Sensors.CreateArray(s     => s.GpIn,              gpin_variables);
-                var axes                = Move.CreateArray(m        => m.Axes,              axes_variables);
-                var gpOut               = State.CreateArray(s       => s.GpOut,             gpout_variables);
-                var heaters             = Heat.CreateArray(h        => h.Heaters,           heater_variables);
-                var analog              = Sensors.CreateArray(s     => s.Analog,            analog_variables);
-                var endstops            = Sensors.CreateArray(s     => s.Endstops,          endstops_variables);
-                var extruders           = Move.CreateArray(m        => m.Extruders,         extruders_variables);
-                var filaments           = Sensors.CreateArray(m     => m.FilamentMonitors,  filament_variables);
+                var gpIn                = Sensors.CreateArray(s     => s.GpIn,              gpin_units);
+                var axes                = Move.CreateArray(m        => m.Axes,              axes_units);
+                var gpOut               = State.CreateArray(s       => s.GpOut,             gpout_units);
+                var heaters             = Heat.CreateArray(h        => h.Heaters,           heater_units);
+                var analog              = Sensors.CreateArray(s     => s.Analog,            analog_units);
+                var endstops            = Sensors.CreateArray(s     => s.Endstops,          endstops_units);
+                var extruders           = Move.CreateArray(m        => m.Extruders,         extruders_units);
+                var filaments           = Sensors.CreateArray(m     => m.FilamentMonitors,  filament_units);
             
                 TOOL_NUM                = Tools.CreateVariable<ushort, ushort>("TOOL NUM",          (c, t) => (ushort)t.Count);
 
@@ -236,7 +235,6 @@ namespace Flux.ViewModels
                 AXIS_ENDSTOP            = endstops.CreateArray<bool, bool>("AXIS ENDSTOP",          (c, e) => e.Triggered);
                 EXTRUSIONS              = extruders.CreateArray("EXTRUSION_SET",                    (c, e) => e.Position);
                 ENABLE_DRIVERS          = axes.CreateArray<bool, bool>("ENABLE DRIVERS",            (c, m) => m.IsEnabledDriver(), EnableDriverAsync);
-                LOCK_CLOSED             = gpIn.CreateArray<bool, bool>("LOCK_CLOSED",               (c, m) => m.Value == 1, VariableRange.Range(1, 1));
 
 
                 VACUUM_PRESENCE         = analog.CreateVariable("ANALOG",                           (c, v) => AnalogSensors.PSE541.Read(v.LastReading),     "vacuum");
@@ -248,12 +246,14 @@ namespace Flux.ViewModels
                 ENABLE_VACUUM           = gpOut.CreateVariable<bool, bool>("ENABLE",                (c, m) => m.Pwm == 1, WriteGpOutAsync, "vacuum");
                 OPEN_LOCK               = gpOut.CreateArray<bool, bool>("OPEN_LOCK",                (c, m) => m.Pwm == 1, WriteGpOutAsync, VariableRange.Range(0, 2));
 
-                FILAMENT_BEFORE_GEAR    = filaments.CreateArray<bool, bool>("FILAMENT_BEFORE_GEAR", (c, m) => m.Status == "ok", VariableRange.Range(0, 4));
-                FILAMENT_AFTER_GEAR     = filaments.CreateArray<bool, bool>("FILAMENT_AFTER_GEAR",  (c, m) => m.Status == "ok", VariableRange.Range(4, 4));
-                FILAMENT_ON_HEAD        = filaments.CreateArray<bool, bool>("FILAMENT_ON_HEAD",     (c, m) => m.Status == "ok", VariableRange.Range(8, 2));
+                FILAMENT_BEFORE_GEAR    = filaments.CreateArray<bool, bool>("FILAMENT_BEFORE_GEAR", (c, m) => m.Status == "ok");
+                
+                LOCK_CLOSED             = gpIn.CreateArray<bool, bool>("LOCK_CLOSED",               (c, m) => m.Value == 1, VariableRange.Range(0, 2));
+                FILAMENT_AFTER_GEAR     = gpIn.CreateArray<bool, bool>("FILAMENT_AFTER_GEAR",       (c, m) => m.Value == 1, VariableRange.Range(2, 4));
+                FILAMENT_ON_HEAD        = gpIn.CreateArray<bool, bool>("FILAMENT_ON_HEAD",          (c, m) => m.Value == 1, VariableRange.Range(6, 2));
 
-
-                Z_BED_HEIGHT            = Global.CreateVariable("z_bed_height",         true,   0.0);
+                
+                Z_BED_HEIGHT            = Global.CreateVariable("z_bed_height",         false,  0.0);
                 Z_PROBE_CORRECTION      = Global.CreateVariable("z_probe_correction",   true,   0.0);
                 VACUUM_LEVEL            = Global.CreateVariable("vacuum_level",         true,   -70.0);
                 QUEUE_SIZE              = Global.CreateVariable("queue_size",           true,   (ushort)1);
@@ -266,8 +266,8 @@ namespace Flux.ViewModels
                 X_PROBE_OFFSET_T        = Global.CreateArray("x_probe_offset",          false,  0.0,    VariableUnit.Range(0, 2));
                 Y_PROBE_OFFSET_T        = Global.CreateArray("y_probe_offset",          false,  0.0,    VariableUnit.Range(0, 2));
                 Z_PROBE_OFFSET_T        = Global.CreateArray("z_probe_offset",          false,  0.0,    VariableUnit.Range(0, 2));
-                HOME_OFFSET_X           = Global.CreateArray("home_offset_x",           true,   0.0,    VariableUnit.Range(0, 2));
-                HOME_OFFSET_Y           = Global.CreateArray("home_offset_y",           true,   0.0,    VariableUnit.Range(0, 2));
+                X_HOME_OFFSET           = Global.CreateArray("x_home_offset",           true,   0.0,    VariableUnit.Range(0, 2));
+                Y_HOME_OFFSET           = Global.CreateArray("y_home_offset",           true,   0.0,    VariableUnit.Range(0, 2));
             }
             catch (Exception ex)
             {

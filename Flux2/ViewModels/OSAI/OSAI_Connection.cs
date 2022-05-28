@@ -1150,5 +1150,10 @@ namespace Flux.ViewModels
         {
             throw new NotImplementedException();
         }
+
+        public override Task<bool> ExecuteParamacroAsync(IEnumerable<string> paramacro, CancellationToken put_ct, bool wait = false, CancellationToken ct = default, bool can_cancel = true)
+        {
+            throw new NotImplementedException();
+        }
     }
 }

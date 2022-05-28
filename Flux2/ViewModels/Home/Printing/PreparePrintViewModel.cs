@@ -8,7 +8,7 @@ namespace Flux.ViewModels
     public class PreparePrintViewModel : HomePhaseViewModel<PreparePrintViewModel>
     {
         [RemoteContent(true)]
-        public ISourceList<IConditionViewModel> Conditions { get; private set; }
+        public ISourceCache<IConditionViewModel, string> Conditions { get; private set; }
 
         private ObservableAsPropertyHelper<bool> _HasSafeStart;
         [RemoteOutput(true)]
@@ -16,10 +16,9 @@ namespace Flux.ViewModels
 
         public PreparePrintViewModel(FluxViewModel flux) : base(flux)
         {
-            Conditions = new SourceList<IConditionViewModel>();
+            Conditions = new SourceCache<IConditionViewModel, string>(c => c.Name);
 
             _HasSafeStart = Conditions.Connect()
-                .AddKey(c => c.Name)
                 .AutoRefresh(c => c.State)
                 .Filter(c => c.State.Valid)
                 .TrueForAll(line => line.StateChanged, state => state.Valid)
@@ -30,12 +29,13 @@ namespace Flux.ViewModels
         public override void Initialize()
         {
             if (Flux.StatusProvider.VacuumPresence.HasValue)
-                Conditions.Add(Flux.StatusProvider.VacuumPresence.Value);
+                Conditions.AddOrUpdate(Flux.StatusProvider.VacuumPresence.Value);
+
             // TODO
             if (Flux.StatusProvider.TopLockClosed.HasValue)
-                Conditions.Add(Flux.StatusProvider.TopLockClosed.Value);
+                Conditions.AddOrUpdate(Flux.StatusProvider.TopLockClosed.Value);
             if (Flux.StatusProvider.ChamberLockClosed.HasValue)
-                Conditions.Add(Flux.StatusProvider.ChamberLockClosed.Value);
+                Conditions.AddOrUpdate(Flux.StatusProvider.ChamberLockClosed.Value);
 
             InitializeRemoteView();
         }

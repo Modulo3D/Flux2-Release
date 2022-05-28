@@ -5,6 +5,7 @@ using ReactiveUI;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reactive;
 using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -14,12 +15,18 @@ namespace Flux.ViewModels
     public abstract class MaterialChangeViewModel<T> : FeederOperationViewModel<T>
         where T : MaterialChangeViewModel<T>
     {
+        [RemoteCommand]
+        public Optional<ReactiveCommand<Unit, Unit>> OpenSpoolsCommand { get; private set; }
+
         public MaterialViewModel Material { get; }
         private bool IsCanceled { get; set; }
         
         public MaterialChangeViewModel(MaterialViewModel material) : base(material.Feeder)
         {
             Material = material;
+
+            if (Flux.ConnectionProvider.HasVariable(c => c.OPEN_LOCK, "spools"))
+                OpenSpoolsCommand = ReactiveCommand.CreateFromTask(async () => { await Flux.ConnectionProvider.ToggleVariableAsync(c => c.OPEN_LOCK, "spools"); });
         }
 
         protected override IObservable<bool> CanCancelOperation()
@@ -58,7 +65,7 @@ namespace Flux.ViewModels
                 return false;
             }
         }
-        protected async Task<(bool result, Optional<double> current_break_temp)> ExecuteFilamentOperation(FilamentOperationSettings settings, Func<IFLUX_Connection, Func<Nozzle, FilamentOperationSettings, Optional<IEnumerable<string>>>> filament_operation, bool use_last_temp)
+        protected async Task<(bool result, Optional<double> current_break_temp)> ExecuteFilamentOperation(GCodeFilamentOperation settings, Func<IFLUX_Connection, Func<Nozzle, GCodeFilamentOperation, Optional<IEnumerable<string>>>> filament_operation, bool use_last_temp)
         {
             try
             {
@@ -76,7 +83,7 @@ namespace Flux.ViewModels
                     .ValueOr(() => 0);
 
                 var break_temp = Math.Max(
-                    settings.BreakTemperature.ValueOr(() => 0),
+                    settings.BreakTemperature,
                     use_last_temp ? last_break_temp : 0);
 
                 if (break_temp < 150)
@@ -125,27 +132,47 @@ namespace Flux.ViewModels
             if (!material.HasValue)
                 return false;
 
-            material.Value.StoreTag(t => t.SetLoaded(Feeder.Position));
+            if (!Flux.ConnectionProvider.HasVariable(c => c.FILAMENT_ON_HEAD))
+                material.Value.StoreTag(t => t.SetLoaded(Feeder.Position));
 
-            var filament_settings = new FilamentOperationSettings(Flux, Material);
-            if (!filament_settings.ExtrusionTemperature.HasValue || !filament_settings.ExtrusionTemperature.HasValue)
+            var filament_settings = GCodeFilamentOperation.Create(Flux, Material);
+            if (!filament_settings.HasValue)
                 return false;
             
-            var operation = await ExecuteFilamentOperation(filament_settings, c => c.GetLoadFilamentGCode, true);
+            var operation = await ExecuteFilamentOperation(filament_settings.Value, c => c.GetLoadFilamentGCode, true);
             if (operation.result == false)
             {
                 Flux.Messages.LogMessage(MaterialChangeResult.MATERIAL_CHANGE_ERROR_PARAMACRO, default);
+                material.Value.StoreTag(t => t.SetLoaded(default));
                 return false;
             }
 
-            Feeder.ToolNozzle.StoreTag(t => t.SetLastBreakTemp(filament_settings.BreakTemperature.Value));
+            // check endstop
+            if (Flux.ConnectionProvider.HasVariable(c => c.FILAMENT_ON_HEAD))
+            {
+                var filament_on_head_unit = Flux.ConnectionProvider.GetArrayUnit(c => c.FILAMENT_ON_HEAD, Feeder.Position);
+                if (!filament_on_head_unit.HasValue)
+                {
+                    material.Value.StoreTag(t => t.SetLoaded(default));
+                    return false;
+                }
+
+                var has_filament_on_head = await Flux.ConnectionProvider.ReadVariableAsync(c => c.FILAMENT_ON_HEAD, filament_on_head_unit.Value.Alias);
+                if (!has_filament_on_head.HasValue || !has_filament_on_head.Value)
+                {
+                    material.Value.StoreTag(t => t.SetLoaded(default));
+                    return false;
+                }
+            }
+
+            Feeder.ToolNozzle.StoreTag(t => t.SetLastBreakTemp(filament_settings.Value.BreakTemperature));
 
             var try_count = 0;
             var result = ContentDialogResult.None;
             while (result != ContentDialogResult.Primary && try_count < 3)
             {
                 try_count++;
-                await Flux.ConnectionProvider.PurgeAsync(filament_settings);
+                await Flux.ConnectionProvider.PurgeAsync(filament_settings.Value);
                 result = await Flux.ShowConfirmDialogAsync("Caricamento del filo", "Filo spurgato correttamente?");
             }
 
@@ -191,11 +218,11 @@ namespace Flux.ViewModels
                         if (value.document.ConvertOr(d => d.Id == 0, () => true)) 
                             return new ConditionState(false, "LEGGI UN MATERIALE");
 
-                        if (value.material.ConvertOr(m => !m.Locked, () => true))
-                            return new ConditionState(false, "BLOCCA IL MATERIALE");
-
                         if (value.tool_material.Convert(tm => tm.Compatible).ConvertOr(c => !c, () => true))
                             return new ConditionState(false, $"{value.document} NON COMPATIBILE");
+
+                        if (value.material.ConvertOr(m => !m.Locked, () => true))
+                            return new ConditionState(false, "BLOCCA IL MATERIALE");
 
                         return new ConditionState(true, $"{value.document} PRONTO AL CARICAMENTO");
                     });
@@ -317,18 +344,11 @@ namespace Flux.ViewModels
             if (!break_temp.HasValue)
                 return false;
 
-            var filament_settings = new FilamentOperationSettings()
-            {
-                Mixing = Material.Position,
-                Extruder = Feeder.Position,
-                BreakTemperature = break_temp.Value,
-                ExtrusionTemperature = extrusion_temp.Value,
-                FilamentOnHead = Flux.ConnectionProvider.GetArrayUnit(c => c.FILAMENT_ON_HEAD, Feeder.Position),
-                FilamentAfterGear = Flux.ConnectionProvider.GetArrayUnit(c => c.FILAMENT_AFTER_GEAR, Material.Position),
-                FilamentBeforeGear = Flux.ConnectionProvider.GetArrayUnit(c => c.FILAMENT_BEFORE_GEAR, Material.Position),
-            };
+            var filament_settings = GCodeFilamentOperation.Create(Flux, Material);
+            if (!filament_settings.HasValue)
+                return false;
 
-            var operation = await ExecuteFilamentOperation(filament_settings, c => c.GetUnloadFilamentGCode, false);
+            var operation = await ExecuteFilamentOperation(filament_settings.Value, c => c.GetUnloadFilamentGCode, false);
             if (operation.result == false)
                 return false;
 
@@ -356,40 +376,26 @@ namespace Flux.ViewModels
             var tool_material = Feeder.ToolMaterials.Connect()
                 .WatchOptional(Material.Position);
 
-            yield return ConditionViewModel.Create("materialKnown??0",
-                material.ConvertMany(m => m.WhenAnyValue(m => m.Document)),
-                value =>
-                {
-                    if (!value.HasValue || value.Value.Id == 0)
-                        return new ConditionState(false, "LEGGI UN MATERIALE");
-                    return new ConditionState(true, $"MATERIALE LETTO: {value.Value}");
-                });
+            yield return ConditionViewModel.Create("material",
+                Observable.CombineLatest(
+                    Feeder.ToolNozzle.WhenAnyValue(f => f.MaterialLoaded),
+                    material.ConvertMany(m => m.WhenAnyValue(m => m.Document)),
+                    material.ConvertMany(m => m.WhenAnyValue(f => f.State)),
+                    tool_material.ConvertMany(tm => tm.WhenAnyValue(m => m.State)),
+                    (loaded, document, material, tool_material) => (loaded, document, material, tool_material)),
+                    value =>
+                    {
+                        if (value.document.ConvertOr(d => d.Id == 0, () => true))
+                            return new ConditionState(false, "LEGGI UN MATERIALE");
 
-            yield return ConditionViewModel.Create("toolMaterialCompatible??1",
-                tool_material.ConvertMany(tm => tm.WhenAnyValue(m => m.State)),
-                value =>
-                {
-                    if (!value.HasValue)
-                        return new ConditionState(default, "");
-                    if (!value.Value.Compatible.HasValue)
-                        return new ConditionState(default, "");
-                    if (!value.Value.Compatible.Value)
-                        return new ConditionState(false, "MATERIALE NON COMPATIBILE");
-                    return new ConditionState(true, "MATERIALE COMPATIBILE");
-                });
+                        if (value.tool_material.Convert(tm => tm.Compatible).ConvertOr(c => !c, () => true))
+                            return new ConditionState(false, $"{value.document} NON COMPATIBILE");
 
-            yield return ConditionViewModel.Create("materialReady??2",
-                material.ConvertMany(m => m.WhenAnyValue(f => f.State)),
-                value => 
-                {
-                    if (!value.HasValue)
-                        return new ConditionState(default, "");
-                    if (value.Value.Loaded)
-                        return new ConditionState(default, "");
-                    if (value.Value.Locked)
-                        return new ConditionState(false, "SBLOCCA IL MATERIALE");
-                    return new ConditionState(true, "MATERIALE SBLOCCATO");
-                });
+                        if (!value.loaded.HasValue)
+                            return new ConditionState(false, "SBLOCCA IL MATERIALE");
+
+                        return new ConditionState(true, $"{value.document} PRONTO ALLO SCARICAMENTO");
+                    });
         }
         public override async Task<bool> UpdateNFCAsync()
         {

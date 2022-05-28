@@ -85,7 +85,7 @@ namespace Flux.ViewModels
             async Task moveAsync(Func<IFLUX_Connection, Optional<IEnumerable<string>>> func)
             {
                 using var put_move_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                await Flux.ConnectionProvider.ExecuteParamacroAsync(func, put_move_cts.Token);
+                await Flux.ConnectionProvider.ExecuteParamacroAsync(func, put_move_cts.Token, false);
             }
 
             MovePrinterLeftCommand = ReactiveCommand.CreateFromTask(() => moveAsync(c => c.GetRelativeXMovementGCode(-MovePrinterDistance, MovePrinterFeedrate)), can_move);

@@ -32,9 +32,9 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public string OperationText => _OperationText.Value;
 
-        private ISourceList<IConditionViewModel> Conditions { get; set; }
+        private ISourceCache<IConditionViewModel, string> Conditions { get; set; }
         [RemoteContent(true)]
-        public IObservableList<IConditionViewModel> FilteredConditions { get; private set; }
+        public IObservableCache<IConditionViewModel, string> FilteredConditions { get; private set; }
 
         [RemoteCommand]
         public ReactiveCommand<Unit, Unit> CancelOperationCommand { get; private set; }
@@ -73,10 +73,10 @@ namespace Flux.ViewModels
 
         public void Initialize()
         {
-            Conditions = new SourceList<IConditionViewModel>();
+            Conditions = new SourceCache<IConditionViewModel, string>(c => c.Name);
             Conditions.Edit(innerList =>
             {
-                innerList.AddRange(FindConditions());
+                innerList.AddOrUpdate(FindConditions());
             });
 
             var is_idle = Feeder.Flux.StatusProvider.IsIdle
@@ -89,15 +89,13 @@ namespace Flux.ViewModels
                     return (Func<IConditionViewModel, bool>)filter;
                     bool filter(IConditionViewModel condition) => idle;
                 }))
-                .AsObservableList();
+                .AsObservableCache();
 
             _AllConditionsTrue = FilteredConditions.Connect()
-                .AddKey(c => c.Name)
                 .TrueForAll(c => c.StateChanged, state => state.Valid)
                 .ToProperty(this, v => v.AllConditionsTrue);
 
             _AllConditionsFalse = FilteredConditions.Connect()
-                .AddKey(c => c.Name)
                 .TrueForAll(c => c.StateChanged, state => !state.Valid)
                 .ToProperty(this, v => v.AllConditionsFalse);
 

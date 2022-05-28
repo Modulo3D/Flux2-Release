@@ -169,7 +169,7 @@ namespace Flux.ViewModels
                 yield return new MaterialViewModel(this, (ushort)((Position * extruders.Value.mixing_extruders) + position));
         }
 
-        private Optional<TViewModel> FindSelectedViewModel<TViewModel>(IQuery<TViewModel, ushort> viewmodels, OptionalChange<IQuery<Optional<bool>, string>> wire_presence)
+        private Optional<TViewModel> FindSelectedViewModel<TViewModel>(IQuery<TViewModel, ushort> viewmodels, OptionalChange<IQuery<Optional<bool>, VariableAlias>> wire_presence)
         {
             if (!wire_presence.HasChange)
                 return default;

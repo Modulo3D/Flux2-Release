@@ -26,11 +26,16 @@ namespace Flux.ViewModels
     {
         public FluxViewModel Flux { get; }
         public CalibrationViewModel Calibration { get; }
+
         [RemoteCommand]
         public ReactiveCommand<Unit, Unit> CancelCalibrationCommand { get; }
+
         private ObservableAsPropertyHelper<Optional<ushort>> _SelectedTool;
         [RemoteOutput(true)]
         public Optional<ushort> SelectedTool => _SelectedTool.Value;
+
+        [RemoteCommand]
+        public ReactiveCommand<Unit, Unit> ProbeBedHeightCommand { get; }
 
         public ManualCalibrationPhaseViewModel(CalibrationViewModel calibration) : base()
         {
@@ -43,7 +48,13 @@ namespace Flux.ViewModels
                 .Convert(o => o.ToOptional(o => o > -1).Convert(o => (ushort)o))
                 .ToProperty(this, v => v.SelectedTool)
                 .DisposeWith(Disposables);
+
+            var can_probe_plate = Flux.StatusProvider.WhenAnyValue(v => v.StatusEvaluation)
+                .Select(s => s.CanSafePrint);
+
+            ProbeBedHeightCommand = ReactiveCommand.CreateFromTask(async () => { await Flux.ConnectionProvider.ProbePlateAsync(); }, can_probe_plate);
         }
+
         public virtual void Initialize()
         {
             InitializeRemoteView();
@@ -51,9 +62,6 @@ namespace Flux.ViewModels
 
         private async Task ExitAsync()
         {
-            if (Flux.ConnectionProvider.HasVariable(c => c.ENABLE_VACUUM))
-                await Flux.ConnectionProvider.WriteVariableAsync(c => c.ENABLE_VACUUM, false);
-
             using var put_exit_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             using var wait_exit_cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             await Flux.ConnectionProvider.ExecuteParamacroAsync(c =>
@@ -82,6 +90,9 @@ namespace Flux.ViewModels
 
             }, put_exit_cts.Token, true, wait_exit_cts.Token);
 
+            if (Flux.ConnectionProvider.HasVariable(c => c.ENABLE_VACUUM))
+                await Flux.ConnectionProvider.WriteVariableAsync(c => c.ENABLE_VACUUM, false);
+
             Flux.Navigator.NavigateBack();
         }
     }
@@ -89,7 +100,7 @@ namespace Flux.ViewModels
     public class PrepareManualCalibrationViewModel : ManualCalibrationPhaseViewModel<PrepareManualCalibrationViewModel>
     {
         [RemoteContent(true)]
-        public ISourceList<IConditionViewModel> Conditions { get; private set; }
+        public ISourceCache<IConditionViewModel, string> Conditions { get; private set; }
 
         private ObservableAsPropertyHelper<bool> _HasSafeStart;
         [RemoteOutput(true)]
@@ -97,26 +108,28 @@ namespace Flux.ViewModels
 
         public PrepareManualCalibrationViewModel(CalibrationViewModel calibration) : base(calibration)
         {
-            Conditions = new SourceList<IConditionViewModel>();
+            Conditions = new SourceCache<IConditionViewModel, string>(c => c.Name);
 
             _HasSafeStart = Conditions.Connect()
-                .AddKey(c => c.Name)
                 .AutoRefresh(c => c.State)
-                .Filter(c => c.State.Valid)
                 .TrueForAll(line => line.StateChanged, state => state.Valid)
-                .StartWith(true)
+                .StartWith(false)
                 .ToProperty(this, e => e.HasSafeStart);
         }
 
         public override void Initialize()
         {
             if (Flux.StatusProvider.VacuumPresence.HasValue)
-                Conditions.Add(Flux.StatusProvider.VacuumPresence.Value);
+                Conditions.AddOrUpdate(Flux.StatusProvider.VacuumPresence.Value);
+
             // TODO
             if (Flux.StatusProvider.TopLockClosed.HasValue)
-                Conditions.Add(Flux.StatusProvider.TopLockClosed.Value);
+                Conditions.AddOrUpdate(Flux.StatusProvider.TopLockClosed.Value);
             if (Flux.StatusProvider.ChamberLockClosed.HasValue)
-                Conditions.Add(Flux.StatusProvider.ChamberLockClosed.Value);
+                Conditions.AddOrUpdate(Flux.StatusProvider.ChamberLockClosed.Value);
+
+            if (Flux.StatusProvider.HasZBedHeight.HasValue)
+                Conditions.AddOrUpdate(Flux.StatusProvider.HasZBedHeight.Value);
 
             InitializeRemoteView();
         }
@@ -124,9 +137,9 @@ namespace Flux.ViewModels
 
     public class PerformManualCalibrationViewModel : ManualCalibrationPhaseViewModel<PerformManualCalibrationViewModel>
     {
-        private ObservableAsPropertyHelper<Optional<double>> _CurrentTemperature;
-        [RemoteOutput(true, typeof(TemperatureConverter))]
-        public Optional<double> CurrentTemperature => _CurrentTemperature.Value;
+        private ObservableAsPropertyHelper<Optional<FLUX_Temp>> _CurrentTemperature;
+        [RemoteOutput(true, typeof(FluxTemperatureConverter))]
+        public Optional<FLUX_Temp> CurrentTemperature => _CurrentTemperature.Value;
 
         private ObservableAsPropertyHelper<double> _TemperaturePercentage;
         [RemoteOutput(true)]
@@ -148,40 +161,21 @@ namespace Flux.ViewModels
                .Select(t =>
                {
                    if (!t.HasValue)
-                       return Observable.Return(Optional<double>.None);
+                       return Observable.Return(Optional<FLUX_Temp>.None);
 
                    var tool_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TEMP_TOOL, t.Value);
                    if (!tool_key.HasValue)
-                       return Observable.Return(Optional<double>.None);
+                       return Observable.Return(Optional<FLUX_Temp>.None);
 
                    return Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_TOOL, tool_key.Value.Alias)
-                       .ObservableOrDefault()
-                       .Convert(t => t.Current);
+                       .ObservableOrDefault();
                })
                .Switch()
                .ToProperty(this, v => v.CurrentTemperature)
                .DisposeWith(Disposables);
 
-            _TemperaturePercentage = this.WhenAnyValue(v => v.SelectedTool)
-                .Select(t =>
-                {
-                    if (!t.HasValue)
-                        return Observable.Return(0.0);
-
-                    var tool_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TEMP_TOOL, t.Value);
-                    if (!tool_key.HasValue)
-                        return Observable.Return(0.0);
-
-                    return Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_TOOL, tool_key.Value.Alias)
-                        .ObservableOrDefault()
-                        .ConvertOr(t =>
-                        {
-                            if (t.Current > t.Target)
-                                return 100;
-                            return Math.Max(0, Math.Min(100, t.Current / t.Target * 100.0));
-                        }, () => 0);
-                })
-                .Switch()
+            _TemperaturePercentage = this.WhenAnyValue(v => v.CurrentTemperature)
+                .ConvertOr(t => t.Percentage, () => 0)
                 .ToProperty(this, v => v.TemperaturePercentage)
                 .DisposeWith(Disposables);
 
@@ -222,16 +216,19 @@ namespace Flux.ViewModels
                 {
                     if (e)
                     {
-
                         var offset = Calibration.Offsets.LookupOptional(SelectedTool);
                         if (!offset.HasValue)
+                            return;
+
+                        var z_bed_height = await Flux.ConnectionProvider.ReadVariableAsync(c => c.Z_BED_HEIGHT);
+                        if (!z_bed_height.HasValue)
                             return;
 
                         var z = await Flux.ConnectionProvider.ReadVariableAsync(m => m.AXIS_POSITION, "Z");
                         if (!z.HasValue)
                             return;
 
-                        offset.Value.ModifyProbeOffset(p => new ProbeOffset(p.Key, p.X, p.Y, z.Value - 0.3));
+                        offset.Value.ModifyProbeOffset(p => new ProbeOffset(p.Key, p.X, p.Y, z.Value - z_bed_height.Value - 0.3));
                         Flux.SettingsProvider.UserSettings.PersistLocalSettings();
                     }
                 })
@@ -245,8 +242,8 @@ namespace Flux.ViewModels
         {
             var can_execute = Observable.CombineLatest(
                 this.WhenAnyValue(v => v.SelectedTool),
-                this.WhenAnyValue(v => v.TemperaturePercentage),
-                (tool, temp) => tool.HasValue && Math.Abs(temp) > 85)
+                this.WhenAnyValue(v => v.CurrentTemperature),
+                (tool, temp) => tool.HasValue && temp.HasValue && temp.Value.Target > 0 && temp.Value.Percentage > 85)
                 .ToOptional();
 
             var button = new CmdButton($"Z??{(distance > 0 ? $"+{distance:0.00mm}" : $"{distance:0.00mm}")}", () => move_tool(distance), can_execute);
@@ -257,7 +254,7 @@ namespace Flux.ViewModels
             async Task move_tool(double d)
             {
                 using var put_relative_movement_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                await Flux.ConnectionProvider.ExecuteParamacroAsync(c => c.GetRelativeZMovementGCode(d, 500), put_relative_movement_cts.Token);
+                await Flux.ConnectionProvider.ExecuteParamacroAsync(c => c.GetRelativeZMovementGCode(d, 500), put_relative_movement_cts.Token, false);
             }
         }
         private IEnumerable<CmdButton> FindToolButtons(Optional<(ushort machine_extruders, ushort mixing_extruders)> extruders)
@@ -359,14 +356,14 @@ namespace Flux.ViewModels
             PrepareManualCalibration.Initialize();
             PerformManualCalibration.Initialize();
 
-            _ManualCalibrationPhase =  Flux.StatusProvider.WhenAnyValue(v => v.StatusEvaluation)
-                 .Select(GetManualCalibrationViewModel)
-                 .ToProperty(this, h => h.ManualCalibrationPhase);
+            _ManualCalibrationPhase = PrepareManualCalibration.WhenAnyValue(v => v.HasSafeStart)
+                .Select(GetManualCalibrationViewModel)
+                .ToProperty(this, h => h.ManualCalibrationPhase);
         }
 
-        private IManualCalibrationPhaseViewModel GetManualCalibrationViewModel(StatusEvaluation status_eval)
+        private IManualCalibrationPhaseViewModel GetManualCalibrationViewModel(bool safe_start)
         {
-            if (!status_eval.CanSafePrint)
+            if (!safe_start)
                 return PrepareManualCalibration;
             return PerformManualCalibration;
         }

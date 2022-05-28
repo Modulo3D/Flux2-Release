@@ -11,12 +11,12 @@ namespace Flux.ViewModels
 {
     public interface IOSAI_Array : IOSAI_VariableBase, IFLUX_Array
     {
-        new IObservableCache<IOSAI_Variable, string> Variables { get; }
+        new IObservableCache<IOSAI_Variable, VariableAlias> Variables { get; }
     }
 
     public interface IOSAI_Array<TRData, TWData> : IOSAI_Array, IFLUX_Array<TRData, TWData>
     {
-        new IObservableCache<IOSAI_Variable<TRData, TWData>, string> Variables { get; }
+        new IObservableCache<IOSAI_Variable<TRData, TWData>, VariableAlias> Variables { get; }
     }
 
     public abstract class OSAI_Array<TVariable, TAddress, TRData, TWData> : FLUX_Array<TRData, TWData>, IOSAI_Array<TRData, TWData>, IEnumerable<TVariable>
@@ -31,10 +31,10 @@ namespace Flux.ViewModels
         public TAddress LogicalAddress { get; }
         IOSAI_Address IOSAI_VariableBase.LogicalAddress => LogicalAddress;
 
-        public new ISourceCache<TVariable, string> Variables { get; }
+        public new ISourceCache<TVariable, VariableAlias> Variables { get; }
 
-        private IObservableCache<IOSAI_Variable<TRData, TWData>, string> _InnerVariables1;
-        IObservableCache<IOSAI_Variable<TRData, TWData>, string> IOSAI_Array<TRData, TWData>.Variables
+        private IObservableCache<IOSAI_Variable<TRData, TWData>, VariableAlias> _InnerVariables1;
+        IObservableCache<IOSAI_Variable<TRData, TWData>, VariableAlias> IOSAI_Array<TRData, TWData>.Variables
         {
             get
             {
@@ -47,8 +47,8 @@ namespace Flux.ViewModels
                 return _InnerVariables1;
             }
         }
-        private IObservableCache<IOSAI_Variable, string> _InnerVariables2;
-        IObservableCache<IOSAI_Variable, string> IOSAI_Array.Variables
+        private IObservableCache<IOSAI_Variable, VariableAlias> _InnerVariables2;
+        IObservableCache<IOSAI_Variable, VariableAlias> IOSAI_Array.Variables
         {
             get
             {
@@ -77,7 +77,7 @@ namespace Flux.ViewModels
             Connection = connection;
             LogicalAddress = s_logical_address;
 
-            Variables = new SourceCache<TVariable, string>(v => v.Unit.Alias);
+            Variables = new SourceCache<TVariable, VariableAlias>(v => v.Unit.Alias);
             base.Variables = Variables.Connect()
                 .Transform(v => (IFLUX_Variable<TRData, TWData>)v)
                 .AsObservableCache();

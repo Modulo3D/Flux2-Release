@@ -84,7 +84,7 @@ namespace Flux.ViewModels
         public void AddCommand(
             string name,
             Func<IFLUX_VariableStore, Optional<IFLUX_Array<bool, bool>>> get_array,
-            string alias,
+            VariableAlias alias,
             OptionalObservable<bool> can_execute = default,
             OptionalObservable<bool> visible = default)
         {
@@ -96,7 +96,7 @@ namespace Flux.ViewModels
         public void AddCommand(
             string name,
             Func<IFLUX_VariableStore, IFLUX_Array<bool, bool>> get_array,
-            string alias,
+            VariableAlias alias,
             OptionalObservable<bool> can_execute = default,
             OptionalObservable<bool> visible = default)
         {

@@ -164,7 +164,7 @@ namespace Flux.ViewModels
                     return false;
             }
 
-            return await PostGCodeAsync("M98 P\"/sys/global/initialize_variables.g\"", ct);
+            return await PostGCodeAsync(new[] { "M98 P\"/sys/global/initialize_variables.g\"" }, ct);
         }
 
         private async Task<(bool result, IEnumerable<IRRF_VariableGlobalModel> variables)> FindMissingVariables(CancellationToken ct)
@@ -232,11 +232,11 @@ namespace Flux.ViewModels
         }
 
         // GCODE
-        public async Task<bool> PostGCodeAsync(string gcode, CancellationToken ct, bool wait = false, CancellationToken gcode_ct = default)
+        public async Task<bool> PostGCodeAsync(IEnumerable<string> gcode, CancellationToken ct, bool wait = false, CancellationToken gcode_ct = default)
         {
             try
             {
-                var resource = $"rr_gcode?gcode={gcode}";
+                var resource = $"rr_gcode?gcode={string.Join("%0A", gcode)}";
                 if (resource.Length >= 160)
                 {
                     Flux.Messages.LogMessage("Errore esecuzione gcode", $"Lunghezza gcode oltre i limiti", MessageLevel.EMERG, 0);
@@ -273,24 +273,24 @@ namespace Flux.ViewModels
         {
             using var put_hold_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             using var wait_hold_cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            return await ExecuteParamacroAsync(new[] { "M108", "M25", "M0" }, put_hold_cts.Token, true, wait_hold_cts.Token);
+            return await PostGCodeAsync(new[] { "M108", "M25", "M0" }, put_hold_cts.Token, true, wait_hold_cts.Token);
         }
         public override async Task<bool> ResetAsync()
         {
             using var put_reset_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             using var wait_reset_cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            return await ExecuteParamacroAsync(new[] { "M108", "M25", "M0" }, put_reset_cts.Token, true, wait_reset_cts.Token);
+            return await PostGCodeAsync(new[] { "M108", "M25", "M0" }, put_reset_cts.Token, true, wait_reset_cts.Token);
         }
         private int GetGCodeLenght(IEnumerable<string> paramacro)
         {
-            return 15 + paramacro.Sum(line => line.Length) + ((paramacro.Count() - 2) * 3);
+            return $"rr_gcode?gcode={string.Join("%0A", paramacro)}".Length;
         }
         public override async Task<bool> CancelPrintAsync(bool hard_cancel)
         {
             // TODO
             using var put_cancel_print_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             using var wait_cancel_print_cts = new CancellationTokenSource(TimeSpan.FromMinutes(1));
-            return await ExecuteParamacroAsync(new []
+            return await PostGCodeAsync(new []
             {
                 "M108", "M25", "M0",
                 "M98 P\"/macros/cancel_print\"",
@@ -299,7 +299,7 @@ namespace Flux.ViewModels
         public override async Task<bool> CycleAsync(bool start, bool wait = false, CancellationToken wait_ct = default)
         {
             using var put_start_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            return await ExecuteParamacroAsync(new[] { "M24" }, put_start_cts.Token, wait, wait_ct);
+            return await PostGCodeAsync(new[] { "M24" }, put_start_cts.Token, wait, wait_ct);
         }
         public override async Task<bool> DeselectPartProgramAsync(bool from_drive, bool wait, CancellationToken ct = default)
         {
@@ -335,7 +335,7 @@ namespace Flux.ViewModels
                     return false;
 
                 var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-                if (!await PostGCodeAsync($"M23 storage/{filename}", cts.Token))
+                if (!await PostGCodeAsync(new[] { $"M23 storage/{filename}" }, cts.Token))
                 {
                     Flux.Messages.LogMessage("Errore selezione partprogram", "Impossibile eseguire il gcode", MessageLevel.ERROR, 0);
                     return false;
@@ -365,17 +365,72 @@ namespace Flux.ViewModels
                 return false;
             }
         }
-        public override async Task<bool> ExecuteParamacroAsync(IEnumerable<string> paramacro, CancellationToken put_ctk, bool wait = false, CancellationToken wait_ct = default)
+
+        public override async Task<bool> ExecuteParamacroAsync(IEnumerable<string> paramacro, CancellationToken put_ctk, bool wait = false, CancellationToken wait_ct = default, bool can_cancel = true)
         {
-            paramacro = paramacro.Select(line => Regex.Replace(line, "M98 P\"(.*)\"", m => $"M98 P\"{m.Groups[1].Value.ToLower().Replace(" ", "_")}\""));
-            var lenght = GetGCodeLenght(paramacro);
-            if (lenght < 160)
-            {
-                return await PostGCodeAsync(string.Join("%0A", paramacro), put_ctk, wait, wait_ct);
-            }
-            else
+            try
             { 
-                return await base.ExecuteParamacroAsync(paramacro, put_ctk, wait, wait_ct);
+                var lenght = GetGCodeLenght(paramacro);
+                if (!can_cancel && lenght < 160)
+                {
+                    return await PostGCodeAsync(paramacro, put_ctk, wait, wait_ct);
+                }
+                else
+                {
+                    // deselect part program
+                    var deselect_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    var deselect_result = await DeselectPartProgramAsync(false, true, deselect_ctk.Token);
+                    if (deselect_result == false)
+                        return false;
+
+                    var delete_job_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    var delete_job_response = await DeleteFileAsync(StoragePath, "job.mcode", true, delete_job_ctk.Token);
+
+                    var delete_paramacro_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    var delete_paramacro_response = await DeleteFileAsync(StoragePath, "paramacro.mcode", true, delete_paramacro_ctk.Token);
+
+                    // put file
+                    var put_paramacro_response = await PutFileAsync(
+                        StoragePath,
+                        "paramacro.mcode",
+                        put_ctk, get_paramacro_gcode().ToOptional());
+
+                    if (put_paramacro_response == false)
+                        return false;
+
+                    var put_job_response = await PutFileAsync(
+                        StoragePath,
+                        "job.mcode",
+                        put_ctk, get_job_gcode().ToOptional());
+
+                    if (put_job_response == false)
+                        return false;
+
+                    // select part program
+                    var select_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    var select_part_program_response = await SelectPartProgramAsync("job.mcode", true, true, select_ctk.Token);
+                    if (select_part_program_response == false)
+                        return false;
+
+                    // Set PLC to Cycle
+                    return await CycleAsync(true, wait, wait_ct);
+
+                    IEnumerable<string> get_job_gcode()
+                    {
+                        yield return $"M98 P\"0:/gcodes/storage/paramacro.mcode\"";
+                    }
+
+                    IEnumerable<string> get_paramacro_gcode()
+                    {
+                        yield return $"M98 R{(can_cancel ? 1 : 0)}";
+                        foreach (var line in paramacro)
+                            yield return line;
+                    }
+                }
+            }
+            catch
+            {
+                return false;
             }
         }
 

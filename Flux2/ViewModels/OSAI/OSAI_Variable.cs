@@ -199,7 +199,7 @@ namespace Flux.ViewModels
             return await Connection.ConvertOrAsync(c =>
             {
                 using var put_write_temp_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                return c.ExecuteParamacroAsync(new[] { WriteTemp(temp) }, put_write_temp_cts.Token);
+                return c.ExecuteParamacroAsync(new[] { WriteTemp(temp) }, put_write_temp_cts.Token, false);
             }, () => false);
         }
     }

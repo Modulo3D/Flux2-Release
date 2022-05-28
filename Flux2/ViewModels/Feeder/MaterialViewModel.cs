@@ -74,26 +74,26 @@ namespace Flux.ViewModels
             var multiplier = Observable.Return(1.0);
             Odometer = new OdometerViewModel<NFCMaterial>(this, multiplier);
 
-            var before_gear_key = Flux.ConnectionProvider.GetArrayUnit(m => m.FILAMENT_BEFORE_GEAR, Feeder.Position);
+            var before_gear_key = Flux.ConnectionProvider.GetArrayUnit(m => m.FILAMENT_BEFORE_GEAR, Feeder.Position).Convert(u => u.Alias).ValueOrDefault();
             _WirePresence1 = Flux.ConnectionProvider.ObserveVariable(
                 m => m.FILAMENT_BEFORE_GEAR,
-                before_gear_key.ConvertOr(u => u.Alias, () => ""))
+                before_gear_key)
                 .ObservableOrDefault()
                 .ToProperty(this, v => v.WirePresence1)
                 .DisposeWith(Disposables);
 
-            var after_gear_key = Flux.ConnectionProvider.GetArrayUnit(m => m.FILAMENT_AFTER_GEAR, Feeder.Position);
+            var after_gear_key = Flux.ConnectionProvider.GetArrayUnit(m => m.FILAMENT_AFTER_GEAR, Feeder.Position).Convert(u => u.Alias).ValueOrDefault();
             _WirePresence2 = Flux.ConnectionProvider.ObserveVariable(
                 m => m.FILAMENT_AFTER_GEAR,
-                after_gear_key.ConvertOr(u => u.Alias, () => ""))
+                after_gear_key)
                 .ObservableOrDefault()
                 .ToProperty(this, v => v.WirePresence2)
                 .DisposeWith(Disposables);
 
-            var on_head_key = Flux.ConnectionProvider.GetArrayUnit(m => m.FILAMENT_ON_HEAD, Feeder.Position);
+            var on_head_key = Flux.ConnectionProvider.GetArrayUnit(m => m.FILAMENT_ON_HEAD, Feeder.Position).Convert(u => u.Alias).ValueOrDefault();
             _WirePresence3 = Flux.ConnectionProvider.ObserveVariable(
                 m => m.FILAMENT_ON_HEAD,
-                on_head_key.ConvertOr(u => u.Alias, () => ""))
+                on_head_key)
                 .ObservableOrDefault()
                 .ToProperty(this, v => v.WirePresence3)
                 .DisposeWith(Disposables);
@@ -261,18 +261,11 @@ namespace Flux.ViewModels
                 if (!break_temp.HasValue)
                     return;
 
-                var filament_settings = new FilamentOperationSettings()
-                {
-                    Mixing = Position,
-                    Extruder = Feeder.Position,
-                    BreakTemperature = break_temp.Value,
-                    ExtrusionTemperature = extrusion_temp.Value,
-                    FilamentOnHead = Flux.ConnectionProvider.GetArrayUnit(c => c.FILAMENT_ON_HEAD, Feeder.Position),
-                    FilamentAfterGear = Flux.ConnectionProvider.GetArrayUnit(c => c.FILAMENT_AFTER_GEAR, Position),
-                    FilamentBeforeGear = Flux.ConnectionProvider.GetArrayUnit(c => c.FILAMENT_BEFORE_GEAR, Position),
-                };
+                var filament_settings = GCodeFilamentOperation.Create(Flux, this);
+                if (!filament_settings.HasValue)
+                    return;
 
-                await Flux.ConnectionProvider.PurgeAsync(filament_settings);
+                await Flux.ConnectionProvider.PurgeAsync(filament_settings.Value);
             }
             else
             {

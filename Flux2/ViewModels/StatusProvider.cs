@@ -60,6 +60,7 @@ namespace Flux.ViewModels
         public Optional<ConditionViewModel<bool>> NotInChange { get; private set; }
         public Optional<ConditionViewModel<bool>> ClampClosed { get; private set; }
         public Optional<ConditionViewModel<bool>> RaisedPistons { get; private set; }
+        public Optional<ConditionViewModel<double>> HasZBedHeight { get; private set; }
         public Optional<ConditionViewModel<(bool @in, bool @out)>> TopLockOpen { get; private set; }
         public Optional<ConditionViewModel<(bool @in, bool @out)>> TopLockClosed { get; private set; }
         public Optional<ConditionViewModel<(bool @in, bool @out)>> ChamberLockOpen { get; private set; }
@@ -77,6 +78,17 @@ namespace Flux.ViewModels
         public StatusProvider(FluxViewModel flux)
         {
             Flux = flux;
+
+            var z_bed_height = Flux.ConnectionProvider.ObserveVariable(m => m.Z_BED_HEIGHT)
+                .ValueOr(() => 0);
+
+            HasZBedHeight = ConditionViewModel.Create("hasZBedHeight", z_bed_height,
+                h =>
+                {
+                    if(h <= 0)
+                        return new ConditionState(false, "TASTA IL PIATTO");
+                    return new ConditionState(true, "PIATTO TASTATO");
+                });
 
             // Safety
             var pressure_in = OptionalObservable.CombineLatest(
@@ -740,12 +752,15 @@ namespace Flux.ViewModels
                     if (!mcode_vm.HasValue)
                         continue;
 
-                    var mcode_analyzer = mcode_vm.Value.Analyzer;
-
+                    // copy extrusion set
                     var extrusion_set = new Extrusion[16];
+                    for (int e = 0; e < extrusion_set.Length; e++)
+                        extrusion_set[e] = mcode_vm.Value.Analyzer.Extrusions[e];
+
+                    // remove odometer extrusion set from extrusion set
                     if (queue_pos.Value == mcode_queue.Key && odometer_extrusion_set.has_mcode && odometer_extrusion_set.extrusions != null)
                         for (int e = 0; e < extrusion_set.Length; e++)
-                            extrusion_set[e] = mcode_analyzer.Extrusions[e] - odometer_extrusion_set.extrusions[e];
+                            extrusion_set[e] -= odometer_extrusion_set.extrusions[e];
 
                     extrusion_set_queue.Add(queue_key, extrusion_set);
                 }
