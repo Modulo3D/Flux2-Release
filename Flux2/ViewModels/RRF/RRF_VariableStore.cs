@@ -253,11 +253,11 @@ namespace Flux.ViewModels
                 FILAMENT_ON_HEAD        = gpIn.CreateArray<bool, bool>("FILAMENT_ON_HEAD",          (c, m) => m.Value == 1, VariableRange.Range(6, 2));
 
                 
-                Z_BED_HEIGHT            = Global.CreateVariable("z_bed_height",         false,  0.0);
                 Z_PROBE_CORRECTION      = Global.CreateVariable("z_probe_correction",   true,   0.0);
                 VACUUM_LEVEL            = Global.CreateVariable("vacuum_level",         true,   -70.0);
-                QUEUE_SIZE              = Global.CreateVariable("queue_size",           true,   (ushort)1);
                 DEBUG                   = Global.CreateVariable("debug",                false,  false);
+                QUEUE_SIZE              = Global.CreateVariable("queue_size",           true,   (ushort)1);
+                Z_BED_HEIGHT            = Global.CreateVariable("z_bed_height",         false,  FluxViewModel.MaxZBedHeight);
                 QUEUE_POS               = Global.CreateVariable("queue_pos",            false,  new QueuePosition(-1), v => new QueuePosition((short)Convert.ChangeType(v, typeof(short))));
 
                 X_USER_OFFSET_T         = Global.CreateArray("x_user_offset",           false,  0.0,    VariableUnit.Range(0, 2));

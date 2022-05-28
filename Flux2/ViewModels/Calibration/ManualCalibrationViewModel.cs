@@ -88,7 +88,7 @@ namespace Flux.ViewModels
 
                 return gcode;
 
-            }, put_exit_cts.Token, true, wait_exit_cts.Token);
+            }, put_exit_cts.Token, true, wait_exit_cts.Token, false);
 
             if (Flux.ConnectionProvider.HasVariable(c => c.ENABLE_VACUUM))
                 await Flux.ConnectionProvider.WriteVariableAsync(c => c.ENABLE_VACUUM, false);
@@ -254,7 +254,7 @@ namespace Flux.ViewModels
             async Task move_tool(double d)
             {
                 using var put_relative_movement_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                await Flux.ConnectionProvider.ExecuteParamacroAsync(c => c.GetRelativeZMovementGCode(d, 500), put_relative_movement_cts.Token, false);
+                await Flux.ConnectionProvider.ExecuteParamacroAsync(c => c.GetRelativeZMovementGCode(d, 500), put_relative_movement_cts.Token);
             }
         }
         private IEnumerable<CmdButton> FindToolButtons(Optional<(ushort machine_extruders, ushort mixing_extruders)> extruders)

@@ -149,7 +149,7 @@ namespace Flux.ViewModels
                 else
                 {
                     if (Flux.ConnectionProvider.HasVariable(c => c.Z_BED_HEIGHT))
-                        await Flux.ConnectionProvider.WriteVariableAsync(c => c.Z_BED_HEIGHT, 0);
+                        await Flux.ConnectionProvider.WriteVariableAsync(c => c.Z_BED_HEIGHT, FluxViewModel.MaxZBedHeight);
 
                     if (Flux.ConnectionProvider.HasVariable(c => c.ENABLE_VACUUM))
                         await Flux.ConnectionProvider.WriteVariableAsync(c => c.ENABLE_VACUUM, true);

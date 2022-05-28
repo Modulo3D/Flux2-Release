@@ -366,7 +366,7 @@ namespace Flux.ViewModels
             }
         }
 
-        public override async Task<bool> ExecuteParamacroAsync(IEnumerable<string> paramacro, CancellationToken put_ctk, bool wait = false, CancellationToken wait_ct = default, bool can_cancel = true)
+        public override async Task<bool> ExecuteParamacroAsync(IEnumerable<string> paramacro, CancellationToken put_ctk, bool wait = false, CancellationToken wait_ct = default, bool can_cancel = false)
         {
             try
             { 
@@ -789,9 +789,20 @@ namespace Flux.ViewModels
         {
             throw new NotImplementedException();
         }
+        public override Optional<IEnumerable<string>> GetSetExtruderMixingGCode(ushort machine_extruder, ushort mixing_extruder)
+        {
+            var extruder_count = Flux.SettingsProvider.ExtrudersCount;
+            if (!extruder_count.HasValue)
+                return default;
+            var mixing = Enumerable.Range(0, extruder_count.Value.mixing_extruders)
+                .Select(i => i == mixing_extruder ? "1" : "0");
+            return new[] { $"M567 P{machine_extruder} E1:{string.Join(":", mixing)}" };
+        }
         public override Optional<IEnumerable<string>> GetRelativeXMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 X{distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
         public override Optional<IEnumerable<string>> GetRelativeYMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 Y{distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
         public override Optional<IEnumerable<string>> GetRelativeZMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 Z{distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
         public override Optional<IEnumerable<string>> GetRelativeEMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 E{distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
+
+
     }
 }

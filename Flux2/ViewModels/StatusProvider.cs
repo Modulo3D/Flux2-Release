@@ -80,12 +80,12 @@ namespace Flux.ViewModels
             Flux = flux;
 
             var z_bed_height = Flux.ConnectionProvider.ObserveVariable(m => m.Z_BED_HEIGHT)
-                .ValueOr(() => 0);
+                .ValueOr(() => FluxViewModel.MaxZBedHeight);
 
             HasZBedHeight = ConditionViewModel.Create("hasZBedHeight", z_bed_height,
                 h =>
                 {
-                    if(h <= 0)
+                    if(h >= FluxViewModel.MaxZBedHeight)
                         return new ConditionState(false, "TASTA IL PIATTO");
                     return new ConditionState(true, "PIATTO TASTATO");
                 });

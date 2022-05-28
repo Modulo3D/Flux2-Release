@@ -50,7 +50,7 @@ namespace Flux.ViewModels
 
                 using var put_cancel_filament_op_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 using var wait_cancel_filament_op_cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
-                if (!await Flux.ConnectionProvider.ExecuteParamacroAsync(f => cancel_filament_operation(f)(Feeder.Position), put_cancel_filament_op_cts.Token, true, wait_cancel_filament_op_cts.Token))
+                if (!await Flux.ConnectionProvider.ExecuteParamacroAsync(f => cancel_filament_operation(f)(Feeder.Position), put_cancel_filament_op_cts.Token, true, wait_cancel_filament_op_cts.Token, true))
                 {
                     Flux.Messages.LogMessage(MaterialChangeResult.MATERIAL_CHANGE_ERROR_PARAMACRO, default);
                     return false;
@@ -94,7 +94,7 @@ namespace Flux.ViewModels
 
                 using var put_filament_op_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 using var wait_filament_op_cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
-                if (!await Flux.ConnectionProvider.ExecuteParamacroAsync(f => filament_operation(f)(nozzle.Value, settings), put_filament_op_cts.Token, true, wait_filament_op_cts.Token))
+                if (!await Flux.ConnectionProvider.ExecuteParamacroAsync(f => filament_operation(f)(nozzle.Value, settings), put_filament_op_cts.Token, true, wait_filament_op_cts.Token, true))
                 {
                     Flux.Messages.LogMessage(MaterialChangeResult.MATERIAL_CHANGE_ERROR_PARAMACRO, default);
                     return (false, break_temp);

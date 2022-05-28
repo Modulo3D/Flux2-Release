@@ -86,6 +86,8 @@ namespace Flux.ViewModels
     [RemoteControl()]
     public class FluxViewModel : RemoteControl<FluxViewModel>, IFlux, IHostedService
     {
+        public static double MaxZBedHeight = 10.0;
+
         [RemoteCommand]
         public Optional<ReactiveCommand<Unit, Unit>> LeftButtonCommand { get; private set; }
         [RemoteCommand]

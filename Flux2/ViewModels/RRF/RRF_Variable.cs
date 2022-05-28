@@ -21,7 +21,7 @@ namespace Flux.ViewModels
     {
         public class RRF_InnerModelBuilder<TModel>
         {
-            public IObservable<Optional<RRF_Connection>> Connection { get; }
+            public RRF_ConnectionProvider ConnectionProvider { get; }
             public Func<RRF_MemoryBuffer, Task<Optional<TModel>>> ReadModel { get; }
             public Func<RRF_ObjectModel, IObservable<Optional<TModel>>> GetModel { get; }
             public IFLUX_VariableStore<TRRF_VariableStore, RRF_ConnectionProvider> VariableStore { get; }
@@ -34,7 +34,7 @@ namespace Flux.ViewModels
                 GetModel = get_model;
                 ReadModel = read_model;
                 VariableStore = variable_store;
-                Connection = variable_store.ConnectionProvider.WhenAnyValue(v => v.Connection);
+                ConnectionProvider = variable_store.ConnectionProvider;
             }
 
             public RRF_VariableObjectModel<TModel, TRData, Unit> CreateVariable<TRData>(
@@ -42,7 +42,7 @@ namespace Flux.ViewModels
                 Func<RRF_Connection, TModel, Optional<TRData>> get_data,
                 VariableUnit unit = default)
             {
-                var variable = new RRF_VariableObjectModel<TModel, TRData, Unit>(Connection, name, ReadModel, GetModel, get_data, unit);
+                var variable = new RRF_VariableObjectModel<TModel, TRData, Unit>(ConnectionProvider, name, ReadModel, GetModel, get_data, unit);
                 return (RRF_VariableObjectModel<TModel, TRData, Unit>)VariableStore.RegisterVariable(variable);
             }
             public RRF_VariableObjectModel<TModel, TRData, Unit> CreateVariable<TRData>(
@@ -50,7 +50,7 @@ namespace Flux.ViewModels
                 Func<RRF_Connection, TModel, Task<Optional<TRData>>> get_data,
                 VariableUnit unit = default)
             {
-                var variable = new RRF_VariableObjectModel<TModel, TRData, Unit>(Connection, name, ReadModel, GetModel, get_data, unit);
+                var variable = new RRF_VariableObjectModel<TModel, TRData, Unit>(ConnectionProvider, name, ReadModel, GetModel, get_data, unit);
                 return (RRF_VariableObjectModel<TModel, TRData, Unit>)VariableStore.RegisterVariable(variable);
             }
 
@@ -59,15 +59,15 @@ namespace Flux.ViewModels
                 Func<RRF_Connection, TModel, Optional<TRData>> get_data,
                 VariableUnit unit = default)
             {
-                var variable = new RRF_VariableObjectModel<TModel, TRData, TWData>(Connection, name, ReadModel, GetModel, get_data, unit);
-                return (RRF_VariableObjectModel <TModel, TRData, TWData>)   VariableStore.RegisterVariable(variable);   
+                var variable = new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, name, ReadModel, GetModel, get_data, unit);
+                return (RRF_VariableObjectModel <TModel, TRData, TWData>)VariableStore.RegisterVariable(variable);   
             }
             public RRF_VariableObjectModel<TModel, TRData, TWData> CreateVariable<TRData, TWData>(
                 string name,
                 Func<RRF_Connection, TModel, Task<Optional<TRData>>> get_data,
                 VariableUnit unit = default)
             {
-                var variable = new RRF_VariableObjectModel<TModel, TRData, TWData>(Connection, name, ReadModel, GetModel, get_data, unit);
+                var variable = new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, name, ReadModel, GetModel, get_data, unit);
                 return (RRF_VariableObjectModel<TModel, TRData, TWData>)VariableStore.RegisterVariable(variable);
             }
             public RRF_VariableObjectModel<TModel, TRData, TWData> CreateVariable<TRData, TWData>(
@@ -76,7 +76,7 @@ namespace Flux.ViewModels
                 Func<RRF_Connection, TWData, bool> write_data,
                 VariableUnit unit = default)
             {
-                var variable = new RRF_VariableObjectModel<TModel, TRData, TWData>(Connection, name, ReadModel, GetModel, get_data, write_data, unit);
+                var variable = new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, name, ReadModel, GetModel, get_data, write_data, unit);
                 return (RRF_VariableObjectModel<TModel, TRData, TWData>)VariableStore.RegisterVariable(variable);
             }
             public RRF_VariableObjectModel<TModel, TRData, TWData> CreateVariable<TRData, TWData>(
@@ -85,7 +85,7 @@ namespace Flux.ViewModels
                 Func<RRF_Connection, TWData, bool> write_data,
                 VariableUnit unit = default)
             {
-                var variable = new RRF_VariableObjectModel<TModel, TRData, TWData>(Connection, name, ReadModel, GetModel, get_data, write_data, unit);
+                var variable = new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, name, ReadModel, GetModel, get_data, write_data, unit);
                 return (RRF_VariableObjectModel<TModel, TRData, TWData>)VariableStore.RegisterVariable(variable);
             }
             public RRF_VariableObjectModel<TModel, TRData, TWData> CreateVariable<TRData, TWData>(
@@ -94,7 +94,7 @@ namespace Flux.ViewModels
                 Func<RRF_Connection, TWData, Task<bool>> write_data,
                 VariableUnit unit = default)
             {
-                var variable = new RRF_VariableObjectModel<TModel, TRData, TWData>(Connection, name, ReadModel, GetModel, get_data, write_data, unit);
+                var variable = new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, name, ReadModel, GetModel, get_data, write_data, unit);
                 return (RRF_VariableObjectModel<TModel, TRData, TWData>)VariableStore.RegisterVariable(variable);
             }
             public RRF_VariableObjectModel<TModel, TRData, TWData> CreateVariable<TRData, TWData>(
@@ -103,7 +103,7 @@ namespace Flux.ViewModels
                 Func<RRF_Connection, TWData, Task<bool>> write_data,
                 VariableUnit unit = default)
             {
-                var variable = new RRF_VariableObjectModel<TModel, TRData, TWData>(Connection, name, ReadModel, GetModel, get_data, write_data, unit);
+                var variable = new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, name, ReadModel, GetModel, get_data, write_data, unit);
                 return (RRF_VariableObjectModel<TModel, TRData, TWData>)VariableStore.RegisterVariable(variable);
             }
 
@@ -111,7 +111,7 @@ namespace Flux.ViewModels
             {
                 private Dictionary<VariableAlias, VariableUnit> Units { get; }
 
-                public IObservable<Optional<RRF_Connection>> Connection { get; }
+                public RRF_ConnectionProvider ConnectionProvider { get; }
                 public Func<TModel, Optional<List<TList>>> GetVariables { get; }
                 public Func<RRF_MemoryBuffer, Task<Optional<TModel>>> ReadModel { get; }
                 public Func<RRF_ObjectModel, IObservable<Optional<TModel>>> GetModel { get; }
@@ -129,7 +129,7 @@ namespace Flux.ViewModels
                     ReadModel = read_model;
                     GetVariables = get_list;
                     VariableStore = variable_store;
-                    Connection = variable_store.ConnectionProvider.WhenAnyValue(v => v.Connection);
+                    ConnectionProvider = variable_store.ConnectionProvider;
                 }
 
                 public RRF_ArrayObjectModel<TModel, TRData, Unit> CreateArray<TRData>(
@@ -177,7 +177,7 @@ namespace Flux.ViewModels
 
                         Optional<TList> get_value(List<TList> list) => list.ElementAtOrDefault(unit.Value.Address);
                         Optional<TRData> get_variable(RRF_Connection c, TModel m) => GetVariables(m).Convert(get_value).Convert(m => get_data(c, m));
-                        return new RRF_VariableObjectModel<TModel, TRData, Unit>(Connection, $"{name} {alias}", ReadModel, GetModel, get_variable, unit.Value);
+                        return new RRF_VariableObjectModel<TModel, TRData, Unit>(ConnectionProvider, $"{name} {alias}", ReadModel, GetModel, get_variable, unit.Value);
                     }
 
                     var variable_units = Units.Skip(variables_range.Start).Take(variables_range.Count).ToDictionary();
@@ -197,7 +197,7 @@ namespace Flux.ViewModels
 
                         Optional<TList> get_value(List<TList> list) => list.ElementAtOrDefault(unit.Value.Address);
                         Optional<TRData> get_variable(RRF_Connection c, TModel m) => GetVariables(m).Convert(get_value).Convert(m => get_data(c, m));
-                        return new RRF_VariableObjectModel<TModel, TRData, TWData>(Connection, $"{name} {alias}", ReadModel, GetModel, get_variable, unit.Value);
+                        return new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, $"{name} {alias}", ReadModel, GetModel, get_variable, unit.Value);
                     }
 
                     var variable_units = Units.Skip(variables_range.Start).Take(variables_range.Count).ToDictionary();
@@ -219,7 +219,7 @@ namespace Flux.ViewModels
                         bool write_unit_data(RRF_Connection c, TWData d) => write_data(c, d, unit.Value);
                         Optional<TList> get_value(List<TList> list) => list.ElementAtOrDefault(unit.Value.Address);
                         Optional<TRData> get_variable(RRF_Connection c, TModel m) => GetVariables(m).Convert(get_value).Convert(m => get_data(c, m));
-                        return new RRF_VariableObjectModel<TModel, TRData, TWData>(Connection, $"{name} {alias}", ReadModel, GetModel, get_variable, write_unit_data, unit.Value);
+                        return new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, $"{name} {alias}", ReadModel, GetModel, get_variable, write_unit_data, unit.Value);
                     }
 
                     var variable_units = Units.Skip(variables_range.Start).Take(variables_range.Count).ToDictionary();
@@ -241,7 +241,7 @@ namespace Flux.ViewModels
                         Task<bool> write_unit_data(RRF_Connection c, TWData d) => write_data(c, d, unit.Value);
                         Optional<TList> get_value(List<TList> list) => list.ElementAtOrDefault(unit.Value.Address);
                         Optional<TRData> get_variable(RRF_Connection c, TModel m) => GetVariables(m).Convert(get_value).Convert(m => get_data(c, m));
-                        return new RRF_VariableObjectModel<TModel, TRData, TWData>(Connection, $"{name} {alias}", ReadModel, GetModel, get_variable, write_unit_data, unit.Value);
+                        return new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, $"{name} {alias}", ReadModel, GetModel, get_variable, write_unit_data, unit.Value);
                     }
 
                     var variable_units = Units.Skip(variables_range.Start).Take(variables_range.Count).ToDictionary();
@@ -261,7 +261,7 @@ namespace Flux.ViewModels
 
                         Optional<TList> get_value(List<TList> list) => list.ElementAtOrDefault(unit.Value.Address);
                         Optional<TRData> get_variable(RRF_Connection c, TModel m) => GetVariables(m).Convert(get_value).Convert(m => get_data(c, m));
-                        return new RRF_VariableObjectModel<TModel, TRData, Unit>(Connection, $"{name} {alias}", ReadModel, GetModel, get_variable, unit.Value);
+                        return new RRF_VariableObjectModel<TModel, TRData, Unit>(ConnectionProvider, $"{name} {alias}", ReadModel, GetModel, get_variable, unit.Value);
                     }
 
                     var variable = get_variable(alias);
@@ -285,7 +285,7 @@ namespace Flux.ViewModels
                         Task<bool> write_unit_data(RRF_Connection c, TWData d) => write_data(c, d, unit.Value);
                         Optional<TList> get_value(List<TList> list) => list.ElementAtOrDefault(unit.Value.Address);
                         Optional<TRData> get_variable(RRF_Connection c, TModel m) => GetVariables(m).Convert(get_value).Convert(m => get_data(c, m));
-                        return new RRF_VariableObjectModel<TModel, TRData, TWData>(Connection, $"{name} {alias}", ReadModel, GetModel, get_variable, write_unit_data, unit.Value);
+                        return new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, $"{name} {alias}", ReadModel, GetModel, get_variable, write_unit_data, unit.Value);
                     }
 
                     var variable = get_variable(alias);
@@ -410,101 +410,113 @@ namespace Flux.ViewModels
         }
     }
 
-    public class RRF_VariableObjectModel<TModel, TRData, TWData> : FLUX_VariableGP<RRF_Connection, TRData, TWData>
+    public class RRF_VariableObjectModel<TModel, TRData, TWData> : FLUX_VariableGP<RRF_ConnectionProvider, RRF_Connection, TRData, TWData>
     {
         public override string Group => "ObjectModel";
 
         public RRF_VariableObjectModel(
-            IObservable<Optional<RRF_Connection>> connection,
+            RRF_ConnectionProvider connection_provider,
             string name,
             Func<RRF_MemoryBuffer, Task<Optional<TModel>>> read_model,
             Func<RRF_ObjectModel, IObservable<Optional<TModel>>> get_model,
             Func<RRF_Connection, TModel, Optional<TRData>> get_data,
             VariableUnit unit = default) :
-            base(connection, name, FluxMemReadPriority.DISABLED,
+            base(connection_provider, name, FluxMemReadPriority.DISABLED,
                 read_func: c => read_variable(c, read_model, s => get_data(c, s)),
                 unit: unit)
         {
-            connection.Convert(c => c.MemoryBuffer)
+            connection_provider
+                .WhenAnyValue(c => c.Connection)
+                .Convert(c => c.MemoryBuffer)
                 .ConvertMany(c => c.ObserveModel(get_model, get_data))
                 .BindTo(this, v => v.Value);
         }
         public RRF_VariableObjectModel(
-            IObservable<Optional<RRF_Connection>> connection,
+            RRF_ConnectionProvider connection_provider,
             string name,
             Func<RRF_MemoryBuffer, Task<Optional<TModel>>> read_model,
             Func<RRF_ObjectModel, IObservable<Optional<TModel>>> get_model,
             Func<RRF_Connection, TModel, Task<Optional<TRData>>> get_data,
             VariableUnit unit = default) :
-            base(connection, name, FluxMemReadPriority.DISABLED,
+            base(connection_provider, name, FluxMemReadPriority.DISABLED,
                 read_func: c => read_variable(c, read_model, s => get_data(c, s)),
                 unit: unit)
         {
-            connection.Convert(c => c.MemoryBuffer)
+            connection_provider
+                .WhenAnyValue(c => c.Connection)
+                .Convert(c => c.MemoryBuffer)
                 .ConvertMany(c => c.ObserveModel(get_model, get_data))
                 .BindTo(this, v => v.Value);
         }
         public RRF_VariableObjectModel(
-            IObservable<Optional<RRF_Connection>> connection,
+            RRF_ConnectionProvider connection_provider,
             string name,
             Func<RRF_MemoryBuffer, Task<Optional<TModel>>> read_model,
             Func<RRF_ObjectModel, IObservable<Optional<TModel>>> get_model,
             Func<RRF_Connection, TModel, Optional<TRData>> get_data,
             Func<RRF_Connection, TWData, bool> write_data = default,
             VariableUnit unit = default) :
-            base(connection, name, FluxMemReadPriority.DISABLED, unit: unit,
+            base(connection_provider, name, FluxMemReadPriority.DISABLED, unit: unit,
                 read_func: c => read_variable(c, read_model, s => get_data(c, s)),
                 write_func: (c, d) => Task.FromResult(write_data?.Invoke(c, d) ?? false))
         {
-            connection.Convert(c => c.MemoryBuffer)
+            connection_provider
+                .WhenAnyValue(c => c.Connection)
+                .Convert(c => c.MemoryBuffer)
                 .ConvertMany(c => c.ObserveModel(get_model, get_data))
                 .BindTo(this, v => v.Value);
         }
         public RRF_VariableObjectModel(
-            IObservable<Optional<RRF_Connection>> connection,
+            RRF_ConnectionProvider connection_provider,
             string name,
             Func<RRF_MemoryBuffer, Task<Optional<TModel>>> read_model,
             Func<RRF_ObjectModel, IObservable<Optional<TModel>>> get_model,
             Func<RRF_Connection, TModel, Task<Optional<TRData>>> get_data,
             Func<RRF_Connection, TWData, bool> write_data = default,
             VariableUnit unit = default) :
-            base(connection, name, FluxMemReadPriority.DISABLED, unit: unit,
+            base(connection_provider, name, FluxMemReadPriority.DISABLED, unit: unit,
                 read_func: c => read_variable(c, read_model, s => get_data(c, s)),
                 write_func: (c, d) => Task.FromResult(write_data?.Invoke(c, d) ?? false))
         {
-            connection.Convert(c => c.MemoryBuffer)
+            connection_provider
+                .WhenAnyValue(c => c.Connection)
+                .Convert(c => c.MemoryBuffer)
                 .ConvertMany(c => c.ObserveModel(get_model, get_data))
                 .BindTo(this, v => v.Value);
         }
         public RRF_VariableObjectModel(
-            IObservable<Optional<RRF_Connection>> connection,
+            RRF_ConnectionProvider connection_provider,
             string name,
             Func<RRF_MemoryBuffer, Task<Optional<TModel>>> read_model,
             Func<RRF_ObjectModel, IObservable<Optional<TModel>>> get_model,
             Func<RRF_Connection, TModel, Optional<TRData>> get_data,
             Func<RRF_Connection, TWData, Task<bool>> write_data = default,
             VariableUnit unit = default) :
-            base(connection, name, FluxMemReadPriority.DISABLED, unit: unit,
+            base(connection_provider, name, FluxMemReadPriority.DISABLED, unit: unit,
                 read_func: c => read_variable(c, read_model, s => get_data(c, s)),
                 write_func: write_data)
         {
-            connection.Convert(c => c.MemoryBuffer)
+            connection_provider
+                .WhenAnyValue(c => c.Connection)
+                .Convert(c => c.MemoryBuffer)
                 .ConvertMany(c => c.ObserveModel(get_model, get_data))
                 .BindTo(this, v => v.Value);
         }
         public RRF_VariableObjectModel(
-            IObservable<Optional<RRF_Connection>> connection,
+            RRF_ConnectionProvider connection_provider,
             string name,
             Func<RRF_MemoryBuffer, Task<Optional<TModel>>> read_model,
             Func<RRF_ObjectModel, IObservable<Optional<TModel>>> get_model,
             Func<RRF_Connection, TModel, Task<Optional<TRData>>> get_data,
             Func<RRF_Connection, TWData, Task<bool>> write_data = default,
             VariableUnit unit = default) :
-            base(connection, name, FluxMemReadPriority.DISABLED, unit: unit,
+            base(connection_provider, name, FluxMemReadPriority.DISABLED, unit: unit,
                 read_func: c => read_variable(c, read_model, s => get_data(c, s)), 
                 write_func: write_data)
         {
-            connection.Convert(c => c.MemoryBuffer)
+            connection_provider
+                .WhenAnyValue(c => c.Connection)
+                .Convert(c => c.MemoryBuffer)
                 .ConvertMany(c => c.ObserveModel(get_model, get_data))
                 .BindTo(this, v => v.Value);
         }
@@ -561,7 +573,7 @@ namespace Flux.ViewModels
         Task<bool> CreateVariableAsync(CancellationToken ct);
     }
 
-    public class RRF_VariableGlobalModel<TData> : FLUX_VariableGP<RRF_Connection, TData, TData>, IRRF_VariableGlobalModel
+    public class RRF_VariableGlobalModel<TData> : FLUX_VariableGP<RRF_ConnectionProvider, RRF_Connection, TData, TData>, IRRF_VariableGlobalModel
     {
         public bool Stored { get; }
         public string Variable { get; }
@@ -570,19 +582,21 @@ namespace Flux.ViewModels
         public string LoadVariableMacro => $"load_{Variable}.g";
 
         public RRF_VariableGlobalModel(
-            IObservable<Optional<RRF_Connection>> connection,
+            RRF_ConnectionProvider connection_provider,
             string variable,
             bool stored,
             TData default_value,
             Func<object, TData> convert_data = default)
-            : base(connection, variable, FluxMemReadPriority.DISABLED,
+            : base(connection_provider, variable, FluxMemReadPriority.DISABLED,
                 read_func: c => read_variable(c, variable, convert_data),
                 write_func: (c, v) => write_variable(c, variable, v, stored))
         {
             Stored = stored;
             Variable = variable;
             DefaultValue = default_value;
-            connection.Convert(c => c.MemoryBuffer)
+            connection_provider
+                .WhenAnyValue(c => c.Connection)
+                .Convert(c => c.MemoryBuffer)
                 .ConvertMany(c => c.ObserveGlobalModel(m => get_data(m, variable, convert_data)))
                 .BindTo(this, v => v.Value);
         }
@@ -636,12 +650,9 @@ namespace Flux.ViewModels
 
         public async Task<bool> CreateVariableAsync(CancellationToken ct) 
         {
-            if (!Connection.HasValue)
-                return false;
-
             var gcode = WriteVariableString(Variable, DefaultValue);
 
-            return await Connection.Value.PutFileAsync(
+            return await ConnectionProvider.PutFileAsync(
                 c => ((RRF_Connection)c).GlobalPath,
                 LoadVariableMacro,
                 ct, gcode.ToOptional());
@@ -657,7 +668,7 @@ namespace Flux.ViewModels
         }
     }
 
-    public class RRF_ArrayVariableGlobalModel<TData> : FLUX_VariableGP<RRF_Connection, TData, TData>, IRRF_VariableGlobalModel
+    public class RRF_ArrayVariableGlobalModel<TData> : FLUX_VariableGP<RRF_ConnectionProvider, RRF_Connection, TData, TData>, IRRF_VariableGlobalModel
     {
         public bool Stored { get; }
         public string Variable { get; }
@@ -666,14 +677,14 @@ namespace Flux.ViewModels
         public string LoadVariableMacro => $"load_{Variable}_{Unit}.g";
 
         public RRF_ArrayVariableGlobalModel(
-            IObservable<Optional<RRF_Connection>> connection,
+            RRF_ConnectionProvider connection_provider,
             string variable,
             VariableUnit unit, 
             bool stored,
             TData default_value,
             Func<object, TData> convert_data = default)
             : base(
-                connection,
+                connection_provider,
                 $"{variable} {unit.Alias}",
                 FluxMemReadPriority.DISABLED,
                 read_func: c => read_variable(c, variable, unit, convert_data),
@@ -683,7 +694,7 @@ namespace Flux.ViewModels
             Stored = stored;
             Variable = variable;
             DefaultValue = default_value;
-            connection
+            connection_provider.WhenAnyValue(c => c.Connection)
                 .Convert(c => c.MemoryBuffer)
                 .ConvertMany(c => c.ObserveGlobalModel(m => get_data(m, variable, unit, convert_data)))
                 .BindTo(this, v => v.Value);
@@ -738,12 +749,9 @@ namespace Flux.ViewModels
 
         public async Task<bool> CreateVariableAsync(CancellationToken ct)
         {
-            if (!Connection.HasValue)
-                return false;
-
             var gcode = WriteVariableString(Variable, Unit, DefaultValue);
 
-            return await Connection.Value.PutFileAsync(
+            return await ConnectionProvider.PutFileAsync(
                 c => ((RRF_Connection)c).GlobalPath,
                 LoadVariableMacro, 
                 ct, gcode.ToOptional());
@@ -763,7 +771,7 @@ namespace Flux.ViewModels
         public override string Group => "Global";
 
         public RRF_ArrayGlobalModel(
-            IObservable<Optional<RRF_Connection>> connection, 
+            RRF_ConnectionProvider connection_provider,
             string variable,
             bool stored,
             TData default_value,
@@ -775,7 +783,7 @@ namespace Flux.ViewModels
             foreach (var unit in variable_units)
                 ((SourceCache<IFLUX_Variable<TData, TData>, VariableAlias>)Variables).AddOrUpdate(get_variable(unit.Value));
 
-            RRF_ArrayVariableGlobalModel<TData> get_variable(VariableUnit unit) => new RRF_ArrayVariableGlobalModel<TData>(connection, variable, unit, stored, default_value, convert_data);
+            RRF_ArrayVariableGlobalModel<TData> get_variable(VariableUnit unit) => new RRF_ArrayVariableGlobalModel<TData>(connection_provider, variable, unit, stored, default_value, convert_data);
         }
 
         public override Optional<VariableUnit> GetArrayUnit(ushort position)
@@ -793,23 +801,23 @@ namespace Flux.ViewModels
         public class RRF_InnerGlobalModelBuilder
         {
             IFLUX_VariableStore<TRRF_VariableStore, RRF_ConnectionProvider> VariableStore { get; }
-            public IObservable<Optional<RRF_Connection>> Connection { get; }
+            public RRF_ConnectionProvider ConnectionProvider { get; }
             public RRF_InnerGlobalModelBuilder(
                 IFLUX_VariableStore<TRRF_VariableStore, RRF_ConnectionProvider> variable_store)
             {
                 VariableStore = variable_store;
-                Connection = variable_store.ConnectionProvider.WhenAnyValue(v => v.Connection); 
+                ConnectionProvider = variable_store.ConnectionProvider; 
             }
 
             public RRF_VariableGlobalModel<TData> CreateVariable<TData>(string name, bool stored, TData default_value, Func<object, TData> convert_value = default) 
             {
-                var variable = new RRF_VariableGlobalModel<TData>(Connection, name, stored, default_value, convert_value);
+                var variable = new RRF_VariableGlobalModel<TData>(ConnectionProvider, name, stored, default_value, convert_value);
                 return (RRF_VariableGlobalModel<TData>)VariableStore.RegisterVariable(variable);
             }
 
             public RRF_ArrayGlobalModel<TData> CreateArray<TData>(string name, bool stored, TData default_value, Dictionary<VariableAlias, VariableUnit> variable_units, Func<object, TData> convert_value = default)
             {
-                var variable = new RRF_ArrayGlobalModel<TData>(Connection, name, stored, default_value, variable_units, convert_value);
+                var variable = new RRF_ArrayGlobalModel<TData>(ConnectionProvider, name, stored, default_value, variable_units, convert_value);
                 return (RRF_ArrayGlobalModel<TData>)VariableStore.RegisterVariable(variable);
             }
         }

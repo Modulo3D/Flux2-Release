@@ -360,6 +360,7 @@ namespace Flux.ViewModels
 
             this.WhenAnyValue(v => v.FluxOffset)
                 .Where(o => o.HasValue)
+                .Throttle(TimeSpan.FromSeconds(1))
                 .Subscribe(async offset => await Flux.ConnectionProvider.SetToolOffsetsAsync(offset.Value))
                 .DisposeWith(Disposables);
 
