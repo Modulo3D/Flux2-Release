@@ -46,12 +46,17 @@ namespace Flux.ViewModels
             Flux = flux;
             Disposables = new CompositeDisposable();
 
-            var send_data_thread = new DisposableThread(async () =>
+            flux.WhenAnyValue(f => f.RemoteControlData)
+                .DistinctUntilChanged()
+                .ThrottleMax(TimeSpan.FromMilliseconds(50), TimeSpan.FromMilliseconds(200))
+                .Subscribe(async d => await SendRemoteControlDataAsync(d));
+
+            /*var send_data_thread = new DisposableThread(async () =>
                 {
                     var data = flux.RemoteControlData;
                     await SendRemoteControlDataAsync(data);
                 }, TimeSpan.FromMilliseconds(50))
-                .DisposeWith(Disposables);
+                .DisposeWith(Disposables);*/
         }
         private async Task SendRemoteControlDataAsync(Optional<RemoteControlData> rc)
         {

@@ -151,7 +151,7 @@ namespace Flux.ViewModels
                 tool_nozzle,
                 this.WhenAnyValue(v => v.State),
                 tool_material.ConvertMany(tm => tm.WhenAnyValue(v => v.State)),
-                Flux.StatusProvider.CanSafeCycle,
+                Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation).Select(s => s.CanSafeCycle),
                 (tool_nozzle, material, tool_material, idle) => new
                 {
                     can_purge = idle && CanPurgeMaterial(tool_nozzle, material, tool_material),
@@ -261,7 +261,7 @@ namespace Flux.ViewModels
                 if (!break_temp.HasValue)
                     return;
 
-                var filament_settings = GCodeFilamentOperation.Create(Flux, this);
+                var filament_settings = GCodeFilamentOperation.Create(Flux, Feeder, this, false);
                 if (!filament_settings.HasValue)
                     return;
 

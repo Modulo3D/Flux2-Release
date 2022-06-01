@@ -73,14 +73,14 @@ namespace Flux.ViewModels
                 .QueryWhenChanged(p => string.Join(" ", p.KeyValues.Select(v => $"{v.Key}{v.Value:0.00}")))
                 .ToProperty(this, v => v.AxisPosition);
 
-            ShowRoutinesCommand = ReactiveCommand.Create(() => { Flux.Navigator.NavigateModal(Flux.Functionality.Routines); });
+            ShowRoutinesCommand = ReactiveCommand.Create(() => { Flux.Navigator.NavigateModal(Flux.Functionality); });
 
             var can_move = Flux.StatusProvider
                 .WhenAnyValue(s => s.StatusEvaluation)
                 .Select(e =>
-                    e.IsIdle.ValueOrDefault() &&
-                    e.IsHomed.ValueOrDefault() &&
-                    e.IsEnabledAxis.ValueOrDefault());
+                    e.IsIdle &&
+                    e.IsHomed &&
+                    e.IsEnabledAxis);
 
             async Task moveAsync(Func<IFLUX_Connection, Optional<IEnumerable<string>>> func)
             {

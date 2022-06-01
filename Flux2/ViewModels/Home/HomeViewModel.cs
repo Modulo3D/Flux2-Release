@@ -22,7 +22,7 @@ namespace Flux.ViewModels
         public HomePhaseViewModel(FluxViewModel flux, string name = default) : base(name)
         {
             Flux = flux;
-            var can_cancel = Flux.StatusProvider.CanSafeStop;
+            var can_cancel = Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation).Select(s => s.CanSafeStop);
             CancelPrintCommand = ReactiveCommand.CreateFromTask(async () => { await Flux.ConnectionProvider.CancelPrintAsync(false); }, can_cancel);
         }
         public virtual void Initialize()
@@ -85,9 +85,6 @@ namespace Flux.ViewModels
             if (!printing_eval.SelectedMCode.HasValue)
                 return WelcomePhase;
 
-            if (!status_eval.IsCycle.HasValue)
-                return WelcomePhase;
-
             if (start_eval.HasInvalidTools)
                 return InvalidToolsPhase;
 
@@ -97,7 +94,7 @@ namespace Flux.ViewModels
             if (start_eval.HasInvalidProbes)
                 return InvalidProbesPhase;
 
-            if (!status_eval.IsCycle.Value)
+            if (!status_eval.IsCycle)
             {
                 if (start_eval.HasLowMaterials)
                     if(!start_eval.StartWithLowMaterials)

@@ -172,7 +172,7 @@ namespace Flux.ViewModels
         private Optional<TViewModel> FindSelectedViewModel<TViewModel>(IQuery<TViewModel, ushort> viewmodels, OptionalChange<IQuery<Optional<bool>, VariableAlias>> wire_presence)
         {
             if (!wire_presence.HasChange)
-                return default;
+                return viewmodels.Lookup(Position);
             var selected_wire = wire_presence.Change.Items.IndexOfOptional(true);
             if (!selected_wire.HasValue)
                 return default;

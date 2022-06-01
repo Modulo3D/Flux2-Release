@@ -15,29 +15,23 @@ namespace Flux.ViewModels
     public abstract class MaterialChangeViewModel<T> : FeederOperationViewModel<T>
         where T : MaterialChangeViewModel<T>
     {
-        [RemoteCommand]
-        public Optional<ReactiveCommand<Unit, Unit>> OpenSpoolsCommand { get; private set; }
-
         public MaterialViewModel Material { get; }
         private bool IsCanceled { get; set; }
         
         public MaterialChangeViewModel(MaterialViewModel material) : base(material.Feeder)
         {
             Material = material;
-
-            if (Flux.ConnectionProvider.HasVariable(c => c.OPEN_LOCK, "spools"))
-                OpenSpoolsCommand = ReactiveCommand.CreateFromTask(async () => { await Flux.ConnectionProvider.ToggleVariableAsync(c => c.OPEN_LOCK, "spools"); });
         }
 
         protected override IObservable<bool> CanCancelOperation()
         {
-            return Flux.StatusProvider.CanSafeStop;
+            return Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation).Select(s => s.CanSafeStop);
         }
         protected override IObservable<bool> CanExecuteOperation()
         {
             return Observable.CombineLatest(
                 this.WhenAnyValue(f => f.AllConditionsTrue),
-                Flux.StatusProvider.CanSafeCycle,
+                Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation).Select(s => s.CanSafeCycle),
                 (c, s) => c && s);
         }
         protected async Task<bool> CancelFilamentOperationAsync(Func<IFLUX_Connection, Func<ushort, Optional<IEnumerable<string>>>> cancel_filament_operation)
@@ -65,47 +59,33 @@ namespace Flux.ViewModels
                 return false;
             }
         }
-        protected async Task<(bool result, Optional<double> current_break_temp)> ExecuteFilamentOperation(GCodeFilamentOperation settings, Func<IFLUX_Connection, Func<Nozzle, GCodeFilamentOperation, Optional<IEnumerable<string>>>> filament_operation, bool use_last_temp)
+        protected async Task<bool> ExecuteFilamentOperation(GCodeFilamentOperation settings, Func<IFLUX_Connection, Func<Nozzle, GCodeFilamentOperation, Optional<IEnumerable<string>>>> filament_operation)
         {
             try
             {
                 IsCanceled = false;
 
                 if (!await Flux.ConnectionProvider.ResetAsync())
-                    return (false, default);
+                    return false;
 
                 var nozzle = Feeder.ToolNozzle.Document.nozzle;
                 if (!nozzle.HasValue)
-                    return (false, default);
-
-                var last_break_temp = Feeder.ToolNozzle.Nfc.Tag
-                    .Convert(n => n.LastBreakTemperature)
-                    .ValueOr(() => 0);
-
-                var break_temp = Math.Max(
-                    settings.BreakTemperature,
-                    use_last_temp ? last_break_temp : 0);
-
-                if (break_temp < 150)
-                {
-                    Flux.Messages.LogMessage(MaterialChangeResult.MATERIAL_CHANGE_ERROR_INVALID_BREAK_TEMP);
-                    return (false, break_temp);
-                }
+                    return false;
 
                 using var put_filament_op_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 using var wait_filament_op_cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
                 if (!await Flux.ConnectionProvider.ExecuteParamacroAsync(f => filament_operation(f)(nozzle.Value, settings), put_filament_op_cts.Token, true, wait_filament_op_cts.Token, true))
                 {
                     Flux.Messages.LogMessage(MaterialChangeResult.MATERIAL_CHANGE_ERROR_PARAMACRO, default);
-                    return (false, break_temp);
+                    return false;
                 }
 
-                return (!IsCanceled, break_temp);
+                return !IsCanceled;
             }
             catch (Exception ex)
             {
                 Flux.Messages.LogException(this, ex);
-                return (false, default);
+                return false;
             }
         }
     }
@@ -135,12 +115,12 @@ namespace Flux.ViewModels
             if (!Flux.ConnectionProvider.HasVariable(c => c.FILAMENT_ON_HEAD))
                 material.Value.StoreTag(t => t.SetLoaded(Feeder.Position));
 
-            var filament_settings = GCodeFilamentOperation.Create(Flux, Material);
+            var filament_settings = GCodeFilamentOperation.Create(Flux, Feeder, Material, true);
             if (!filament_settings.HasValue)
                 return false;
             
-            var operation = await ExecuteFilamentOperation(filament_settings.Value, c => c.GetLoadFilamentGCode, true);
-            if (operation.result == false)
+            var operation = await ExecuteFilamentOperation(filament_settings.Value, c => c.GetLoadFilamentGCode);
+            if (operation == false)
             {
                 Flux.Messages.LogMessage(MaterialChangeResult.MATERIAL_CHANGE_ERROR_PARAMACRO, default);
                 material.Value.StoreTag(t => t.SetLoaded(default));
@@ -199,30 +179,34 @@ namespace Flux.ViewModels
             var tool_material = Feeder.ToolMaterials.Connect()
                 .WatchOptional(Material.Position);
 
-            yield return ConditionViewModel.Create("material",
+            var can_update_nfc = FindCanUpdateNFC();
+
+            yield return ConditionViewModel.Create(
+                Flux,
+                "material",
                 Observable.CombineLatest(
                     Feeder.ToolNozzle.WhenAnyValue(f => f.MaterialLoaded),
                     material.ConvertMany(m => m.WhenAnyValue(m => m.Document)),
                     material.ConvertMany(m => m.WhenAnyValue(f => f.State)),
                     tool_material.ConvertMany(tm => tm.WhenAnyValue(m => m.State)),
                     (loaded, document, material, tool_material) => (loaded, document, material, tool_material)),
-                    value =>
+                    (state, value) =>
                     {
                         if (value.loaded.HasValue)
                         {
                             var mat = value.loaded.Value.Document;
                             var pos = value.loaded.Value.Position;
-                            return new ConditionState(false, $"MATERIALE GIA' CARICATO ({mat} POS. {pos + 1})");
+                            return state.Create(false, $"MATERIALE GIA' CARICATO ({mat} POS. {pos + 1})");
                         }
 
                         if (value.document.ConvertOr(d => d.Id == 0, () => true)) 
-                            return new ConditionState(false, "LEGGI UN MATERIALE");
+                            return state.Create(false, "LEGGI UN MATERIALE", "nFC", UpdateNFCAsync, can_update_nfc);
 
                         if (value.tool_material.Convert(tm => tm.Compatible).ConvertOr(c => !c, () => true))
-                            return new ConditionState(false, $"{value.document} NON COMPATIBILE");
+                            return state.Create(false, $"{value.document} NON COMPATIBILE");
 
                         if (value.material.ConvertOr(m => !m.Locked, () => true))
-                            return new ConditionState(false, "BLOCCA IL MATERIALE");
+                            return state.Create(false, "BLOCCA IL MATERIALE", "nFC", UpdateNFCAsync, can_update_nfc);
 
                         return new ConditionState(true, $"{value.document} PRONTO AL CARICAMENTO");
                     });
@@ -276,16 +260,6 @@ namespace Flux.ViewModels
                     return false;
                 return true;
             }, () => false);
-        }
-        protected override IObservable<string> FindUpdateNFCText()
-        {
-            var material = Feeder.Materials.Connect()
-                .WatchOptional(Material.Position);
-
-            return Observable.CombineLatest(
-                material.ConvertMany(m => m.WhenAnyValue(m => m.Document)),
-                this.WhenAnyValue(v => v.CanUpdateNFC),
-                (d, nfc) => d.HasValue ? (nfc ? "BLOCCA" : "✔") : "LEGGI");
         }
 
         protected override Task<bool> CancelOperationAsync()
@@ -344,12 +318,12 @@ namespace Flux.ViewModels
             if (!break_temp.HasValue)
                 return false;
 
-            var filament_settings = GCodeFilamentOperation.Create(Flux, Material);
+            var filament_settings = GCodeFilamentOperation.Create(Flux, Feeder, Material, false);
             if (!filament_settings.HasValue)
                 return false;
 
-            var operation = await ExecuteFilamentOperation(filament_settings.Value, c => c.GetUnloadFilamentGCode, false);
-            if (operation.result == false)
+            var operation = await ExecuteFilamentOperation(filament_settings.Value, c => c.GetUnloadFilamentGCode);
+            if (operation == false)
                 return false;
 
             material.Value.StoreTag(t => t.SetLoaded(default));
@@ -376,23 +350,25 @@ namespace Flux.ViewModels
             var tool_material = Feeder.ToolMaterials.Connect()
                 .WatchOptional(Material.Position);
 
-            yield return ConditionViewModel.Create("material",
+            yield return ConditionViewModel.Create(
+                Flux,
+                "material",
                 Observable.CombineLatest(
                     Feeder.ToolNozzle.WhenAnyValue(f => f.MaterialLoaded),
                     material.ConvertMany(m => m.WhenAnyValue(m => m.Document)),
                     material.ConvertMany(m => m.WhenAnyValue(f => f.State)),
                     tool_material.ConvertMany(tm => tm.WhenAnyValue(m => m.State)),
                     (loaded, document, material, tool_material) => (loaded, document, material, tool_material)),
-                    value =>
+                    (state, value) =>
                     {
                         if (value.document.ConvertOr(d => d.Id == 0, () => true))
-                            return new ConditionState(false, "LEGGI UN MATERIALE");
+                            return state.Create(false, "LEGGI UN MATERIALE", "nFC", UpdateNFCAsync);
 
                         if (value.tool_material.Convert(tm => tm.Compatible).ConvertOr(c => !c, () => true))
-                            return new ConditionState(false, $"{value.document} NON COMPATIBILE");
+                            return state.Create(false, $"{value.document} NON COMPATIBILE");
 
                         if (!value.loaded.HasValue)
-                            return new ConditionState(false, "SBLOCCA IL MATERIALE");
+                            return state.Create(false, "SBLOCCA IL MATERIALE", "nFC", UpdateNFCAsync);
 
                         return new ConditionState(true, $"{value.document} PRONTO ALLO SCARICAMENTO");
                     });
@@ -453,16 +429,6 @@ namespace Flux.ViewModels
                     return true;
                 return false;
             });
-        }
-        protected override IObservable<string> FindUpdateNFCText()
-        {
-            var material = Feeder.Materials.Connect()
-                .WatchOptional(Material.Position);
-
-            return Observable.CombineLatest(
-                material.ConvertMany(m => m.WhenAnyValue(m => m.State)),
-                this.WhenAnyValue(v => v.CanUpdateNFC),
-                (s, nfc) => s.HasValue && s.Value.Loaded ? (nfc ? "BLOCCA" : "✔") : (nfc ? "SBLOCCA" : "✔"));
         }
 
         protected override Task<bool> CancelOperationAsync()

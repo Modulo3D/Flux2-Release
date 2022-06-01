@@ -91,7 +91,7 @@ namespace Flux.ViewModels
             var material = Feeder.WhenAnyValue(f => f.SelectedMaterial);
 
             var can_load_unload_tool = Observable.CombineLatest(
-                Flux.StatusProvider.CanSafeCycle,
+                Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation).Select(s => s.CanSafeCycle),
                 this.WhenAnyValue(v => v.State),
                 material.ConvertMany(m => m.WhenAnyValue(v => v.State)),
                 (idle, tool, material) =>
@@ -121,8 +121,9 @@ namespace Flux.ViewModels
             var tool_cur = Flux.ConnectionProvider.ObserveVariable(m => m.TOOL_CUR)
                 .DistinctUntilChanged();
 
-            var in_idle = Flux.StatusProvider.IsIdle
-                .ValueOrDefault()
+            var in_idle = Flux.StatusProvider
+                .WhenAnyValue(s => s.StatusEvaluation)
+                .Select(s => s.IsIdle)
                 .DistinctUntilChanged();
 
             var in_change = Flux.ConnectionProvider.ObserveVariable(m => m.IN_CHANGE)

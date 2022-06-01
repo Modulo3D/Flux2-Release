@@ -27,8 +27,8 @@ namespace Flux.ViewModels
     {
         public FluxViewModel Flux { get; }
 
-        private ObservableAsPropertyHelper<(bool has_mcode, Extrusion[] extrusions)> _Extrusions;
-        public (bool has_mcode, Extrusion[] extrusions) Extrusions => _Extrusions.Value;
+        private ObservableAsPropertyHelper<(Optional<QueuePosition> queue_pos, Optional<MCode> mcode, Extrusion[] extrusions)> _Extrusions;
+        public (Optional<QueuePosition> queue_pos, Optional<MCode> mcode, Extrusion[] extrusions) Extrusions => _Extrusions.Value;
 
         public IObservableCache<FeederEvaluator, ushort> FeederEvaluators { get; private set; }
         public IObservableList<Dictionary<QueueKey, Material>> ExpectedMaterialsQueue { get; private set; }
@@ -68,27 +68,15 @@ namespace Flux.ViewModels
         public Optional<ConditionViewModel<(Pressure @in, double level)>> PressurePresence { get; private set; }
         public Optional<ConditionViewModel<(Pressure @in, double level, bool @out)>> VacuumPresence { get; private set; }
 
-        public IObservable<Optional<bool>> IsIdle { get; }
-        public IObservable<Optional<bool>> IsCycle { get; }
-        public IObservable<bool> CanSafeCycle { get; }
-        public IObservable<bool> CanSafePrint { get; }
-        public IObservable<bool> CanSafeStop { get; }
-        public IObservable<bool> CanSafeHold { get; }
-
         public StatusProvider(FluxViewModel flux)
         {
             Flux = flux;
 
-            var z_bed_height = Flux.ConnectionProvider.ObserveVariable(m => m.Z_BED_HEIGHT)
-                .ValueOr(() => FluxViewModel.MaxZBedHeight);
-
-            HasZBedHeight = ConditionViewModel.Create("hasZBedHeight", z_bed_height,
-                h =>
-                {
-                    if(h >= FluxViewModel.MaxZBedHeight)
-                        return new ConditionState(false, "TASTA IL PIATTO");
-                    return new ConditionState(true, "PIATTO TASTATO");
-                });
+            // Status
+            var is_idle = Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS)
+                .Convert(data => data == FLUX_ProcessStatus.IDLE)
+                .DistinctUntilChanged()
+                .ValueOr(() => false);
 
             // Safety
             var pressure_in = OptionalObservable.CombineLatest(
@@ -101,31 +89,31 @@ namespace Flux.ViewModels
                     return (new Pressure(0), 0);
                 });
 
-            PressurePresence = ConditionViewModel.Create("pressure", pressure_in,
-                value =>
+            PressurePresence = ConditionViewModel.Create(flux, "pressure", pressure_in,
+                (state, value) =>
                 {
                     if (value.Item1.Kpa < value.Item2)
-                        return new ConditionState(false, "ATTIVARE L'ARIA COMPRESSA");
-                    return new ConditionState(true, "ARIA COMPRESSA ATTIVA");
+                        return state.Create(false, "ATTIVARE L'ARIA COMPRESSA");
+                    return state.Create(true, "ARIA COMPRESSA ATTIVA");
                 });
 
             var clamp_open = Flux.ConnectionProvider.ObserveVariable(m => m.OPEN_HEAD_CLAMP)
                 .ValueOr(() => false);
 
-            ClampOpen = ConditionViewModel.Create("clampOpen", clamp_open,
-                value =>
+            ClampOpen = ConditionViewModel.Create(flux, "clampOpen", clamp_open,
+                (state, value) =>
                 {
                     if (!value)
-                        return new ConditionState(false, "APRIRE LA PINZA");
-                    return new ConditionState(true, "PINZA APERTA");
+                        return state.Create(false, "APRIRE LA PINZA", "clamp", c => c.OPEN_HEAD_CLAMP, is_idle);
+                    return state.Create(true, "PINZA APERTA", "clamp", c => c.OPEN_HEAD_CLAMP, is_idle);
                 });
 
-            ClampClosed = ConditionViewModel.Create("clampClosed", clamp_open,
-                value =>
+            ClampClosed = ConditionViewModel.Create(flux, "clampClosed", clamp_open,
+                (state, value) =>
                 {
                     if (value)
-                        return new ConditionState(false, "CHIUDERE LA PINZA");
-                    return new ConditionState(true, "PINZA CHIUSA");
+                        return state.Create(false, "CHIUDERE LA PINZA", "clamp", c => c.OPEN_HEAD_CLAMP);
+                    return state.Create(true, "PINZA CHIUSA", "clamp", c => c.OPEN_HEAD_CLAMP);
                 });
 
             var vacuum = OptionalObservable.CombineLatest(
@@ -139,12 +127,12 @@ namespace Flux.ViewModels
                     return (new Pressure(0), 0, false);
                 });
 
-            VacuumPresence = ConditionViewModel.Create("vacuum", vacuum,
-                value =>
+            VacuumPresence = ConditionViewModel.Create(flux, "vacuum", vacuum,
+                (state, value) =>
                 {
                     if (!value.Item3 || value.Item1.Kpa > value.Item2)
-                        return new ConditionState(false, "INSERIRE UN FOGLIO");
-                    return new ConditionState(true, "FOGLIO INSERITO");
+                        return state.Create(false, "INSERIRE UN FOGLIO", "vacuum", c => c.ENABLE_VACUUM, is_idle);
+                    return state.Create(true, "FOGLIO INSERITO", "vacuum", c => c.ENABLE_VACUUM, is_idle);
                 },
                 TimeSpan.FromSeconds(1));
 
@@ -158,20 +146,20 @@ namespace Flux.ViewModels
                     return (false, false);
                 });
 
-            TopLockClosed = ConditionViewModel.Create("topLockClosed", top_lock,
-                value =>
+            TopLockClosed = ConditionViewModel.Create(flux, "topLockClosed", top_lock,
+                (state, value) =>
                 {
                     if (!value.Item1 || value.Item2)
-                        return new ConditionState(false, "CHIUDERE IL CAPPELLO");
-                    return new ConditionState(true, "CAPPELLO CHIUSO");
+                        return state.Create(false, "CHIUDERE IL CAPPELLO", "lock", c => c.OPEN_LOCK, "top", is_idle);
+                    return state.Create(true, "CAPPELLO CHIUSO", "lock", c => c.OPEN_LOCK, "top", is_idle);
                 });
 
-            TopLockOpen = ConditionViewModel.Create("topLockOpen", top_lock,
-                value =>
+            TopLockOpen = ConditionViewModel.Create(flux, "topLockOpen", top_lock,
+                (state, value) =>
                 {
                     if (value.Item1)
-                        return new ConditionState(false, "APRIRE IL CAPPELLO");
-                    return new ConditionState(true, "CAPPELLO APERTO");
+                        return state.Create(false, "APRIRE IL CAPPELLO", "lock", c => c.OPEN_LOCK, "top", is_idle);
+                    return state.Create(true, "CAPPELLO APERTO", "lock", c => c.OPEN_LOCK, "top", is_idle);
                 });
 
             var chamber_lock = OptionalObservable.CombineLatest(
@@ -184,42 +172,42 @@ namespace Flux.ViewModels
                     return (false, false);
                 });
 
-            ChamberLockClosed = ConditionViewModel.Create("chamberLockClosed", chamber_lock,
-                value =>
+            ChamberLockClosed = ConditionViewModel.Create(flux, "chamberLockClosed", chamber_lock,
+                (state, value) =>
                 {
                     if (!value.Item1 || value.Item2)
-                        return new ConditionState(false, "CHIUDERE LA PORTELLA");
-                    return new ConditionState(true, "PORTELLA CHIUSA");
+                        return state.Create(false, "CHIUDERE LA PORTELLA", "lock", c => c.OPEN_LOCK, "chamber", is_idle);
+                    return state.Create(true, "PORTELLA CHIUSA", "lock", c => c.OPEN_LOCK, "chamber", is_idle);
                 });
 
-            ChamberLockOpen = ConditionViewModel.Create("chamberLockOpen", chamber_lock,
-                value =>
+            ChamberLockOpen = ConditionViewModel.Create(flux, "chamberLockOpen", chamber_lock,
+                (state, value) =>
                 {
                     if (value.Item1)
-                        return new ConditionState(false, "APRIRE LA PORTELLA");
-                    return new ConditionState(true, "PORTELLA APERTA");
+                        return state.Create(false, "APRIRE LA PORTELLA", "lock", c => c.OPEN_LOCK, "chamber", is_idle);
+                    return state.Create(true, "PORTELLA APERTA", "lock", c => c.OPEN_LOCK, "chamber", is_idle);
                 });
 
             var raised_pistions = Flux.ConnectionProvider.ObserveVariable(m => m.PISTON_LOW)
                 .ConvertToObservable(c => c.QueryWhenChanged(low => low.Items.All(low => low.HasValue && !low.Value)));
 
-            RaisedPistons = ConditionViewModel.Create("raisedPiston", raised_pistions,
-                value =>
+            RaisedPistons = ConditionViewModel.Create(flux, "raisedPiston", raised_pistions,
+                (state, value) =>
                 {
                     if (!value)
-                        return new ConditionState(false, "ALZARE TUTTI I PISTONI");
-                    return new ConditionState(true, "STATO PISTONI CORRETTO");
+                        return state.Create(false, "ALZARE TUTTI I PISTONI");
+                    return state.Create(true, "STATO PISTONI CORRETTO");
                 });
 
             var not_in_change = Flux.ConnectionProvider.ObserveVariable(m => m.IN_CHANGE)
                 .ValueOr(() => false);
 
-            NotInChange = ConditionViewModel.Create("notInChange", not_in_change,
-                value =>
+            NotInChange = ConditionViewModel.Create(flux, "notInChange", not_in_change,
+                (state, value) =>
                 {
                     if (value)
-                        return new ConditionState(false, "STAMPANTE IN CHANGE");
-                    return new ConditionState(true, "STAMPANTE NON IN CHANGE");
+                        return state.Create(false, "STAMPANTE IN CHANGE");
+                    return state.Create(true, "STAMPANTE NON IN CHANGE");
                 });
 
             var has_safe_state = Observable.CombineLatest(
@@ -236,17 +224,14 @@ namespace Flux.ViewModels
                 .StartWith(false)
                 .DistinctUntilChanged();
 
-            // Status
-            IsIdle = Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS)
-                .Convert(data => data == FLUX_ProcessStatus.IDLE)
-                .DistinctUntilChanged();
-
-            IsCycle = Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS)
+            var is_cycle = Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS)
                 .Convert(data => data == FLUX_ProcessStatus.CYCLE)
-                .DistinctUntilChanged();
+                .DistinctUntilChanged()
+                .ValueOr(() => false);
 
             var is_homed = Flux.ConnectionProvider.ObserveVariable(m => m.IS_HOMED)
-                .DistinctUntilChanged();
+                .DistinctUntilChanged()
+                .ValueOr(() => false);
 
             var is_enabled_axis = Flux.ConnectionProvider.ObserveVariable(m => m.ENABLE_DRIVERS)
                 .QueryWhenChanged(e =>
@@ -255,7 +240,8 @@ namespace Flux.ViewModels
                         return Optional<bool>.None;
                     return e.Items.All(e => e.Value);
                 })
-                .DistinctUntilChanged();
+                .DistinctUntilChanged()
+                .ValueOr(() => false);
 
             FeederEvaluators = Flux.Feeders.Feeders.Connect()
                 .QueryWhenChanged(CreateFeederEvaluator)
@@ -322,22 +308,21 @@ namespace Flux.ViewModels
                 .DistinctUntilChanged()
                 .StartWithDefault();
 
-            var selected_mcode = Observable.CombineLatest(
-                Flux.ConnectionProvider.ObserveVariable(m => m.ENABLE_VACUUM).ObservableOrDefault(),
-                Flux.MCodes.AvaiableMCodes.Connect().WatchOptional(selected_guid),
-                FindSelectedMCode)
+            var selected_mcode =  Flux.MCodes.AvaiableMCodes.Connect()
+                .WatchOptional(selected_guid)
+                .Convert(m => m.Analyzer.MCode)
                 .StartWithDefault()
                 .DistinctUntilChanged();
 
-            CanSafeCycle = Observable.CombineLatest(
-                IsIdle,
+            var can_safe_cycle = Observable.CombineLatest(
+                is_idle,
                 has_safe_state,
-                (idle, safe) => idle.ValueOrDefault() && safe)
+                (idle, safe) => idle && safe)
                 .StartWith(false)
                 .DistinctUntilChanged();
 
-            CanSafePrint = Observable.CombineLatest(
-                CanSafeCycle,
+            var can_safe_print = Observable.CombineLatest(
+                can_safe_cycle,
                 VacuumPresence.ConvertToObservable(v => v.StateChanged),
                 CanPrinterSafePrint);
 
@@ -348,8 +333,8 @@ namespace Flux.ViewModels
                 Flux.ConnectionProvider.ObserveVariable(m => m.RUNNING_MCODE).ObservableOrDefault(),
                 IsSafeStop);
 
-            CanSafeStop = Observable.CombineLatest(
-                IsCycle,
+            var can_safe_stop = Observable.CombineLatest(
+                is_cycle,
                 has_safe_state,
                 /*is_safe_stop,*/
                 (cycle, safe/*, stop*/) => safe /*&& (!cycle || stop)*/)
@@ -363,11 +348,11 @@ namespace Flux.ViewModels
                 Flux.ConnectionProvider.ObserveVariable(m => m.RUNNING_MCODE).ObservableOrDefault(),
                 IsSafePause);
 
-            CanSafeHold = Observable.CombineLatest(
-                IsCycle,
+            var can_safe_hold = Observable.CombineLatest(
+                is_cycle,
                 has_safe_state,
                 /*is_safe_hold,*/
-                (cycle, safe/*, pause*/) => cycle.ValueOrDefault() && safe/* && pause*/)
+                (cycle, safe/*, pause*/) => cycle && safe/* && pause*/)
                 .StartWith(false)
                 .DistinctUntilChanged();
 
@@ -416,27 +401,28 @@ namespace Flux.ViewModels
             var extrusions = Flux.ConnectionProvider
                 .ObserveVariable(c => c.EXTRUSIONS)
                 .QueryWhenChanged()
-                .ThrottleMax(TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(15));
+                .ThrottleMax(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5));
 
-            _Extrusions = Observable.CombineLatest(extrusions, selected_mcode, (extrusions, selected_mcode) =>
+            _Extrusions = Observable.CombineLatest(queue_pos, selected_mcode, extrusions, (queue_pos, selected_mcode, extrusions) =>
                 {
                     var extrusion_set = new Extrusion[16];
                     if (!selected_mcode.HasValue)
-                        return (false, extrusion_set);
+                        return (queue_pos, selected_mcode, extrusion_set);
 
+                    var extrusions_array = Flux.ConnectionProvider.GetArray(c => c.EXTRUSIONS);
                     foreach (var extrusion in extrusions.KeyValues)
                     {
-                        if (!ushort.TryParse(extrusion.Key, out var extruder))
+                        var extrusion_variable = extrusions_array.Variables.Lookup(extrusion.Key);
+                        if (!extrusion_variable.HasValue)
                             continue;
-                        if (!extrusion.Value.HasValue)
-                            continue;
+                        var extruder = extrusion_variable.Value.Unit.Index;
                         var report = selected_mcode.Value.FeederReports.Lookup(extruder);
                         if (!report.HasValue)
                             continue;
                         extrusion_set[extruder] = new Extrusion(report.Value, extrusion.Value.Value);
                     }
 
-                    return (true, extrusion_set);
+                    return (queue_pos, selected_mcode, extrusion_set);
                 })
                 .ToProperty(this, v => v.Extrusions);
 
@@ -444,15 +430,25 @@ namespace Flux.ViewModels
                 .PairWithPreviousValue()
                 .Subscribe(extrusions =>
                 {
-                    if (!extrusions.OldValue.has_mcode)
+                    if (!extrusions.OldValue.queue_pos.HasValue)
                         return;
-                    if (!extrusions.NewValue.has_mcode)
+                    if (!extrusions.NewValue.queue_pos.HasValue)
                         return;
+                    if (extrusions.OldValue.queue_pos != extrusions.NewValue.queue_pos)
+                        return;
+
+                    if (!extrusions.OldValue.mcode.HasValue)
+                        return;
+                    if (!extrusions.NewValue.mcode.HasValue)
+                        return;
+                    if (extrusions.OldValue.mcode.Value.MCodeGuid != extrusions.NewValue.mcode.Value.MCodeGuid)
+                        return;
+
                     if (extrusions.OldValue.extrusions == null)
                         return;
                     if (extrusions.NewValue.extrusions == null)
-                        return;
-
+                        return;    
+                    
                     // reset extrusion value
                     for (int e = 0; e < extrusions.OldValue.extrusions.Length; e++)
                         if (extrusions.OldValue.extrusions[e].WeightG > extrusions.NewValue.extrusions[e].WeightG)
@@ -474,7 +470,6 @@ namespace Flux.ViewModels
             var extrusion_set = this.WhenAnyValue(v => v.Extrusions);
 
             var extrusion_set_queue = Observable.CombineLatest(
-                queue_pos,
                 mcode_queue,
                 extrusion_set,
                 mcodes,
@@ -509,13 +504,13 @@ namespace Flux.ViewModels
                 .ToProperty(this, v => v.PrintingEvaluation);
 
             _StatusEvaluation = Observable.CombineLatest(
-                IsIdle,
+                is_idle,
                 is_homed,
-                IsCycle,
-                CanSafeStop,
-                CanSafeHold,
-                CanSafeCycle,
-                CanSafePrint,
+                is_cycle,
+                can_safe_stop,
+                can_safe_hold,
+                can_safe_cycle,
+                can_safe_print,
                 is_enabled_axis,
                 StatusEvaluation.Create)
                 .DistinctUntilChanged()
@@ -530,6 +525,21 @@ namespace Flux.ViewModels
                 GetPrintProgress)
                 .DistinctUntilChanged()
                 .ToProperty(this, v => v.PrintProgress);
+
+            var z_bed_height = Flux.ConnectionProvider.ObserveVariable(m => m.Z_BED_HEIGHT)
+                .ValueOr(() => FluxViewModel.MaxZBedHeight);
+
+            HasZBedHeight = ConditionViewModel.Create(flux, "hasZBedHeight", z_bed_height,
+                (state, value) =>
+                {
+                    if (value >= FluxViewModel.MaxZBedHeight)
+                    {
+                        var can_probe_plate = this.WhenAnyValue(v => v.StatusEvaluation)
+                            .Select(s => s.CanSafePrint);
+                        return state.Create(false, "TASTA IL PIATTO", "plate", c => c.ProbePlateAsync(), can_probe_plate);
+                    }
+                    return state.Create(true, "PIATTO TASTATO");
+                });
         }
 
         public void Initialize()
@@ -734,18 +744,20 @@ namespace Flux.ViewModels
                 yield return evaluator;
             }
         }
-        private Optional<Dictionary<QueueKey, Extrusion[]>> GetExtrusionSetQueue(Optional<QueuePosition> queue_pos, Dictionary<QueuePosition, Guid> queue, (bool has_mcode, Extrusion[] extrusions) odometer_extrusion_set, Dictionary<Guid, IFluxMCodeStorageViewModel> mcodes)
+        private Optional<Dictionary<QueueKey, Extrusion[]>> GetExtrusionSetQueue(Dictionary<QueuePosition, Guid> queue, (Optional<QueuePosition> queue_pos, Optional<MCode> mcode, Extrusion[] extrusions) odometer_extrusion_set, Dictionary<Guid, IFluxMCodeStorageViewModel> mcodes)
         {
             try
             {
-                if (!queue_pos.HasValue)
+                if (!odometer_extrusion_set.queue_pos.HasValue)
+                    return default;
+                if (!odometer_extrusion_set.mcode.HasValue)
                     return default;
 
                 var extrusion_set_queue = new Dictionary<QueueKey, Extrusion[]>();
                 foreach (var mcode_queue in queue)
                 {
                     var queue_key = new QueueKey(mcode_queue.Value, mcode_queue.Key);
-                    if (mcode_queue.Key < queue_pos.Value)
+                    if (mcode_queue.Key < odometer_extrusion_set.queue_pos.Value)
                         continue;
 
                     var mcode_vm = mcodes.Lookup(mcode_queue.Value);
@@ -758,9 +770,13 @@ namespace Flux.ViewModels
                         extrusion_set[e] = mcode_vm.Value.Analyzer.Extrusions[e];
 
                     // remove odometer extrusion set from extrusion set
-                    if (queue_pos.Value == mcode_queue.Key && odometer_extrusion_set.has_mcode && odometer_extrusion_set.extrusions != null)
+                    if (odometer_extrusion_set.mcode.Value.MCodeGuid == mcode_queue.Value &&
+                        odometer_extrusion_set.queue_pos.Value == mcode_queue.Key &&
+                        odometer_extrusion_set.extrusions != null)
+                    { 
                         for (int e = 0; e < extrusion_set.Length; e++)
                             extrusion_set[e] -= odometer_extrusion_set.extrusions[e];
+                    }
 
                     extrusion_set_queue.Add(queue_key, extrusion_set);
                 }
@@ -771,14 +787,6 @@ namespace Flux.ViewModels
                 Flux.Messages.LogException(this, ex);
                 return default;
             }
-        }
-        private Optional<MCode> FindSelectedMCode(Optional<bool> enabled_vacuum, Optional<IFluxMCodeStorageViewModel> mcode_vm)
-        {
-            if (enabled_vacuum.HasValue && !enabled_vacuum.Value)
-                return default;
-            if (!mcode_vm.HasValue)
-                return default;
-            return mcode_vm.Value.Analyzer.MCode;
         }
     }
 }

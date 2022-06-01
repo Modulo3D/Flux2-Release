@@ -222,34 +222,34 @@ namespace Flux.ViewModels
                 .WhenAnyValue(s => s.StatusEvaluation);
             var IS_HOME = status
                 .Select(e =>
-                    e.IsHomed.ValueOrDefault());
+                    e.IsHomed);
             var IS_ENAB = status
                 .Select(e =>
-                    e.IsEnabledAxis.ValueOrDefault())
+                    e.IsEnabledAxis)
                 .ToOptional();
             var IS_SAFE = status
                 .Select(e => e.CanSafeCycle)
                 .ToOptional();
             var IS_IDLE = status
                 .Select(e =>
-                    e.IsIdle.ValueOrDefault())
+                    e.IsIdle)
                 .ToOptional();
             var IS_IH = status
                 .Select(e =>
-                    e.IsIdle.ValueOrDefault() &&
-                    e.IsHomed.ValueOrDefault())
+                    e.IsIdle &&
+                    e.IsHomed)
                 .ToOptional();
             var IS_IEH = status
                 .Select(e =>
-                    e.IsIdle.ValueOrDefault() &&
-                    e.IsEnabledAxis.ValueOrDefault() &&
-                    e.IsHomed.ValueOrDefault())
+                    e.IsIdle &&
+                    e.IsEnabledAxis &&
+                    e.IsHomed)
                 .ToOptional();
             var IS_IEHS = status
                 .Select(e =>
-                    e.IsIdle.ValueOrDefault() &&
-                    e.IsEnabledAxis.ValueOrDefault() &&
-                    e.IsHomed.ValueOrDefault() &&
+                    e.IsIdle &&
+                    e.IsEnabledAxis &&
+                    e.IsHomed &&
                     e.CanSafeCycle)
                 .ToOptional();
 
@@ -362,23 +362,23 @@ namespace Flux.ViewModels
                 .WhenAnyValue(s => s.StatusEvaluation);
             var IS_HOME = status
                 .Select(e =>
-                    e.IsHomed.ValueOrDefault());
+                    e.IsHomed);
             var IS_ENAB = status
                 .Select(e =>
-                    e.IsEnabledAxis.ValueOrDefault())
+                    e.IsEnabledAxis)
                 .ToOptional();
             var IS_SAFE = status
                 .Select(e => e.CanSafeCycle)
                 .ToOptional();
             var IS_IDLE = status
                 .Select(e =>
-                    e.IsIdle.ValueOrDefault())
+                    e.IsIdle)
                 .ToOptional();
             var IS_IEHS = status
                 .Select(e =>
-                    e.IsIdle.ValueOrDefault() &&
-                    e.IsEnabledAxis.ValueOrDefault() &&
-                    e.IsHomed.ValueOrDefault() &&
+                    e.IsIdle &&
+                    e.IsEnabledAxis &&
+                    e.IsHomed &&
                     e.CanSafeCycle)
                 .ToOptional();
 
@@ -402,7 +402,7 @@ namespace Flux.ViewModels
                     AddCommand(
                         "stopOperation",
                         async () => await Flux.ConnectionProvider.CancelPrintAsync(false),
-                        can_execute: Flux.StatusProvider.CanSafeStop.ToOptional());
+                        can_execute: Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation).Select(s => s.CanSafeStop).ToOptional());
 
                     AddCommand(
                         "lowerPlate",

@@ -26,7 +26,7 @@ namespace Flux.ViewModels
         END_PHASE = 7,
     }
 
-    public class RRF_ConnectionProvider : FLUX_ConnectionProvider<RRF_Connection, RRF_VariableStoreMP500>
+    public class RRF_ConnectionProvider : FLUX_ConnectionProvider<RRF_Connection, RRF_VariableStoreS300>
     {
         private ObservableAsPropertyHelper<Optional<bool>> _IsConnecting;
         public override Optional<bool> IsConnecting => _IsConnecting.Value;
@@ -46,7 +46,7 @@ namespace Flux.ViewModels
 
         public FluxViewModel Flux { get; }
         public override IFlux IFlux => Flux;
-        protected override RRF_VariableStoreMP500 VariableStore => new RRF_VariableStoreMP500(this);
+        protected override RRF_VariableStoreS300 VariableStore => new RRF_VariableStoreS300(this);
 
         public RRF_ConnectionProvider(FluxViewModel flux)
         {
@@ -247,24 +247,7 @@ namespace Flux.ViewModels
         {
             if (!queue_size.HasValue || queue_size.Value <= 1)
                 return new[] { "M98 P\"/macros/cancel_print\"" };
-
-            return new List<string>
-            {
-                $"G1 Z290 F1000",
-                $"M106 F0 S255",
-                $"M190 R65",
-                $"M106 F0 S0",
-                $"G1 U300 F1500",
-                $"G28 U0",
-                $"G1 Z280 F1000",
-                $"set global.queue_pos = global.queue_pos + 1",
-                $"if (!exists(var.next_job))",
-                $"    var next_job = \"queue/inner/start_\"^floor(global.queue_pos)^\".g\"",
-                $"    M32 {{var.next_job}}",
-                $"else",
-                $"    set var.next_job = \"queue/inner/start_\"^floor(global.queue_pos)^\".g\"",
-                $"    M32 {{var.next_job}}"
-            };
+            return new[] { "M98 P\"/macros/unload_print\"" };
         }
 
         public override async Task<bool> ParkToolAsync()

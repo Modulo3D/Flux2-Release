@@ -210,8 +210,9 @@ namespace Flux.ViewModels
                         .ValueOr(() => FluxColors.Empty)
                         .ToProperty(this, v => v.RightIconForeground);
 
-                    var is_idle = StatusProvider.IsIdle
-                        .ValueOrDefault();
+                    var is_idle = StatusProvider
+                        .WhenAnyValue(s => s.StatusEvaluation)
+                        .Select(s => s.IsIdle);
 
                     // COMMANDS
                     if (ConnectionProvider.HasVariable(s => s.CHAMBER_LIGHT))

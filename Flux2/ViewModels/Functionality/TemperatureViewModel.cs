@@ -3,6 +3,7 @@ using Modulo3DStandard;
 using ReactiveUI;
 using System;
 using System.Reactive;
+using System.Reactive.Linq;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
@@ -46,8 +47,9 @@ namespace Flux.ViewModels
             Label = label;
             Flux = temperatures.Flux;
 
-            var is_idle = Flux.StatusProvider.IsIdle
-                .ValueOrDefault();
+            var is_idle = Flux.StatusProvider
+                .WhenAnyValue(s => s.StatusEvaluation)
+                .Select(s => s.IsIdle);
 
             ShutTargetCommand = ReactiveCommand.CreateFromTask(async () => { await set_temp(0); }, is_idle);
             SelectTargetCommand = ReactiveCommand.CreateFromTask(async () => { await set_temp(TargetTemperature); }, is_idle);

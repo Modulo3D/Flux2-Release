@@ -34,14 +34,11 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public Optional<ushort> SelectedTool => _SelectedTool.Value;
 
-        [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> ProbeBedHeightCommand { get; }
-
         public ManualCalibrationPhaseViewModel(CalibrationViewModel calibration) : base()
         {
             Flux = calibration.Flux;
             Calibration = calibration;
-            var can_cancel = Flux.StatusProvider.CanSafeStop;
+            var can_cancel = Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation).Select(s => s.CanSafeStop);
             CancelCalibrationCommand = ReactiveCommand.CreateFromTask(ExitAsync, can_cancel);
 
             _SelectedTool = Flux.ConnectionProvider.ObserveVariable(m => m.TOOL_CUR)
@@ -49,10 +46,9 @@ namespace Flux.ViewModels
                 .ToProperty(this, v => v.SelectedTool)
                 .DisposeWith(Disposables);
 
-            var can_probe_plate = Flux.StatusProvider.WhenAnyValue(v => v.StatusEvaluation)
+            var can_probe_plate = Flux.StatusProvider
+                .WhenAnyValue(v => v.StatusEvaluation)
                 .Select(s => s.CanSafePrint);
-
-            ProbeBedHeightCommand = ReactiveCommand.CreateFromTask(async () => { await Flux.ConnectionProvider.ProbePlateAsync(); }, can_probe_plate);
         }
 
         public virtual void Initialize()
@@ -113,7 +109,7 @@ namespace Flux.ViewModels
             _HasSafeStart = Conditions.Connect()
                 .AutoRefresh(c => c.State)
                 .TrueForAll(line => line.StateChanged, state => state.Valid)
-                .StartWith(false)
+                .StartWith(true)
                 .ToProperty(this, e => e.HasSafeStart);
         }
 
@@ -280,7 +276,7 @@ namespace Flux.ViewModels
                     print_temp,
                     tool_offset,
                     this.WhenAnyValue(v => v.SelectedTool),
-                    Flux.StatusProvider.IsIdle.ValueOrDefault(),
+                    Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation).Select(s => s.IsIdle),
                     (temp, offset, tool, idle) => temp.HasValue && offset.HasValue && idle && tool != e)
                     .ToOptional();
 

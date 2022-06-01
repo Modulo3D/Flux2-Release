@@ -34,21 +34,22 @@ namespace Flux.ViewModels
 
             startup.Where(t =>
                 t.initializing.HasValue && 
-                (t.initializing.Value || !t.IsHomed.HasValue || !t.IsHomed.Value))
+                (t.initializing.Value || !t.IsHomed))
                 .ObserveOn(RxApp.MainThreadScheduler)
                 .Subscribe(t => Flux.Navigator.Navigate(this));
 
             startup.Where(t =>
                 t.initializing.HasValue &&
-                (!t.initializing.Value && t.IsHomed.HasValue && t.IsHomed.Value))
+                (!t.initializing.Value && t.IsHomed))
                 .ObserveOn(RxApp.MainThreadScheduler)
                 .Subscribe(_ => Flux.Navigator.NavigateHome());
 
-            var can_reset = Flux.StatusProvider.IsIdle
-                .ValueOr(() => true);
+            var can_reset = Flux.StatusProvider
+                .WhenAnyValue(s => s.StatusEvaluation)
+                .Select(s => s.IsIdle);
 
             var can_home = Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation)
-                .Select(s => s.CanSafeCycle && s.IsHomed.HasValue && !s.IsHomed.Value);
+                .Select(s => s.CanSafeCycle && !s.IsHomed);
 
             _ConnectionProgress = Flux.ConnectionProvider.WhenAnyValue(v => v.ConnectionProgress)
                 .ToProperty(this, v => v.ConnectionProgress);

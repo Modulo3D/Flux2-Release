@@ -48,7 +48,8 @@ namespace Flux.ViewModels
             Materials = Feeders.Connect()
                 .AutoRefresh(f => f.SelectedMaterial)
                 .Transform(f => f.SelectedMaterial, true)
-                .Transform(f => f.Convert(f => f.Document))
+                .AutoRefresh(m => m.Document)
+                .Transform(f => f.Convert(f => f.Document), true)
                 .AsObservableCache()
                 .DisposeWith(Disposables);
 

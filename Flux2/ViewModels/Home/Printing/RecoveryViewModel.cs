@@ -22,8 +22,9 @@ namespace Flux.ViewModels
 
         public RecoveryViewModel(FluxViewModel flux) : base(flux, "recovery")
         {
-            var is_idle = Flux.StatusProvider.IsIdle
-                .ValueOrDefault();
+            var is_idle = Flux.StatusProvider
+                .WhenAnyValue(s => s.StatusEvaluation)
+                .Select(s => s.IsIdle);
 
             var has_recovery = Flux.StatusProvider
                 .WhenAnyValue(v => v.PrintingEvaluation)

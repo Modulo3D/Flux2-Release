@@ -21,8 +21,9 @@ namespace Flux.ViewModels
                 .Transform(f => new MagazineItemViewModel(Flux, f))
                 .AsObservableCache();
 
-            var is_idle = Flux.StatusProvider.IsIdle
-                .ValueOrDefault();
+            var is_idle = Flux.StatusProvider
+                .WhenAnyValue(s => s.StatusEvaluation)
+                .Select(s => s.IsIdle);
 
             ResetMagazineCommand = ReactiveCommand.CreateFromTask(async () => { await Flux.SettingsProvider.ResetMagazineAsync(); }, is_idle);
 

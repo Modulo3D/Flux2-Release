@@ -1405,7 +1405,7 @@ namespace Flux.ViewModels
         {
             return storage.GetPartProgramFromStorage()
                 .GroupBy(s => s.MCodeGuid)
-                .ToDictionary(g => g.Key, g => g.ToDictionary(m => m.StartBlock));
+                .ToDictionary(g => g.Key, g => g.DistinctBy(m => m.StartBlock).ToDictionary(m => m.StartBlock));
         }
 
         public static Optional<Dictionary<QueuePosition, Guid>> GetGuidDictionaryFromQueue(this FLUX_FileList queue)

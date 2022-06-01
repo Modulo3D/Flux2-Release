@@ -278,7 +278,7 @@ namespace Flux.ViewModels
                 .DisposeWith(Disposables);
 
             var has_probe_offset_key = Observable.CombineLatest(
-                Flux.StatusProvider.IsIdle.ValueOrDefault(),
+                Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation).Select(s => s.IsIdle),
                 this.WhenAnyValue(v => v.ProbeOffsetKey),
                 (i, p) => i && p.HasValue);
 

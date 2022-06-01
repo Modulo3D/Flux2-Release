@@ -90,8 +90,8 @@ namespace Flux.ViewModels
                 .DisposeWith(Disposables);;
 
             var can_safe_start = Flux.StatusProvider
-             .WhenAnyValue(s => s.StatusEvaluation)
-             .Select(e => e.CanSafeCycle);
+                 .WhenAnyValue(s => s.StatusEvaluation)
+                 .Select(e => e.CanSafeCycle);
 
             var no_error_probe = Offsets.Connect()
                 .TrueForAny(p => p.WhenAnyValue(o => o.ProbeState), s => s != FluxProbeState.ERROR_PROBE);
@@ -103,7 +103,7 @@ namespace Flux.ViewModels
 
             var is_idle = Flux.StatusProvider
                 .WhenAnyValue(e => e.StatusEvaluation)
-                .Select(c => c.IsIdle.ValueOr(() => false));
+                .Select(c => c.IsIdle);
 
             var user_settings = Flux.SettingsProvider.UserSettings;
 

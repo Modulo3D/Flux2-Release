@@ -122,7 +122,7 @@ namespace Flux.ViewModels
 
                     await StoreTagAsync(reading.Value);
                 },
-                Flux.StatusProvider.CanSafeCycle,
+                Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation).Select(s => s.CanSafeCycle),
                 RxApp.MainThreadScheduler)
                 .DisposeWith(Disposables);
 

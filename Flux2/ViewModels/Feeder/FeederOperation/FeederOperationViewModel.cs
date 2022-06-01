@@ -40,8 +40,6 @@ namespace Flux.ViewModels
         public ReactiveCommand<Unit, Unit> CancelOperationCommand { get; private set; }
         [RemoteCommand]
         public ReactiveCommand<Unit, Unit> ExecuteOperationCommand { get; private set; }
-        [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> UpdateNFCCommand { get; private set; }
 
 
         private ObservableAsPropertyHelper<bool> _AllConditionsTrue;
@@ -50,17 +48,9 @@ namespace Flux.ViewModels
         private ObservableAsPropertyHelper<bool> _AllConditionsFalse;
         public bool AllConditionsFalse => _AllConditionsFalse.Value;
 
-        private ObservableAsPropertyHelper<bool> _CanUpdateNFC;
-        [RemoteOutput(true)]
-        public bool CanUpdateNFC => _CanUpdateNFC.Value;
-
-        private ObservableAsPropertyHelper<string> _UpdateNFCText;
-        [RemoteOutput(true)]
-        public string UpdateNFCText => _UpdateNFCText.Value;
-
-        private ObservableAsPropertyHelper<Optional<double>> _CurrentTemperature;
-        [RemoteOutput(true, typeof(TemperatureConverter))]
-        public Optional<double> CurrentTemperature => _CurrentTemperature.Value;
+        private ObservableAsPropertyHelper<Optional<FLUX_Temp>> _CurrentTemperature;
+        [RemoteOutput(true, typeof(FluxTemperatureConverter))]
+        public Optional<FLUX_Temp> CurrentTemperature => _CurrentTemperature.Value;
 
         private ObservableAsPropertyHelper<double> _TemperaturePercentage;
         [RemoteOutput(true)]
@@ -79,8 +69,9 @@ namespace Flux.ViewModels
                 innerList.AddOrUpdate(FindConditions());
             });
 
-            var is_idle = Feeder.Flux.StatusProvider.IsIdle
-                .ValueOrDefault();
+            var is_idle = Feeder.Flux.StatusProvider
+                .WhenAnyValue(s => s.StatusEvaluation)
+                .Select(s => s.IsIdle);
 
             FilteredConditions = Conditions.Connect()
                 .AutoRefresh(c => c.State)
@@ -113,35 +104,18 @@ namespace Flux.ViewModels
                 this.WhenAnyValue(v => v.AllConditionsTrue),
                 (is_idle, execute, conditions) => is_idle && execute && conditions);
 
-            _CanUpdateNFC = Observable.CombineLatest(
-                is_idle,
-                FindCanUpdateNFC(),
-                (is_idle, execute) => is_idle && execute)
-                .ToProperty(this, v => v.CanUpdateNFC);
-
-            _UpdateNFCText = FindUpdateNFCText()
-                .ToProperty(this, v => v.UpdateNFCText);
-
             var tool_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TEMP_TOOL, Feeder.Position);
             if (!tool_key.HasValue)
                 return;
 
             _CurrentTemperature = Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_TOOL, tool_key.Value.Alias)
                 .ObservableOrDefault()
-                .Convert(t => t.Current)
                 .ToProperty(this, v => v.CurrentTemperature);
 
-            _TemperaturePercentage = Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_TOOL, tool_key.Value.Alias)
-                .ObservableOrDefault()
-                .ConvertOr(t =>
-                {
-                    if (t.Current > t.Target)
-                        return 100;
-                    return Math.Max(0, Math.Min(100, t.Current / t.Target * 100.0));
-                }, () => 0)
+            _TemperaturePercentage = this.WhenAnyValue(v => v.CurrentTemperature)
+                .ConvertOr(t => t.Percentage, () => 0)
                 .ToProperty(this, v => v.TemperaturePercentage);
 
-            UpdateNFCCommand = ReactiveCommand.CreateFromTask(UpdateNFCAsync, this.WhenAnyValue(v => v.CanUpdateNFC));
             CancelOperationCommand = ReactiveCommand.CreateFromTask(async () => { await CancelOperationAsync(); }, can_cancel);
             ExecuteOperationCommand = ReactiveCommand.CreateFromTask(async () => { await ExecuteOperationAsync(); }, can_execute);
         }
@@ -150,7 +124,6 @@ namespace Flux.ViewModels
 
         protected abstract Task<bool> CancelOperationAsync();
         protected abstract IObservable<bool> CanCancelOperation();
-        protected abstract IObservable<string> FindUpdateNFCText();
 
         protected abstract Task<bool> ExecuteOperationAsync();
         protected abstract IObservable<bool> FindCanUpdateNFC();

@@ -158,7 +158,7 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override Task<bool> SelectPartProgramAsync(string filename, bool from_drive, bool wait, CancellationToken ct)
+        public override Task<bool> SelectPartProgramAsync(string partprogram, bool from_drive, bool wait, CancellationToken ct)
         {
             throw new NotImplementedException();
         }

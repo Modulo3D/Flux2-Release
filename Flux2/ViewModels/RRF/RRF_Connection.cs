@@ -104,7 +104,7 @@ namespace Flux.ViewModels
         }
     }
 
-    public class RRF_Connection : FLUX_Connection<RRF_VariableStoreMP500, RRF_Client, RRF_MemoryBuffer>
+    public class RRF_Connection : FLUX_Connection<RRF_VariableStoreS300, RRF_Client, RRF_MemoryBuffer>
     {
         private RRF_MemoryBuffer _MemoryBuffer;
         public override RRF_MemoryBuffer MemoryBuffer
@@ -130,7 +130,7 @@ namespace Flux.ViewModels
 
         public FluxViewModel Flux { get; }
 
-        public RRF_Connection(FluxViewModel flux, RRF_VariableStoreMP500 variable_store, string address) : base(variable_store, new RRF_Client(address))
+        public RRF_Connection(FluxViewModel flux, RRF_VariableStoreS300 variable_store, string address) : base(variable_store, new RRF_Client(address))
         {
             Flux = flux;
             Client.DisposeWith(Disposables);
@@ -327,7 +327,7 @@ namespace Flux.ViewModels
                 return false;
             }
         }
-        public override async Task<bool> SelectPartProgramAsync(string filename, bool from_drive, bool wait, CancellationToken ct = default)
+        public override async Task<bool> SelectPartProgramAsync(string partprogram, bool from_drive, bool wait, CancellationToken ct = default)
         {
             try
             {
@@ -335,7 +335,7 @@ namespace Flux.ViewModels
                     return false;
 
                 var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-                if (!await PostGCodeAsync(new[] { $"M23 storage/{filename}" }, cts.Token))
+                if (!await PostGCodeAsync(new[] { $"M23 storage/{partprogram}" }, cts.Token))
                 {
                     Flux.Messages.LogMessage("Errore selezione partprogram", "Impossibile eseguire il gcode", MessageLevel.ERROR, 0);
                     return false;
@@ -349,7 +349,7 @@ namespace Flux.ViewModels
                             .Convert(f => f.FileName)
                             .ValueOrOptional(() => j.LastFileName);
                     })
-                    .ConvertOr(f => Path.GetFileName(f) == filename, () => false);
+                    .ConvertOr(f => Path.GetFileName(f) == partprogram, () => false);
 
                 if (!await WaitUtils.WaitForAsync(selected_pp, ct))
                 {

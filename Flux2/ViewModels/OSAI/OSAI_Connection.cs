@@ -667,13 +667,13 @@ namespace Flux.ViewModels
         {
             return await WriteVariableAsync(c => c.REQ_HOLD, true);
         }
-        public override async Task<bool> SelectPartProgramAsync(string filename, bool from_drive, bool wait, CancellationToken ct = default)
+        public override async Task<bool> SelectPartProgramAsync(string partprogram, bool from_drive, bool wait, CancellationToken ct = default)
         {
             try
             {
                 if (from_drive)
                 {
-                    var select_part_program_request = new SelectPartProgramFromDriveRequest(ProcessNumber, $"{StoragePath}\\{filename}");
+                    var select_part_program_request = new SelectPartProgramFromDriveRequest(ProcessNumber, $"{StoragePath}\\{partprogram}");
                     var select_part_program_response = await Client.SelectPartProgramFromDriveAsync(select_part_program_request);
 
                     if (!ProcessResponse(
@@ -684,7 +684,7 @@ namespace Flux.ViewModels
                 }
                 else
                 {
-                    var select_part_program_request = new SelectPartProgramRequest(ProcessNumber, $"{StoragePath}\\{filename}");
+                    var select_part_program_request = new SelectPartProgramRequest(ProcessNumber, $"{StoragePath}\\{partprogram}");
                     var select_part_program_response = await Client.SelectPartProgramAsync(select_part_program_request);
 
                     if (!ProcessResponse(
