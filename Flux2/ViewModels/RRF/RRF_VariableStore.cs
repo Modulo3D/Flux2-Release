@@ -115,9 +115,9 @@ namespace Flux.ViewModels
     }
 
     // S300
-    public class RRF_VariableStoreS300 : RRF_VariableStoreBase<RRF_VariableStoreS300>
+    /*public class RRF_VariableStore : RRF_VariableStoreBase<RRF_VariableStore>
     {
-        public RRF_VariableStoreS300(RRF_ConnectionProvider connection_provider) : base(connection_provider, 4)
+        public RRF_VariableStore(RRF_ConnectionProvider connection_provider) : base(connection_provider, 4)
         {
             try
             {
@@ -172,13 +172,13 @@ namespace Flux.ViewModels
             }
         }
 
-    }
+    }*/
 
 
     // MP500
-    public class RRF_VariableStoreMP500 : RRF_VariableStoreBase<RRF_VariableStoreMP500>
+    public class RRF_VariableStore : RRF_VariableStoreBase<RRF_VariableStore>
     {
-        public RRF_VariableStoreMP500(RRF_ConnectionProvider connection_provider) : base(connection_provider, 2)
+        public RRF_VariableStore(RRF_ConnectionProvider connection_provider) : base(connection_provider, 2)
         {
             try
             {

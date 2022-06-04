@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Reactive.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -26,7 +27,7 @@ namespace Flux.ViewModels
         END_PHASE = 7,
     }
 
-    public class RRF_ConnectionProvider : FLUX_ConnectionProvider<RRF_Connection, RRF_VariableStoreS300>
+    public class RRF_ConnectionProvider : FLUX_ConnectionProvider<RRF_Connection, RRF_VariableStore>
     {
         private ObservableAsPropertyHelper<Optional<bool>> _IsConnecting;
         public override Optional<bool> IsConnecting => _IsConnecting.Value;
@@ -46,11 +47,12 @@ namespace Flux.ViewModels
 
         public FluxViewModel Flux { get; }
         public override IFlux IFlux => Flux;
-        protected override RRF_VariableStoreS300 VariableStore => new RRF_VariableStoreS300(this);
+        protected override RRF_VariableStore VariableStore { get; } 
 
         public RRF_ConnectionProvider(FluxViewModel flux)
         {
             Flux = flux;
+            VariableStore = new RRF_VariableStore(this);
 
             var connection = this.WhenAnyValue(v => v.Connection);
             var full_memory_read = connection.Convert(c => c.MemoryBuffer)

@@ -104,7 +104,7 @@ namespace Flux.ViewModels
         }
     }
 
-    public class RRF_Connection : FLUX_Connection<RRF_VariableStoreS300, RRF_Client, RRF_MemoryBuffer>
+    public class RRF_Connection : FLUX_Connection<RRF_VariableStore, RRF_Client, RRF_MemoryBuffer>
     {
         private RRF_MemoryBuffer _MemoryBuffer;
         public override RRF_MemoryBuffer MemoryBuffer
@@ -130,7 +130,7 @@ namespace Flux.ViewModels
 
         public FluxViewModel Flux { get; }
 
-        public RRF_Connection(FluxViewModel flux, RRF_VariableStoreS300 variable_store, string address) : base(variable_store, new RRF_Client(address))
+        public RRF_Connection(FluxViewModel flux, RRF_VariableStore variable_store, string address) : base(variable_store, new RRF_Client(address))
         {
             Flux = flux;
             Client.DisposeWith(Disposables);
