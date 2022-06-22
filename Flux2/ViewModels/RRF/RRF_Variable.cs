@@ -97,6 +97,17 @@ namespace Flux.ViewModels
                 var variable = new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, name, ReadModel, GetModel, get_data, write_data, unit);
                 return (RRF_VariableObjectModel<TModel, TRData, TWData>)VariableStore.RegisterVariable(variable);
             }
+
+            internal RRF_InnerModelBuilder<RRF_ObjectModelState>.RRF_ArrayBuilder<RRF_ObjectModelGpOut> CreateArray(Func<RRF_ObjectModelState, Optional<List<RRF_ObjectModelGpOut>>> p, object gpoutUnits)
+            {
+                throw new NotImplementedException();
+            }
+
+            internal RRF_InnerModelBuilder<RRF_ObjectModelSensors>.RRF_ArrayBuilder<RRF_ObjectModelGpIn> CreateArray(Func<RRF_ObjectModelSensors, Optional<List<RRF_ObjectModelGpIn>>> p, object gpinUnits)
+            {
+                throw new NotImplementedException();
+            }
+
             public RRF_VariableObjectModel<TModel, TRData, TWData> CreateVariable<TRData, TWData>(
                 string name,
                 Func<RRF_Connection, TModel, Task<Optional<TRData>>> get_data,

@@ -66,9 +66,11 @@ namespace Flux.ViewModels
 
             ToolNozzle = new ToolNozzleViewModel(this);
 
+            var extruders = Flux.SettingsProvider
+                .WhenAnyValue(v => v.ExtrudersCount);
+
             // TODO
-            Materials = Flux.SettingsProvider
-                .WhenAnyValue(v => v.ExtrudersCount)
+            Materials = extruders
                 .Select(CreateMaterials)
                 .ToObservableChangeSet(f => f.Position)
                 .DisposeMany()
@@ -90,14 +92,14 @@ namespace Flux.ViewModels
                 .QueryWhenChanged();
 
             _SelectedToolMaterial = Observable.CombineLatest(
-               tool_materials, selected_positions, FindSelectedViewModel)
+               tool_materials, extruders, selected_positions, FindSelectedViewModel)
                 .ToProperty(this, v => v.SelectedToolMaterial);
 
             var materials = Materials.Connect()
                 .QueryWhenChanged();
 
             _SelectedMaterial = Observable.CombineLatest(
-               materials, selected_positions, FindSelectedViewModel)
+               materials, extruders, selected_positions, FindSelectedViewModel)
                 .ToProperty(this, v => v.SelectedMaterial);
 
 
@@ -169,14 +171,27 @@ namespace Flux.ViewModels
                 yield return new MaterialViewModel(this, (ushort)((Position * extruders.Value.mixing_extruders) + position));
         }
 
-        private Optional<TViewModel> FindSelectedViewModel<TViewModel>(IQuery<TViewModel, ushort> viewmodels, OptionalChange<IQuery<Optional<bool>, VariableAlias>> wire_presence)
+        private Optional<TViewModel> FindSelectedViewModel<TViewModel>(
+            IQuery<TViewModel, ushort> viewmodels, 
+            Optional<(ushort machine_extruders, ushort mixing_extruders)> extruders,
+            OptionalChange<IQuery<Optional<bool>, VariableAlias>> wire_presence)
         {
+            if (!extruders.HasValue)
+                return default;
             if (!wire_presence.HasChange)
-                return viewmodels.Lookup(Position);
-            var selected_wire = wire_presence.Change.Items.IndexOfOptional(true);
+                return default;
+
+            var wire_range_start = Position * extruders.Value.mixing_extruders;
+            var wire_range_end = wire_range_start + extruders.Value.mixing_extruders;
+
+            var selected_wire = wire_presence.Change.Items
+                .Select((wire, index) => (wire, index))
+                .FirstOrOptional(t => t.index >= wire_range_start && t.index < wire_range_end && t.wire == true);
+            
             if (!selected_wire.HasValue)
                 return default;
-            return viewmodels.Lookup((ushort)selected_wire.Value.Index);
+
+            return viewmodels.Lookup((ushort)selected_wire.Value.index);
         }
 
         // FEEDER

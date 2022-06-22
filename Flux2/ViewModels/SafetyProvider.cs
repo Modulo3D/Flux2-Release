@@ -167,6 +167,7 @@ namespace Flux.ViewModels
 
             _State = current_state
                 .DistinctUntilChanged()
+                .StartWith(new ConditionState(false, ""))
                 .ToProperty(this, e => e.State);
 
             StateChanged = this.WhenAnyValue(v => v.State);

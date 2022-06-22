@@ -15,6 +15,7 @@ using System.Net.Http.Headers;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -138,36 +139,44 @@ namespace Flux.ViewModels
 
         public async Task<bool> InitializeVariablesAsync(CancellationToken ct)
         {
-            var files = await ListFilesAsync(GlobalPath, ct);
-            if (!files.HasValue)
-                return false;
+            var written_file = await DownloadFileAsync(GlobalPath, "initialize_variables.g", ct);
+            
+            var variables = VariableStore.Variables.Values
+               .SelectMany(v => v switch
+               {
+                   IFLUX_Array array => array.Variables.Items,
+                   IFLUX_Variable variable => new[] { variable },
+                   _ => throw new NotImplementedException()
+               })
+               .Where(v => v is IRRF_VariableGlobalModel global)
+               .Select(v => (IRRF_VariableGlobalModel)v);
 
-            var file_set = files.Value.Files.Select(f => f.Name).ToHashSet();
-            if (!file_set.Contains("initialize_variables.g"))
+            var source_variables = variables
+                .Select(v => v.LoadVariableMacro)
+                .Select(m => $"M98 P\"/sys/global/{m}\"")
+                .ToOptional();
+
+            using var sha256 = SHA256.Create();
+            var written_hash = written_file.ConvertOr(w =>
             {
-                var variables = VariableStore.Variables.Values
-                   .SelectMany(v => v switch
-                   {
-                       IFLUX_Array array => array.Variables.Items,
-                       IFLUX_Variable variable => new[] { variable },
-                       _ => throw new NotImplementedException()
-                   })
-                   .Where(v => v is IRRF_VariableGlobalModel global)
-                   .Select(v => (IRRF_VariableGlobalModel)v);
+                var written = w.Split(Environment.NewLine.ToCharArray(), 
+                    StringSplitOptions.RemoveEmptyEntries);
+                return sha256.ComputeHash(Encoding.UTF8.GetBytes(string.Join("", written))).ToHex();
+            }, () => "");
+            
+            var source_hash = source_variables.ConvertOr(s =>
+            {
+                return sha256.ComputeHash(Encoding.UTF8.GetBytes(string.Join("", s))).ToHex();
+            }, () => "");
 
-                var source = variables
-                    .Select(v => v.LoadVariableMacro)
-                    .Select(m => $"M98 P\"/sys/global/{m}\"")
-                    .ToOptional();
-
-                if (!await PutFileAsync(c => ((RRF_Connection)c).GlobalPath, "initialize_variables.g", ct, source))
+            if (written_hash != source_hash)
+                if (!await PutFileAsync(c => ((RRF_Connection)c).GlobalPath, "initialize_variables.g", ct, source_variables))
                     return false;
-            }
 
             return await PostGCodeAsync(new[] { "M98 P\"/sys/global/initialize_variables.g\"" }, ct);
         }
 
-        private async Task<(bool result, IEnumerable<IRRF_VariableGlobalModel> variables)> FindMissingVariables(CancellationToken ct)
+        private async Task<(bool result, List<IRRF_VariableGlobalModel> variables)> FindMissingVariables(CancellationToken ct)
         {
             var variables = VariableStore.Variables.Values
                 .SelectMany(v => v switch
@@ -181,7 +190,7 @@ namespace Flux.ViewModels
 
             var files = await ListFilesAsync(GlobalPath, ct);
             if (!files.HasValue)
-                return (false, Array.Empty<IRRF_VariableGlobalModel>());
+                return (false, default);
 
             var file_set = files.Value.Files
                 .Select(f => f.Name)
@@ -197,7 +206,8 @@ namespace Flux.ViewModels
                 .Where(v => v is IRRF_VariableGlobalModel global)
                 .Select(v => (IRRF_VariableGlobalModel)v)
                 .Where(v => !file_set.Contains(v.LoadVariableMacro))
-                .Select(v => v);
+                .Select(v => v)
+                .ToList();
 
             return (true, missing_variables);
         }
@@ -208,7 +218,7 @@ namespace Flux.ViewModels
             if (!missing_variables.result)
                 return false;
 
-            if (!missing_variables.variables.Any())
+            if (missing_variables.variables.Count == 0)
                 return true;
 
             var advanced_mode = Flux.MCodes.OperatorUSB
@@ -279,7 +289,11 @@ namespace Flux.ViewModels
         {
             using var put_reset_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             using var wait_reset_cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            return await PostGCodeAsync(new[] { "M108", "M25", "M0" }, put_reset_cts.Token, true, wait_reset_cts.Token);
+            return await PostGCodeAsync(new[]
+            {
+                "M108", "M25",
+                "set global.iterator = false", "M0"
+            }, put_reset_cts.Token, true, wait_reset_cts.Token);
         }
         private int GetGCodeLenght(IEnumerable<string> paramacro)
         {
@@ -292,7 +306,8 @@ namespace Flux.ViewModels
             using var wait_cancel_print_cts = new CancellationTokenSource(TimeSpan.FromMinutes(1));
             return await PostGCodeAsync(new []
             {
-                "M108", "M25", "M0",
+                "M108", "M25", 
+                "set global.iterator = false", "M0",
                 "M98 P\"/macros/cancel_print\"",
             }, put_cancel_print_cts.Token, true, wait_cancel_print_cts.Token);
         }
@@ -418,13 +433,17 @@ namespace Flux.ViewModels
                     IEnumerable<string> get_job_gcode()
                     {
                         yield return $"M98 P\"0:/gcodes/storage/paramacro.mcode\"";
+                        yield return $"if global.iterator == false";
+                        yield return $" M98 P\"0:/macros/cancel_print\"";
                     }
 
                     IEnumerable<string> get_paramacro_gcode()
                     {
                         yield return $"M98 R{(can_cancel ? 1 : 0)}";
+                        yield return $"set global.iterator = true";
+                        yield return $"";
                         foreach (var line in paramacro)
-                            yield return line;
+                            yield return line.TrimEnd();
                     }
                 }
             }
@@ -530,9 +549,21 @@ namespace Flux.ViewModels
         {
             try
             {
-                var request = new RRF_Request($"rr_filelist?dir={folder}", Method.Get, RRF_RequestPriority.Immediate, ct);
-                var response = await Client.ExecuteAsync(request);
-                return response.GetContent<FLUX_FileList>();
+                Optional<FLUX_FileList> file_list = default;
+                var full_file_list = new FLUX_FileList(folder);
+                do
+                {
+                    var first = file_list.ConvertOr(f => f.Next, () => 0);
+                    var request = new RRF_Request($"rr_filelist?dir={folder}&first={first}", Method.Get, RRF_RequestPriority.Immediate, ct);
+                    var response = await Client.ExecuteAsync(request);
+                    
+                    file_list = response.GetContent<FLUX_FileList>();
+                    if (file_list.HasValue)
+                        full_file_list.Files.AddRange(file_list.Value.Files);
+
+                } while (file_list.HasValue && file_list.Value.Next != 0);
+
+                return full_file_list;
             }
             catch
             {
@@ -727,6 +758,10 @@ namespace Flux.ViewModels
         public override Optional<IEnumerable<string>> GetCenterPositionGCode()
         {
             return new[] { "M98 P\"/macros/center_position\"" };
+        }
+        public override Optional<IEnumerable<string>> GetManualCalibrationPositionGCode()
+        {
+            return new[] { "M98 P\"/macros/manual_calibration_position\"" };
         }
         public override Optional<IEnumerable<string>> GetSetLowCurrentGCode()
         {

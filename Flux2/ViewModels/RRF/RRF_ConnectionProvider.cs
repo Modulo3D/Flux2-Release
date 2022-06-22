@@ -133,7 +133,7 @@ namespace Flux.ViewModels
                 switch (ConnectionPhase.Value)
                 {
                     case RRF_ConnectionPhase.START_PHASE:
-                        await CreateTimeoutAsync(TimeSpan.FromSeconds(5), ct =>
+                        await CreateTimeoutAsync(TimeSpan.FromSeconds(1), ct =>
                         {
                             if (Connection.HasValue)
                             {
@@ -155,7 +155,7 @@ namespace Flux.ViewModels
                         break;
 
                     case RRF_ConnectionPhase.DISCONNECTING_CLIENT:
-                        await CreateTimeoutAsync(TimeSpan.FromSeconds(5), async ct =>
+                        await CreateTimeoutAsync(TimeSpan.FromSeconds(1), async ct =>
                         {
                             var request = new RRF_Request("rr_disconnect", Method.Get, RRF_RequestPriority.Immediate, ct);
                             var disconnected = await Connection.Value.Client.ExecuteAsync(request);
@@ -164,7 +164,7 @@ namespace Flux.ViewModels
                         break;
 
                     case RRF_ConnectionPhase.CONNECTING_CLIENT:
-                        await CreateTimeoutAsync(TimeSpan.FromSeconds(5), async ct =>
+                        await CreateTimeoutAsync(TimeSpan.FromSeconds(1), async ct =>
                         {
                             var request = new RRF_Request($"rr_connect?password=\"\"&time={DateTime.UtcNow:O}", Method.Get, RRF_RequestPriority.Immediate, ct);
                             var connected = await Connection.Value.Client.ExecuteAsync(request);
@@ -174,7 +174,7 @@ namespace Flux.ViewModels
 
                     case RRF_ConnectionPhase.READING_STATUS:
                         Flux.Messages.Messages.Clear();
-                        await CreateTimeoutAsync(TimeSpan.FromSeconds(5), async ct =>
+                        await CreateTimeoutAsync(TimeSpan.FromSeconds(1), async ct =>
                         {
                             var state = await Connection.Value.MemoryBuffer.GetModelDataAsync<RRF_ObjectModelState>(ct);
                             if (!state.HasValue)
@@ -190,7 +190,7 @@ namespace Flux.ViewModels
                         break;
 
                     case RRF_ConnectionPhase.CREATING_VARIABLES:
-                        await CreateTimeoutAsync(TimeSpan.FromSeconds(30), async ct =>
+                        await CreateTimeoutAsync(TimeSpan.FromSeconds(5), async ct =>
                         {
                             var result = await Connection.Value.CreateVariablesAsync(ct);
                             if (result)
@@ -199,7 +199,7 @@ namespace Flux.ViewModels
                         break;
 
                     case RRF_ConnectionPhase.INITIALIZING_VARIABLES:
-                        await CreateTimeoutAsync(TimeSpan.FromSeconds(30), async ct =>
+                        await CreateTimeoutAsync(TimeSpan.FromSeconds(5), async ct =>
                         {
                             var result = await Connection.Value.InitializeVariablesAsync(ct);
                             if (result)

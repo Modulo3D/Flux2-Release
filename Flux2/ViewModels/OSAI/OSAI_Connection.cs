@@ -1160,5 +1160,10 @@ namespace Flux.ViewModels
         {
             throw new NotImplementedException();
         }
+
+        public override Optional<IEnumerable<string>> GetManualCalibrationPositionGCode()
+        {
+            throw new NotImplementedException();
+        }
     }
 }

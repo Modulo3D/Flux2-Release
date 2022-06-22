@@ -208,14 +208,16 @@ namespace Flux.ViewModels
 
     public class ManageViewModel : NavPanelViewModel<ManageViewModel>
     {
-        public MemoryViewModel Memory { get; }
+        public MoveViewModel Move { get; }
         public FilesViewModel Files { get; }
+        public MemoryViewModel Memory { get; }
         public TemperaturesViewModel Temperatures { get; }
 
         public ManageViewModel(FluxViewModel flux) : base(flux)
         {
-            Memory = new MemoryViewModel(Flux);
+            Move = new MoveViewModel(Flux);
             Files = new FilesViewModel(Flux);
+            Memory = new MemoryViewModel(Flux);
             Temperatures = new TemperaturesViewModel(Flux);
 
             var status = Flux.StatusProvider
@@ -282,8 +284,8 @@ namespace Flux.ViewModels
                 AddCommand("power", ShutdownAsync, can_execute: IS_IDLE);
 
             AddCommand("cleanPlate", CleanPlate);
-            /*AddCommand("keepChamber", m => m.KEEP_CHAMBER);
-            AddCommand("keepExtruders", m => m.KEEP_TOOL, visible: advanced_mode);*/
+            AddCommand("keepChamber", m => m.KEEP_CHAMBER);
+            AddCommand("keepExtruders", m => m.KEEP_TOOL, visible: advanced_mode);
 
             var user_settings = Flux.SettingsProvider.UserSettings;
             AddCommand(
@@ -325,10 +327,10 @@ namespace Flux.ViewModels
             AddCommand("resetPrinter", Flux.Startup.ResetPrinter, visible: advanced_mode);
             AddCommand("vacuumPump", m => m.ENABLE_VACUUM, can_execute: IS_IDLE, visible: advanced_mode);
             AddCommand("openClamp", m => m.OPEN_HEAD_CLAMP, can_execute: IS_IDLE, visible: advanced_mode);
-            //AddCommand("createArray", () => array = new byte[1024 * 1024 * 200]);
 
             AddModal(Memory, visible: advanced_mode);
             AddModal(Files, visible: advanced_mode);
+            AddModal(Move, visible: advanced_mode);
         }
 
         //private byte[] array { get; set; }

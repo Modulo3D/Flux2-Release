@@ -53,6 +53,7 @@ namespace Flux.ViewModels
                 Items.StartAutoSelect(q => q.KeyValues.FirstOrOptional(kvp => kvp.Value.HasValue).Convert(kvp => kvp.Key));
 
             Items.SelectedKeyChanged
+                .StartWithDefault()
                 .Subscribe(v => selection_changed?.Invoke(v))
                 .DisposeWith(Disposables);
 

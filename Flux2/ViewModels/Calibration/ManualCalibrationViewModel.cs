@@ -28,7 +28,7 @@ namespace Flux.ViewModels
         public CalibrationViewModel Calibration { get; }
 
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> CancelCalibrationCommand { get; }
+        public abstract ReactiveCommand<Unit, Unit> CancelCalibrationCommand { get; protected set; }
 
         private ObservableAsPropertyHelper<Optional<ushort>> _SelectedTool;
         [RemoteOutput(true)]
@@ -38,8 +38,6 @@ namespace Flux.ViewModels
         {
             Flux = calibration.Flux;
             Calibration = calibration;
-            var can_cancel = Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation).Select(s => s.CanSafeStop);
-            CancelCalibrationCommand = ReactiveCommand.CreateFromTask(ExitAsync, can_cancel);
 
             _SelectedTool = Flux.ConnectionProvider.ObserveVariable(m => m.TOOL_CUR)
                 .Convert(o => o.ToOptional(o => o > -1).Convert(o => (ushort)o))
@@ -56,7 +54,7 @@ namespace Flux.ViewModels
             InitializeRemoteView();
         }
 
-        private async Task ExitAsync()
+        protected async Task ExitAsync()
         {
             using var put_exit_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             using var wait_exit_cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
@@ -102,6 +100,9 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public bool HasSafeStart => _HasSafeStart?.Value ?? false;
 
+        [RemoteCommand]
+        public override ReactiveCommand<Unit, Unit> CancelCalibrationCommand { get; protected set; }
+
         public PrepareManualCalibrationViewModel(CalibrationViewModel calibration) : base(calibration)
         {
             Conditions = new SourceCache<IConditionViewModel, string>(c => c.Name);
@@ -111,6 +112,12 @@ namespace Flux.ViewModels
                 .TrueForAll(line => line.StateChanged, state => state.Valid)
                 .StartWith(true)
                 .ToProperty(this, e => e.HasSafeStart);
+
+            var can_cancel = Flux.StatusProvider
+                .WhenAnyValue(s => s.StatusEvaluation)
+                .Select(s => s.CanSafeStop);
+
+            CancelCalibrationCommand = ReactiveCommand.CreateFromTask(ExitAsync, can_cancel);
         }
 
         public override void Initialize()
@@ -151,6 +158,10 @@ namespace Flux.ViewModels
         private ObservableAsPropertyHelper<string> _AxisPosition;
         [RemoteOutput(true)]
         public string AxisPosition => _AxisPosition.Value;
+
+        [RemoteCommand]
+        public override ReactiveCommand<Unit, Unit> CancelCalibrationCommand { get; protected set; }
+
         public PerformManualCalibrationViewModel(CalibrationViewModel calibration) : base(calibration)
         {
             _CurrentTemperature = this.WhenAnyValue(v => v.SelectedTool)
@@ -175,12 +186,7 @@ namespace Flux.ViewModels
                 .ToProperty(this, v => v.TemperaturePercentage)
                 .DisposeWith(Disposables);
 
-            ToolButtons = Flux.SettingsProvider
-                .WhenAnyValue(v => v.ExtrudersCount)
-                .Select(FindToolButtons)
-                .ToObservableChangeSet()
-                .AsObservableList()
-                .DisposeWith(Disposables); MoveUpButtons = new SourceList<CmdButton>();
+            MoveUpButtons = new SourceList<CmdButton>();
             MoveUpButtons.Add(FindMoveButton(-1));
             MoveUpButtons.Add(FindMoveButton(-0.1));
             MoveUpButtons.Add(FindMoveButton(-0.01));
@@ -192,39 +198,51 @@ namespace Flux.ViewModels
             MoveDownButtons.Add(FindMoveButton(0.01));
             MoveDownButtons.DisposeWith(Disposables);
 
-            var move_up_executing = MoveUpButtons.Connect()
+            var move_up_not_executing = MoveUpButtons.Connect()
                 .AddKey(b => b.Name)
                 .Transform(m => m.Command, true)
                 .TrueForAll(c => c.IsExecuting, e => !e)
                 .StartWith(false);
 
-            var move_down_executing = MoveDownButtons.Connect()
+            var move_down_not_executing = MoveDownButtons.Connect()
                 .AddKey(b => b.Name)
                 .Transform(m => m.Command, true)
                 .TrueForAll(c => c.IsExecuting, e => !e)
                 .StartWith(false);
 
-            Observable.CombineLatest(
-                move_up_executing, move_down_executing,
-                (up, down) => up || down)
-                .Throttle(TimeSpan.FromSeconds(1))
-                .Subscribe(async e =>
+            var not_executing = Observable.CombineLatest(
+                move_up_not_executing, move_down_not_executing,
+                (up_not_executing, down_not_executing) => up_not_executing && down_not_executing)
+                .Delay(ne => Observable.Timer(TimeSpan.FromSeconds(ne ? 1 : 0)));
+
+            ToolButtons = Flux.SettingsProvider
+                .WhenAnyValue(v => v.ExtrudersCount)
+                .Select(e => FindToolButtons(e, not_executing))
+                .ToObservableChangeSet()
+                .AsObservableList()
+                .DisposeWith(Disposables);
+
+            not_executing.Subscribe(async not_executing =>
                 {
-                    if (e)
+                    if (not_executing)
                     {
                         var offset = Calibration.Offsets.LookupOptional(SelectedTool);
                         if (!offset.HasValue)
                             return;
 
-                        var z_bed_height = await Flux.ConnectionProvider.ReadVariableAsync(c => c.Z_BED_HEIGHT);
-                        if (!z_bed_height.HasValue)
-                            return;
+                        var bed_height = 0.0;
+                        if (Flux.ConnectionProvider.HasVariable(c => c.Z_BED_HEIGHT))
+                        {
+                            var z_bed_height = await Flux.ConnectionProvider.ReadVariableAsync(c => c.Z_BED_HEIGHT);
+                            if(z_bed_height.HasValue)
+                                bed_height = z_bed_height.Value;
+                        }
 
                         var z = await Flux.ConnectionProvider.ReadVariableAsync(m => m.AXIS_POSITION, "Z");
                         if (!z.HasValue)
                             return;
 
-                        offset.Value.ModifyProbeOffset(p => new ProbeOffset(p.Key, p.X, p.Y, z.Value - z_bed_height.Value - 0.3));
+                        offset.Value.ModifyProbeOffset(p => new ProbeOffset(p.Key, p.X, p.Y, z.Value - bed_height - 0.3));
                         Flux.SettingsProvider.UserSettings.PersistLocalSettings();
                     }
                 })
@@ -233,6 +251,17 @@ namespace Flux.ViewModels
             _AxisPosition = Flux.ConnectionProvider.ObserveVariable(m => m.AXIS_POSITION)
                 .QueryWhenChanged(p => string.Join(" ", p.KeyValues.Select(v => $"{v.Key}{v.Value:0.00}")))
                 .ToProperty(this, v => v.AxisPosition);
+
+            var can_safe_stop = Flux.StatusProvider
+                .WhenAnyValue(s => s.StatusEvaluation)
+                .Select(s => s.CanSafeStop);
+
+            var can_cancel = Observable.CombineLatest(
+                can_safe_stop,
+                not_executing,
+                (ss, ne) => ss && ne);
+
+            CancelCalibrationCommand = ReactiveCommand.CreateFromTask(ExitAsync, can_cancel);
         }
         CmdButton FindMoveButton(double distance)
         {
@@ -253,7 +282,7 @@ namespace Flux.ViewModels
                 await Flux.ConnectionProvider.ExecuteParamacroAsync(c => c.GetRelativeZMovementGCode(d, 500), put_relative_movement_cts.Token);
             }
         }
-        private IEnumerable<CmdButton> FindToolButtons(Optional<(ushort machine_extruders, ushort mixing_extruders)> extruders)
+        private IEnumerable<CmdButton> FindToolButtons(Optional<(ushort machine_extruders, ushort mixing_extruders)> extruders, IObservable<bool> not_executing)
         {
             if (!extruders.HasValue)
                 yield break;
@@ -275,9 +304,10 @@ namespace Flux.ViewModels
                 var can_execute = Observable.CombineLatest(
                     print_temp,
                     tool_offset,
+                    not_executing,
                     this.WhenAnyValue(v => v.SelectedTool),
                     Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation).Select(s => s.IsIdle),
-                    (temp, offset, tool, idle) => temp.HasValue && offset.HasValue && idle && tool != e)
+                    (temp, offset, ne, tool, idle) => temp.HasValue && offset.HasValue && ne && idle && tool != e)
                     .ToOptional();
 
                 var button = new CmdButton($"selectExtruder??{e + 1}", select_tool, can_execute);
@@ -319,10 +349,10 @@ namespace Flux.ViewModels
                             return default;
                         gcode.AddRange(set_tool_offset_gcode.Value);
 
-                        var center_position_gcode = c.GetCenterPositionGCode();
-                        if (!center_position_gcode.HasValue)
+                        var manual_calibration_position_gcode = c.GetManualCalibrationPositionGCode();
+                        if (!manual_calibration_position_gcode.HasValue)
                             return default;
-                        gcode.AddRange(center_position_gcode.Value);
+                        gcode.AddRange(manual_calibration_position_gcode.Value);
 
                         var raise_plate_gcode = c.GetRaisePlateGCode();
                         if (!raise_plate_gcode.HasValue)

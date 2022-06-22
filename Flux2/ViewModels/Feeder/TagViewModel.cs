@@ -37,8 +37,11 @@ namespace Flux.ViewModels
         }
 
         private readonly ObservableAsPropertyHelper<TDocument> _Document;
-        [RemoteOutput(true, typeof(ToStringConverter))]
         public TDocument Document => _Document.Value;
+
+
+        [RemoteOutput(true)]
+        public abstract Optional<string> DocumentLabel { get; }
 
         private ObservableAsPropertyHelper<double> _OdometerPercentage;
         [RemoteOutput(true)]
@@ -55,8 +58,7 @@ namespace Flux.ViewModels
             FeederViewModel feeder, ushort position,
             Func<FluxUserSettings, SourceCache<NFCReading, ushort>> get_tag_storage,
             Func<ILocalDatabase, TNFCTag, TDocument> find_document,
-            Func<TNFCTag, Guid> check_tag,
-            Optional<string> name = default) : base(name)
+            Func<TNFCTag, Guid> check_tag) : base($"{typeof(TTagViewModel).GetRemoteControlName()}??{position}")
         {
             Feeder = feeder;
             Flux = feeder.Flux;

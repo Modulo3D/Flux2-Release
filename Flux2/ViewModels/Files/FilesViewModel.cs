@@ -169,12 +169,15 @@ namespace Flux.ViewModels
             textbox.InitializeRemoteView();
             combo.InitializeRemoteView();
 
+            var can_confirm = combo.Items.SelectedValueChanged
+                .Select(f => f.HasValue && f.Value == FLUX_FileAccess.ReadWrite);
+
             var result = await Flux.ShowSelectionAsync(
                 "Modifica File",
                 Observable.Return(true),
-                combo.Items.SelectedValueChanged.Select(f => f.HasValue && f.Value == FLUX_FileAccess.ReadWrite),
-                combo, 
-                textbox);
+                can_confirm,
+                textbox,
+                combo); 
             
             if (result != ContentDialogResult.Primary)
                 return;

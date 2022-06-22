@@ -1,6 +1,7 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Modulo3DStandard;
 using ReactiveUI;
 using System;
@@ -155,8 +156,12 @@ namespace Flux.ViewModels
             set => this.RaiseAndSetIfChanged(ref _ContentDialog, value);
         }
 
-        public FluxViewModel() : base("flux")
+        public ILogger<IFlux> Logger { get; }
+
+        public FluxViewModel(ILogger<IFlux> logger) : base("flux")
         {
+            Logger = logger;
+
             ServicePointManager.UseNagleAlgorithm = false;
             ServicePointManager.Expect100Continue = false;
 
@@ -298,10 +303,12 @@ namespace Flux.ViewModels
 
         public Task StopAsync(CancellationToken cancellationToken)
         {
+            Dispose();
             return Task.CompletedTask;
         }
         public Task StartAsync(CancellationToken cancellationToken)
         {
+            InitializeRemoteView();
             return Task.CompletedTask;
         }
         private string GetStatusText(FLUX_ProcessStatus status, Optional<OSAI_Macro> macro, Optional<OSAI_MCode> mcode, Optional<OSAI_GCode> gcode)

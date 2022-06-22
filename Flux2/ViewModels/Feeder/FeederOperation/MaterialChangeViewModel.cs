@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reactive;
+using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -17,10 +18,59 @@ namespace Flux.ViewModels
     {
         public MaterialViewModel Material { get; }
         private bool IsCanceled { get; set; }
-        
+
+        private ObservableAsPropertyHelper<Optional<bool>> _WirePresenceBeforeGear;
+        [RemoteOutput(true)]
+        public Optional<bool> WirePresenceBeforeGear => _WirePresenceBeforeGear.Value;
+
+        private ObservableAsPropertyHelper<Optional<bool>> _WirePresenceAfterGear;
+        [RemoteOutput(true)]
+        public Optional<bool> WirePresenceAfterGear => _WirePresenceAfterGear.Value;
+
+        private ObservableAsPropertyHelper<Optional<bool>> _WirePresenceOnHead;
+        [RemoteOutput(true)]
+        public Optional<bool> WirePresenceOnHead => _WirePresenceOnHead.Value;
+
+
         public MaterialChangeViewModel(MaterialViewModel material) : base(material.Feeder)
         {
             Material = material;
+
+            var before_gear_key = Flux.ConnectionProvider
+                .GetArrayUnit(m => m.FILAMENT_BEFORE_GEAR, material.Position)
+                .Convert(u => u.Alias)
+                .ValueOrDefault();
+
+            _WirePresenceBeforeGear = Flux.ConnectionProvider.ObserveVariable(
+                m => m.FILAMENT_BEFORE_GEAR,
+                before_gear_key)
+                .ObservableOrDefault()
+                .ToProperty(this, v => v.WirePresenceBeforeGear)
+                .DisposeWith(Disposables);
+
+            var after_gear_key = Flux.ConnectionProvider
+                .GetArrayUnit(m => m.FILAMENT_AFTER_GEAR, material.Position)
+                .Convert(u => u.Alias)
+                .ValueOrDefault();
+
+            _WirePresenceAfterGear = Flux.ConnectionProvider.ObserveVariable(
+                m => m.FILAMENT_AFTER_GEAR,
+                after_gear_key)
+                .ObservableOrDefault()
+                .ToProperty(this, v => v.WirePresenceAfterGear)
+                .DisposeWith(Disposables);
+
+            var on_head_key = Flux.ConnectionProvider
+                .GetArrayUnit(m => m.FILAMENT_ON_HEAD, Feeder.Position)
+                .Convert(u => u.Alias)
+                .ValueOrDefault();
+
+            _WirePresenceOnHead = Flux.ConnectionProvider.ObserveVariable(
+                m => m.FILAMENT_ON_HEAD,
+                on_head_key)
+                .ObservableOrDefault()
+                .ToProperty(this, v => v.WirePresenceOnHead)
+                .DisposeWith(Disposables);
         }
 
         protected override IObservable<bool> CanCancelOperation()
@@ -44,7 +94,7 @@ namespace Flux.ViewModels
 
                 using var put_cancel_filament_op_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 using var wait_cancel_filament_op_cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
-                if (!await Flux.ConnectionProvider.ExecuteParamacroAsync(f => cancel_filament_operation(f)(Feeder.Position), put_cancel_filament_op_cts.Token, true, wait_cancel_filament_op_cts.Token, true))
+                if (!await Flux.ConnectionProvider.ExecuteParamacroAsync(f => cancel_filament_operation(f)(Feeder.Position), put_cancel_filament_op_cts.Token, true, wait_cancel_filament_op_cts.Token))
                 {
                     Flux.Messages.LogMessage(MaterialChangeResult.MATERIAL_CHANGE_ERROR_PARAMACRO, default);
                     return false;
@@ -170,8 +220,12 @@ namespace Flux.ViewModels
             // TODO
             if (Flux.StatusProvider.TopLockClosed.HasValue)
                 yield return Flux.StatusProvider.TopLockClosed.Value;
+
             if (Flux.StatusProvider.ChamberLockClosed.HasValue)
                 yield return Flux.StatusProvider.ChamberLockClosed.Value;
+
+            if (Flux.StatusProvider.SpoolsLock.HasValue)
+                yield return Flux.StatusProvider.SpoolsLock.Value;
 
             var material = Feeder.Materials.Connect()
                 .WatchOptional(Material.Position);
@@ -290,22 +344,6 @@ namespace Flux.ViewModels
             if (!material.HasValue)
                 return false;
 
-            var nfc = material.Value.Nfc;
-
-            if (material.Value.WirePresence1 == false)
-            {
-                if (nfc.Tag.HasValue)
-                {
-                    var tag = material.Value.Nfc.Tag.Value;
-                    if (tag.CurWeightG.HasValue)
-                    {
-                        var material_limit = tag.MaxWeightG / 100 * 5;
-                        if (tag.CurWeightG.Value < material_limit)
-                            material.Value.StoreTag(m => m.SetCurWeight(default));
-                    }
-                }
-            }
-
             var tool_material = Feeder.ToolMaterials.Lookup(Material.Position);
             if (!tool_material.HasValue)
                 return false;
@@ -343,6 +381,9 @@ namespace Flux.ViewModels
 
             if (Flux.StatusProvider.ChamberLockClosed.HasValue)
                 yield return Flux.StatusProvider.ChamberLockClosed.Value;
+
+            if (Flux.StatusProvider.SpoolsLock.HasValue)
+                yield return Flux.StatusProvider.SpoolsLock.Value;
 
             var material = Feeder.Materials.Connect()
                 .WatchOptional(Material.Position);

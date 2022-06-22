@@ -4,6 +4,8 @@ using Modulo3DStandard;
 using ReactiveUI;
 using System.Linq;
 using System.Net;
+using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
 
@@ -44,6 +46,8 @@ namespace Flux.ViewModels
         private ObservableAsPropertyHelper<Optional<(ushort machine_extruders, ushort mixing_extruders)>> _ExtrudersCount;
         public Optional<(ushort machine_extruders, ushort mixing_extruders)> ExtrudersCount => _ExtrudersCount.Value;
 
+        public IObservableCache<IPAddress, string> HostAddressCache { get; }
+
         public SettingsProvider(FluxViewModel flux)
         {
             Flux = flux;
@@ -54,9 +58,20 @@ namespace Flux.ViewModels
                 FindPrinter)
                 .ToProperty(this, v => v.Printer);
 
-            var host = Dns.GetHostEntry(Dns.GetHostName());
+            HostAddressCache = NetworkInterface.GetAllNetworkInterfaces()
+                .Where(nic => nic.OperationalStatus == OperationalStatus.Up)
+                .Where(nic => nic.SupportsMulticast)
+                .AsObservableChangeSet(nic => nic.Id)
+                .Transform(nic => nic.GetIPProperties().ToOptional())
+                .Transform(ip => ip.Convert(ip => ip.UnicastAddresses))
+                .Transform(i => i.Convert(i => i.Select(a => a.Address)))
+                .Transform(a => a.Convert(a => a.FirstOrOptional(a => a.AddressFamily == AddressFamily.InterNetwork)))
+                .Filter(ip => ip.HasValue)
+                .Transform(ip => ip.Value)
+                .AsObservableCache();
+
             _HostAddress = CoreSettings.Local.WhenAnyValue(s => s.HostID)
-                .Convert(id => host.AddressList.ElementAtOrDefault(id))
+                .Convert(id => HostAddressCache.Lookup(id))
                 .ToProperty(this, v => v.HostAddress);
 
             _ExtrudersCount = this.WhenAnyValue(v => v.Printer)

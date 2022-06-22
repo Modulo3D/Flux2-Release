@@ -18,15 +18,6 @@ namespace Flux.ViewModels
         private ObservableAsPropertyHelper<MaterialState> _State;
         public override MaterialState State => _State.Value;
 
-        private ObservableAsPropertyHelper<Optional<bool>> _WirePresence1;
-        public Optional<bool> WirePresence1 => _WirePresence1.Value;
-
-        private ObservableAsPropertyHelper<Optional<bool>> _WirePresence2;
-        public Optional<bool> WirePresence2 => _WirePresence2.Value;
-
-        private ObservableAsPropertyHelper<Optional<bool>> _WirePresence3;
-        public Optional<bool> WirePresence3 => _WirePresence3.Value;
-
         public override OdometerViewModel<NFCMaterial> Odometer { get; }
 
         public ReactiveCommand<Unit, Unit> UnloadMaterialCommand { get; private set; }
@@ -66,37 +57,99 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public string MaterialBrush => _MaterialBrush.Value;
 
+        private ObservableAsPropertyHelper<Optional<string>> _DocumentLabel;
+        [RemoteOutput(true)]
+        public override Optional<string> DocumentLabel => _DocumentLabel.Value;
+
+        private ObservableAsPropertyHelper<Optional<bool>> _WirePresenceBeforeGear;
+        [RemoteOutput(true)]
+        public Optional<bool> WirePresenceBeforeGear => _WirePresenceBeforeGear.Value;
+
+        private ObservableAsPropertyHelper<Optional<bool>> _WirePresenceAfterGear;
+        [RemoteOutput(true)]
+        public Optional<bool> WirePresenceAfterGear => _WirePresenceAfterGear.Value;
+
+        private ObservableAsPropertyHelper<Optional<bool>> _WirePresenceOnHead;
+        [RemoteOutput(true)]
+        public Optional<bool> WirePresenceOnHead => _WirePresenceOnHead.Value;
+
+        private ObservableAsPropertyHelper<bool> _MaterialLoaded;
+        [RemoteOutput(true)]
+        public bool MaterialLoaded => _MaterialLoaded.Value;
+
         public MaterialViewModel(FeederViewModel feeder, ushort position) : base(feeder, position, s => s.Materials, (db, m) =>
         {
             return m.GetDocument<Material>(db, m => m.MaterialGuid);
-        }, t => t.MaterialGuid, $"{typeof(MaterialViewModel).GetRemoteControlName()}??{position}")
+        }, t => t.MaterialGuid)
         {
             var multiplier = Observable.Return(1.0);
-            Odometer = new OdometerViewModel<NFCMaterial>(this, multiplier);
+            Odometer = new OdometerViewModel<NFCMaterial>(Flux, this, multiplier);
 
-            var before_gear_key = Flux.ConnectionProvider.GetArrayUnit(m => m.FILAMENT_BEFORE_GEAR, Feeder.Position).Convert(u => u.Alias).ValueOrDefault();
-            _WirePresence1 = Flux.ConnectionProvider.ObserveVariable(
+            var before_gear_key = Flux.ConnectionProvider
+                .GetArrayUnit(m => m.FILAMENT_BEFORE_GEAR, Position)
+                .Convert(u => u.Alias)
+                .ValueOrDefault();
+
+            _WirePresenceBeforeGear = Flux.ConnectionProvider.ObserveVariable(
                 m => m.FILAMENT_BEFORE_GEAR,
                 before_gear_key)
                 .ObservableOrDefault()
-                .ToProperty(this, v => v.WirePresence1)
+                .ToProperty(this, v => v.WirePresenceBeforeGear)
                 .DisposeWith(Disposables);
 
-            var after_gear_key = Flux.ConnectionProvider.GetArrayUnit(m => m.FILAMENT_AFTER_GEAR, Feeder.Position).Convert(u => u.Alias).ValueOrDefault();
-            _WirePresence2 = Flux.ConnectionProvider.ObserveVariable(
+            var after_gear_key = Flux.ConnectionProvider
+                .GetArrayUnit(m => m.FILAMENT_AFTER_GEAR, Position)
+                .Convert(u => u.Alias)
+                .ValueOrDefault();
+
+            _WirePresenceAfterGear = Flux.ConnectionProvider.ObserveVariable(
                 m => m.FILAMENT_AFTER_GEAR,
                 after_gear_key)
                 .ObservableOrDefault()
-                .ToProperty(this, v => v.WirePresence2)
+                .ToProperty(this, v => v.WirePresenceAfterGear)
                 .DisposeWith(Disposables);
 
-            var on_head_key = Flux.ConnectionProvider.GetArrayUnit(m => m.FILAMENT_ON_HEAD, Feeder.Position).Convert(u => u.Alias).ValueOrDefault();
-            _WirePresence3 = Flux.ConnectionProvider.ObserveVariable(
+            var on_head_key = Flux.ConnectionProvider
+                .GetArrayUnit(m => m.FILAMENT_ON_HEAD, Feeder.Position)
+                .Convert(u => u.Alias)
+                .ValueOrDefault();
+
+            _WirePresenceOnHead = Flux.ConnectionProvider.ObserveVariable(
                 m => m.FILAMENT_ON_HEAD,
                 on_head_key)
                 .ObservableOrDefault()
-                .ToProperty(this, v => v.WirePresence3)
+                .ToProperty(this, v => v.WirePresenceOnHead)
                 .DisposeWith(Disposables);
+
+            this.WhenAnyValue(v => v.WirePresenceOnHead)
+                .Subscribe(SetMaterialLoaded)
+                .DisposeWith(Disposables);
+
+            _DocumentLabel = this.WhenAnyValue(v => v.Document)
+                .Convert(d => d.Name)
+                .ToProperty(this, v => v.DocumentLabel)
+                .DisposeWith(Disposables);
+
+            _MaterialLoaded = this.WhenAnyValue(v => v.Nfc)
+                .Select(nfc => nfc.Tag)
+                .Convert(tag => tag.Loaded)
+                .Convert(l => l == Feeder.Position)
+                .ValueOr(() => false)
+                .ToProperty(this, v => v.MaterialLoaded)
+                .DisposeWith(Disposables);
+        }
+
+        private void SetMaterialLoaded(Optional<bool> wire_presence_on_head)
+        {
+            if (!wire_presence_on_head.HasValue)
+                return;
+            if (!Nfc.Tag.HasValue)
+                return;
+
+            if(wire_presence_on_head.Value)
+                StoreTag(t => t.SetLoaded(Feeder.Position));
+            else
+                StoreTag(t => t.SetLoaded(default));
         }
 
         public override void Initialize()
@@ -159,7 +212,7 @@ namespace Flux.ViewModels
                     can_unload = idle && CanUnloadMaterial(tool_nozzle, material, tool_material),
                 });
 
-            UnloadMaterialCommand = ReactiveCommand.CreateFromTask(UnloadAsync, material.Select(m => m.can_unload))
+            UnloadMaterialCommand = ReactiveCommand.CreateFromTask(UnloadAsync/*, material.Select(m => m.can_unload)*/)
                 .DisposeWith(Disposables);
             LoadPurgeMaterialCommand = ReactiveCommand.CreateFromTask(LoadPurgeAsync, material.Select(m => m.can_load || m.can_purge))
                 .DisposeWith(Disposables);

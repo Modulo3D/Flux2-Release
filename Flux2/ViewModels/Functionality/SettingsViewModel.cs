@@ -6,6 +6,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using System.Reactive;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
@@ -18,7 +20,7 @@ namespace Flux.ViewModels
         public OptionalSelectableCache<Printer, int> Printers { get; }
 
         [RemoteInput]
-        public OptionalSelectableCache<(IPAddress address, int id), int> HostAddress { get; }
+        public SelectableCache<IPAddress, string> HostAddress { get; }
 
         private Optional<string> _PlcAddress = "";
         [RemoteInput]
@@ -63,10 +65,10 @@ namespace Flux.ViewModels
                 .ToObservableChangeSet(p => p.ConvertOr(p => p.Id, () => 0));
             Printers = OptionalSelectableCache.Create(printer_cache);
 
-            var host = Dns.GetHostEntry(Dns.GetHostName());
-            var host_address_cache = host.AddressList.Select((ip, id) => (ip, id).ToOptional())
-                .AsObservableChangeSet(t => t.ConvertOr(t => t.id, () => -1));
-            HostAddress = OptionalSelectableCache.Create(host_address_cache);
+            var host_address_cache = Flux.SettingsProvider.HostAddressCache
+                .Connect();
+
+            HostAddress = SelectableCache.Create(host_address_cache);
 
             var user_settings = Flux.SettingsProvider.UserSettings.Local;
             var core_settings = Flux.SettingsProvider.CoreSettings.Local;
@@ -102,12 +104,12 @@ namespace Flux.ViewModels
                 var user_settings = Flux.SettingsProvider.UserSettings.Local;
                 var core_settings = Flux.SettingsProvider.CoreSettings.Local;
 
-                core_settings.PrinterID = Printers.SelectedValue.Convert(v => v).ConvertOr(p => p.Id, () => 0);
-                core_settings.HostID = HostAddress.SelectedValue.Convert(v => v).ConvertOr(p => p.id, () => 0);
                 user_settings.CostHour = CostHour;
                 core_settings.PLCAddress = PlcAddress;
                 user_settings.PrinterName = PrinterName;
                 core_settings.WebcamAddress = WebcamAddress;
+                core_settings.PrinterID = Printers.SelectedKey;
+                core_settings.HostID = HostAddress.SelectedKey;
 
                 if (!Flux.SettingsProvider.PersistLocalSettings())
                     return;

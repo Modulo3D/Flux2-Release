@@ -40,13 +40,17 @@ namespace Flux.ViewModels
 
         public ReactiveCommand<Unit, Unit> ChangeCommand { get; private set; }
 
+        private ObservableAsPropertyHelper<Optional<string>> _DocumentLabel;
+        [RemoteOutput(true)]
+        public override Optional<string> DocumentLabel => _DocumentLabel.Value;
+
         public ToolNozzleViewModel(FeederViewModel feeder) : base(feeder, feeder.Position, s => s.ToolNozzles, (db, tn) =>
         {
             return (tn.GetDocument<Tool>(db, tn => tn.ToolGuid),
                 tn.GetDocument<Nozzle>(db, tn => tn.NozzleGuid));
         }, t => t.ToolGuid)
         {
-            Odometer = new OdometerViewModel<NFCToolNozzle>(this, Observable.Return(1.0));
+            Odometer = new OdometerViewModel<NFCToolNozzle>(Flux, this, Observable.Return(1.0));
 
             var tool_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TEMP_TOOL, Position).Convert(u => u.Alias).ValueOrDefault();
             _NozzleTemperature = Flux.ConnectionProvider
@@ -58,7 +62,6 @@ namespace Flux.ViewModels
             _State = FindToolState()
                 .ToProperty(this, v => v.State)
                 .DisposeWith(Disposables);
-
 
             _ToolNozzleBrush =
                 this.WhenAnyValue(v => v.State)
@@ -75,6 +78,11 @@ namespace Flux.ViewModels
                     return FluxColors.Active;
                 })
                 .ToProperty(this, v => v.ToolNozzleBrush)
+                .DisposeWith(Disposables);
+
+            _DocumentLabel = this.WhenAnyValue(v => v.Document.nozzle)
+                .Convert(d => d.Name)
+                .ToProperty(this, v => v.DocumentLabel)
                 .DisposeWith(Disposables);
         }
 
