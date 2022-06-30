@@ -92,14 +92,14 @@ namespace Flux.ViewModels
                 MCODE_RECOVERY          = Storage.CreateVariable("mcode_recovery", (c, f) => f.GetMCodeRecoveryAsync(c));
                 TOOL_NUM                = Tools.CreateVariable<ushort, ushort>("TOOL NUM", (c, t) => (ushort)t.Count);
                 PART_PROGRAM            = PartProgram.CreateVariable("PART PROGRAM", (c, m) => m.GetPartProgram());
-                QUEUE                   = Queue.CreateVariable("QUEUE", (c, m) => m.GetGuidDictionaryFromQueue());
+                QUEUE                   = Queue.CreateVariable("QUEUE", (c, m) => m.GetJobDictionaryFromQueue());
                 TOOL_CUR                = State.CreateVariable<short, short>("TOOL CUR", (c, s) => s.CurrentTool);
                 PROCESS_STATUS          = State.CreateVariable("PROCESS STATUS", (c, m) => m.GetProcessStatus());
                 IS_HOMED                = Move.CreateVariable<bool, bool>("IS HOMED", (c, m) => m.IsHomed());
                 BLOCK_NUM               = BlockNum.CreateVariable("BLOCK NUM", (c, m) => m.GetBlockNum());
 
                 ITERATOR                = Global.CreateVariable("iterator",             false,  true);
-                KEEP_CHAMBER            = Global.CreateVariable("keep_chamber",         false,  false);
+                KEEP_CHAMBER            = Global.CreateVariable("keep_chamber",         true,   false);
                 KEEP_TOOL               = Global.CreateVariable("keep_tool",            false,  false);
                 DEBUG                   = Global.CreateVariable("debug",                false,  false);
                 QUEUE_SIZE              = Global.CreateVariable("queue_size",           true,   (ushort)1);
@@ -236,7 +236,7 @@ namespace Flux.ViewModels
                 
                 Z_PROBE_CORRECTION      = Global.CreateVariable("z_probe_correction",   true,   0.0);
                 VACUUM_LEVEL            = Global.CreateVariable("vacuum_level",         true,   -70.0);
-                Z_BED_HEIGHT            = Global.CreateVariable("z_bed_height",         false,  FluxViewModel.MaxZBedHeight);       
+                Z_BED_HEIGHT            = Global.CreateVariable("z_bed_height",         false,  FluxViewModel.MaxZBedHeight);  
             }
             catch (Exception ex)
             {

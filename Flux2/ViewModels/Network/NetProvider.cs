@@ -208,6 +208,7 @@ namespace Flux.ViewModels
             Flux = main;
             Pinger = new Ping();
             Client = new RestClient();
+            Client.UseSerializer(() => new JsonNetRestSerializer());
             UdpDiscovery = new UdpDiscovery();
         }
 

@@ -101,6 +101,7 @@ namespace Flux.ViewModels
         public MCodesViewModel MCodes { get; private set; }
         [RemoteContent(false)]
         public FluxNavigatorViewModel Navigator { get; private set; }
+        public LoggingProvider LoggingProvider { get; private set; }
         public StartupViewModel Startup { get; private set; }
         public FeedersViewModel Feeders { get; private set; }
         public MagazineViewModel Magazine { get; private set; }
@@ -202,6 +203,7 @@ namespace Flux.ViewModels
                     StatusBar = new StatusBarViewModel(this);
                     Functionality = new FunctionalityViewModel(this);
                     Navigator = new FluxNavigatorViewModel(this);
+                    LoggingProvider = new LoggingProvider(this);
 
                     _LeftIconForeground = ConnectionProvider.ObserveVariable(m => m.OPEN_LOCK, "chamber")
                         .ObservableOrDefault()
@@ -299,6 +301,63 @@ namespace Flux.ViewModels
                     SettingsProvider.CoreSettings.PersistLocalSettings();
                 }
             });
+
+            DisposableThread.Start(async () =>
+            {
+                try
+                {
+                    var user_settings = SettingsProvider.UserSettings.Local;
+
+                    var spool_closed = await ConnectionProvider.ReadVariableAsync(c => c.LOCK_CLOSED, "spools");
+                    if (!spool_closed.HasValue)
+                        return;
+
+                    if (!user_settings.LastDryingRegenerationTime.HasValue || !spool_closed.Value)
+                    {
+                        await ConnectionProvider.WriteVariableAsync(c => c.TEMP_CHAMBER, "spools", 0);
+                        user_settings.LastDryingRegenerationTime = DateTime.MinValue;
+                        SettingsProvider.UserSettings.PersistLocalSettings();
+                        return;
+                    }
+
+                    var last_drying = DateTime.Now - user_settings.LastDryingRegenerationTime.Value;
+                    if (last_drying > TimeSpan.FromDays(7) && spool_closed.Value)
+                    {
+
+                        var min_material_temp = Feeders.Feeders.Items
+                            .SelectMany(f => f.Materials.Items)
+                            .Select(m => m.Document)
+                            .Where(d => d.HasValue)
+                            .Select(d => d.Value.DryingTemperature)
+                            .Where(t => t.HasValue)
+                            .Select(t => t.Value)
+                            .Min();
+
+                        // TODO - get max temp from model
+                        var spools_temp = Math.Min(min_material_temp, 70);
+
+                        await ConnectionProvider.WriteVariableAsync(c => c.TEMP_CHAMBER, "spools", spools_temp);
+                        var target_temp = await ConnectionProvider.ReadVariableAsync(c => c.TEMP_CHAMBER, "spools")
+                            .ConvertAsync(t => t.Target)
+                            .ValueOrAsync(() => 0.0);
+
+                        if (Math.Abs(spools_temp - target_temp) < 5)
+                        { 
+                            user_settings.LastDryingRegenerationTime = DateTime.Now;
+                            SettingsProvider.UserSettings.PersistLocalSettings();
+                        }
+                    }
+
+                    last_drying = DateTime.Now - user_settings.LastDryingRegenerationTime.Value;
+                    if (last_drying > TimeSpan.FromHours(2) || !spool_closed.Value)
+                        await ConnectionProvider.WriteVariableAsync(c => c.TEMP_CHAMBER, "spools", 0);
+                }
+                catch (Exception ex)
+                {
+                    await ConnectionProvider.WriteVariableAsync(c => c.TEMP_CHAMBER, "spools", 0);
+                }
+
+            }, TimeSpan.FromSeconds(5));
         }
 
         public Task StopAsync(CancellationToken cancellationToken)

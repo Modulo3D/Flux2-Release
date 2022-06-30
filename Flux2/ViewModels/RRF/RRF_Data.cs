@@ -1251,12 +1251,12 @@ namespace Flux.ViewModels
                 if (queue_pos.Value < 0)
                     return default;
 
-                var queue_dict = data.queue.GetGuidDictionaryFromQueue();
-                if (!queue_dict.HasValue || !queue_dict.Value.TryGetValue(queue_pos.Value, out var current_guid))
+                var job_queue = data.queue.GetJobDictionaryFromQueue();
+                if (!job_queue.TryGetValue(queue_pos.Value, out var current_job))
                     return default;
 
                 var storage_dict = data.storage.GetPartProgramDictionaryFromStorage();
-                if (!storage_dict.HasValue || !storage_dict.Value.ContainsKey(current_guid))
+                if (!storage_dict.ContainsKey(current_job.MCodeGuid))
                     return default;
 
                 // Full part program from filename
@@ -1266,14 +1266,14 @@ namespace Flux.ViewModels
                     .ValueOr(() => "");
 
                 if (MCodePartProgram.TryParse(partprogram_filename, out var full_part_program) && 
-                    full_part_program.MCodeGuid == current_guid)
+                    full_part_program.MCodeGuid == current_job.MCodeGuid)
                 { 
-                    if (storage_dict.Value.TryGetValue(full_part_program.MCodeGuid, out var part_programs) &&
+                    if (storage_dict.TryGetValue(full_part_program.MCodeGuid, out var part_programs) &&
                         part_programs.TryGetValue(full_part_program.StartBlock, out var part_program))
                         return part_program;
                 }
 
-                return storage_dict.Value.FirstOrOptional(kvp => kvp.Key == current_guid)
+                return storage_dict.FirstOrOptional(kvp => kvp.Key == current_job.MCodeGuid)
                     .Convert(p => p.Value.Values.FirstOrDefault());
             }
             catch
@@ -1281,19 +1281,6 @@ namespace Flux.ViewModels
                 return default;
             }
         }
-
-        public static IEnumerable<MCodePartProgram> GetPartProgramFromStorage(this FLUX_FileList storage)
-        {
-            foreach (var file in storage.Files)
-            {
-                if (file.Type != FLUX_FileType.File)
-                    continue;
-                if (!MCodePartProgram.TryParse(file.Name, out var part_program))
-                    continue;
-                yield return part_program;
-            }
-        }
-
 
         public static async Task<Optional<IFLUX_MCodeRecovery>> GetMCodeRecoveryAsync(this FLUX_FileList files, RRF_Connection connection)
         {
@@ -1401,21 +1388,33 @@ namespace Flux.ViewModels
             return mcode_recovery;
         }
 
-        public static Optional<Dictionary<Guid, Dictionary<BlockNumber, MCodePartProgram>>> GetPartProgramDictionaryFromStorage(this FLUX_FileList storage)
+        public static Dictionary<Guid, Dictionary<BlockNumber, MCodePartProgram>> GetPartProgramDictionaryFromStorage(this FLUX_FileList storage)
         {
             return storage.GetPartProgramFromStorage()
                 .GroupBy(s => s.MCodeGuid)
                 .ToDictionary(g => g.Key, g => g.DistinctBy(m => m.StartBlock).ToDictionary(m => m.StartBlock));
         }
 
-        public static Optional<Dictionary<QueuePosition, Guid>> GetGuidDictionaryFromQueue(this FLUX_FileList queue)
+        public static IEnumerable<MCodePartProgram> GetPartProgramFromStorage(this FLUX_FileList storage)
         {
-            return queue.GetGuidFromQueue()
-                .GroupBy(s => s.queue_pos)
-                .Select(s => s.First())
-                .ToDictionary(s => s.queue_pos, s => s.mcode_guid);
+            foreach (var file in storage.Files)
+            {
+                if (file.Type != FLUX_FileType.File)
+                    continue;
+                if (!MCodePartProgram.TryParse(file.Name, out var part_program))
+                    continue;
+                yield return part_program;
+            }
         }
-        public static IEnumerable<(QueuePosition queue_pos, Guid mcode_guid)> GetGuidFromQueue(this FLUX_FileList queue)
+
+        public static Dictionary<QueuePosition, FluxJob> GetJobDictionaryFromQueue(this FLUX_FileList queue)
+        {
+            return queue.GetJobFromQueue()
+                .GroupBy(s => s.QueuePosition)
+                .Select(s => s.First())
+                .ToDictionary(s => s.QueuePosition);
+        }
+        public static IEnumerable<FluxJob> GetJobFromQueue(this FLUX_FileList queue)
         {
             foreach (var file in queue.Files)
             {
@@ -1423,13 +1422,15 @@ namespace Flux.ViewModels
                     continue;
                 var parts = file.Name.Split(';',
                     StringSplitOptions.RemoveEmptyEntries);
-                if (parts.Length != 2)
+                if (parts.Length != 3)
                     continue;
                 if (!short.TryParse(parts[0], out var queue_pos))
                     continue;
-                if (!Guid.TryParse(parts[1], out var queue_guid))
+                if (!Guid.TryParse(parts[1], out var job_guid))
                     continue;
-                yield return (queue_pos, queue_guid);
+                if (!Guid.TryParse(parts[2], out var mcode_guid))
+                    continue;
+                yield return new FluxJob(job_guid, mcode_guid, queue_pos);
             }
         }
     }

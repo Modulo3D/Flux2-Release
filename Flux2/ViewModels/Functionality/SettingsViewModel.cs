@@ -30,6 +30,14 @@ namespace Flux.ViewModels
             set => this.RaiseAndSetIfChanged(ref _PlcAddress, value);
         }
 
+        private Optional<string> _LoggerAddress = "";
+        [RemoteInput]
+        public Optional<string> LoggerAddress
+        {
+            get => _LoggerAddress;
+            set => this.RaiseAndSetIfChanged(ref _LoggerAddress, value);
+        }
+
         private Optional<string> _WebcamAddress = "";
         [RemoteInput]
         public Optional<string> WebcamAddress
@@ -85,6 +93,9 @@ namespace Flux.ViewModels
             core_settings.WhenAnyValue(s => s.WebcamAddress)
                 .BindTo(this, v => v.WebcamAddress);
 
+            core_settings.WhenAnyValue(s => s.LoggerAddress)
+                .BindTo(this, v => v.LoggerAddress);
+
             user_settings.WhenAnyValue(s => s.PrinterName)
                 .BindTo(this, v => v.PrinterName);
 
@@ -108,6 +119,7 @@ namespace Flux.ViewModels
                 core_settings.PLCAddress = PlcAddress;
                 user_settings.PrinterName = PrinterName;
                 core_settings.WebcamAddress = WebcamAddress;
+                core_settings.LoggerAddress = LoggerAddress;
                 core_settings.PrinterID = Printers.SelectedKey;
                 core_settings.HostID = HostAddress.SelectedKey;
 

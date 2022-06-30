@@ -1165,5 +1165,10 @@ namespace Flux.ViewModels
         {
             throw new NotImplementedException();
         }
+
+        public override Task<bool> GenerateInnerQueueAsync()
+        {
+            throw new NotImplementedException();
+        }
     }
 }

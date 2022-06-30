@@ -179,7 +179,11 @@ namespace Flux.ViewModels
             if (!extruders.HasValue)
                 return default;
             if (!wire_presence.HasChange)
+            {
+                if(extruders.Value.mixing_extruders == 1)
+                    return viewmodels.Lookup(Position);
                 return default;
+            }
 
             var wire_range_start = Position * extruders.Value.mixing_extruders;
             var wire_range_end = wire_range_start + extruders.Value.mixing_extruders;

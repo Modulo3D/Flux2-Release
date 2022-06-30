@@ -838,6 +838,51 @@ namespace Flux.ViewModels
         public override Optional<IEnumerable<string>> GetRelativeZMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 Z{distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
         public override Optional<IEnumerable<string>> GetRelativeEMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 E{distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
 
+        public override async Task<bool> GenerateInnerQueueAsync()
+        {
+            var queue_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var queue = await ListFilesAsync(
+                QueuePath,
+                queue_ctk.Token);
+            if (!queue.HasValue)
+                return false;
 
+            var job_dict = queue.Value.GetJobDictionaryFromQueue();
+            if (job_dict.Count > 1)
+            {
+                var sctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                var storage = await ListFilesAsync(
+                    StoragePath,
+                    sctk.Token);
+
+                if (!storage.HasValue)
+                    return false;
+
+                var storage_dict = storage.Value.GetPartProgramDictionaryFromStorage();
+
+                foreach (var job in job_dict)
+                {
+                    if (!storage_dict.TryGetValue(job.Value.MCodeGuid, out var queue_part_program))
+                        continue;
+
+                    var part_program = queue_part_program.Values.FirstOrOptional(kvp => kvp.StartBlock == 0);
+                    if (!part_program.HasValue)
+                        continue;
+
+                    var put_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    var start_mcode_string = GetStartPartProgramGCode($"{part_program.Value}");
+                    if (!await PutFileAsync(
+                        InnerQueuePath,
+                        $"start_{job.Key}.g",
+                        put_ctk.Token,
+                        start_mcode_string))
+                        return false;
+                }
+
+                return true;
+            }
+
+            return true;
+        }
     }
 }

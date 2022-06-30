@@ -187,15 +187,15 @@ namespace Flux.ViewModels
                 .DisposeWith(Disposables);
 
             MoveUpButtons = new SourceList<CmdButton>();
-            MoveUpButtons.Add(FindMoveButton(-1));
-            MoveUpButtons.Add(FindMoveButton(-0.1));
-            MoveUpButtons.Add(FindMoveButton(-0.01));
+            MoveUpButtons.Add(FindMoveButton(-1, false));
+            MoveUpButtons.Add(FindMoveButton(-0.1, true));
+            MoveUpButtons.Add(FindMoveButton(-0.01, true));
             MoveUpButtons.DisposeWith(Disposables);
 
             MoveDownButtons = new SourceList<CmdButton>();
-            MoveDownButtons.Add(FindMoveButton(1));
-            MoveDownButtons.Add(FindMoveButton(0.1));
-            MoveDownButtons.Add(FindMoveButton(0.01));
+            MoveDownButtons.Add(FindMoveButton(1, false));
+            MoveDownButtons.Add(FindMoveButton(0.1, true));
+            MoveDownButtons.Add(FindMoveButton(0.01, true));
             MoveDownButtons.DisposeWith(Disposables);
 
             var move_up_not_executing = MoveUpButtons.Connect()
@@ -263,7 +263,7 @@ namespace Flux.ViewModels
 
             CancelCalibrationCommand = ReactiveCommand.CreateFromTask(ExitAsync, can_cancel);
         }
-        CmdButton FindMoveButton(double distance)
+        CmdButton FindMoveButton(double distance, bool can_always_move)
         {
             var can_execute = Observable.CombineLatest(
                 this.WhenAnyValue(v => v.SelectedTool),
@@ -271,7 +271,7 @@ namespace Flux.ViewModels
                 (tool, temp) => tool.HasValue && temp.HasValue && temp.Value.Target > 0 && temp.Value.Percentage > 85)
                 .ToOptional();
 
-            var button = new CmdButton($"Z??{(distance > 0 ? $"+{distance:0.00mm}" : $"{distance:0.00mm}")}", () => move_tool(distance), can_execute);
+            var button = new CmdButton($"Z??{(distance > 0 ? $"+{distance:0.00mm}" : $"{distance:0.00mm}")}", () => move_tool(distance), can_always_move ? default : can_execute);
             button.InitializeRemoteView();
             button.DisposeWith(Disposables);
             return button;

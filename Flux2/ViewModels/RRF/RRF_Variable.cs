@@ -39,6 +39,14 @@ namespace Flux.ViewModels
 
             public RRF_VariableObjectModel<TModel, TRData, Unit> CreateVariable<TRData>(
                 string name,
+                Func<RRF_Connection, TModel, TRData> get_data,
+                VariableUnit unit = default)
+            {
+                var variable = new RRF_VariableObjectModel<TModel, TRData, Unit>(ConnectionProvider, name, ReadModel, GetModel, (c, m) => get_data(c, m).ToOptional(), unit);
+                return (RRF_VariableObjectModel<TModel, TRData, Unit>)VariableStore.RegisterVariable(variable);
+            }
+            public RRF_VariableObjectModel<TModel, TRData, Unit> CreateVariable<TRData>(
+                string name,
                 Func<RRF_Connection, TModel, Optional<TRData>> get_data,
                 VariableUnit unit = default)
             {

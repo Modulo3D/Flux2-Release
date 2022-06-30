@@ -300,7 +300,7 @@ namespace Flux.ViewModels
             return storage.Value.GetPartProgramDictionaryFromStorage();
         }
 
-        private static async Task<Optional<Dictionary<QueuePosition, Guid>>> GetQueueAsync(OSAI_Connection connection)
+        private static async Task<Dictionary<QueuePosition, FluxJob>> GetQueueAsync(OSAI_Connection connection)
         {
             var qctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             var queue = await connection.ListFilesAsync(
@@ -308,7 +308,7 @@ namespace Flux.ViewModels
                 qctk.Token);
             if (!queue.HasValue)
                 return default;
-            return queue.Value.GetGuidDictionaryFromQueue();
+            return queue.Value.GetJobDictionaryFromQueue();
         }
 
         private static async Task<Optional<LineNumber>> GetBlockNumAsync(OSAI_Connection connection)
@@ -389,7 +389,7 @@ namespace Flux.ViewModels
                     return default;
 
                 var storage_dict = await connection.ReadVariableAsync(c => c.STORAGE);
-                if (!storage_dict.HasValue || !storage_dict.Value.TryGetValue(current_job, out var part_program))
+                if (!storage_dict.HasValue || !storage_dict.Value.TryGetValue(current_job.MCodeGuid, out var part_program))
                     return default;
 
                 // TODO

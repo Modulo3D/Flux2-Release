@@ -237,6 +237,11 @@ namespace Flux.ViewModels
         {
             throw new NotImplementedException();
         }
+
+        public override Task<bool> GenerateInnerQueueAsync()
+        {
+            throw new NotImplementedException();
+        }
     }
     public class Dummy_MemoryBuffer : FLUX_MemoryBuffer
     {
