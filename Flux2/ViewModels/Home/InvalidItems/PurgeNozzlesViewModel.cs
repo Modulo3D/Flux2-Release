@@ -26,13 +26,15 @@ namespace Flux.ViewModels
             _InvalidItemBrush = Observable.CombineLatest(
                eval.Feeder.ToolNozzle.WhenAnyValue(m => m.NozzleTemperature),
                tool_material.ConvertMany(tm => tm.WhenAnyValue(m => m.ExtrusionTemp)).ValueOr(() => 0),
-               (current_temp, expected_temp) =>
+               (temp, expected_temp) =>
                {
-                   if (!current_temp.HasValue)
+                   if (!temp.HasValue)
                        return FluxColors.Error;
-                   var missing_temp = expected_temp - current_temp.Value.Current;
-                   if (missing_temp <= 0)
-                       return FluxColors.Active;
+                   var target_temp = temp.Value.Target;
+                   if (target_temp < expected_temp)
+                       return FluxColors.Error;
+                   var current_temp = temp.Value.Current;
+                   var missing_temp = expected_temp - current_temp;
                    if (missing_temp > 15)
                        return FluxColors.Error;
                    return FluxColors.Warning;

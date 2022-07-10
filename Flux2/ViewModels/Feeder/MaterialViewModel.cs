@@ -314,7 +314,8 @@ namespace Flux.ViewModels
                 if (!break_temp.HasValue)
                     return;
 
-                var filament_settings = GCodeFilamentOperation.Create(Flux, Feeder, this, false);
+                var recovery = Flux.StatusProvider.PrintingEvaluation.Recovery;
+                var filament_settings = GCodeFilamentOperation.Create(Flux, Feeder, this, false, !recovery.HasValue, recovery.HasValue);
                 if (!filament_settings.HasValue)
                     return;
 
@@ -345,7 +346,7 @@ namespace Flux.ViewModels
 
             var materials = documents.Documents
                 .Distinct()
-                .OrderBy(d => d.MaterialType.ValueOr(() => ""))
+                .OrderBy(d => d[d => d.MaterialType, ""])
                 .ThenBy(d => d.Name)
                 .AsObservableChangeSet(m => m.Id)
                 .AsObservableCache();

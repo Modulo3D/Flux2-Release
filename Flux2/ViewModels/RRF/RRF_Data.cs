@@ -343,8 +343,8 @@ namespace Flux.ViewModels
         //[JsonProperty("simulatedTime")]
         //public object SimulatedTime { get; set; }
 
-        //[JsonProperty("size")]
-        //public Optional<long> Size { get; set; }
+        [JsonProperty("size")]
+        public Optional<long> Size { get; set; }
     }
 
     public class RRF_ObjectModelTimesLeft
@@ -370,8 +370,8 @@ namespace Flux.ViewModels
         [JsonProperty("file")]
         public Optional<RRF_ObjectModelFile> File { get; set; }
 
-        //[JsonProperty("filePosition")]
-        //public Optional<long> FilePosition { get; set; }
+        [JsonProperty("filePosition")]
+        public Optional<long> FilePosition { get; set; }
 
         //[JsonProperty("firstLayerDuration")]
         //public Optional<double> FirstLayerDuration { get; set; }
@@ -1205,6 +1205,31 @@ namespace Flux.ViewModels
 
     public static class RRF_DataUtils
     {
+        public static Optional<ParamacroProgress> GetParamacroProgress(this RRF_ObjectModelJob job)
+        {
+            try
+            {
+                var file = job.File;
+                if (!file.HasValue)
+                    return default;
+                var file_name = file.Value.FileName;
+                if (!file_name.HasValue)
+                    return default;
+                var file_size = file.Value.Size;
+                if (!file_size.HasValue)
+                    return default;
+                var file_position = job.FilePosition;
+                if (!file_position.HasValue)
+                    return default;
+                var percentage = (double)file_position.Value / file_size.Value * 100.0;
+                return new ParamacroProgress(file_name.Value, percentage);
+            }
+            catch
+            {
+                return default;
+            }
+        }
+
         public static Optional<LineNumber> GetBlockNum(this (RRF_ObjectModelJob job, RRF_ObjectModelState state, List<RRF_ObjectModelInput> input) data)
         {
             try
@@ -1284,108 +1309,135 @@ namespace Flux.ViewModels
 
         public static async Task<Optional<IFLUX_MCodeRecovery>> GetMCodeRecoveryAsync(this FLUX_FileList files, RRF_Connection connection)
         {
-            if (!files.Files.Any(f => f.Name == "resurrect.g"))
-                return default;
-
-            var get_resurrect_cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            var resurrect_source = await connection.DownloadFileAsync(f => f.StoragePath, "resurrect.g", get_resurrect_cts.Token);
-            if (!resurrect_source.HasValue)
-                return default;
-
-            var hold_file = resurrect_source.Match("M23 \"(.*)\"")
-                .Convert(m => m.Groups.Lookup(1));
-            if (!hold_file.HasValue)
-                return default;
-
-            var hold_mcode_partprogram = hold_file
-                .Convert(m => MCodePartProgram.Parse(m.Value));
-            if (!hold_mcode_partprogram.HasValue)
-                return default;
-
-            var hold_mcode_vm = connection.Flux.MCodes.AvaiableMCodes.Lookup(hold_mcode_partprogram.Value.MCodeGuid);
-            if (!hold_mcode_vm.HasValue)
-                return default;
-
-            var hold_byte_offset = resurrect_source.Match("M26 S([+-]?[0-9]+)")
-                .Convert(m => m.Groups.Lookup(1))
-                .Convert(o => uint.TryParse(o.Value, out var offset) ? offset : default);
-            if (!hold_byte_offset.HasValue)
-                return default;
-
-            var hold_tool = resurrect_source.Matches("T([+-]?[0-9]+) P([+-]?[0-9]+)")
-                .Convert(m => m[1].Groups.Lookup(1))
-                .Convert(t => short.TryParse(t.Value, out var tool) ? tool : default);
-            if (!hold_tool.HasValue)
-                return default;
-
-            var mcode_recovery = new RRF_MCodeRecovery(
-                hold_mcode_partprogram.Value.MCodeGuid,
-                hold_byte_offset.Value,
-                hold_tool.Value);
-
-            if (!files.Files.Any(f => f.Name == mcode_recovery.FileName))
+            try
             {
+                if (!files.Files.Any(f => f.Name == "resurrect.g"))
+                    return default;
+
+                var get_resurrect_cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+                var resurrect_source = await connection.DownloadFileAsync(f => f.StoragePath, "resurrect.g", get_resurrect_cts.Token);
+                if (!resurrect_source.HasValue)
+                    return default;
+
+                // language=regex
+                var hold_file = resurrect_source.Match("M23 \"(?<resurrect_source>.*)\"");
+                if (!hold_file.HasValue)
+                    return default;
+
+                var hold_mcode_partprogram = hold_file.Value.Groups.Lookup("resurrect_source")
+                    .Convert(m => MCodePartProgram.Parse(m.Value));
+                if (!hold_mcode_partprogram.HasValue)
+                    return default;
+
+                var hold_mcode_vm = connection.Flux.MCodes.AvaiableMCodes.Lookup(hold_mcode_partprogram.Value.MCodeGuid);
+                if (!hold_mcode_vm.HasValue)
+                    return default;
+
+                // language=regex
+                var match_recovery = "M26 S(?<block_num>[+-]?[0-9]+)";
+                var hold_recovery = resurrect_source.Match(match_recovery);
+                if (!hold_recovery.HasValue)
+                    return default;
+
+                var hold_block_num = hold_recovery.Value.Groups.Lookup("block_num")
+                    .Convert(t => uint.TryParse(t.Value, out var block_num) ? (BlockNumber)block_num : default);
+                if (!hold_block_num.HasValue)
+                    return default;
+
+                // language=regex
+                var hold_tools = resurrect_source.Matches("T(?<tool>[+-]?[0-9]+)");
+                if (!hold_tools.HasValue)
+                    return default;
+
+                var hold_tool = hold_tools.Value.LastOrDefault().Groups.Lookup("tool")
+                    .Convert(t => short.TryParse(t.Value, out var tool) ? tool : default);
+                if (!hold_tool.HasValue)
+                    return default;
+
+                var mcode_recovery = new RRF_MCodeRecovery(
+                    hold_mcode_partprogram.Value.MCodeGuid,
+                    hold_block_num.Value,
+                    hold_tool.Value);
+
                 // upload file
-
-                var hold_plate_temp = resurrect_source.Match("M140 P([+-]?[0-9]+) S([+-]?[0-9]*[.]?[0-9]+)")
-                    .Convert(m => m.Groups.Lookup(2))
-                    .Convert(m => m.Value);
-                if (!hold_plate_temp.HasValue)
-                    return default;
-
-                var hold_e_pos = resurrect_source.Match("G92 E([+-]?[0-9]*[.]?[0-9]+)")
-                    .Convert(m => m.Groups.Lookup(1))
-                    .Convert(e => e.Value);
-                if (!hold_e_pos.HasValue)
-                    return default;
-
-                var hold_moves = resurrect_source.Matches("G0 ([a-zA-Z0-9. ]*)");
-                if (!hold_moves.HasValue)
-                    return default;
-
-                var hold_temps = resurrect_source.Matches("G10 P([+-]?[0-9]+) S([+-]?[0-9]*[.]?[0-9]+) R([+-]?[0-9]*[.]?[0-9]+)");
-                if (!hold_temps.HasValue)
-                    return default;
-
-                var hold_feedrate = resurrect_source.Match("G1 F([+-]?[0-9]*[.]?[0-9]+) P([+-]?[0-9]+)")
-                    .Convert(m => m.Groups.Lookup(1))
-                    .Convert(m => m.Value);
-                if (!hold_feedrate.HasValue)
-                    return default;
-
-                var put_resurrect_cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-                if (!await connection.PutFileAsync(
-                    f => f.StoragePath,
-                    mcode_recovery.FileName,
-                    put_resurrect_cts.Token,
-                    get_recovery_lines().ToOptional()))
-                    return default;
-
-                IEnumerable<string> get_recovery_lines()
+                if (!files.Files.Any(f => f.Name == mcode_recovery.FileName))
                 {
-                    yield return $"M140 S{hold_plate_temp}";
-                    foreach (Match hold_temp in hold_temps.Value)
-                        yield return hold_temp.Value;
+                    // language=regex
+                    var match_plates = "M140 P([+-]?[0-9]+) S([+-]?[0-9]*[.]?[0-9]+)";
+                    var hold_plates = resurrect_source.Matches(match_plates);
 
-                    yield return $"T{hold_tool}";
-                    yield return "M98 P\"resurrect-prologue.g\"";
-                    yield return $"G92 E{hold_e_pos}";
+                    // language=regex
+                    var match_chambers = "M141 P([+-]?[0-9]+) S([+-]?[0-9]*[.]?[0-9]+)";
+                    var hold_chambers = resurrect_source.Matches(match_chambers);
 
-                    yield return "M116";
+                    // language=regex
+                    var match_e_pos = "G92 E([+-]?[0-9]*[.]?[0-9]+)";
+                    var hold_e_pos = resurrect_source.Match(match_e_pos);
+                    if (!hold_e_pos.HasValue)
+                        return default;
 
-                    yield return $"M23 \"{hold_file}\"";
-                    yield return $"M26 S{hold_byte_offset}";
+                    // language=regex
+                    var match_moves = "G0 ([a-zA-Z0-9. ]*)";
+                    var hold_moves = resurrect_source.Matches(match_moves);
+                    if (!hold_moves.HasValue)
+                        return default;
 
-                    foreach (Match hold_move in hold_moves.Value)
-                        yield return hold_move.Value;
+                    // language=regex
+                    var match_temps = "G10 P([+-]?[0-9]+) S([+-]?[0-9]*[.]?[0-9]+) R([+-]?[0-9]*[.]?[0-9]+)";
+                    var hold_temps = resurrect_source.Matches(match_temps);
+                    if (!hold_temps.HasValue)
+                        return default;
 
-                    yield return $"G1 F{hold_feedrate} P0";
+                    // language=regex
+                    var match_feedrate = "G1 F([+-]?[0-9]*[.]?[0-9]+) P([+-]?[0-9]+)";
+                    var hold_feedrate = resurrect_source.Match(match_feedrate);
+                    if (!hold_feedrate.HasValue)
+                        return default;
 
-                    yield return "M24";
+                    var put_resurrect_cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+                    if (!await connection.PutFileAsync(
+                        f => f.StoragePath,
+                        mcode_recovery.FileName,
+                        put_resurrect_cts.Token,
+                        get_recovery_lines().ToOptional()))
+                        return default;
+
+                    IEnumerable<string> get_recovery_lines()
+                    {
+                        if (hold_chambers.HasValue)
+                            foreach (Match hold_chamber in hold_chambers.Value)
+                                yield return hold_chamber.Value;
+
+                        if (hold_plates.HasValue)
+                            foreach (Match hold_plate in hold_plates.Value)
+                                yield return hold_plate.Value;
+
+                        foreach (Match hold_temp in hold_temps.Value)
+                            yield return hold_temp.Value;
+
+                        yield return $"T{hold_tool.Value}";
+                        yield return hold_e_pos.Value.Value;
+
+                        yield return "M116";
+
+                        yield return hold_file.Value.Value;
+                        yield return hold_recovery.Value.Value;
+
+                        foreach (Match hold_move in hold_moves.Value)
+                            yield return hold_move.Value;
+
+                        yield return hold_feedrate.Value.Value;
+
+                        yield return "M24";
+                    }
                 }
-            }
 
-            return mcode_recovery;
+                return mcode_recovery;
+            }
+            catch (Exception ex)
+            {
+                return default;
+            }
         }
 
         public static Dictionary<Guid, Dictionary<BlockNumber, MCodePartProgram>> GetPartProgramDictionaryFromStorage(this FLUX_FileList storage)

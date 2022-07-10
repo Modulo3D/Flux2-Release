@@ -136,9 +136,9 @@ namespace Flux.ViewModels
                     var tool = nfc.Tag.Value.GetDocument<Tool>(db.Value, tn => tn.ToolGuid);
                     if (!tool.HasValue)
                         return Optional<ToolOffset>.None;
-                    var x = tool.Value.ToolXOffset.ValueOr(() => 0);
-                    var y = tool.Value.ToolYOffset.ValueOr(() => 0);
-                    var z = tool.Value.ToolZOffset.ValueOr(() => 0);
+                    var x = tool.Value[t => t.ToolXOffset, 0.0];
+                    var y = tool.Value[t => t.ToolYOffset, 0.0];
+                    var z = tool.Value[t => t.ToolZOffset, 0.0];
                     return new ToolOffset(x, y, z);
                 })
                 .DistinctUntilChanged()
@@ -201,12 +201,12 @@ namespace Flux.ViewModels
                     {
                         if (db.HasValue)
                         {
-                            var nozzle = tool_nfc.GetDocument<Tool>(db.Value, tn => tn.ToolGuid);
-                            if (nozzle.HasValue)
+                            var tool = tool_nfc.GetDocument<Tool>(db.Value, tn => tn.ToolGuid);
+                            if (tool.HasValue)
                             {
-                                var x = nozzle.Value.ToolXOffset.ValueOr(() => 0);
-                                var y = nozzle.Value.ToolYOffset.ValueOr(() => 0);
-                                var z = nozzle.Value.ToolZOffset.ValueOr(() => 0);
+                                var x = tool.Value[n => n.ToolXOffset, 0.0];
+                                var y = tool.Value[n => n.ToolYOffset, 0.0];
+                                var z = tool.Value[n => n.ToolZOffset, 0.0];
                                 var probe_offset = new ProbeOffset(probe_offset_key, x, y, z);
                                 user_settings.Local.ProbeOffsets.AddOrUpdate(probe_offset);
                             }
@@ -436,9 +436,9 @@ namespace Flux.ViewModels
                 if (!tool.HasValue)
                     return new ProbeOffset(ProbeOffsetKey.Value, 0, 0, 0);
 
-                var x_offset = tool.Value.ToolXOffset.ValueOr(() => 0);
-                var y_offset = tool.Value.ToolYOffset.ValueOr(() => 0);
-                var z_offset = tool.Value.ToolZOffset.ValueOr(() => 0);
+                var x_offset = tool.Value[t => t.ToolXOffset, 0.0];
+                var y_offset = tool.Value[t => t.ToolYOffset, 0.0];
+                var z_offset = tool.Value[t => t.ToolZOffset, 0.0];
 
                 return new ProbeOffset(ProbeOffsetKey.Value, x_offset, y_offset, z_offset);
             });

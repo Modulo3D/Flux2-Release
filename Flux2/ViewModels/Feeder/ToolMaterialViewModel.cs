@@ -53,12 +53,12 @@ namespace Flux.ViewModels
                 .DisposeWith(Material.Disposables);
 
             _ExtrusionTemp = this.WhenAnyValue(f => f.Document)
-                .Select(d => d.Convert(d => d.PrintTemperature).ToOptional(t => t > 150))
+                .Select(d => d.Convert(d => d[d => d.PrintTemperature, 0.0]))
                 .ToProperty(this, v => v.ExtrusionTemp)
                 .DisposeWith(Material.Disposables);
 
             _BreakTemp = this.WhenAnyValue(f => f.Document)
-                .Select(d => d.Convert(d => d.BreakTemperature).ToOptional(t => t > 150))
+                .Select(d => d.Convert(d => d[d => d.BreakTemperature, 0.0]))
                 .ToProperty(this, v => v.BreakTemp)
                 .DisposeWith(Material.Disposables);
         }

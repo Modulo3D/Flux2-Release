@@ -78,7 +78,6 @@ namespace Flux.ViewModels
 
             _SelectedFeeder = selected_extruder
                 .ConvertToObservable(FindSelectedFeeder)
-                .ConvertToObservable(o => o.Switch())
                 .ObservableOrDefault()
                 .ToProperty(this, v => v.SelectedFeeder)
                 .DisposeWith(Disposables);

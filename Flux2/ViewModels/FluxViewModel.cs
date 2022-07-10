@@ -238,6 +238,7 @@ namespace Flux.ViewModels
 
                     _StatusText = Observable.CombineLatest(
                         StatusProvider.WhenAnyValue(v => v.FluxStatus),
+                        StatusProvider.WhenAnyValue(v => v.PrintingEvaluation),
                         ConnectionProvider.ObserveVariable(m => m.RUNNING_MACRO).ObservableOrDefault(),
                         ConnectionProvider.ObserveVariable(m => m.RUNNING_MCODE).ObservableOrDefault(),
                         ConnectionProvider.ObserveVariable(m => m.RUNNING_GCODE).ObservableOrDefault(),
@@ -302,7 +303,8 @@ namespace Flux.ViewModels
                 }
             });
 
-            DisposableThread.Start(async () =>
+            // TODO
+            /*DisposableThread.Start(async () =>
             {
                 try
                 {
@@ -357,7 +359,7 @@ namespace Flux.ViewModels
                     await ConnectionProvider.WriteVariableAsync(c => c.TEMP_CHAMBER, "spools", 0);
                 }
 
-            }, TimeSpan.FromSeconds(5));
+            }, TimeSpan.FromSeconds(5));*/
         }
 
         public Task StopAsync(CancellationToken cancellationToken)
@@ -370,20 +372,27 @@ namespace Flux.ViewModels
             InitializeRemoteView();
             return Task.CompletedTask;
         }
-        private string GetStatusText(FLUX_ProcessStatus status, Optional<OSAI_Macro> macro, Optional<OSAI_MCode> mcode, Optional<OSAI_GCode> gcode)
+        private string GetStatusText(FLUX_ProcessStatus status, PrintingEvaluation printing_evaluation, Optional<OSAI_Macro> macro, Optional<OSAI_MCode> mcode, Optional<OSAI_GCode> gcode)
         {
             return status switch
             {
-                FLUX_ProcessStatus.IDLE => "LIBERA",
+                FLUX_ProcessStatus.IDLE =>  "LIBERA",
                 FLUX_ProcessStatus.ERROR => "ERRORE",
                 FLUX_ProcessStatus.EMERG => "EMERGENZA",
-                FLUX_ProcessStatus.NONE => "ACCENSIONE...",
-                FLUX_ProcessStatus.WAIT => "ATTESA OPERATORE",
-                FLUX_ProcessStatus.CYCLE => in_cycle(),
+                FLUX_ProcessStatus.NONE =>  "ACCENSIONE...",
+                FLUX_ProcessStatus.WAIT => wait(),
+                FLUX_ProcessStatus.CYCLE => cycle(),
                 _ => "ONLINE",
             };
 
-            string in_cycle()
+            string wait()
+            {
+                if (printing_evaluation.Recovery.HasValue)
+                    return "IN PAUSA";
+                return "ATTESA OPERATORE";
+            }
+
+            string cycle()
             {
                 if (!macro.HasValue)
                     return "IN FUNZIONE";

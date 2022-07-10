@@ -25,7 +25,7 @@ namespace Flux.ViewModels
 
             // log program history
             var queue_pos = Flux.ConnectionProvider.ObserveVariable(c => c.QUEUE_POS);
-            var block_num = Flux.ConnectionProvider.ObserveVariable(c => c.BLOCK_NUM);
+            var progress = Flux.StatusProvider.WhenAnyValue(c => c.PrintProgress);
 
             var queue_started = queue_pos.PairWithPreviousValue()
                 .Where(q => q.OldValue.HasValue && q.OldValue.Value == -1)
@@ -43,7 +43,7 @@ namespace Flux.ViewModels
                 .Select(q => q.OldValue.Value);
             
             var job_started = Observable.Merge(queue_started, queue_incremented.Select(i => i.NewValue))
-                .SelectMany(q => block_num.FirstAsync(b => b.HasValue && b.Value > 0).Select(_ => q));
+                .SelectMany(q => progress.FirstAsync(b => b.Percentage > 0).Select(_ => q));
 
             var job_finished = Observable.Merge(queue_ended, queue_incremented.Select(i => i.OldValue));
 

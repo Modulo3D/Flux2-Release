@@ -1,5 +1,4 @@
-﻿using DynamicData;
-using DynamicData.Kernel;
+﻿using DynamicData.Kernel;
 using EmbedIO;
 using EmbedIO.Routing;
 using EmbedIO.WebApi;
@@ -15,7 +14,6 @@ using System.IO.Compression;
 using System.Linq;
 using System.Net;
 using System.Net.NetworkInformation;
-using System.Net.Sockets;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Text;
@@ -293,15 +291,15 @@ namespace Flux.ViewModels
                     return Task.CompletedTask;
                 })
                 .WithWebApi("/api", (c, d) => WebServerUtils.SerializeJson(c, d), m => m.WithController(() => new FluxWebApiController(Flux)))
-                .WithWebApi("/settings/user", Flux.SettingsProvider.UserSettings, settings =>
+                .WithWebApi("/settings/user", Flux.SettingsProvider.UserSettings, user =>
                 {
-                    settings
+                    user
                         .WithWebApiSetting(s => s.PrinterName)
                         .WithWebApiSetting(s => s.CostHour);
                 })
-                .WithWebApi("/settings/core", Flux.SettingsProvider.CoreSettings, settings =>
+                .WithWebApi("/settings/core", Flux.SettingsProvider.CoreSettings, core =>
                 {
-                    settings
+                    core
                         .WithWebApiReadSetting(s => s.PrinterID)
                         .WithWebApiReadSetting(s => s.PrinterGuid);
                 })
@@ -419,7 +417,7 @@ namespace Flux.ViewModels
         }
         [Route(HttpVerbs.Get, "/memory")]
         public async Task GetMemory()
-        {;
+        {
             var variables = Flux.ConnectionProvider.Variables.SelectMany(v =>
             {
                 switch (v.Value)

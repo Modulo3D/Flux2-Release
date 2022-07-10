@@ -320,7 +320,7 @@ namespace Flux.ViewModels
                         .Lookup(e)
                         .Convert(f => f.SelectedToolMaterial)
                         .Convert(tm => tm.Document)
-                        .Convert(tm => tm.PrintTemperature);
+                        .Convert(tm => tm[tm => tm.PrintTemperature, 0.0]);
                     if (!print_temperature.HasValue)
                         return;
 

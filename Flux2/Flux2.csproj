@@ -67,7 +67,7 @@
 
   <ItemGroup>
     <Reference Include="Modulo3DDatabase">
-      <HintPath>..\..\Modulo3D\Modulo3DDatabase\bin\Debug\netstandard2.0\Modulo3DDatabase.dll</HintPath>
+      <HintPath>..\..\Modulo3D\Modulo3D\Modulo3DStandard\bin\Debug\netstandard2.0\Modulo3DDatabase.dll</HintPath>
     </Reference>
     <Reference Include="Modulo3DStandard">
       <HintPath>..\..\Modulo3D\Modulo3D\Modulo3DStandard\bin\Debug\netstandard2.0\Modulo3DStandard.dll</HintPath>

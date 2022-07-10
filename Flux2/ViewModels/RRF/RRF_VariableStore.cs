@@ -63,9 +63,9 @@ namespace Flux.ViewModels
                 Move = RRF_ModelBuilder<TRRF_VariableStore>.CreateModel(this, m => m.Move, read_timeout);
                 State = RRF_ModelBuilder<TRRF_VariableStore>.CreateModel(this, m => m.State, read_timeout);
                 Tools = RRF_ModelBuilder<TRRF_VariableStore>.CreateModel(this, m => m.Tools, read_timeout);
-                Queue = RRF_ModelBuilder<TRRF_VariableStore>.CreateModel(this, m => m.Queue, read_timeout);
+                Queue = RRF_ModelBuilder<TRRF_VariableStore>.CreateModel(this, m => m.Queue, read_timeout); // TODO
                 Inputs = RRF_ModelBuilder<TRRF_VariableStore>.CreateModel(this, m => m.Inputs, read_timeout);
-                Storage = RRF_ModelBuilder<TRRF_VariableStore>.CreateModel(this, m => m.Storage, read_timeout);
+                Storage = RRF_ModelBuilder<TRRF_VariableStore>.CreateModel(this, m => m.Storage, read_timeout); // TODO
                 Sensors = RRF_ModelBuilder<TRRF_VariableStore>.CreateModel(this, m => m.Sensors, read_timeout);
                 BlockNum = RRF_ModelBuilder<TRRF_VariableStore>.CreateModel(this, m => m.Job, m => m.State, m => m.Inputs, read_timeout);
                 PartProgram = RRF_ModelBuilder<TRRF_VariableStore>.CreateModel(this, m => m.Job, m => m.Global, m => m.Storage, m => m.Queue, read_timeout);
@@ -88,6 +88,7 @@ namespace Flux.ViewModels
                 AXIS_ENDSTOP            = Endstops.CreateArray("AXIS ENDSTOP", (c, e) => e.Triggered);
                 ENABLE_DRIVERS          = Axes.CreateArray<bool, bool>("ENABLE DRIVERS", (c, m) => m.IsEnabledDriver(), EnableDriverAsync);
 
+                PROGRESS                = Job.CreateVariable("PROGRESS", (c, m) => m.GetParamacroProgress());
                 STORAGE                 = Storage.CreateVariable("STORAGE", (c, m) => m.GetPartProgramDictionaryFromStorage());
                 MCODE_RECOVERY          = Storage.CreateVariable("mcode_recovery", (c, f) => f.GetMCodeRecoveryAsync(c));
                 TOOL_NUM                = Tools.CreateVariable<ushort, ushort>("TOOL NUM", (c, t) => (ushort)t.Count);
@@ -96,7 +97,6 @@ namespace Flux.ViewModels
                 TOOL_CUR                = State.CreateVariable<short, short>("TOOL CUR", (c, s) => s.CurrentTool);
                 PROCESS_STATUS          = State.CreateVariable("PROCESS STATUS", (c, m) => m.GetProcessStatus());
                 IS_HOMED                = Move.CreateVariable<bool, bool>("IS HOMED", (c, m) => m.IsHomed());
-                BLOCK_NUM               = BlockNum.CreateVariable("BLOCK NUM", (c, m) => m.GetBlockNum());
 
                 ITERATOR                = Global.CreateVariable("iterator",             false,  true);
                 KEEP_CHAMBER            = Global.CreateVariable("keep_chamber",         true,   false);
@@ -148,9 +148,9 @@ namespace Flux.ViewModels
     }
 
     // S300
-    /*public class RRF_VariableStore : RRF_VariableStoreBase<RRF_VariableStore>
+    public class RRF_VariableStore : RRF_VariableStoreBase<RRF_VariableStore>
     {
-        public override Dictionary<VariableAlias, VariableUnit> AxesUnits => VariableUnit.Range(0, "X", "Y", "Z", "U", "C");
+        public override Dictionary<VariableAlias, VariableUnit> AxesUnits => VariableUnit.Range(0, "X", "Y", "Z", /*"U",*/ "C");
         public override Dictionary<VariableAlias, VariableUnit> GpInUnits => VariableUnit.Range(0, 0);
         public override Dictionary<VariableAlias, VariableUnit> GpOutUnits => VariableUnit.Range(0, 0);
         public override Dictionary<VariableAlias, VariableUnit> HeaterUnits => new[]
@@ -194,11 +194,11 @@ namespace Flux.ViewModels
                 Console.WriteLine(ex);
             }
         }
-    }*/
+    }
 
 
     // MP500
-    public class RRF_VariableStore : RRF_VariableStoreBase<RRF_VariableStore>
+    /*public class RRF_VariableStore : RRF_VariableStoreBase<RRF_VariableStore>
     {
         public override Dictionary<VariableAlias, VariableUnit> AxesUnits => VariableUnit.Range(0, "X", "Y", "Z", "U", "V");
         public override Dictionary<VariableAlias, VariableUnit> GpInUnits => VariableUnit.Range(0, "chamber", "spools", "M1", "M2", "M3", "M4", "T1", "T2");
@@ -243,5 +243,5 @@ namespace Flux.ViewModels
                 Console.WriteLine(ex);
             }
         }
-    }
+    }*/
 }

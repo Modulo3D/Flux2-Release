@@ -187,7 +187,7 @@ namespace Flux.ViewModels
             return (ushort)index;
         }
         private IEnumerable<(TDocument document, ushort position)> FindDocuments<TDocument>(Optional<ILocalDatabase> database, Optional<MCodeAnalyzer> analyzer, Func<FeederReport, int> get_id)
-            where TDocument : IDocument
+            where TDocument : IDocument, new()
         {
             if (!database.HasValue)
                 yield break;

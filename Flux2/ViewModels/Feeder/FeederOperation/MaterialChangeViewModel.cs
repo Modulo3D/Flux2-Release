@@ -109,7 +109,7 @@ namespace Flux.ViewModels
                 return false;
             }
         }
-        protected async Task<bool> ExecuteFilamentOperation(GCodeFilamentOperation settings, Func<IFLUX_Connection, Func<Nozzle, GCodeFilamentOperation, Optional<IEnumerable<string>>>> filament_operation)
+        protected async Task<bool> ExecuteFilamentOperation(GCodeFilamentOperation settings, Func<IFLUX_Connection, Func<GCodeFilamentOperation, Optional<IEnumerable<string>>>> filament_operation)
         {
             try
             {
@@ -118,13 +118,9 @@ namespace Flux.ViewModels
                 if (!await Flux.ConnectionProvider.ResetAsync())
                     return false;
 
-                var nozzle = Feeder.ToolNozzle.Document.nozzle;
-                if (!nozzle.HasValue)
-                    return false;
-
                 using var put_filament_op_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 using var wait_filament_op_cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
-                if (!await Flux.ConnectionProvider.ExecuteParamacroAsync(f => filament_operation(f)(nozzle.Value, settings), put_filament_op_cts.Token, true, wait_filament_op_cts.Token, true))
+                if (!await Flux.ConnectionProvider.ExecuteParamacroAsync(f => filament_operation(f)(settings), put_filament_op_cts.Token, true, wait_filament_op_cts.Token, true))
                 {
                     Flux.Messages.LogMessage(MaterialChangeResult.MATERIAL_CHANGE_ERROR_PARAMACRO, default);
                     return false;
@@ -165,7 +161,7 @@ namespace Flux.ViewModels
             if (!Flux.ConnectionProvider.HasVariable(c => c.FILAMENT_ON_HEAD))
                 material.Value.StoreTag(t => t.SetLoaded(Feeder.Position));
 
-            var filament_settings = GCodeFilamentOperation.Create(Flux, Feeder, Material, true);
+            var filament_settings = GCodeFilamentOperation.Create(Flux, Feeder, Material, true, false, true);
             if (!filament_settings.HasValue)
                 return false;
             
@@ -356,7 +352,7 @@ namespace Flux.ViewModels
             if (!break_temp.HasValue)
                 return false;
 
-            var filament_settings = GCodeFilamentOperation.Create(Flux, Feeder, Material, false);
+            var filament_settings = GCodeFilamentOperation.Create(Flux, Feeder, Material, false, true, false);
             if (!filament_settings.HasValue)
                 return false;
 
@@ -406,7 +402,7 @@ namespace Flux.ViewModels
                             return state.Create(false, "LEGGI UN MATERIALE", "nFC", UpdateNFCAsync);
 
                         if (value.tool_material.Convert(tm => tm.Compatible).ConvertOr(c => !c, () => true))
-                            return state.Create(false, $"{value.document} NON COMPATIBILE");
+                            return state.Create(false, $"{value.document} NON COMPATIBILE", "nFC", UpdateNFCAsync);
 
                         if (!value.loaded.HasValue)
                             return state.Create(false, "SBLOCCA IL MATERIALE", "nFC", UpdateNFCAsync);

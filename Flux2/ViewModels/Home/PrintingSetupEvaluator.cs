@@ -21,7 +21,7 @@ namespace Flux.ViewModels
 
     public abstract class TagViewModelEvaluator<TNFCTag, TTagDocument, TDocument, TState> : ReactiveObject, ITagViewModelEvaluator
         where TNFCTag : INFCOdometerTag<TNFCTag>
-        where TDocument : IDocument
+        where TDocument : IDocument, new()
     {
         public FeederEvaluator FeederEvaluator { get; }
         public abstract Optional<IFluxTagViewModel<TNFCTag, TTagDocument, TState>> TagViewModel { get; }
@@ -378,9 +378,9 @@ namespace Flux.ViewModels
                 return true;
             if (!plc_temp.HasValue)
                 return true;
-            if (plc_temp.Value.Target > 150)
-                return Math.Abs(plc_temp.Value.Current - plc_temp.Value.Target) > 10;
-            return Math.Abs(plc_temp.Value.Current - extrusion_temp.Value) > 15;
+            if (plc_temp.Value.Target == 0)
+                return true;
+            return plc_temp.Value.Target - plc_temp.Value.Current > 10;
         }
 
         private Optional<IFluxOffsetViewModel> FindOffset(IQuery<IFluxOffsetViewModel, ushort> offsets)
