@@ -6,6 +6,7 @@ using RestSharp;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Reactive;
 using System.Reactive.Linq;
 using System.Text;
@@ -114,7 +115,12 @@ namespace Flux.ViewModels
 
                     flux.Logger.LogInformation(new EventId(0, "job_finished"), $"{job.Value.JobGuid}");
 
-                    // todo
+                    // TODO
+                    if (!core_settings.LoggerAddress.HasValue)
+                        return;
+                    if (string.IsNullOrEmpty(core_settings.LoggerAddress.Value))
+                        return;
+
                     var request = new RestRequest($"{core_settings.LoggerAddress}/api/programs");
                     request.AddJsonBody(program_history);
                     await Flux.NetProvider.Client.PutAsync(request);
@@ -195,6 +201,16 @@ namespace Flux.ViewModels
                 .Select(v => get_log(v.Value))
                 .DistinctUntilChanged()
                 .Subscribe(v => logger.LogInformation(id, $"{v}"));
+        }
+
+        public static IObservable<T> LogObservable<T>(this IObservable<T> observable,
+           EventId event_id,
+           ILogger logger)
+        {
+            observable
+               .DistinctUntilChanged()
+               .Subscribe(v => logger.LogInformation(event_id, $"{v}"));
+            return observable;
         }
     }
 }

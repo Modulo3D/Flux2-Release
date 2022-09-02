@@ -1439,52 +1439,6 @@ namespace Flux.ViewModels
                 return default;
             }
         }
-
-        public static Dictionary<Guid, Dictionary<BlockNumber, MCodePartProgram>> GetPartProgramDictionaryFromStorage(this FLUX_FileList storage)
-        {
-            return storage.GetPartProgramFromStorage()
-                .GroupBy(s => s.MCodeGuid)
-                .ToDictionary(g => g.Key, g => g.DistinctBy(m => m.StartBlock).ToDictionary(m => m.StartBlock));
-        }
-
-        public static IEnumerable<MCodePartProgram> GetPartProgramFromStorage(this FLUX_FileList storage)
-        {
-            foreach (var file in storage.Files)
-            {
-                if (file.Type != FLUX_FileType.File)
-                    continue;
-                if (!MCodePartProgram.TryParse(file.Name, out var part_program))
-                    continue;
-                yield return part_program;
-            }
-        }
-
-        public static Dictionary<QueuePosition, FluxJob> GetJobDictionaryFromQueue(this FLUX_FileList queue)
-        {
-            return queue.GetJobFromQueue()
-                .GroupBy(s => s.QueuePosition)
-                .Select(s => s.First())
-                .ToDictionary(s => s.QueuePosition);
-        }
-        public static IEnumerable<FluxJob> GetJobFromQueue(this FLUX_FileList queue)
-        {
-            foreach (var file in queue.Files)
-            {
-                if (file.Type != FLUX_FileType.File)
-                    continue;
-                var parts = file.Name.Split(';',
-                    StringSplitOptions.RemoveEmptyEntries);
-                if (parts.Length != 3)
-                    continue;
-                if (!short.TryParse(parts[0], out var queue_pos))
-                    continue;
-                if (!Guid.TryParse(parts[1], out var job_guid))
-                    continue;
-                if (!Guid.TryParse(parts[2], out var mcode_guid))
-                    continue;
-                yield return new FluxJob(job_guid, mcode_guid, queue_pos);
-            }
-        }
     }
 
     public class RRF_MCodeRecovery : IFLUX_MCodeRecovery

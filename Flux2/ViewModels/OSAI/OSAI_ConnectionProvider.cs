@@ -43,11 +43,12 @@ namespace Flux.ViewModels
 
         public FluxViewModel Flux { get; }
         public override IFlux IFlux => Flux;
-        protected override OSAI_VariableStore VariableStore => new OSAI_VariableStore(this);
+        protected override OSAI_VariableStore VariableStore { get; }
 
         public OSAI_ConnectionProvider(FluxViewModel flux)
         {
             Flux = flux;
+            VariableStore = new OSAI_VariableStore(this);
 
             var connection = this.WhenAnyValue(v => v.Connection);
             var full_memory_read = connection.Convert(c => c.MemoryBuffer)
@@ -99,31 +100,36 @@ namespace Flux.ViewModels
 
             DisposableThread.Start(async () =>
             {
-                if (DateTime.Now - status_t >= TimeSpan.FromMilliseconds(100))
-                    await update_status();
-
-                if (DateTime.Now - network_t >= TimeSpan.FromSeconds(10))
-                    await update_network();
-
-                if (DateTime.Now - debug_t >= TimeSpan.FromSeconds(5))
-                    await update_debug();
-
-                if (ConnectionPhase.HasValue && ConnectionPhase.Value >= OSAI_ConnectionPhase.INITIALIZED_BOOT_PHASE)
+                try
                 {
-                    if (DateTime.Now - memory_buffer_t >= TimeSpan.FromMilliseconds(100))
-                        await update_memory_buffers();
+                    if (DateTime.Now - status_t >= TimeSpan.FromMilliseconds(100))
+                        await update_status();
 
-                    foreach (var variable_group in plc_variables)
-                        await UpdateVariableGroup(variable_group);
+                    if (DateTime.Now - network_t >= TimeSpan.FromSeconds(10))
+                        await update_network();
 
-                    if (DateTime.Now - full_memory_t >= OSAI_Connection.UltraLowPriority)
-                        Connection.IfHasValue(c => c.MemoryBuffer.HasFullMemoryRead = true);
+                    if (DateTime.Now - debug_t >= TimeSpan.FromSeconds(5))
+                        await update_debug();
+
+                    if (ConnectionPhase.HasValue && ConnectionPhase.Value >= OSAI_ConnectionPhase.INITIALIZED_BOOT_PHASE)
+                    {
+                        if (DateTime.Now - memory_buffer_t >= TimeSpan.FromMilliseconds(100))
+                            await update_memory_buffers();
+
+                        foreach (var variable_group in plc_variables)
+                            await UpdateVariableGroup(variable_group);
+
+                        if (DateTime.Now - full_memory_t >= OSAI_Connection.UltraLowPriority)
+                            Connection.IfHasValue(c => c.MemoryBuffer.HasFullMemoryRead = true);
+                    }
+                    else
+                    {
+                        Connection.IfHasValue(c => c.MemoryBuffer.HasFullMemoryRead = false);
+                    }
                 }
-                else
-                {
-                    Connection.IfHasValue(c => c.MemoryBuffer.HasFullMemoryRead = false);
+                catch (Exception ex)
+                { 
                 }
-
             }, TimeSpan.Zero);
 
             async Task update_debug()

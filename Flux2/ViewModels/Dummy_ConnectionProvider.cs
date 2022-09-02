@@ -3,6 +3,7 @@ using DynamicData.Kernel;
 using Modulo3DStandard;
 using System;
 using System.Collections.Generic;
+using System.Linq.Expressions;
 using System.Reactive;
 using System.Threading;
 using System.Threading.Tasks;
@@ -34,10 +35,68 @@ namespace Flux.ViewModels
         public override Optional<IEnumerable<string>> GenerateEndMCodeLines(MCode mcode, Optional<ushort> queue_size) => default;
     }
 
+    public class Dummy_Array<TRData, TWData> : FLUX_Array<TRData, TWData>
+    {
+        public override string Group => "";
+        public override Optional<VariableUnit> GetArrayUnit(ushort position) => default;
+        public Dummy_Array() : base("", FluxMemReadPriority.DISABLED)
+        {
+        }
+    }
+    public class Dummy_Variable<TRData, TWData> : FLUX_Variable<TRData, TWData>
+    {
+        public override bool ReadOnly => false;
+        public override string Group => "";
+        public Dummy_Variable() : base("", FluxMemReadPriority.DISABLED, new VariableUnit(0))
+        {
+        }
+        public override Task<Optional<TRData>> ReadAsync()
+        {
+            return Task.FromResult(Optional<TRData>.None);
+        }
+        public override Task<bool> WriteAsync(TWData data)
+        {
+            return Task.FromResult(false);
+        }
+    }
+
     public class Dummy_VariableStore : FLUX_VariableStore<Dummy_VariableStore, Dummy_ConnectionProvider>
     {
         public Dummy_VariableStore(Dummy_ConnectionProvider connection_provider) : base(connection_provider)
         {
+            CreateDummy(s => s.AXIS_ENDSTOP);
+            CreateDummy(s => s.ENABLE_DRIVERS);
+            CreateDummy(s => s.PROGRESS);
+            CreateDummy(s => s.STORAGE);
+            CreateDummy(s => s.MCODE_RECOVERY);
+            CreateDummy(s => s.TOOL_NUM);
+            CreateDummy(s => s.PART_PROGRAM);
+            CreateDummy(s => s.QUEUE);
+            CreateDummy(s => s.TOOL_CUR);
+            CreateDummy(s => s.PROCESS_STATUS);
+            CreateDummy(s => s.IS_HOMED);
+            CreateDummy(s => s.DEBUG);
+            CreateDummy(s => s.QUEUE_SIZE);
+            CreateDummy(s => s.QUEUE_POS);
+            CreateDummy(s => s.X_USER_OFFSET_T);
+            CreateDummy(s => s.Y_USER_OFFSET_T);
+            CreateDummy(s => s.Z_USER_OFFSET_T);
+            CreateDummy(s => s.X_PROBE_OFFSET_T);
+            CreateDummy(s => s.Y_PROBE_OFFSET_T);
+            CreateDummy(s => s.Z_PROBE_OFFSET_T);
+            CreateDummy(s => s.X_HOME_OFFSET);
+            CreateDummy(s => s.Y_HOME_OFFSET);
+        }
+
+        private void CreateDummy<TRData, TWData>(Expression<Func<Dummy_VariableStore, IFLUX_Array<TRData, TWData>>> array_expression)
+        {
+            var array_setter = this.GetCachedSetterDelegate(array_expression);
+            array_setter.Invoke(new Dummy_Array<TRData, TWData>());
+        }
+        private void CreateDummy<TRData, TWData>(Expression<Func<Dummy_VariableStore, IFLUX_Variable<TRData, TWData>>> array_expression)
+        {
+            var array_setter = this.GetCachedSetterDelegate(array_expression);
+            array_setter.Invoke(new Dummy_Variable<TRData, TWData>());
         }
     }
     public class Dummy_Connection : FLUX_Connection<Dummy_VariableStore, Unit, Dummy_MemoryBuffer>
@@ -71,16 +130,6 @@ namespace Flux.ViewModels
         }
 
         public override Task<bool> DeselectPartProgramAsync(bool from_drive, bool wait, CancellationToken ct)
-        {
-            throw new NotImplementedException();
-        }
-
-        public override Optional<IEnumerable<string>> GetGotoPurgePositionGCode(ushort position)
-        {
-            throw new NotImplementedException();
-        }
-
-        public override Optional<IEnumerable<string>> GetGotoReaderGCode(ushort position)
         {
             throw new NotImplementedException();
         }
@@ -144,7 +193,7 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override Optional<IEnumerable<string>> GetStartPartProgramGCode(string file_name)
+        public override Optional<IEnumerable<string>> GetStartPartProgramGCode(string folder, string file_name)
         {
             throw new NotImplementedException();
         }
@@ -237,18 +286,13 @@ namespace Flux.ViewModels
         {
             throw new NotImplementedException();
         }
-
-        public override Task<bool> GenerateInnerQueueAsync()
-        {
-            throw new NotImplementedException();
-        }
     }
     public class Dummy_MemoryBuffer : FLUX_MemoryBuffer
     {
         public override Dummy_Connection Connection { get; }
         public Dummy_MemoryBuffer(Dummy_Connection connection)
         {
-            Connection = connection;
+            Connection = connection;         
         }
     }
 }

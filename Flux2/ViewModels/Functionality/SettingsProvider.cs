@@ -2,11 +2,14 @@
 using DynamicData.Kernel;
 using Modulo3DStandard;
 using ReactiveUI;
+using System;
+using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Reactive.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
@@ -60,7 +63,6 @@ namespace Flux.ViewModels
 
             HostAddressCache = NetworkInterface.GetAllNetworkInterfaces()
                 .Where(nic => nic.OperationalStatus == OperationalStatus.Up)
-                .Where(nic => nic.SupportsMulticast)
                 .AsObservableChangeSet(nic => nic.Id)
                 .Transform(nic => nic.GetIPProperties().ToOptional())
                 .Transform(ip => ip.Convert(ip => ip.UnicastAddresses))
@@ -82,6 +84,35 @@ namespace Flux.ViewModels
                     return (machine_extruder_count, mixing_extruder_count);
                 })
                 .ToProperty(this, v => v.ExtrudersCount);
+
+            UserSettings.Local.WhenAnyValue(s => s.StandbyMinutes)
+                .Subscribe(s =>
+                {
+                    try
+                    {
+                        if (!s.HasValue)
+                            return;
+
+                        var seconds = (int)TimeSpan.FromMinutes(s.Value).TotalSeconds;
+                        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                        {
+                            using var process = new Process
+                            {
+                                StartInfo = new ProcessStartInfo
+                                {
+                                    UseShellExecute = true,
+                                    FileName = "/bin/bash",
+                                    Arguments = $"-c \"xset s {seconds} {seconds}\"",
+                                }
+                            };
+                            process.Start();
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine(ex.ToString());
+                    }
+                });
         }
 
         private Optional<Printer> FindPrinter(Optional<ILocalDatabase> database, Optional<int> printer_id)

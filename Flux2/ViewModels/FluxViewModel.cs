@@ -118,7 +118,7 @@ namespace Flux.ViewModels
         public IFLUX_ConnectionProvider ConnectionProvider { get; private set; }
 
         private ObservableAsPropertyHelper<DateTime> _CurrentTime;
-        [RemoteOutput(true, typeof(DateTimeConverter<DateTimeFormat>))]
+        [RemoteOutput(true, typeof(DateTimeConverter<AbsoluteDateTimeFormat>))]
         public DateTime CurrentTime => _CurrentTime.Value;
 
         private ObservableAsPropertyHelper<string> _LeftIconForeground;
@@ -179,10 +179,11 @@ namespace Flux.ViewModels
             {
                 try
                 {
-                    var printer_id = SettingsProvider.CoreSettings.Local.PrinterID;
-                    var printer_result = db.FindById<Printer>(printer_id.ValueOr(() => 0));
-                    var printer = printer_result.Documents.FirstOrDefault().ToOptional();
-                    ConnectionProvider = printer.Convert(p => p.MachineGCodeFlavor).ValueOr(() => "") switch
+                    var printer_id      = SettingsProvider.CoreSettings.Local.PrinterID;
+                    var printer_result  = db.FindById<Printer>(printer_id.ValueOr(() => 0));
+                    var printer         = printer_result.Documents.FirstOrDefault().ToOptional();
+                    var gcode_flavor    = printer.ConvertOr(p => p[p => p.MachineGCodeFlavor, ""], () => "");
+                    ConnectionProvider  = gcode_flavor switch
                     {
                         "Modulo3D (Duet)" => new RRF_ConnectionProvider(this),
                         "Modulo3D (Osai)" => new OSAI_ConnectionProvider(this),

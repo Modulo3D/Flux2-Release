@@ -405,7 +405,7 @@ namespace Flux.ViewModels
             if (!await Flux.ConnectionProvider.ClearFolderAsync(c => c.InnerQueuePath, true, clear_inner_queue_cts.Token))
                 return false;
 
-            return true;
+            return await Flux.ConnectionProvider.GenerateInnerQueueAsync();
         }
         public async Task<bool> AddToQueueAsync(IFluxMCodeStorageViewModel mcode)
         {
@@ -483,7 +483,7 @@ namespace Flux.ViewModels
             if (queue_size <= 1)
                 Flux.Navigator.NavigateHome();
 
-            return true;
+            return await Flux.ConnectionProvider.GenerateInnerQueueAsync();
         }
         public async Task<bool> DeleteFromQueueAsync(IFluxMCodeQueueViewModel mcode)
         {
@@ -540,7 +540,7 @@ namespace Flux.ViewModels
                     return false;
             }
 
-            return true;
+            return await Flux.ConnectionProvider.GenerateInnerQueueAsync();
         }
         public async Task<bool> MoveInQueueAsync(IFluxMCodeQueueViewModel mcode, Func<QueuePosition, QueuePosition> move)
         {
@@ -593,7 +593,7 @@ namespace Flux.ViewModels
                put_current_cts.Token))
                 return false;
 
-            return true;
+            return await Flux.ConnectionProvider.GenerateInnerQueueAsync();
         }
 
         private async Task<Optional<Dictionary<QueuePosition, FluxJob>>> ReadMCodeQueueAsync()

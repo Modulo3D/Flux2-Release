@@ -1,5 +1,6 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
+using Modulo3DDatabase;
 using Modulo3DStandard;
 using ReactiveUI;
 using System;
@@ -83,10 +84,10 @@ namespace Flux.ViewModels
                 .Transform(tm => (IFluxToolMaterialViewModel)tm)
                 .AsObservableCache();
 
-
             var selected_positions = Flux.ConnectionProvider
                 .ObserveVariable(c => c.FILAMENT_AFTER_GEAR)
-                .ConvertToObservable(c => c.QueryWhenChanged());
+                .Convert(c => c.QueryWhenChanged())
+                .ToOptionalObservable();
 
             var tool_materials = ToolMaterials.Connect()
                 .QueryWhenChanged();

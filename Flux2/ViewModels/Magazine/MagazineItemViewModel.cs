@@ -53,13 +53,15 @@ namespace Flux.ViewModels
 
             RaiseMagazineCommand = ReactiveCommand.CreateFromTask(RaiseMagazineAsync, can_raise);
 
-            if (Flux.ConnectionProvider.HasVariable(m => m.RAISE_PNEUMATIC_PISTON))
-                AddCommand("raiseMagazine", RaiseMagazineCommand);
+            // TODO
+            /*if (Flux.ConnectionProvider.HasVariable(m => m.RAISE_PNEUMATIC_PISTON))
+                AddCommand("raiseMagazine", RaiseMagazineCommand);*/
         }
 
-        private async Task RaiseMagazineAsync()
+        private Task RaiseMagazineAsync()
         {
-            var lower_key = Flux.ConnectionProvider.GetArrayUnit(m => m.LOWER_PNEUMATIC_PISTON, Feeder.Position);
+            // TODO
+            /*var lower_key = Flux.ConnectionProvider.GetArrayUnit(m => m.LOWER_PNEUMATIC_PISTON, Feeder.Position);
             if (!lower_key.HasValue)
                 return;
 
@@ -71,7 +73,8 @@ namespace Flux.ViewModels
             await Flux.ConnectionProvider.WriteVariableAsync(m => m.RAISE_PNEUMATIC_PISTON, lower_key.Value.Alias, true);
 
             await Task.Delay(TimeSpan.FromSeconds(1));
-            await Flux.ConnectionProvider.WriteVariableAsync(m => m.RAISE_PNEUMATIC_PISTON, raise_key.Value.Alias, false);
+            await Flux.ConnectionProvider.WriteVariableAsync(m => m.RAISE_PNEUMATIC_PISTON, raise_key.Value.Alias, false);*/
+            return Task.CompletedTask;
         }
     }
 }

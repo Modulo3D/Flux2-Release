@@ -44,7 +44,7 @@ namespace Flux.ViewModels
         public ReactiveCommand<Unit, Unit> MoveDownMCodeQueueCommand { get; }
 
         private ObservableAsPropertyHelper<DateTime> _EndTime;
-        [RemoteOutput(true, typeof(DateTimeConverter<DateTimeFormat>))]
+        [RemoteOutput(true, typeof(DateTimeConverter<RelativeDateTimeFormat>))]
         public DateTime EndTime => _EndTime.Value;
 
         public MCodeQueueViewModel(MCodesViewModel mcodes, FluxJob job) : base($"{typeof(MCodeQueueViewModel).GetRemoteControlName()}??{job.QueuePosition}")
@@ -108,17 +108,38 @@ namespace Flux.ViewModels
                 .ValueOr(() => false)
                 .DistinctUntilChanged();
 
-            var can_move_up = Observable.Return(job.QueuePosition > 0);
-
-            var can_move_down = mcodes.Flux.ConnectionProvider
+            var last_queue_pos = mcodes.Flux.ConnectionProvider
                 .ObserveVariable(c => c.QUEUE)
-                .Convert(q => q?.Count ?? 0)
-                .ValueOr(() => 0)
-                .Select(c => job.QueuePosition < c - 1);
+                .Convert(q => q?.Count - 1 ?? -1)
+                .Convert(c => new QueuePosition((short)c))
+                .ValueOr(() => new QueuePosition(-1));
 
-            DeleteMCodeQueueCommand = ReactiveCommand.CreateFromTask(async () => { await MCodes.DeleteFromQueueAsync(this); }, is_idle);
-            MoveUpMCodeQueueCommand = ReactiveCommand.CreateFromTask(async () => { await MCodes.MoveInQueueAsync(this, i => (short)(i - 1)); }, Observable.CombineLatest(is_idle, can_move_up, (i,m) => i && m));
-            MoveDownMCodeQueueCommand = ReactiveCommand.CreateFromTask(async () => { await MCodes.MoveInQueueAsync(this, i => (short)(i + 1)); }, Observable.CombineLatest(is_idle, can_move_down, (i, m) => i && m));
+            var can_delete = Observable.CombineLatest(is_idle, queue_pos, CanDeleteQueue);
+            var can_move_up = Observable.CombineLatest(is_idle, queue_pos, CanMoveUpQueue);
+            var can_move_down = Observable.CombineLatest(is_idle, queue_pos, last_queue_pos, CanMoveDownQueue);
+
+            DeleteMCodeQueueCommand = ReactiveCommand.CreateFromTask(async () => { await MCodes.DeleteFromQueueAsync(this); }, can_delete);
+            MoveUpMCodeQueueCommand = ReactiveCommand.CreateFromTask(async () => { await MCodes.MoveInQueueAsync(this, i => (short)(i - 1)); }, can_move_up);
+            MoveDownMCodeQueueCommand = ReactiveCommand.CreateFromTask(async () => { await MCodes.MoveInQueueAsync(this, i => (short)(i + 1)); }, can_move_down);
+        }
+
+        private bool CanDeleteQueue(bool is_idle, QueuePosition queue_position)
+        {
+            if (is_idle)
+                return true;
+            return Job.QueuePosition > queue_position;
+        }
+        private bool CanMoveUpQueue(bool is_idle, QueuePosition queue_position)
+        {
+            if (is_idle)
+                return Job.QueuePosition > 0;
+            return Job.QueuePosition > queue_position + 1;
+        }
+        private bool CanMoveDownQueue(bool is_idle, QueuePosition queue_position, QueuePosition last_queue_pos)
+        {
+            if (is_idle)
+                return Job.QueuePosition < last_queue_pos;
+            return Job.QueuePosition > queue_position && Job.QueuePosition < last_queue_pos;
         }
 
         private DateTime FindEndTime(DateTime start_time, QueuePosition queue_pos, PrintProgress progress, Dictionary<QueuePosition, Optional<MCodeAnalyzer>> mcode_analyzers)

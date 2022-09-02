@@ -43,7 +43,7 @@ namespace Flux.ViewModels
                 VariableUnit unit = default)
             {
                 var variable = new RRF_VariableObjectModel<TModel, TRData, Unit>(ConnectionProvider, name, ReadModel, GetModel, (c, m) => get_data(c, m).ToOptional(), unit);
-                return (RRF_VariableObjectModel<TModel, TRData, Unit>)VariableStore.RegisterVariable(variable);
+                return VariableStore.RegisterVariable(variable);
             }
             public RRF_VariableObjectModel<TModel, TRData, Unit> CreateVariable<TRData>(
                 string name,
@@ -51,7 +51,7 @@ namespace Flux.ViewModels
                 VariableUnit unit = default)
             {
                 var variable = new RRF_VariableObjectModel<TModel, TRData, Unit>(ConnectionProvider, name, ReadModel, GetModel, get_data, unit);
-                return (RRF_VariableObjectModel<TModel, TRData, Unit>)VariableStore.RegisterVariable(variable);
+                return VariableStore.RegisterVariable(variable);
             }
             public RRF_VariableObjectModel<TModel, TRData, Unit> CreateVariable<TRData>(
                 string name,
@@ -59,7 +59,7 @@ namespace Flux.ViewModels
                 VariableUnit unit = default)
             {
                 var variable = new RRF_VariableObjectModel<TModel, TRData, Unit>(ConnectionProvider, name, ReadModel, GetModel, get_data, unit);
-                return (RRF_VariableObjectModel<TModel, TRData, Unit>)VariableStore.RegisterVariable(variable);
+                return VariableStore.RegisterVariable(variable);
             }
 
             public RRF_VariableObjectModel<TModel, TRData, TWData> CreateVariable<TRData, TWData>(
@@ -68,7 +68,7 @@ namespace Flux.ViewModels
                 VariableUnit unit = default)
             {
                 var variable = new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, name, ReadModel, GetModel, get_data, unit);
-                return (RRF_VariableObjectModel <TModel, TRData, TWData>)VariableStore.RegisterVariable(variable);   
+                return VariableStore.RegisterVariable(variable);   
             }
             public RRF_VariableObjectModel<TModel, TRData, TWData> CreateVariable<TRData, TWData>(
                 string name,
@@ -76,7 +76,7 @@ namespace Flux.ViewModels
                 VariableUnit unit = default)
             {
                 var variable = new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, name, ReadModel, GetModel, get_data, unit);
-                return (RRF_VariableObjectModel<TModel, TRData, TWData>)VariableStore.RegisterVariable(variable);
+                return VariableStore.RegisterVariable(variable);
             }
             public RRF_VariableObjectModel<TModel, TRData, TWData> CreateVariable<TRData, TWData>(
                 string name,
@@ -85,7 +85,7 @@ namespace Flux.ViewModels
                 VariableUnit unit = default)
             {
                 var variable = new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, name, ReadModel, GetModel, get_data, write_data, unit);
-                return (RRF_VariableObjectModel<TModel, TRData, TWData>)VariableStore.RegisterVariable(variable);
+                return VariableStore.RegisterVariable(variable);
             }
             public RRF_VariableObjectModel<TModel, TRData, TWData> CreateVariable<TRData, TWData>(
                 string name,
@@ -94,7 +94,7 @@ namespace Flux.ViewModels
                 VariableUnit unit = default)
             {
                 var variable = new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, name, ReadModel, GetModel, get_data, write_data, unit);
-                return (RRF_VariableObjectModel<TModel, TRData, TWData>)VariableStore.RegisterVariable(variable);
+                return VariableStore.RegisterVariable(variable);
             }
             public RRF_VariableObjectModel<TModel, TRData, TWData> CreateVariable<TRData, TWData>(
                 string name,
@@ -103,7 +103,7 @@ namespace Flux.ViewModels
                 VariableUnit unit = default)
             {
                 var variable = new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, name, ReadModel, GetModel, get_data, write_data, unit);
-                return (RRF_VariableObjectModel<TModel, TRData, TWData>)VariableStore.RegisterVariable(variable);
+                return VariableStore.RegisterVariable(variable);
             }
 
             internal RRF_InnerModelBuilder<RRF_ObjectModelState>.RRF_ArrayBuilder<RRF_ObjectModelGpOut> CreateArray(Func<RRF_ObjectModelState, Optional<List<RRF_ObjectModelGpOut>>> p, object gpoutUnits)
@@ -123,7 +123,7 @@ namespace Flux.ViewModels
                 VariableUnit unit = default)
             {
                 var variable = new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, name, ReadModel, GetModel, get_data, write_data, unit);
-                return (RRF_VariableObjectModel<TModel, TRData, TWData>)VariableStore.RegisterVariable(variable);
+                return VariableStore.RegisterVariable(variable);
             }
 
             public class RRF_ArrayBuilder<TList>
@@ -200,8 +200,8 @@ namespace Flux.ViewModels
                     }
 
                     var variable_units = Units.Skip(variables_range.Start).Take(variables_range.Count).ToDictionary();
-                    var variable = new RRF_ArrayObjectModel<TModel, TRData, Unit>(name, variable_units, get_variable);
-                    return (RRF_ArrayObjectModel<TModel, TRData, Unit>)VariableStore.RegisterVariable(variable);
+                    var array = new RRF_ArrayObjectModel<TModel, TRData, Unit>(name, variable_units, get_variable);
+                    return VariableStore.RegisterArray(array);
                 }
                 public RRF_ArrayObjectModel<TModel, TRData, TWData> CreateArray<TRData, TWData>(
                     string name,
@@ -220,8 +220,8 @@ namespace Flux.ViewModels
                     }
 
                     var variable_units = Units.Skip(variables_range.Start).Take(variables_range.Count).ToDictionary();
-                    var variable = new RRF_ArrayObjectModel<TModel, TRData, TWData>(name, variable_units, get_variable);
-                    return (RRF_ArrayObjectModel<TModel, TRData, TWData>)VariableStore.RegisterVariable(variable);
+                    var array = new RRF_ArrayObjectModel<TModel, TRData, TWData>(name, variable_units, get_variable);
+                    return VariableStore.RegisterArray(array);
                 }
                 public RRF_ArrayObjectModel<TModel, TRData, TWData> CreateArray<TRData, TWData>(
                     string name,
@@ -242,8 +242,8 @@ namespace Flux.ViewModels
                     }
 
                     var variable_units = Units.Skip(variables_range.Start).Take(variables_range.Count).ToDictionary();
-                    var variable = new RRF_ArrayObjectModel<TModel, TRData, TWData>(name, variable_units, get_variable);
-                    return (RRF_ArrayObjectModel<TModel, TRData, TWData>)VariableStore.RegisterVariable(variable);
+                    var array = new RRF_ArrayObjectModel<TModel, TRData, TWData>(name, variable_units, get_variable);
+                    return VariableStore.RegisterArray(array);
                 }
                 public RRF_ArrayObjectModel<TModel, TRData, TWData> CreateArray<TRData, TWData>(
                     string name,
@@ -265,7 +265,7 @@ namespace Flux.ViewModels
 
                     var variable_units = Units.Skip(variables_range.Start).Take(variables_range.Count).ToDictionary();
                     var array = new RRF_ArrayObjectModel<TModel, TRData, TWData>(name, variable_units, get_variable);
-                    return (RRF_ArrayObjectModel<TModel, TRData, TWData>)VariableStore.RegisterVariable(array);
+                    return VariableStore.RegisterArray(array);
                 }
 
                 public Optional<IFLUX_Variable<TRData, Unit>> CreateVariable<TRData>(string name,
@@ -565,13 +565,13 @@ namespace Flux.ViewModels
             Func<VariableAlias, Optional<IFLUX_Variable<TRData, TWData>>> get_variable)
             : base(name, FluxMemReadPriority.DISABLED)
         {
-            Variables = new SourceCache<IFLUX_Variable<TRData, TWData>, VariableAlias>(v => v.Unit.Alias);
+            var source_cache = (SourceCache<IFLUX_Variable<TRData, TWData>, VariableAlias>)Variables;
             foreach (var unit in variable_units)
             {
                 var variable = get_variable(unit.Key);
                 if (!variable.HasValue)
                     continue;
-                ((SourceCache<IFLUX_Variable<TRData, TWData>, VariableAlias>)Variables).AddOrUpdate(variable.Value);
+                source_cache.AddOrUpdate(variable.Value);
             }
         }
 
@@ -798,9 +798,9 @@ namespace Flux.ViewModels
             Func<object, TData> convert_data = default)
             : base(variable, FluxMemReadPriority.DISABLED)
         {
-            Variables = new SourceCache<IFLUX_Variable<TData, TData>, VariableAlias>(v => v.Unit.Alias);
+            var source_cache = (SourceCache<IFLUX_Variable<TData, TData>, VariableAlias>)Variables;
             foreach (var unit in variable_units)
-                ((SourceCache<IFLUX_Variable<TData, TData>, VariableAlias>)Variables).AddOrUpdate(get_variable(unit.Value));
+                source_cache.AddOrUpdate(get_variable(unit.Value));
 
             RRF_ArrayVariableGlobalModel<TData> get_variable(VariableUnit unit) => new RRF_ArrayVariableGlobalModel<TData>(connection_provider, variable, unit, stored, default_value, convert_data);
         }
@@ -831,13 +831,13 @@ namespace Flux.ViewModels
             public RRF_VariableGlobalModel<TData> CreateVariable<TData>(string name, bool stored, TData default_value, Func<object, TData> convert_value = default) 
             {
                 var variable = new RRF_VariableGlobalModel<TData>(ConnectionProvider, name, stored, default_value, convert_value);
-                return (RRF_VariableGlobalModel<TData>)VariableStore.RegisterVariable(variable);
+                return VariableStore.RegisterVariable(variable);
             }
 
             public RRF_ArrayGlobalModel<TData> CreateArray<TData>(string name, bool stored, TData default_value, Dictionary<VariableAlias, VariableUnit> variable_units, Func<object, TData> convert_value = default)
             {
                 var variable = new RRF_ArrayGlobalModel<TData>(ConnectionProvider, name, stored, default_value, variable_units, convert_value);
-                return (RRF_ArrayGlobalModel<TData>)VariableStore.RegisterVariable(variable);
+                return VariableStore.RegisterArray(variable);
             }
         }
 

@@ -234,8 +234,10 @@ namespace Flux.ViewModels
                         if (Flux.ConnectionProvider.HasVariable(c => c.Z_BED_HEIGHT))
                         {
                             var z_bed_height = await Flux.ConnectionProvider.ReadVariableAsync(c => c.Z_BED_HEIGHT);
-                            if(z_bed_height.HasValue)
-                                bed_height = z_bed_height.Value;
+                            if (!z_bed_height.HasValue)
+                                return;
+                            
+                            bed_height = z_bed_height.Value;
                         }
 
                         var z = await Flux.ConnectionProvider.ReadVariableAsync(m => m.AXIS_POSITION, "Z");
@@ -249,7 +251,9 @@ namespace Flux.ViewModels
                 .DisposeWith(Disposables);
 
             _AxisPosition = Flux.ConnectionProvider.ObserveVariable(m => m.AXIS_POSITION)
-                .QueryWhenChanged(p => string.Join(" ", p.KeyValues.Select(v => $"{v.Key}{v.Value:0.00}")))
+                .Convert(c => c.QueryWhenChanged(p => string.Join(" ", p.KeyValues.Select(v => $"{v.Key}{v.Value:0.00}"))))
+                .ToOptionalObservable()
+                .ObservableOr(() => "")
                 .ToProperty(this, v => v.AxisPosition);
 
             var can_safe_stop = Flux.StatusProvider
@@ -263,15 +267,33 @@ namespace Flux.ViewModels
 
             CancelCalibrationCommand = ReactiveCommand.CreateFromTask(ExitAsync, can_cancel);
         }
-        CmdButton FindMoveButton(double distance, bool can_always_move)
+        CmdButton FindMoveButton(double distance, bool can_unsafe_cycle)
         {
+            var can_safe_cycle = Flux.StatusProvider
+                .WhenAnyValue(s => s.StatusEvaluation)
+                .Select(e => e.CanSafePrint);
+
             var can_execute = Observable.CombineLatest(
                 this.WhenAnyValue(v => v.SelectedTool),
                 this.WhenAnyValue(v => v.CurrentTemperature),
-                (tool, temp) => tool.HasValue && temp.HasValue && temp.Value.Target > 0 && temp.Value.Percentage > 85)
+                can_safe_cycle,
+                (tool, temp, can_safe_cycle) =>
+                {
+                    if (!tool.HasValue)
+                        return false;
+                    if (!temp.HasValue)
+                        return false;
+                    if (temp.Value.Target <= 0)
+                        return false;
+                    if (temp.Value.Percentage < 85)
+                        return default;
+                    if (!can_safe_cycle)
+                        return can_unsafe_cycle;
+                    return true;
+                })
                 .ToOptional();
 
-            var button = new CmdButton($"Z??{(distance > 0 ? $"+{distance:0.00mm}" : $"{distance:0.00mm}")}", () => move_tool(distance), can_always_move ? default : can_execute);
+            var button = new CmdButton($"Z??{(distance > 0 ? $"+{distance:0.00mm}" : $"{distance:0.00mm}")}", () => move_tool(distance), can_execute);
             button.InitializeRemoteView();
             button.DisposeWith(Disposables);
             return button;
@@ -295,7 +317,7 @@ namespace Flux.ViewModels
                     .WatchOptional(e)
                     .ConvertMany(f => f.WhenAnyValue(f => f.SelectedToolMaterial))
                     .ConvertMany(tm => tm.WhenAnyValue(tm => tm.Document))
-                    .Convert(tm => tm.PrintTemperature);
+                    .Convert(tm => tm[tm => tm.PrintTemperature, 0.0]);
 
                 var tool_offset = Calibration.Offsets.Connect()
                     .WatchOptional(e)

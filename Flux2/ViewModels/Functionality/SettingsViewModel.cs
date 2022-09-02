@@ -62,6 +62,14 @@ namespace Flux.ViewModels
             set => this.RaiseAndSetIfChanged(ref _CostHour, value);
         }
 
+        private Optional<int> _StandbyMinutes = 0;
+        [RemoteInput(step:15, min:0, max:120, converter:typeof(StandbyConverter))]
+        public Optional<int> StandbyMinutes
+        {
+            get => _StandbyMinutes;
+            set => this.RaiseAndSetIfChanged(ref _StandbyMinutes, value);
+        }
+
         [RemoteCommand]
         public ReactiveCommand<Unit, Unit> SaveSettingsCommand { get; }
 
@@ -102,6 +110,9 @@ namespace Flux.ViewModels
             user_settings.WhenAnyValue(s => s.CostHour)
                 .BindTo(this, v => v.CostHour);
 
+            user_settings.WhenAnyValue(s => s.StandbyMinutes)
+                .BindTo(this, v => v.StandbyMinutes);
+
             var canSave = Printers.SelectedValueChanged
                 .Select(p => p.HasValue);
 
@@ -120,6 +131,7 @@ namespace Flux.ViewModels
                 user_settings.PrinterName = PrinterName;
                 core_settings.WebcamAddress = WebcamAddress;
                 core_settings.LoggerAddress = LoggerAddress;
+                user_settings.StandbyMinutes = StandbyMinutes;
                 core_settings.PrinterID = Printers.SelectedKey;
                 core_settings.HostID = HostAddress.SelectedKey;
 

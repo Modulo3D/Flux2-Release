@@ -18,7 +18,7 @@ namespace Flux.ViewModels
 {
     public class FluxMessage : RemoteControl<FluxMessage>, IFluxMessage
     {
-        [RemoteOutput(false, typeof(DateTimeConverter<DateTimeFormat>))]
+        [RemoteOutput(false, typeof(DateTimeConverter<RelativeDateTimeFormat>))]
         public DateTime TimeStamp { get; set; }
 
         [RemoteOutput(false)]

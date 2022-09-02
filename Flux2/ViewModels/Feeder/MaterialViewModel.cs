@@ -205,14 +205,14 @@ namespace Flux.ViewModels
                 this.WhenAnyValue(v => v.State),
                 tool_material.ConvertMany(tm => tm.WhenAnyValue(v => v.State)),
                 Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation).Select(s => s.CanSafeCycle),
-                (tool_nozzle, material, tool_material, idle) => new
+                (tool_nozzle, material, tool_material, can_cycle) => new
                 {
-                    can_purge = idle && CanPurgeMaterial(tool_nozzle, material, tool_material),
-                    can_load = idle && CanLoadMaterial(tool_nozzle, material, tool_material),
-                    can_unload = idle && CanUnloadMaterial(tool_nozzle, material, tool_material),
+                    can_unload = can_cycle, // && CanUnloadMaterial(tool_nozzle, material, tool_material),
+                    can_purge = CanPurgeMaterial(can_cycle, tool_nozzle, material, tool_material),
+                    can_load = CanLoadMaterial(can_cycle, tool_nozzle, material, tool_material),
                 });
 
-            UnloadMaterialCommand = ReactiveCommand.CreateFromTask(UnloadAsync/*, material.Select(m => m.can_unload)*/)
+            UnloadMaterialCommand = ReactiveCommand.CreateFromTask(UnloadAsync, material.Select(m => m.can_unload))
                 .DisposeWith(Disposables);
             LoadPurgeMaterialCommand = ReactiveCommand.CreateFromTask(LoadPurgeAsync, material.Select(m => m.can_load || m.can_purge))
                 .DisposeWith(Disposables);
@@ -256,8 +256,10 @@ namespace Flux.ViewModels
             return Observable.CombineLatest(inserted, known, locked, loaded,
                  (inserted, known, locked, loaded) => new MaterialState(inserted, known, selected, locked, loaded));
         }
-        private bool CanUnloadMaterial(ToolNozzleState tool_nozzle, MaterialState material,  Optional<ToolMaterialState> tool_material)
+        private bool CanUnloadMaterial(bool can_cycle, ToolNozzleState tool_nozzle, MaterialState material,  Optional<ToolMaterialState> tool_material)
         {
+            if (!can_cycle)
+                return false;
             if (!tool_nozzle.IsLoaded())
                 return false;
             if (material.IsNotLoaded())
@@ -268,8 +270,10 @@ namespace Flux.ViewModels
                 return false;
             return true;
         }
-        private bool CanLoadMaterial(ToolNozzleState tool_nozzle, MaterialState material,  Optional<ToolMaterialState> tool_material)
+        private bool CanLoadMaterial(bool can_cycle, ToolNozzleState tool_nozzle, MaterialState material,  Optional<ToolMaterialState> tool_material)
         {
+            if (!can_cycle)
+                return false;
             if (!tool_nozzle.IsLoaded())
                 return false;
             if (material.IsLoaded())
@@ -280,8 +284,10 @@ namespace Flux.ViewModels
                 return false;
             return true;
         }
-        private bool CanPurgeMaterial(ToolNozzleState tool_nozzle, MaterialState material, Optional<ToolMaterialState> tool_material)
+        private bool CanPurgeMaterial(bool can_cycle, ToolNozzleState tool_nozzle, MaterialState material, Optional<ToolMaterialState> tool_material)
         {
+            if (!can_cycle)
+                return false;
             if (!tool_nozzle.IsLoaded())
                 return false;
             if (!material.IsLoaded())

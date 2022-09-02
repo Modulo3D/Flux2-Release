@@ -50,7 +50,8 @@ namespace Flux.ViewModels
                 tn.GetDocument<Nozzle>(db, tn => tn.NozzleGuid));
         }, t => t.ToolGuid)
         {
-            Odometer = new OdometerViewModel<NFCToolNozzle>(Flux, this, Observable.Return(1.0));
+            var multiplier = Observable.Return(1.0);
+            Odometer = new OdometerViewModel<NFCToolNozzle>(Flux, this, multiplier);
 
             var tool_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TEMP_TOOL, Position).Convert(u => u.Alias).ValueOrDefault();
             _NozzleTemperature = Flux.ConnectionProvider

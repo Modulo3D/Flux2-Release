@@ -123,8 +123,13 @@ namespace Flux.ViewModels
                 .ToProperty(this, v => v.CanDelete)
                 .DisposeWith(Disposables);
 
+            var queue_size = Flux.ConnectionProvider
+                .ObserveVariable(c => c.QUEUE_SIZE)
+                .ValueOr(() => (ushort)0);
+
             _CanSelect = Observable.CombineLatest(
                 is_selecting_file,
+                queue_size,
                 Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS),
                 Flux.StatusProvider.WhenAnyValue(e => e.PrintingEvaluation),
                 CanSelectMCode)
@@ -155,14 +160,16 @@ namespace Flux.ViewModels
             AddOutput("quality", this.WhenAnyValue(v => v.Analyzer).Convert(a => a.MCode.PrintQuality));
             AddOutput("materials", Materials.Connect().QueryWhenChanged(f => f.Items.Select(i => i.Name)));
             AddOutput("duration", this.WhenAnyValue(v => v.Analyzer).Convert(a => a.MCode.Duration), typeof(TimeSpanConverter));
-            AddOutput("created", this.WhenAnyValue(v => v.Analyzer).Convert(a => a.MCode.Created), typeof(DateTimeConverter<DateTimeFormat>));
+            AddOutput("created", this.WhenAnyValue(v => v.Analyzer).Convert(a => a.MCode.Created), typeof(DateTimeConverter<RelativeDateTimeFormat>));
             AddOutput("quantities", this.WhenAnyValue(v => v.Analyzer).Convert(a => a.Extrusions.Select(e => e.Value.WeightG)), typeof(EnumerableConverter<WeightConverter, double>));
         }
 
-        private bool CanSelectMCode(bool selecting, Optional<FLUX_ProcessStatus> status, PrintingEvaluation printing_eval)
+        private bool CanSelectMCode(bool selecting, ushort queue_size, Optional<FLUX_ProcessStatus> status, PrintingEvaluation printing_eval)
         {
             if (selecting)
                 return false;
+            if (queue_size > 1)
+                return true;
             if (!printing_eval.SelectedMCode.HasValue && !printing_eval.Recovery.HasValue)
                 return true;
             if (!status.ConvertOr(s => s == FLUX_ProcessStatus.IDLE, () => false))

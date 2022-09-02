@@ -32,7 +32,6 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public string OperationText => _OperationText.Value;
 
-        private ISourceCache<IConditionViewModel, string> Conditions { get; set; }
         [RemoteContent(true)]
         public IObservableCache<IConditionViewModel, string> FilteredConditions { get; private set; }
 
@@ -63,23 +62,20 @@ namespace Flux.ViewModels
 
         public void Initialize()
         {
-            Conditions = new SourceCache<IConditionViewModel, string>(c => c.Name);
-            Conditions.Edit(innerList =>
-            {
-                innerList.AddOrUpdate(FindConditions());
-            });
-
             var is_idle = Feeder.Flux.StatusProvider
                 .WhenAnyValue(s => s.StatusEvaluation)
                 .Select(s => s.IsIdle);
 
-            FilteredConditions = Conditions.Connect()
-                .AutoRefresh(c => c.State)
+            var conditions = FindConditions();
+            FilteredConditions = conditions
+                .AsObservableChangeSet(t => t.condition.Name)
                 .Filter(is_idle.Select(idle =>
                 {
-                    return (Func<IConditionViewModel, bool>)filter;
-                    bool filter(IConditionViewModel condition) => idle;
+                    return (Func<(IConditionViewModel condition, bool filter_on_cycle), bool>)filter_condition;
+                    bool filter_condition((IConditionViewModel condition, bool filter_on_cycle) t) => !t.filter_on_cycle || idle;
                 }))
+                .Transform(t => t.condition)
+                .AutoRefresh(c => c.State)
                 .AsObservableCache();
 
             _AllConditionsTrue = FilteredConditions.Connect()
@@ -132,6 +128,6 @@ namespace Flux.ViewModels
         protected abstract string FindTitleText(bool idle);
         protected abstract string FindOperationText(bool idle);
 
-        protected abstract IEnumerable<IConditionViewModel> FindConditions();
+        protected abstract IEnumerable<(IConditionViewModel condition, bool filter_on_cycle)> FindConditions();
     }
 }

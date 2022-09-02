@@ -158,20 +158,19 @@ namespace Flux.ViewModels
                 .Select(v => v as IOSAI_VariableBase)
                 .Where(v => v?.LogicalAddress.VarCode == varcode);
 
-            var start_addr = variables.SelectMany(var =>
+            var addr_range = variables.SelectMany(var =>
             {
-                if (var is IOSAI_Array array)
-                    return array.Variables.Items.Select(v => v.LogicalAddress.Index);
+                if (var is IFLUX_Array array)
+                {
+                    return array.Variables.Items
+                        .Where(v => v is IOSAI_Variable)
+                        .Select(v => ((IOSAI_Variable)v).LogicalAddress.Index);
+                }
                 return new[] { var.LogicalAddress.Index };
-            }).Min();
+            });
 
-            var end_addr = variables.SelectMany(var =>
-            {
-                if (var is IOSAI_Array array)
-                    return array.Variables.Items.Select(v => v.LogicalAddress.Index);
-                return new[] { var.LogicalAddress.Index };
-            }).Max();
-
+            var start_addr = addr_range.Min();
+            var end_addr = addr_range.Max();
             return (start_addr, end_addr);
         }
         public async Task UpdateBufferAsync()

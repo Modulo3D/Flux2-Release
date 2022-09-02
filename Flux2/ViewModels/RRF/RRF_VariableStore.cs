@@ -19,6 +19,7 @@ namespace Flux.ViewModels
         where TRRF_VariableStore : RRF_VariableStoreBase<TRRF_VariableStore>
     {
         public RRF_VariableGlobalModel<bool> ITERATOR { get; }
+        public RRF_VariableGlobalModel<bool> RUN_DAEMON { get; }
 
         public RRF_GlobalModelBuilder<TRRF_VariableStore>.RRF_InnerGlobalModelBuilder Global{ get; }
         public RRF_ModelBuilder<TRRF_VariableStore>.RRF_InnerModelBuilder<FLUX_FileList> Queue { get; }
@@ -72,8 +73,8 @@ namespace Flux.ViewModels
 
                 var extruders_units = VariableUnit.Range(0, max_extruders);
 
-                var extruders = Move.CreateArray(m => m.Extruders, extruders_units);
-                EXTRUSIONS = extruders.CreateArray("EXTRUSIONS", (c, e) => e.Position);
+                var extruders           = Move.CreateArray(m => m.Extruders, extruders_units);
+                EXTRUSIONS              = extruders.CreateArray<double, double>("EXTRUSIONS", (c, e) => e.Position);
 
                 Axes                    = Move.CreateArray(m => m.Axes, AxesUnits);
                 GpIn                    = Sensors.CreateArray(s => s.GpIn, GpInUnits);
@@ -85,7 +86,7 @@ namespace Flux.ViewModels
                 Filaments               = Sensors.CreateArray(m => m.FilamentMonitors, FilamentUnits);
 
                 AXIS_POSITION           = Axes.CreateArray("AXIS_POSITION", (c, a) => a.MachinePosition);
-                AXIS_ENDSTOP            = Endstops.CreateArray("AXIS ENDSTOP", (c, e) => e.Triggered);
+                AXIS_ENDSTOP            = Endstops.CreateArray<bool, bool>("AXIS ENDSTOP", (c, e) => e.Triggered, (c, e, u) => Task.FromResult(true));
                 ENABLE_DRIVERS          = Axes.CreateArray<bool, bool>("ENABLE DRIVERS", (c, m) => m.IsEnabledDriver(), EnableDriverAsync);
 
                 PROGRESS                = Job.CreateVariable("PROGRESS", (c, m) => m.GetParamacroProgress());
@@ -99,6 +100,7 @@ namespace Flux.ViewModels
                 IS_HOMED                = Move.CreateVariable<bool, bool>("IS HOMED", (c, m) => m.IsHomed());
 
                 ITERATOR                = Global.CreateVariable("iterator",             false,  true);
+                RUN_DAEMON              = Global.CreateVariable("run_daemon",           false,  true);
                 KEEP_CHAMBER            = Global.CreateVariable("keep_chamber",         true,   false);
                 KEEP_TOOL               = Global.CreateVariable("keep_tool",            false,  false);
                 DEBUG                   = Global.CreateVariable("debug",                false,  false);

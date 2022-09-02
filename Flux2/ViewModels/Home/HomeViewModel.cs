@@ -42,6 +42,7 @@ namespace Flux.ViewModels
         public InvalidToolsViewModel InvalidToolsPhase { get; }
         public LowMaterialsViewModel LowMaterialsPhase { get; }
         public InvalidProbesViewModel InvalidProbesPhase { get; }
+        public InvalidPrinterViewModel InvalidPrinterPhase { get; }
         public InvalidMaterialsViewModel InvalidMaterialsPhase { get; }
 
         private ObservableAsPropertyHelper<IHomePhaseViewModel> _HomePhase;
@@ -50,14 +51,15 @@ namespace Flux.ViewModels
 
         public HomeViewModel(FluxViewModel flux) : base(flux)
         {
-            WelcomePhase = new WelcomeViewModel(Flux); // ok
+            WelcomePhase = new WelcomeViewModel(Flux);
             RecoveryPhase = new RecoveryViewModel(Flux);
             PrintingPhase = new PrintingViewModel(Flux);
             ColdNozzlesPhase = new PurgeNozzlesViewModel(Flux);
             PreparePrintPhase = new PreparePrintViewModel(Flux);
-            InvalidToolsPhase = new InvalidToolsViewModel(Flux); // ok
+            InvalidToolsPhase = new InvalidToolsViewModel(Flux);
             LowMaterialsPhase = new LowMaterialsViewModel(Flux);
             InvalidProbesPhase = new InvalidProbesViewModel(Flux);
+            InvalidPrinterPhase = new InvalidPrinterViewModel(Flux);
             InvalidMaterialsPhase = new InvalidMaterialsViewModel(Flux);
 
             PrintingPhase.Initialize();
@@ -84,6 +86,9 @@ namespace Flux.ViewModels
 
             if (!printing_eval.SelectedMCode.HasValue)
                 return WelcomePhase;
+
+            if (start_eval.HasInvalidPrinter)
+                return InvalidPrinterPhase;
 
             if (start_eval.HasInvalidTools)
                 return InvalidToolsPhase;

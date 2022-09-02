@@ -158,6 +158,23 @@ namespace Flux.ViewModels
             if (!material.HasValue)
                 return false;
 
+            if (!material.Value.Nfc.Tag.HasValue)
+                return false;
+
+            var nfc_tag = material.Value.Nfc.Tag;
+            if (!nfc_tag.HasValue)
+                return false;
+
+            var cur_weight = nfc_tag.Value.CurWeightG;
+            if (!cur_weight.HasValue)
+                return false;
+
+            if (cur_weight.Value <= 0)
+            {
+                Flux.Messages.LogMessage("Impossibile caricare il materiale", "Bobina terminata", MessageLevel.WARNING, 0);
+                return false;
+            }
+
             if (!Flux.ConnectionProvider.HasVariable(c => c.FILAMENT_ON_HEAD))
                 material.Value.StoreTag(t => t.SetLoaded(Feeder.Position));
 
@@ -208,20 +225,26 @@ namespace Flux.ViewModels
                 return false;
             }
 
+            if (!await Flux.ConnectionProvider.ParkToolAsync())
+            {
+                Flux.Messages.LogMessage(MaterialChangeResult.MATERIAL_CHANGE_CANCELLED, default);
+                return false;
+            }
+
             Flux.Navigator.NavigateBack();
             return result == ContentDialogResult.Primary;
         }
-        protected override IEnumerable<IConditionViewModel> FindConditions()
+        protected override IEnumerable<(IConditionViewModel condition, bool filter_on_cycle)> FindConditions()
         {
             // TODO
             if (Flux.StatusProvider.TopLockClosed.HasValue)
-                yield return Flux.StatusProvider.TopLockClosed.Value;
+                yield return (Flux.StatusProvider.TopLockClosed.Value, true);
 
             if (Flux.StatusProvider.ChamberLockClosed.HasValue)
-                yield return Flux.StatusProvider.ChamberLockClosed.Value;
+                yield return (Flux.StatusProvider.ChamberLockClosed.Value, true);
 
             if (Flux.StatusProvider.SpoolsLock.HasValue)
-                yield return Flux.StatusProvider.SpoolsLock.Value;
+                yield return (Flux.StatusProvider.SpoolsLock.Value, false);
 
             var material = Feeder.Materials.Connect()
                 .WatchOptional(Material.Position);
@@ -231,7 +254,7 @@ namespace Flux.ViewModels
 
             var can_update_nfc = FindCanUpdateNFC();
 
-            yield return ConditionViewModel.Create(
+            yield return (ConditionViewModel.Create(
                 Flux,
                 "material",
                 Observable.CombineLatest(
@@ -259,7 +282,7 @@ namespace Flux.ViewModels
                             return state.Create(false, "BLOCCA IL MATERIALE", "nFC", UpdateNFCAsync, can_update_nfc);
 
                         return new ConditionState(true, $"{value.document} PRONTO AL CARICAMENTO");
-                    });
+                    }), true);
         }
 
         public override async Task<bool> UpdateNFCAsync()
@@ -369,17 +392,17 @@ namespace Flux.ViewModels
 
             return true;
         }
-        protected override IEnumerable<IConditionViewModel> FindConditions()
+        protected override IEnumerable<(IConditionViewModel condition, bool filter_on_cycle)> FindConditions()
         {
             // TODO
             if(Flux.StatusProvider.TopLockClosed.HasValue)
-                yield return Flux.StatusProvider.TopLockClosed.Value;
+                yield return (Flux.StatusProvider.TopLockClosed.Value, true);
 
             if (Flux.StatusProvider.ChamberLockClosed.HasValue)
-                yield return Flux.StatusProvider.ChamberLockClosed.Value;
+                yield return (Flux.StatusProvider.ChamberLockClosed.Value, true);
 
             if (Flux.StatusProvider.SpoolsLock.HasValue)
-                yield return Flux.StatusProvider.SpoolsLock.Value;
+                yield return (Flux.StatusProvider.SpoolsLock.Value, false);
 
             var material = Feeder.Materials.Connect()
                 .WatchOptional(Material.Position);
@@ -387,7 +410,7 @@ namespace Flux.ViewModels
             var tool_material = Feeder.ToolMaterials.Connect()
                 .WatchOptional(Material.Position);
 
-            yield return ConditionViewModel.Create(
+            yield return (ConditionViewModel.Create(
                 Flux,
                 "material",
                 Observable.CombineLatest(
@@ -408,7 +431,7 @@ namespace Flux.ViewModels
                             return state.Create(false, "SBLOCCA IL MATERIALE", "nFC", UpdateNFCAsync);
 
                         return new ConditionState(true, $"{value.document} PRONTO ALLO SCARICAMENTO");
-                    });
+                    }), true);
         }
         public override async Task<bool> UpdateNFCAsync()
         {

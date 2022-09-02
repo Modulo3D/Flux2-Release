@@ -301,6 +301,18 @@ namespace Flux.ViewModels
 
             AddCommand(
                 new ToggleButton(
+                    "swFilamentSensor",
+                    () =>
+                    {
+                        var sw_filament = !user_settings.Local.SoftwareFilamentSensor.ValueOr(() => false);
+                        user_settings.Local.SoftwareFilamentSensor = sw_filament;
+                        user_settings.PersistLocalSettings();
+                    },
+                    user_settings.Local.WhenAnyValue(s => s.SoftwareFilamentSensor),
+                    visible: advanced_mode));
+
+            AddCommand(
+                new ToggleButton(
                     "debug",
                     () =>
                     {

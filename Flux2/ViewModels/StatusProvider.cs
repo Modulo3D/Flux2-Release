@@ -3,6 +3,7 @@ using DynamicData.Aggregation;
 using DynamicData.Binding;
 using DynamicData.Kernel;
 using Microsoft.Extensions.Logging;
+using Modulo3DDatabase;
 using Modulo3DStandard;
 using ReactiveUI;
 using System;
@@ -155,8 +156,7 @@ namespace Flux.ViewModels
                     if (!value.Item3 || value.Item1.Kpa > value.Item2)
                         return state.Create(false, "INSERIRE UN FOGLIO", "vacuum", c => c.ENABLE_VACUUM, is_idle);
                     return state.Create(true, "FOGLIO INSERITO", "vacuum", c => c.ENABLE_VACUUM, is_idle);
-                },
-                TimeSpan.FromSeconds(1));
+                });
 
             var top_lock = OptionalObservable.CombineLatest(
                 Flux.ConnectionProvider.ObserveVariable(m => m.LOCK_CLOSED, "top"),
@@ -229,8 +229,10 @@ namespace Flux.ViewModels
                     return state.Create(true, "PORTELLA APERTA", "lock", c => c.OPEN_LOCK, "chamber", is_idle);
                 });
 
-            var raised_pistions = Flux.ConnectionProvider.ObserveVariable(m => m.PISTON_LOW)
-                .ConvertToObservable(c => c.QueryWhenChanged(low => low.Items.All(low => low.HasValue && !low.Value)));
+            // TODO
+            /*var raised_pistions = Flux.ConnectionProvider.ObserveVariable(m => m.PISTON_LOW)
+                .Convert(c => c.QueryWhenChanged(low => low.Items.All(low => low.HasValue && !low.Value)))
+                .ToOptionalObservable();
 
             RaisedPistons = ConditionViewModel.Create(flux, "raisedPiston", raised_pistions,
                 (state, value) =>
@@ -238,7 +240,7 @@ namespace Flux.ViewModels
                     if (!value)
                         return state.Create(false, "ALZARE TUTTI I PISTONI");
                     return state.Create(true, "STATO PISTONI CORRETTO");
-                });
+                });*/
 
             var not_in_change = Flux.ConnectionProvider.ObserveVariable(m => m.IN_CHANGE)
                 .ValueOr(() => false);
@@ -254,7 +256,7 @@ namespace Flux.ViewModels
             var has_safe_state = Observable.CombineLatest(
                 Flux.ConnectionProvider.WhenAnyValue(v => v.IsInitializing),
                 Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS),
-                RaisedPistons.ConvertToObservable(c => c.StateChanged),
+                //RaisedPistons.ConvertToObservable(c => c.StateChanged),
                 PressurePresence.ConvertToObservable(c => c.StateChanged),
                 TopLockClosed.ConvertToObservable(c => c.StateChanged),
                 ChamberLockClosed.ConvertToObservable(c => c.StateChanged),
@@ -307,6 +309,8 @@ namespace Flux.ViewModels
                 .Transform(m => m.Value)
                 .AsObservableList();
 
+            var core_settings = Flux.SettingsProvider.CoreSettings.Local;
+
             var start_with_low_materials = this.WhenAnyValue(s => s.StartWithLowMaterials);
 
             var has_invalid_materials = FeederEvaluators.Connect()
@@ -344,6 +348,8 @@ namespace Flux.ViewModels
                 .DistinctUntilChanged()
                 .StartWithDefault();
 
+            selected_part_program.LogObservable(new EventId(0, "selected_part_program"), flux.Logger);
+
             var selected_guid = selected_part_program
                 .Convert(pp => pp.MCodeGuid)
                 .DistinctUntilChanged()
@@ -356,6 +362,11 @@ namespace Flux.ViewModels
                 .Convert(a => a.MCode)
                 .StartWithDefault()
                 .DistinctUntilChanged();
+
+            var has_invalid_printer = Observable.CombineLatest(
+                core_settings.WhenAnyValue(v => v.PrinterID),
+                selected_mcode,
+                (printer_id, selected_mcode) => !selected_mcode.HasValue || selected_mcode.Value.PrinterId != printer_id);
 
             var can_safe_cycle = Observable.CombineLatest(
                 is_idle,
@@ -432,7 +443,7 @@ namespace Flux.ViewModels
             var sample_print_progress = Observable.CombineLatest(
                 is_cycle,
                 selected_mcode,
-                Observable.Interval(TimeSpan.FromSeconds(30)).StartWith(0),
+                Observable.Interval(TimeSpan.FromSeconds(5)).StartWith(0),
                 (_, _, _) => Unit.Default);
 
             var database = Flux.DatabaseProvider
@@ -448,6 +459,7 @@ namespace Flux.ViewModels
                 has_low_materials,
                 has_invalid_tools,
                 has_invalid_probes,
+                has_invalid_printer,
                 has_invalid_materials,
                 start_with_low_materials,
                 StartEvaluation.Create)
@@ -555,9 +567,10 @@ namespace Flux.ViewModels
                 .StartWith(new OdometerExtrusions())
                 .ToProperty(this, v => v.OdometerExtrusions);
 
-            this.WhenAnyValue(v => v.OdometerExtrusions)
-                .PairWithPreviousValue()
-                .Subscribe(extrusions =>
+            var extrusion_set = this.WhenAnyValue(v => v.OdometerExtrusions);
+
+            extrusion_set.PairWithPreviousValue()
+                .Subscribe(async extrusions =>
                 {
                     if (!extrusions.OldValue.QueuePosition.HasValue)
                         return;
@@ -603,12 +616,27 @@ namespace Flux.ViewModels
 
                             feeder.ToolNozzle.Odometer.AccumulateValue(extrusion_diff);
                             if (feeder.SelectedMaterial.HasValue)
+                            { 
                                 feeder.SelectedMaterial.Value.Odometer.AccumulateValue(extrusion_diff);
+
+                                if (!feeder.SelectedMaterial.Value.Odometer.Value.HasValue)
+                                    continue;
+
+                                if (feeder.SelectedMaterial.Value.Odometer.Percentage > 0)
+                                    continue;
+
+                                var user_settings = flux.SettingsProvider.UserSettings.Local;
+                                if (!user_settings.SoftwareFilamentSensor.HasValue)
+                                    continue;
+
+                                if (!user_settings.SoftwareFilamentSensor.Value)
+                                    continue;
+
+                                await Flux.ConnectionProvider.HoldAsync(true);
+                            }
                         }
                     }
                 });
-
-            var extrusion_set = this.WhenAnyValue(v => v.OdometerExtrusions);
 
             _ExtrusionSetQueue = Observable.CombineLatest(
                 mcode_queue,
@@ -751,7 +779,7 @@ namespace Flux.ViewModels
         private bool CanPrinterSafeCycle(
             Optional<bool> is_initializing,
             Optional<FLUX_ProcessStatus> status,
-            OptionalChange<ConditionState> raised_pistons,
+            /*OptionalChange<ConditionState> raised_pistons,*/
             OptionalChange<ConditionState> pressure,
             OptionalChange<ConditionState> top_lock,
             OptionalChange<ConditionState> chamber_lock,
@@ -767,8 +795,8 @@ namespace Flux.ViewModels
                 return false;
             if (status.Value == FLUX_ProcessStatus.ERROR)
                 return false;
-            if (raised_pistons.HasChange && raised_pistons.Change.Valid)
-                return false;
+            /*if (raised_pistons.HasChange && !raised_pistons.Change.Valid)
+                return false;*/
             if (pressure.HasChange && !pressure.Change.Valid)
                 return false;
             if (top_lock.HasChange && !top_lock.Change.Valid)
@@ -828,9 +856,9 @@ namespace Flux.ViewModels
         }
         private Optional<Dictionary<FluxJob, Dictionary<ushort, Extrusion>>> GetExtrusionSetQueue(Dictionary<QueuePosition, FluxJob> job_queue, OdometerExtrusions odometer_extrusion, Dictionary<Guid, Optional<MCodeAnalyzer>> mcode_analyzers)
         {
-            
+
             try
-            {   
+            {
                 if (!odometer_extrusion.QueuePosition.HasValue)
                     return default;
                 if (!odometer_extrusion.MCodeGuid.HasValue)
@@ -840,7 +868,7 @@ namespace Flux.ViewModels
 
                 var extrusion_set_queue = new Dictionary<FluxJob, Dictionary<ushort, Extrusion>>();
                 foreach (var job in job_queue.Values)
-                { 
+                {
                     if (job.QueuePosition < odometer_extrusion.QueuePosition.Value)
                         continue;
 
@@ -866,7 +894,7 @@ namespace Flux.ViewModels
                 }
                 return extrusion_set_queue;
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 Flux.Messages.LogException(this, ex);
                 return default;

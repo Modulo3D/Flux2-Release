@@ -66,5 +66,7 @@
 
         public override string ToString() => Name;
         public override OSAI_NamedAddress Increment() => new OSAI_NamedAddress(Name, (ushort)(Index + 1));
+
+        public static implicit operator OSAI_NamedAddress(string name) => new OSAI_NamedAddress(name);
     }
 }

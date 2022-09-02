@@ -26,20 +26,54 @@ namespace Flux.ViewModels
     }
     public interface IRRF_MemoryReader : IRRF_MemoryReaderBase
     {
-        string Name { get; }
         string Resource { get; }
+        Task TryScheduleAsync(CancellationToken ct);
     }
     public interface IRRF_MemoryReaderGroup : IRRF_MemoryReaderBase, IDisposable
     {
         TimeSpan Period { get; }
         TimeSpan Timeout { get; }
+        ISourceCache<IRRF_MemoryReader, string> MemoryReaders { get; }
     }
-    public class RRF_MemoryReader : ReactiveObject, IRRF_MemoryReader
+    public class RRF_ModelReader<TData> : ReactiveObject, IRRF_MemoryReader
     {
-        public string Name { get; }
+        public string Resource { get; }
+        public Action<TData> Action { get; }
+        public RRF_Connection Connection { get; }
+
+        private bool _HasMemeoryRead;
+        public bool HasMemoryRead
+        {
+            get => _HasMemeoryRead;
+            private set => this.RaiseAndSetIfChanged(ref _HasMemeoryRead, value);
+        }
+
+        public RRF_ModelReader(RRF_Connection connection, string resource, Action<TData> action)
+        {
+            Action = action; 
+            Resource = resource;
+            Connection = connection;
+        }
+
+        public async Task TryScheduleAsync(CancellationToken ct)
+        {
+            var request = new RRF_Request($"rr_model?key={Resource}&flags=d99v", Method.Get, RRF_RequestPriority.Medium, ct);
+            var rrf_response = await Connection.Client.ExecuteAsync(request);
+            if (!rrf_response.Ok)
+                return;
+
+            var model_data = rrf_response.GetContent<RRF_ObjectModelResponse<TData>>();
+            if (model_data.HasValue)
+                Action?.Invoke(model_data.Value.Result);
+             
+            HasMemoryRead = true;
+        }
+    }
+    public class RRF_FileSystemReader : ReactiveObject, IRRF_MemoryReader
+    {
         public string Resource { get; }
         public RRF_Connection Connection { get; }
-        public Action<RRF_Response> Action { get; }
+        public Action<FLUX_FileList> Action { get; }
 
         private bool _HasMemoryRead;
         public bool HasMemoryRead
@@ -48,33 +82,44 @@ namespace Flux.ViewModels
             private set => this.RaiseAndSetIfChanged(ref _HasMemoryRead, value);
         }
 
-        public RRF_MemoryReader(RRF_Connection connection, string name, string resource, Action<RRF_Response> action)
+        public RRF_FileSystemReader(RRF_Connection connection, string resource, Action<FLUX_FileList> action)
         {
-            Name = name;
-            Action = action; 
+            Action = action;
             Resource = resource;
             Connection = connection;
         }
 
         public async Task TryScheduleAsync(CancellationToken ct)
         {
-            var request = new RRF_Request(Resource, Method.Get, RRF_RequestPriority.Medium, ct);
-            var rrf_response = await Connection.Client.ExecuteAsync(request);
-            if (!rrf_response.Ok)
-                return;
-        
-            Action?.Invoke(rrf_response);
+            Optional<FLUX_FileList> file_list = default;
+            var full_file_list = new FLUX_FileList(Resource);
+            do
+            {
+                var first = file_list.ConvertOr(f => f.Next, () => 0);
+                var request = new RRF_Request($"rr_filelist?dir={Resource}&first={first}", Method.Get, RRF_RequestPriority.Immediate, ct);
+                
+                var rrf_response = await Connection.Client.ExecuteAsync(request);
+                if (!rrf_response.Ok)
+                    return;
+
+                file_list = rrf_response.GetContent<FLUX_FileList>();
+                if (file_list.HasValue)
+                    full_file_list.Files.AddRange(file_list.Value.Files);
+
+            } while (file_list.HasValue && file_list.Value.Next != 0);
+
+            Action?.Invoke(full_file_list);
             HasMemoryRead = true;
         }
     }
-
 
     public class RRF_MemoryReaderGroup : ReactiveObject, IRRF_MemoryReaderGroup
     {
         public TimeSpan Period { get; }
         public TimeSpan Timeout { get; }
         public DisposableThread Thread { get; }
-        public SourceCache<RRF_MemoryReader, string> MemoryReaders { get; }
+        public SourceCache<IRRF_MemoryReader, string> MemoryReaders { get; }
+        ISourceCache<IRRF_MemoryReader, string> IRRF_MemoryReaderGroup.MemoryReaders => MemoryReaders;
 
         public RRF_Connection Connection { get; }
 
@@ -93,7 +138,7 @@ namespace Flux.ViewModels
             Thread = DisposableThread.Start(TryScheduleAsync, period)
                 .DisposeWith(Disposables);
 
-            MemoryReaders = new SourceCache<RRF_MemoryReader, string>(r => r.Name)
+            MemoryReaders = new SourceCache<IRRF_MemoryReader, string>(r => r.Resource)
                 .DisposeWith(Disposables);
 
             _HasMemoryRead = MemoryReaders.Connect()
@@ -111,29 +156,19 @@ namespace Flux.ViewModels
             }
         }
 
-        public void AddModelReader<T>(RRF_MemoryBuffer buffer, Action<T> model)
+        public void AddModelReader<TData>(RRF_MemoryBuffer buffer, Action<TData> model)
         {
-            var key = buffer.ModelKeys.Lookup(typeof(T));
+            var key = buffer.ModelKeys.Lookup(typeof(TData));
             if (!key.HasValue)
                 return;
 
-            var reader = new RRF_MemoryReader(Connection, key.Value, $"rr_model?key={key.Value}&flags=d99v", r => 
-            {
-                var model_data = r.GetContent<RRF_ObjectModelResponse<T>>();
-                if (model_data.HasValue)
-                    model?.Invoke(model_data.Value.Result);
-            });
+            var reader = new RRF_ModelReader<TData>(Connection, key.Value, model);
             MemoryReaders.AddOrUpdate(reader);
         }
 
         public void AddFileSytemReader(string key, Action<FLUX_FileList> file_system)
         {
-            var reader = new RRF_MemoryReader(Connection, key, $"rr_filelist?dir={key}", r =>
-            {
-                var files = r.GetContent<FLUX_FileList>();
-                if (files.HasValue)
-                    file_system?.Invoke(files.Value);
-            });
+            var reader = new RRF_FileSystemReader(Connection, key, file_system);
             MemoryReaders.AddOrUpdate(reader);
         }
 

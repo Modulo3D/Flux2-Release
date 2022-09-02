@@ -70,7 +70,9 @@ namespace Flux.ViewModels
                 .ToProperty(this, v => v.MovePrinterDistance);
 
             _AxisPosition = Flux.ConnectionProvider.ObserveVariable(m => m.AXIS_POSITION)
-                .QueryWhenChanged(p => string.Join(" ", p.KeyValues.Select(v => $"{v.Key}{v.Value:0.00}")))
+                .Convert(c => c.QueryWhenChanged(p => string.Join(" ", p.KeyValues.Select(v => $"{v.Key}{v.Value:0.00}"))))
+                .ToOptionalObservable()
+                .ObservableOr(() => "")
                 .ToProperty(this, v => v.AxisPosition);
 
             ShowRoutinesCommand = ReactiveCommand.Create(() => { Flux.Navigator.NavigateModal(Flux.Functionality); });
