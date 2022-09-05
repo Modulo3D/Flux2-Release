@@ -19,6 +19,7 @@ namespace Flux.ViewModels
     {
         public const ushort AxisNum = 4;
         public ushort ProcessNumber => 1;
+        public override ushort ArrayBase => 1;
 
         public FluxViewModel Flux { get; }
         private OSAI_MemoryBuffer _MemoryBuffer;
@@ -32,10 +33,12 @@ namespace Flux.ViewModels
             }
         }
 
-        public override string InnerQueuePath => "PROGRAMS\\QUEUE\\INNER";
+        public override string RootPath => "DEVICE";
+        public override string PathSeparator => "\\";
         public override string QueuePath => "PROGRAMS\\QUEUE";
         public override string StoragePath => "PROGRAMS\\STORAGE";
-
+        public override string InnerQueuePath => "PROGRAMS\\QUEUE\\INNER";
+        
         // MEMORY VARIABLES
         public OSAI_Connection(FluxViewModel flux, OSAI_VariableStore variable_store, string address) : base(variable_store, new OPENcontrolPortTypeClient(OPENcontrolPortTypeClient.EndpointConfiguration.OPENcontrol, address))
         {
@@ -774,26 +777,36 @@ namespace Flux.ViewModels
         }
         public override async Task<Optional<FLUX_FileList>> ListFilesAsync(string folder, CancellationToken ct = default)
         {
+            var files_data = new FLUX_FileList(folder);
+            Optional<LogFSFindFirstResponse> find_first_result = default;
+
             try
             {
-                var find_first_result = await Client.LogFSFindFirstOrDefaultAsync($"{folder}\\*");
-
-                if (!ProcessResponse(
-                    find_first_result.Body.retval,
-                    find_first_result.Body.ErrClass,
-                    find_first_result.Body.ErrNum))
-                    return default;
-
-                var files_data = new FLUX_FileList(folder);
-
-                // empty 
-                if (find_first_result.Body.Finder == 0xFFFFFFFF)
+                find_first_result = await Client.LogFSFindFirstOrDefaultAsync($"{folder}\\*");
+                if (!find_first_result.HasValue)
                     return files_data;
 
-                if (!string.IsNullOrEmpty(find_first_result.Body.FindData.FileName))
-                    files_data.Files.Add(new FLUX_File() { Type = FLUX_FileType.File, Name = find_first_result.Body.FindData.FileName });
+                if (!ProcessResponse(
+                    find_first_result.Value.Body.retval,
+                    find_first_result.Value.Body.ErrClass,
+                    find_first_result.Value.Body.ErrNum))
+                    return files_data;
 
-                var handle = find_first_result.Body.Finder;
+                // empty 
+                if (find_first_result.Value.Body.Finder == 0xFFFFFFFF)
+                    return files_data;
+
+                if (!string.IsNullOrEmpty(find_first_result.Value.Body.FindData.FileName))
+                {
+                    var file_attributes = (OSAI_FileAttributes)find_first_result.Value.Body.FindData.FileAttributes;
+                    files_data.Files.Add(new FLUX_File()
+                    {
+                        Name = find_first_result.Value.Body.FindData.FileName,
+                        Type = file_attributes.HasFlag(OSAI_FileAttributes.FILE_ATTRIBUTE_DIRECTORY) ? FLUX_FileType.Directory : FLUX_FileType.File,
+                    });
+                }
+
+                var handle = find_first_result.Value.Body.Finder;
 
                 Optional<LogFSFindNextResponse> find_next_result;
                 do
@@ -809,26 +822,34 @@ namespace Flux.ViewModels
                         return files_data;
 
                     if (!string.IsNullOrEmpty(find_next_result.Value.Body.FindData.FileName))
-                        files_data.Files.Add(new FLUX_File() { Type = FLUX_FileType.File, Name = find_next_result.Value.Body.FindData.FileName });
+                    {
+                        var file_attributes = (OSAI_FileAttributes)find_next_result.Value.Body.FindData.FileAttributes;
+                        files_data.Files.Add(new FLUX_File() 
+                        { 
+                            Name = find_next_result.Value.Body.FindData.FileName,
+                            Type = file_attributes.HasFlag(OSAI_FileAttributes.FILE_ATTRIBUTE_DIRECTORY) ? FLUX_FileType.Directory : FLUX_FileType.File,
+                        });
+                    }
                 }
                 while (find_next_result.ConvertOr(r => r.Body.Found, () => false));
-
-                var close_request = new LogFSFindCloseRequest(find_first_result.Body.Finder);
-                var close_response = await Client.LogFSFindCloseAsync(close_request);
-
-                if (!ProcessResponse(
-                    find_next_result.Value.Body.retval,
-                    find_next_result.Value.Body.ErrClass,
-                    find_next_result.Value.Body.ErrNum))
-                    return files_data;
-
-                return files_data;
             }
             catch (Exception ex)
             {
                 Debug.WriteLine(ex);
                 return default;
             }
+            finally
+            {
+                var close_request = new LogFSFindCloseRequest(find_first_result.Value.Body.Finder);
+                var close_response = await Client.LogFSFindCloseAsync(close_request);
+
+                ProcessResponse(
+                    close_response.retval,
+                    close_response.ErrClass,
+                    close_response.ErrNum);
+            }
+            
+            return files_data;
         }
         public override async Task<bool> PutFileAsync(
             string folder,
@@ -1176,18 +1197,17 @@ namespace Flux.ViewModels
 
         public override Optional<IEnumerable<string>> GetSetToolOffsetGCode(ushort position, double x, double y, double z)
         {
-            throw new NotImplementedException();
+            var x_offset = (x + y) / 2;
+            var y_offset = (x - y) / 2;
+            return new[] { $"(UTO, 0, X({x_offset}), Y({y_offset}), Z({z}))" };
         }
 
         public override async Task<bool> CancelPrintAsync(bool hard_cancel)
         {
             using var put_cancel_print_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             using var wait_cancel_print_cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            return await ExecuteParamacroAsync(new[] 
-            {
-                "(CLS, MACRO\\cancel_print)" 
-            }, 
-            put_cancel_print_cts.Token, true, wait_cancel_print_cts.Token);
+            return await ExecuteParamacroAsync(new[] { "(CLS, MACRO\\cancel_print)" }, 
+                put_cancel_print_cts.Token, true, wait_cancel_print_cts.Token);
         }
 
         public override async Task<bool> RenameFileAsync(string folder, string old_filename, string new_filename, bool wait, CancellationToken ct = default)
@@ -1206,12 +1226,12 @@ namespace Flux.ViewModels
 
         public override Optional<IEnumerable<string>> GetSetLowCurrentGCode()
         {
-            return default;
+            throw new NotImplementedException();
         }
 
         public override Optional<IEnumerable<string>> GetProbeMagazineGCode()
         {
-            return default;
+            throw new NotImplementedException();
         }
 
         public override Optional<IEnumerable<string>> GetCancelLoadFilamentGCode(ushort position)
@@ -1226,7 +1246,7 @@ namespace Flux.ViewModels
 
         public override Optional<IEnumerable<string>> GetCenterPositionGCode()
         {
-            throw new NotImplementedException();
+            return new[] { "(CLS, MACRO\\center_position)" };
         }
 
         public override async Task<bool> ExecuteParamacroAsync(IEnumerable<string> paramacro, CancellationToken put_ct, bool wait = false, CancellationToken wait_ct = default, bool can_cancel = false)
@@ -1274,12 +1294,12 @@ namespace Flux.ViewModels
 
         public override Optional<IEnumerable<string>> GetSetExtruderMixingGCode(ushort machine_extruder, ushort mixing_extruder)
         {
-            return default;
+            throw new NotImplementedException();
         }
 
         public override Optional<IEnumerable<string>> GetManualCalibrationPositionGCode()
         {
-            return default;
+            throw new NotImplementedException();
         }
     }
 }

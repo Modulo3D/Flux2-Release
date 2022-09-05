@@ -102,12 +102,12 @@ namespace Flux.ViewModels
     public class Dummy_Connection : FLUX_Connection<Dummy_VariableStore, Unit, Dummy_MemoryBuffer>
     {
         public override Dummy_MemoryBuffer MemoryBuffer { get; }
-
+        public override string RootPath => throw new NotImplementedException();
         public override string QueuePath => throw new NotImplementedException();
-
-        public override string InnerQueuePath => throw new NotImplementedException();
-
+        public override ushort ArrayBase => throw new NotImplementedException();
         public override string StoragePath => throw new NotImplementedException();
+        public override string PathSeparator => throw new NotImplementedException();
+        public override string InnerQueuePath => throw new NotImplementedException();
 
         public Dummy_Connection(Dummy_VariableStore variable_store) : base(variable_store, Unit.Default)
         {

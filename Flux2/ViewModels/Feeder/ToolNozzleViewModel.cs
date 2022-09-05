@@ -183,13 +183,15 @@ namespace Flux.ViewModels
 
             var in_mateinance = this.WhenAnyValue(v => v.InMaintenance);
 
+            var array_base = Flux.ConnectionProvider.ArrayBase;
+
             return Observable.CombineLatest(
                 in_change_error, tool_cur, inserted, mem_trailer, input_trailer, mem_magazine, input_magazine, known, locked, loaded, in_mateinance,
                 (in_change_error, tool_cur, inserted, mem_trailer, input_trailer, mem_magazine, input_magazine, known, locked, loaded, in_mateinance) =>
                 {
                     var on_trailer = !mem_trailer.HasChange || !input_trailer.HasChange || mem_trailer.Change.Convert(t => t && t == input_trailer.Change.ValueOr(() => t)).ValueOr(() => false);
                     var in_magazine = mem_magazine.HasChange && input_magazine.HasChange && mem_magazine.Change.Convert(t => t && t == input_magazine.Change.ValueOr(() => t)).ValueOr(() => false);
-                    var selected = tool_cur.Convert(t => t.ToOptional(t => t > -1)).Convert(t => Position == (ushort)t).ValueOr(() => false);
+                    var selected = tool_cur.Convert(t => t.ToOptional(t => t > -1)).Convert(t => Position == (ushort)(t - array_base)).ValueOr(() => false);
                     return new ToolNozzleState(has_tool_change, selected, inserted, known, locked, loaded, on_trailer, in_magazine, in_mateinance, in_change_error.ValueOr(() => false));
                 });
         }

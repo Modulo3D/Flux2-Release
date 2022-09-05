@@ -81,7 +81,7 @@ namespace Flux.ViewModels
             if (!options.Value.HasValue)
                 return;
 
-            var path = Folder.ConvertOr(f => f.FSFullPath, () => "");
+            var path = Folder.ConvertOr(f => f.FSFullPath, () => Flux.ConnectionProvider.PathSeparator);
             switch (options.Value.Value)
             {
                 case FLUX_FileType.File:
@@ -200,7 +200,7 @@ namespace Flux.ViewModels
         public async Task<(Optional<FolderViewModel>, Optional<FLUX_FileList>)> ListFilesAsync(Optional<FolderViewModel> folder)
         {
             var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            var path = folder.ConvertOr(f => f.FSFullPath, () => "");
+            var path = folder.ConvertOr(f => f.FSFullPath, () => Flux.ConnectionProvider.RootPath);
             var file_list = await Flux.ConnectionProvider.ListFilesAsync(path, cts.Token);
             return (folder, file_list);
         }
@@ -214,11 +214,11 @@ namespace Flux.ViewModels
                 switch (file.Type)
                 {
                     case FLUX_FileType.File:
-                        var file_vm = new FileViewModel(this, file_list.folder, file);
+                        var file_vm = new FileViewModel(this, file_list.folder, file, Flux.ConnectionProvider.PathSeparator);
                         yield return file_vm;
                         break;
                     case FLUX_FileType.Directory:
-                        var folder_vm = new FolderViewModel(this, file_list.folder, file);
+                        var folder_vm = new FolderViewModel(this, file_list.folder, file, Flux.ConnectionProvider.PathSeparator);
                         yield return folder_vm;
                         break;
                 }

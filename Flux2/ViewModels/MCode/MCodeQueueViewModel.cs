@@ -102,11 +102,13 @@ namespace Flux.ViewModels
                 .ToProperty(this, v => v.MCodeName)
                 .DisposeWith(Disposables);
 
-            var is_idle = MCodes.Flux.ConnectionProvider
-                .ObserveVariable(v => v.PROCESS_STATUS)
-                .Convert(s => s == FLUX_ProcessStatus.IDLE)
-                .ValueOr(() => false)
-                .DistinctUntilChanged();
+            var is_idle = MCodes.Flux.StatusProvider
+                .WhenAnyValue(s => s.StatusEvaluation)
+                .Select(e => e.IsIdle);
+
+            var can_safe_cycle = MCodes.Flux.StatusProvider
+                .WhenAnyValue(s => s.StatusEvaluation)
+                .Select(e => e.CanSafeCycle);
 
             var last_queue_pos = mcodes.Flux.ConnectionProvider
                 .ObserveVariable(c => c.QUEUE)
@@ -114,8 +116,8 @@ namespace Flux.ViewModels
                 .Convert(c => new QueuePosition((short)c))
                 .ValueOr(() => new QueuePosition(-1));
 
-            var can_delete = Observable.CombineLatest(is_idle, queue_pos, CanDeleteQueue);
             var can_move_up = Observable.CombineLatest(is_idle, queue_pos, CanMoveUpQueue);
+            var can_delete = Observable.CombineLatest(can_safe_cycle, queue_pos, CanDeleteQueue);
             var can_move_down = Observable.CombineLatest(is_idle, queue_pos, last_queue_pos, CanMoveDownQueue);
 
             DeleteMCodeQueueCommand = ReactiveCommand.CreateFromTask(async () => { await MCodes.DeleteFromQueueAsync(this); }, can_delete);

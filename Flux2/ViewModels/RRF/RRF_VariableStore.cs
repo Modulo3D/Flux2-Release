@@ -15,33 +15,33 @@ using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
-    public abstract class RRF_VariableStoreBase<TRRF_VariableStore> : FLUX_VariableStore<TRRF_VariableStore, RRF_ConnectionProvider>
-        where TRRF_VariableStore : RRF_VariableStoreBase<TRRF_VariableStore>
+    public abstract class RRF_VariableStoreBase : FLUX_VariableStore<RRF_VariableStoreBase, RRF_ConnectionProvider>
     {
-        public RRF_VariableGlobalModel<bool> ITERATOR { get; }
-        public RRF_VariableGlobalModel<bool> RUN_DAEMON { get; }
+        public IFLUX_Variable<bool, bool> ITERATOR { get; }
+        public IFLUX_Variable<bool, bool> RUN_DAEMON { get; }
 
-        public RRF_GlobalModelBuilder<TRRF_VariableStore>.RRF_InnerGlobalModelBuilder Global{ get; }
-        public RRF_ModelBuilder<TRRF_VariableStore>.RRF_InnerModelBuilder<FLUX_FileList> Queue { get; }
-        public RRF_ModelBuilder<TRRF_VariableStore>.RRF_InnerModelBuilder<FLUX_FileList> Storage { get; }
-        public RRF_ModelBuilder<TRRF_VariableStore>.RRF_InnerModelBuilder<RRF_ObjectModelJob> Job { get; }
-        public RRF_ModelBuilder<TRRF_VariableStore>.RRF_InnerModelBuilder<RRF_ObjectModelHeat> Heat { get; }
-        public RRF_ModelBuilder<TRRF_VariableStore>.RRF_InnerModelBuilder<RRF_ObjectModelMove> Move { get; }
-        public RRF_ModelBuilder<TRRF_VariableStore>.RRF_InnerModelBuilder<RRF_ObjectModelState> State { get; }
-        public RRF_ModelBuilder<TRRF_VariableStore>.RRF_InnerModelBuilder<RRF_ObjectModelSensors> Sensors { get; }
-        public RRF_ModelBuilder<TRRF_VariableStore>.RRF_InnerModelBuilder<List<RRF_ObjectModelTool>> Tools { get; }
-        public RRF_ModelBuilder<TRRF_VariableStore>.RRF_InnerModelBuilder<List<RRF_ObjectModelInput>> Inputs { get; }
-        public RRF_ModelBuilder<TRRF_VariableStore>.RRF_InnerModelBuilder<(RRF_ObjectModelJob job, RRF_ObjectModelState state, List<RRF_ObjectModelInput> inputs)> BlockNum { get; }
-        public RRF_ModelBuilder<TRRF_VariableStore>.RRF_InnerModelBuilder<(RRF_ObjectModelJob job, RRF_ObjectModelGlobal global, FLUX_FileList storage, FLUX_FileList queue)> PartProgram { get; }
-     
-        public RRF_ModelBuilder<TRRF_VariableStore>.RRF_InnerModelBuilder<RRF_ObjectModelMove>.RRF_ArrayBuilder<RRF_ObjectModelAxis> Axes { get; }
-        public RRF_ModelBuilder<TRRF_VariableStore>.RRF_InnerModelBuilder<RRF_ObjectModelSensors>.RRF_ArrayBuilder<RRF_ObjectModelGpIn> GpIn { get; }
-        public RRF_ModelBuilder<TRRF_VariableStore>.RRF_InnerModelBuilder<RRF_ObjectModelState>.RRF_ArrayBuilder<RRF_ObjectModelGpOut> GpOut { get; }
-        public RRF_ModelBuilder<TRRF_VariableStore>.RRF_InnerModelBuilder<RRF_ObjectModelHeat>.RRF_ArrayBuilder<RRF_ObjectModelHeater> Heaters { get; }
-        public RRF_ModelBuilder<TRRF_VariableStore>.RRF_InnerModelBuilder<RRF_ObjectModelSensors>.RRF_ArrayBuilder<RRF_ObjectModelAnalog> Analog { get; }
-        public RRF_ModelBuilder<TRRF_VariableStore>.RRF_InnerModelBuilder<RRF_ObjectModelSensors>.RRF_ArrayBuilder<RRF_FilamentMonitor> Filaments { get; }
-        public RRF_ModelBuilder<TRRF_VariableStore>.RRF_InnerModelBuilder<RRF_ObjectModelMove>.RRF_ArrayBuilder<RRF_ObjectModelExtruder> Extruders { get; }
-        public RRF_ModelBuilder<TRRF_VariableStore>.RRF_InnerModelBuilder<RRF_ObjectModelSensors>.RRF_ArrayBuilder<RRF_ObjectModelEndstop> Endstops { get; }
+        public RRF_GlobalModelBuilder.RRF_InnerGlobalModelBuilder Global{ get; }
+        public RRF_ModelBuilder.RRF_InnerModelBuilder<FLUX_FileList> Queue { get; }
+        public RRF_ModelBuilder.RRF_InnerModelBuilder<FLUX_FileList> Storage { get; }
+        public RRF_ModelBuilder.RRF_InnerModelBuilder<RRF_ObjectModelJob> Job { get; }
+        public RRF_ModelBuilder.RRF_InnerModelBuilder<RRF_ObjectModelHeat> Heat { get; }
+        public RRF_ModelBuilder.RRF_InnerModelBuilder<RRF_ObjectModelMove> Move { get; }
+        public RRF_ModelBuilder.RRF_InnerModelBuilder<RRF_ObjectModelState> State { get; }
+        public RRF_ModelBuilder.RRF_InnerModelBuilder<RRF_ObjectModelSensors> Sensors { get; }
+        public RRF_ModelBuilder.RRF_InnerModelBuilder<List<RRF_ObjectModelTool>> Tools { get; }
+        public RRF_ModelBuilder.RRF_InnerModelBuilder<List<RRF_ObjectModelInput>> Inputs { get; }
+
+        public RRF_ModelBuilder.RRF_InnerModelBuilder<(RRF_ObjectModelJob job, RRF_ObjectModelState state, List<RRF_ObjectModelInput> inputs)> BlockNum { get; }
+        public RRF_ModelBuilder.RRF_InnerModelBuilder<(RRF_ObjectModelJob job, RRF_ObjectModelGlobal global, FLUX_FileList storage, FLUX_FileList queue)> PartProgram { get; }
+
+        public RRF_ModelBuilder.RRF_InnerModelBuilder<RRF_ObjectModelMove>.RRF_ArrayBuilder<RRF_ObjectModelAxis> Axes { get; }
+        public RRF_ModelBuilder.RRF_InnerModelBuilder<RRF_ObjectModelSensors>.RRF_ArrayBuilder<RRF_ObjectModelGpIn> GpIn { get; }
+        public RRF_ModelBuilder.RRF_InnerModelBuilder<RRF_ObjectModelState>.RRF_ArrayBuilder<RRF_ObjectModelGpOut> GpOut { get; }
+        public RRF_ModelBuilder.RRF_InnerModelBuilder<RRF_ObjectModelHeat>.RRF_ArrayBuilder<RRF_ObjectModelHeater> Heaters { get; }
+        public RRF_ModelBuilder.RRF_InnerModelBuilder<RRF_ObjectModelSensors>.RRF_ArrayBuilder<RRF_ObjectModelAnalog> Analog { get; }
+        public RRF_ModelBuilder.RRF_InnerModelBuilder<RRF_ObjectModelSensors>.RRF_ArrayBuilder<RRF_FilamentMonitor> Filaments { get; }
+        public RRF_ModelBuilder.RRF_InnerModelBuilder<RRF_ObjectModelMove>.RRF_ArrayBuilder<RRF_ObjectModelExtruder> Extruders { get; }
+        public RRF_ModelBuilder.RRF_InnerModelBuilder<RRF_ObjectModelSensors>.RRF_ArrayBuilder<RRF_ObjectModelEndstop> Endstops { get; }
 
         public abstract Dictionary<VariableAlias, VariableUnit> AxesUnits { get; }
         public abstract Dictionary<VariableAlias, VariableUnit> GpInUnits { get; }
@@ -58,23 +58,21 @@ namespace Flux.ViewModels
             { 
                 var read_timeout = TimeSpan.FromSeconds(5);
             
-                Global = RRF_GlobalModelBuilder<TRRF_VariableStore>.CreateModel(this);
-                Job = RRF_ModelBuilder<TRRF_VariableStore>.CreateModel(this, m => m.Job, read_timeout);
-                Heat = RRF_ModelBuilder<TRRF_VariableStore>.CreateModel(this, m => m.Heat, read_timeout);
-                Move = RRF_ModelBuilder<TRRF_VariableStore>.CreateModel(this, m => m.Move, read_timeout);
-                State = RRF_ModelBuilder<TRRF_VariableStore>.CreateModel(this, m => m.State, read_timeout);
-                Tools = RRF_ModelBuilder<TRRF_VariableStore>.CreateModel(this, m => m.Tools, read_timeout);
-                Queue = RRF_ModelBuilder<TRRF_VariableStore>.CreateModel(this, m => m.Queue, read_timeout); // TODO
-                Inputs = RRF_ModelBuilder<TRRF_VariableStore>.CreateModel(this, m => m.Inputs, read_timeout);
-                Storage = RRF_ModelBuilder<TRRF_VariableStore>.CreateModel(this, m => m.Storage, read_timeout); // TODO
-                Sensors = RRF_ModelBuilder<TRRF_VariableStore>.CreateModel(this, m => m.Sensors, read_timeout);
-                BlockNum = RRF_ModelBuilder<TRRF_VariableStore>.CreateModel(this, m => m.Job, m => m.State, m => m.Inputs, read_timeout);
-                PartProgram = RRF_ModelBuilder<TRRF_VariableStore>.CreateModel(this, m => m.Job, m => m.Global, m => m.Storage, m => m.Queue, read_timeout);
+                Global = RRF_GlobalModelBuilder.CreateModel(this);
+                Job = RRF_ModelBuilder.CreateModel(this, m => m.Job, read_timeout);
+                Heat = RRF_ModelBuilder.CreateModel(this, m => m.Heat, read_timeout);
+                Move = RRF_ModelBuilder.CreateModel(this, m => m.Move, read_timeout);
+                State = RRF_ModelBuilder.CreateModel(this, m => m.State, read_timeout);
+                Tools = RRF_ModelBuilder.CreateModel(this, m => m.Tools, read_timeout);
+                Queue = RRF_ModelBuilder.CreateModel(this, m => m.Queue, read_timeout); // TODO
+                Inputs = RRF_ModelBuilder.CreateModel(this, m => m.Inputs, read_timeout);
+                Storage = RRF_ModelBuilder.CreateModel(this, m => m.Storage, read_timeout); // TODO
+                Sensors = RRF_ModelBuilder.CreateModel(this, m => m.Sensors, read_timeout);
+                BlockNum = RRF_ModelBuilder.CreateModel(this, m => m.Job, m => m.State, m => m.Inputs, read_timeout);
+                PartProgram = RRF_ModelBuilder.CreateModel(this, m => m.Job, m => m.Global, m => m.Storage, m => m.Queue, read_timeout);
 
                 var extruders_units = VariableUnit.Range(0, max_extruders);
 
-                var extruders           = Move.CreateArray(m => m.Extruders, extruders_units);
-                EXTRUSIONS              = extruders.CreateArray<double, double>("EXTRUSIONS", (c, e) => e.Position);
 
                 Axes                    = Move.CreateArray(m => m.Axes, AxesUnits);
                 GpIn                    = Sensors.CreateArray(s => s.GpIn, GpInUnits);
@@ -85,36 +83,42 @@ namespace Flux.ViewModels
                 Endstops                = Sensors.CreateArray(s => s.Endstops, EndstopsUnits);
                 Filaments               = Sensors.CreateArray(m => m.FilamentMonitors, FilamentUnits);
 
-                AXIS_POSITION           = Axes.CreateArray("AXIS_POSITION", (c, a) => a.MachinePosition);
-                AXIS_ENDSTOP            = Endstops.CreateArray<bool, bool>("AXIS ENDSTOP", (c, e) => e.Triggered, (c, e, u) => Task.FromResult(true));
-                ENABLE_DRIVERS          = Axes.CreateArray<bool, bool>("ENABLE DRIVERS", (c, m) => m.IsEnabledDriver(), EnableDriverAsync);
+                Extruders.CreateArray(c => c.EXTRUSIONS, (c, e) => e.Position);
+                
+                Axes.CreateArray(c => c.AXIS_POSITION, (c, a) => a.MachinePosition);
+                Axes.CreateArray(c => c.ENABLE_DRIVERS, (c, m) => m.IsEnabledDriver(), write_data: EnableDriverAsync);
+                
+                Endstops.CreateArray(c => c.AXIS_ENDSTOP, (c, e) => e.Triggered, write_data: (c, e, u) => Task.FromResult(true));
 
-                PROGRESS                = Job.CreateVariable("PROGRESS", (c, m) => m.GetParamacroProgress());
-                STORAGE                 = Storage.CreateVariable("STORAGE", (c, m) => m.GetPartProgramDictionaryFromStorage());
-                MCODE_RECOVERY          = Storage.CreateVariable("mcode_recovery", (c, f) => f.GetMCodeRecoveryAsync(c));
-                TOOL_NUM                = Tools.CreateVariable<ushort, ushort>("TOOL NUM", (c, t) => (ushort)t.Count);
-                PART_PROGRAM            = PartProgram.CreateVariable("PART PROGRAM", (c, m) => m.GetPartProgram());
-                QUEUE                   = Queue.CreateVariable("QUEUE", (c, m) => m.GetJobDictionaryFromQueue());
-                TOOL_CUR                = State.CreateVariable<short, short>("TOOL CUR", (c, s) => s.CurrentTool);
-                PROCESS_STATUS          = State.CreateVariable("PROCESS STATUS", (c, m) => m.GetProcessStatus());
-                IS_HOMED                = Move.CreateVariable<bool, bool>("IS HOMED", (c, m) => m.IsHomed());
+                Queue.CreateVariable(c => c.QUEUE,              (c, m) => m.GetJobDictionaryFromQueue());
+                Job.CreateVariable(c => c.PROGRESS,             (c, m) => m.GetParamacroProgress());
+                PartProgram.CreateVariable(c => c.PART_PROGRAM, (c, m) => m.GetPartProgram());
+                Tools.CreateVariable(c => c.TOOL_NUM,           (c, t) => (ushort)t.Count);
+                
+                Storage.CreateVariable(c => c.STORAGE,          (c, m) => m.GetPartProgramDictionaryFromStorage());
+                Storage.CreateVariable(c => c.MCODE_RECOVERY,   (c, f) => f.GetMCodeRecoveryAsync(c));
+                
+                State.CreateVariable(c => c.PROCESS_STATUS, (c, m) => m.GetProcessStatus());
+                State.CreateVariable(c => c.TOOL_CUR, (c, s) => s.CurrentTool);
+                
+                Move.CreateVariable(c => c.IS_HOMED, (c, m) => m.IsHomed());
 
-                ITERATOR                = Global.CreateVariable("iterator",             false,  true);
-                RUN_DAEMON              = Global.CreateVariable("run_daemon",           false,  true);
-                KEEP_CHAMBER            = Global.CreateVariable("keep_chamber",         true,   false);
-                KEEP_TOOL               = Global.CreateVariable("keep_tool",            false,  false);
-                DEBUG                   = Global.CreateVariable("debug",                false,  false);
-                QUEUE_SIZE              = Global.CreateVariable("queue_size",           true,   (ushort)1);
-                QUEUE_POS               = Global.CreateVariable("queue_pos",            false,  new QueuePosition(-1), v => new QueuePosition((short)Convert.ChangeType(v, typeof(short))));
+                Global.CreateVariable(c => c.ITERATOR,      false,  true);
+                Global.CreateVariable(c => c.RUN_DAEMON,    false,  true);
+                Global.CreateVariable(c => c.KEEP_CHAMBER,  true,   false);
+                Global.CreateVariable(c => c.KEEP_TOOL,     false,  false);
+                Global.CreateVariable(c => c.DEBUG,         false,  false);
+                Global.CreateVariable(c => c.QUEUE_SIZE,    true,   (ushort)1);
+                Global.CreateVariable(c => c.QUEUE_POS,     false,  new QueuePosition(-1), v => new QueuePosition((short)Convert.ChangeType(v, typeof(short))));
 
-                X_USER_OFFSET_T         = Global.CreateArray("x_user_offset",           false,  0.0,    VariableUnit.Range(0, max_extruders));
-                Y_USER_OFFSET_T         = Global.CreateArray("y_user_offset",           false,  0.0,    VariableUnit.Range(0, max_extruders));
-                Z_USER_OFFSET_T         = Global.CreateArray("z_user_offset",           false,  0.0,    VariableUnit.Range(0, max_extruders));
-                X_PROBE_OFFSET_T        = Global.CreateArray("x_probe_offset",          false,  0.0,    VariableUnit.Range(0, max_extruders));
-                Y_PROBE_OFFSET_T        = Global.CreateArray("y_probe_offset",          false,  0.0,    VariableUnit.Range(0, max_extruders));
-                Z_PROBE_OFFSET_T        = Global.CreateArray("z_probe_offset",          false,  0.0,    VariableUnit.Range(0, max_extruders));
-                X_HOME_OFFSET           = Global.CreateArray("x_home_offset",           true,   0.0,    VariableUnit.Range(0, max_extruders));
-                Y_HOME_OFFSET           = Global.CreateArray("y_home_offset",           true,   0.0,    VariableUnit.Range(0, max_extruders));
+                Global.CreateArray(c => c.X_USER_OFFSET_T,  false,  0.0,    VariableUnit.Range(0, max_extruders));
+                Global.CreateArray(c => c.Y_USER_OFFSET_T,  false,  0.0,    VariableUnit.Range(0, max_extruders));
+                Global.CreateArray(c => c.Z_USER_OFFSET_T,  false,  0.0,    VariableUnit.Range(0, max_extruders));
+                Global.CreateArray(c => c.X_PROBE_OFFSET_T, false,  0.0,    VariableUnit.Range(0, max_extruders));
+                Global.CreateArray(c => c.Y_PROBE_OFFSET_T, false,  0.0,    VariableUnit.Range(0, max_extruders));
+                Global.CreateArray(c => c.Z_PROBE_OFFSET_T, false,  0.0,    VariableUnit.Range(0, max_extruders));
+                Global.CreateArray(c => c.X_HOME_OFFSET,    true,   0.0,    VariableUnit.Range(0, max_extruders));
+                Global.CreateArray(c => c.Y_HOME_OFFSET,    true,   0.0,    VariableUnit.Range(0, max_extruders));
             }
             catch(Exception ex)
             {
@@ -150,9 +154,9 @@ namespace Flux.ViewModels
     }
 
     // S300
-    public class RRF_VariableStore : RRF_VariableStoreBase<RRF_VariableStore>
+    public class RRF_VariableStoreS300 : RRF_VariableStoreBase
     {
-        public override Dictionary<VariableAlias, VariableUnit> AxesUnits => VariableUnit.Range(0, "X", "Y", "Z", /*"U",*/ "C");
+        public override Dictionary<VariableAlias, VariableUnit> AxesUnits => VariableUnit.Range(0, "X", "Y", "Z", "U", "C");
         public override Dictionary<VariableAlias, VariableUnit> GpInUnits => VariableUnit.Range(0, 0);
         public override Dictionary<VariableAlias, VariableUnit> GpOutUnits => VariableUnit.Range(0, 0);
         public override Dictionary<VariableAlias, VariableUnit> HeaterUnits => new[]
@@ -168,7 +172,7 @@ namespace Flux.ViewModels
         public override Dictionary<VariableAlias, VariableUnit> EndstopsUnits => VariableUnit.Range(0, "X", "Y", "Z", "U");
         public override Dictionary<VariableAlias, VariableUnit> FilamentUnits => VariableUnit.Range(0, 0);
 
-        public RRF_VariableStore(RRF_ConnectionProvider connection_provider) : base(connection_provider, 4)
+        public RRF_VariableStoreS300(RRF_ConnectionProvider connection_provider) : base(connection_provider, 4)
         {
             try
             {
@@ -182,14 +186,14 @@ namespace Flux.ViewModels
                     return tool_list.ToOptional();
                 }, VariableUnit.Range(0, 4));
 
-                TEMP_PLATE              = Heaters.CreateVariable<FLUX_Temp, double>("TEMP", (c, m) => m.GetTemperature(), SetPlateTemperature, "bed");
-                TEMP_TOOL               = Heaters.CreateArray<FLUX_Temp, double>("TEMP_TOOL", (c, m) => m.GetTemperature(), SetToolTemperatureAsync, VariableRange.Range(1, 4));
+                Heaters.CreateVariable(c => c.TEMP_PLATE, (c, m) => m.GetTemperature(), "bed", SetPlateTemperature);
+                Heaters.CreateArray(c => c.TEMP_TOOL, (c, m) => m.GetTemperature(), VariableRange.Range(1, 4), SetToolTemperatureAsync);
 
-                MEM_TOOL_ON_TRAILER     = tool_array.CreateArray<bool, bool>("TOOL ON TRAILER",    (c, m) => m);
-                MEM_TOOL_IN_MAGAZINE    = tool_array.CreateArray<bool, bool>("TOOL IN MAGAZINE",   (c, m) => !m);   
+                tool_array.CreateArray(c => c.MEM_TOOL_ON_TRAILER,    (c, m) => m);
+                tool_array.CreateArray(c => c.MEM_TOOL_IN_MAGAZINE,   (c, m) => !m);   
 
-                X_MAGAZINE_POS          = Global.CreateArray("x_magazine_pos",          true,   0.0, VariableUnit.Range(0, 4));
-                Y_MAGAZINE_POS          = Global.CreateArray("y_magazine_pos",          true,   0.0, VariableUnit.Range(0, 4));
+                Global.CreateArray(c => c.X_MAGAZINE_POS, true,   0.0, VariableUnit.Range(0, 4));
+                Global.CreateArray(c => c.Y_MAGAZINE_POS, true,   0.0, VariableUnit.Range(0, 4));
             }
             catch (Exception ex)
             {
@@ -200,7 +204,7 @@ namespace Flux.ViewModels
 
 
     // MP500
-    /*public class RRF_VariableStore : RRF_VariableStoreBase<RRF_VariableStore>
+    public class RRF_VariableStoreMP500 : RRF_VariableStoreBase
     {
         public override Dictionary<VariableAlias, VariableUnit> AxesUnits => VariableUnit.Range(0, "X", "Y", "Z", "U", "V");
         public override Dictionary<VariableAlias, VariableUnit> GpInUnits => VariableUnit.Range(0, "chamber", "spools", "M1", "M2", "M3", "M4", "T1", "T2");
@@ -217,33 +221,34 @@ namespace Flux.ViewModels
         public override Dictionary<VariableAlias, VariableUnit> ExtrudersUnits => VariableUnit.Range(0, "T1", "T2");
         public override Dictionary<VariableAlias, VariableUnit> EndstopsUnits => VariableUnit.Range(0, "X", "Y", "Z", "U", "V");
         public override Dictionary<VariableAlias, VariableUnit> FilamentUnits => VariableUnit.Range(2, "M1", "M2", "M3", "M4");
-        public RRF_VariableStore(RRF_ConnectionProvider connection_provider) : base(connection_provider, 2)
+        public RRF_VariableStoreMP500(RRF_ConnectionProvider connection_provider) : base(connection_provider, 2)
         {
             try
             {
-                VACUUM_PRESENCE         = Analog.CreateVariable("ANALOG",                           (c, v) => AnalogSensors.PSE541.Read(v.LastReading),     "vacuum");
-                TEMP_PLATE              = Heaters.CreateVariable<FLUX_Temp, double>("TEMP",         (c, m) => m.GetTemperature(), SetPlateTemperature,      "bed");
-                TEMP_CHAMBER            = Heaters.CreateArray<FLUX_Temp, double>("TEMP_CHAMBER",    (c, m) => m.GetTemperature(), SetChamberTemperature,    VariableRange.Range(1, 2));
-                TEMP_TOOL               = Heaters.CreateArray<FLUX_Temp, double>("TEMP_TOOL",       (c, m) => m.GetTemperature(), SetToolTemperatureAsync,  VariableRange.Range(3, 2));
+                Heaters.CreateArray(c => c.TEMP_CHAMBER,        (c, m) => m.GetTemperature(), VariableRange.Range(1, 2), SetChamberTemperature);
+                Heaters.CreateArray(c => c.TEMP_TOOL,           (c, m) => m.GetTemperature(), VariableRange.Range(3, 2), SetToolTemperatureAsync);
+                Heaters.CreateVariable(c => c.TEMP_PLATE,       (c, m) => m.GetTemperature(), "bed", SetPlateTemperature);
 
-                CHAMBER_LIGHT           = GpOut.CreateVariable<bool, bool>("ENABLE",                (c, m) => m.Pwm == 1, WriteGpOutAsync, "light");
-                ENABLE_VACUUM           = GpOut.CreateVariable<bool, bool>("ENABLE",                (c, m) => m.Pwm == 1, WriteGpOutAsync, "vacuum");
-                OPEN_LOCK               = GpOut.CreateArray<bool, bool>("OPEN_LOCK",                (c, m) => m.Pwm == 1, WriteGpOutAsync, VariableRange.Range(0, 2));
-                
-                LOCK_CLOSED             = GpIn.CreateArray<bool, bool>("LOCK_CLOSED",               (c, m) => m.Value == 1, VariableRange.Range(0, 2));
-                FILAMENT_AFTER_GEAR     = GpIn.CreateArray<bool, bool>("FILAMENT_AFTER_GEAR",       (c, m) => m.Value == 1, VariableRange.Range(2, 4));
-                FILAMENT_ON_HEAD        = GpIn.CreateArray<bool, bool>("FILAMENT_ON_HEAD",          (c, m) => m.Value == 1, VariableRange.Range(6, 2));
+                Analog.CreateVariable(c => c.VACUUM_PRESENCE,   (c, v) => AnalogSensors.PSE541.Instance.Read(v.LastReading), "vacuum");
 
-                FILAMENT_BEFORE_GEAR    = Filaments.CreateArray<bool, bool>("FILAMENT_BEFORE_GEAR", (c, m) => m.Status == "ok");
+                GpOut.CreateArray(c => c.OPEN_LOCK, (c, m) => m.Pwm == 1, VariableRange.Range(0, 2), WriteGpOutAsync);
+                GpOut.CreateVariable(c => c.CHAMBER_LIGHT, (c, m) => m.Pwm == 1, "light", WriteGpOutAsync);
+                GpOut.CreateVariable(c => c.ENABLE_VACUUM, (c, m) => m.Pwm == 1, "vacuum", WriteGpOutAsync);
                 
-                Z_PROBE_CORRECTION      = Global.CreateVariable("z_probe_correction",   true,   0.0);
-                VACUUM_LEVEL            = Global.CreateVariable("vacuum_level",         true,   -70.0);
-                Z_BED_HEIGHT            = Global.CreateVariable("z_bed_height",         false,  FluxViewModel.MaxZBedHeight);  
+                GpIn.CreateArray(c => c.LOCK_CLOSED,            (c, m) => m.Value == 1, VariableRange.Range(0, 2));
+                GpIn.CreateArray(c => c.FILAMENT_AFTER_GEAR,    (c, m) => m.Value == 1, VariableRange.Range(2, 4));
+                GpIn.CreateArray(c => c.FILAMENT_ON_HEAD,       (c, m) => m.Value == 1, VariableRange.Range(6, 2));
+
+                Filaments.CreateArray(c => c.FILAMENT_BEFORE_GEAR, (c, m) => m.Status == "ok");
+                
+                Global.CreateVariable(c => c.Z_BED_HEIGHT,          false,  FluxViewModel.MaxZBedHeight);  
+                Global.CreateVariable(c => c.Z_PROBE_CORRECTION,    true,   0.0);
+                Global.CreateVariable(c => c.VACUUM_LEVEL,          true,   -70.0);
             }
             catch (Exception ex)
             {
                 Console.WriteLine(ex);
             }
         }
-    }*/
+    }
 }

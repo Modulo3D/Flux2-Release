@@ -380,33 +380,17 @@ namespace Flux.ViewModels
                 VacuumPresence.ConvertToObservable(v => v.StateChanged),
                 CanPrinterSafePrint);
 
-            // TODO
-            var is_safe_stop = Observable.CombineLatest(
-                Flux.ConnectionProvider.ObserveVariable(m => m.RUNNING_MACRO).ObservableOrDefault(),
-                Flux.ConnectionProvider.ObserveVariable(m => m.RUNNING_GCODE).ObservableOrDefault(),
-                Flux.ConnectionProvider.ObserveVariable(m => m.RUNNING_MCODE).ObservableOrDefault(),
-                IsSafeStop);
-
             var can_safe_stop = Observable.CombineLatest(
                 is_cycle,
                 has_safe_state,
-                /*is_safe_stop,*/
-                (cycle, safe/*, stop*/) => safe /*&& (!cycle || stop)*/)
+                (cycle, safe) => safe)
                 .StartWith(false)
                 .DistinctUntilChanged();
-
-            // TODO
-            var is_safe_hold = Observable.CombineLatest(
-                Flux.ConnectionProvider.ObserveVariable(m => m.RUNNING_MACRO).ObservableOrDefault(),
-                Flux.ConnectionProvider.ObserveVariable(m => m.RUNNING_GCODE).ObservableOrDefault(),
-                Flux.ConnectionProvider.ObserveVariable(m => m.RUNNING_MCODE).ObservableOrDefault(),
-                IsSafePause);
 
             var can_safe_hold = Observable.CombineLatest(
                 is_cycle,
                 has_safe_state,
-                /*is_safe_hold,*/
-                (cycle, safe/*, pause*/) => cycle && safe/* && pause*/)
+                (cycle, safe) => cycle && safe)
                 .StartWith(false)
                 .DistinctUntilChanged();
 

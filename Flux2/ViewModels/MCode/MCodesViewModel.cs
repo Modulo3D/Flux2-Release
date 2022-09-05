@@ -540,6 +540,13 @@ namespace Flux.ViewModels
                     return false;
             }
 
+            queue_pos = await Flux.ConnectionProvider.ReadVariableAsync(c => c.QUEUE_POS);
+            if (!queue_pos.HasValue)
+                return false;
+
+            if (queue_pos.Value == -1)
+                await Flux.ConnectionProvider.CancelPrintAsync(true);
+
             return await Flux.ConnectionProvider.GenerateInnerQueueAsync();
         }
         public async Task<bool> MoveInQueueAsync(IFluxMCodeQueueViewModel mcode, Func<QueuePosition, QueuePosition> move)

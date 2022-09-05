@@ -163,8 +163,8 @@ namespace Flux.ViewModels
                 if (var is IFLUX_Array array)
                 {
                     return array.Variables.Items
-                        .Where(v => v is IOSAI_Variable)
-                        .Select(v => ((IOSAI_Variable)v).LogicalAddress.Index);
+                        .Where(v => v is IOSAI_VariableBase)
+                        .Select(v => ((IOSAI_VariableBase)v).LogicalAddress.Index);
                 }
                 return new[] { var.LogicalAddress.Index };
             });
@@ -203,7 +203,7 @@ namespace Flux.ViewModels
                 mw_response.ErrNum))
                 MW_BUFFER = mw_response.Value;
         }
-        public IObservable<Optional<ushort>> ObserveWordVar(IOSAI_Variable variable)
+        public IObservable<Optional<ushort>> ObserveWordVar(IOSAI_VariableBase variable)
         {
             switch (variable.LogicalAddress.VarCode)
             {
@@ -248,7 +248,7 @@ namespace Flux.ViewModels
             }
             return Observable.Return(Optional<ushort>.None);
         }
-        public IObservable<Optional<double>> ObserveDWordVar(IOSAI_Variable variable)
+        public IObservable<Optional<double>> ObserveDWordVar(IOSAI_VariableBase variable)
         {
             switch (variable.LogicalAddress.VarCode)
             {

@@ -28,18 +28,20 @@ namespace Flux.ViewModels
         public string FSPath { get; }
         public string FSFullPath { get; }
         public FilesViewModel Files { get; }
+        public string PathSeparator { get; }
         public Optional<FolderViewModel> Folder { get; }
 
-        public FSViewModel(FilesViewModel files, Optional<FolderViewModel> folder, FLUX_File file) : base($"{typeof(TViewModel).GetRemoteControlName()}??{file.Name}")
+        public FSViewModel(FilesViewModel files, Optional<FolderViewModel> folder, FLUX_File file, string path_separator) : base($"{typeof(TViewModel).GetRemoteControlName()}??{file.Name}")
         {
             Files = files;
             Folder = folder;
             FSName = file.Name;
-            FSPath = Folder.ConvertOr(f => $"{f.FSPath}/{f.FSName}".TrimStart('/'), () => "");
-            FSFullPath = Folder.ConvertOr(f => $"{f.FSPath}/{f.FSName}/{FSName}".TrimStart('/'), () => FSName);
+            PathSeparator = path_separator;
+            FSPath = Folder.ConvertOr(f => $"{f.FSPath}{path_separator}{f.FSName}".TrimStart(path_separator.ToCharArray()), () => "");
+            FSFullPath = Folder.ConvertOr(f => $"{f.FSPath}{path_separator}{f.FSName}{path_separator}{FSName}".TrimStart(path_separator.AsArray()), () => FSName);
         }
 
-        public override string ToString() => $"{FSPath}/{FSName}";
+        public override string ToString() => $"{FSPath}{PathSeparator}{FSName}";
     }
 
     public enum FLUX_FileAccess : uint
@@ -61,7 +63,7 @@ namespace Flux.ViewModels
         [RemoteCommand]
         public ReactiveCommand<Unit, Unit> ModifyFileCommand { get; }
 
-        public FileViewModel(FilesViewModel files, Optional<FolderViewModel> folder, FLUX_File file) : base(files, folder, file)
+        public FileViewModel(FilesViewModel files, Optional<FolderViewModel> folder, FLUX_File file, string path_separator) : base(files, folder, file, path_separator)
         {
             EditFileCommand = ReactiveCommand.CreateFromTask(() => files.EditFileAsync(this))
                 .DisposeWith(Disposables);

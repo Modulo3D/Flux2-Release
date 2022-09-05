@@ -15,7 +15,7 @@ namespace Flux.ViewModels
         [RemoteCommand]
         public ReactiveCommand<Unit, Unit> ModifyFolderCommand { get; }
 
-        public FolderViewModel(FilesViewModel files, Optional<FolderViewModel> folder, FLUX_File file) : base(files, folder, file)
+        public FolderViewModel(FilesViewModel files, Optional<FolderViewModel> folder, FLUX_File file, string path_separator) : base(files, folder, file, path_separator)
         {
             OpenFolderCommand = ReactiveCommand.Create(() =>
             {

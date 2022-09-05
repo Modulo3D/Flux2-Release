@@ -105,7 +105,7 @@ namespace Flux.ViewModels
         }
     }
 
-    public class RRF_Connection : FLUX_Connection<RRF_VariableStore, RRF_Client, RRF_MemoryBuffer>
+    public class RRF_Connection : FLUX_Connection<RRF_VariableStoreBase, RRF_Client, RRF_MemoryBuffer>
     {
         private RRF_MemoryBuffer _MemoryBuffer;
         public override RRF_MemoryBuffer MemoryBuffer
@@ -121,17 +121,14 @@ namespace Flux.ViewModels
         public override string InnerQueuePath => "gcodes/queue/inner";
         public override string StoragePath => "gcodes/storage";
         public override string QueuePath => "gcodes/queue";
+        public override string PathSeparator => "/";
         public string GlobalPath => "sys/global";
-
-        // FLUX_FolderType.InnerQueue => "gcodes/queue/inner",
-        // FLUX_FolderType.Queue => "gcodes/queue",
-        // StoragePath => "gcodes/storage",
-        // FLUX_FolderType.System => "sys",
-        // FLUX_FolderType.Global => "sys/global",
+        public override string RootPath => "";
 
         public FluxViewModel Flux { get; }
+        public override ushort ArrayBase => 0;
 
-        public RRF_Connection(FluxViewModel flux, RRF_VariableStore variable_store, string address) : base(variable_store, new RRF_Client(address))
+        public RRF_Connection(FluxViewModel flux, RRF_VariableStoreBase variable_store, string address) : base(variable_store, new RRF_Client(address))
         {
             Flux = flux;
             Client.DisposeWith(Disposables);

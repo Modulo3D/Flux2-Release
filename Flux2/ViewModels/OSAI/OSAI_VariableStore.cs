@@ -16,142 +16,147 @@ namespace Flux.ViewModels
 {
     public class OSAI_VariableStore : FLUX_VariableStore<OSAI_VariableStore, OSAI_ConnectionProvider>
     {
-        public IFLUX_Variable<OSAI_ProcessMode, OSAI_ProcessMode> PROCESS_MODE { get; }
-        public IFLUX_Variable<OSAI_BootMode, OSAI_BootMode> BOOT_MODE { get; }
-        public IFLUX_Variable<OSAI_BootPhase, Unit> BOOT_PHASE { get; }
-        public IFLUX_Variable<bool, bool> AUX_ON { get; }
+        public IFLUX_Variable<OSAI_ProcessMode, OSAI_ProcessMode> PROCESS_MODE { get; set; }
+        public IFLUX_Variable<OSAI_BootMode, OSAI_BootMode> BOOT_MODE { get; set; }
+        public IFLUX_Variable<OSAI_BootPhase, Unit> BOOT_PHASE { get; set; }
+        public IFLUX_Variable<bool, bool> AUX_ON { get; set; }
 
-        public IFLUX_Array<double, double> HOME_OFFSET { get; }
-        public IFLUX_Variable<double, double> Y_SAFE_MAX { get; }
-        public IFLUX_Array<double, double> PURGE_POSITION { get; }
-        public IFLUX_Array<double, double> TOOL_PROBE_POSITION { get; }
-        public IFLUX_Variable<double, double> Z_TOOL_CORRECTION { get; }
-        public IFLUX_Array<double, double> PLATE_PROBE_POSITION { get; }
+        public IFLUX_Array<double, double> HOME_OFFSET { get; set; }
+        public IFLUX_Variable<double, double> Y_SAFE_MAX { get; set; }
+        public IFLUX_Array<double, double> PURGE_POSITION { get; set; }
+        public IFLUX_Array<double, double> TOOL_PROBE_POSITION { get; set; }
+        public IFLUX_Variable<double, double> Z_TOOL_CORRECTION { get; set; }
+        public IFLUX_Array<double, double> PLATE_PROBE_POSITION { get; set; }
 
         public OSAI_VariableStore(OSAI_ConnectionProvider connection_provider) : base(connection_provider)
         {
-            var bump_unit = VariableUnit.Range(0, "x", "y");
-            var drivers_unit = VariableUnit.Range(0, "xyz", "e");
-            var lock_unit = VariableUnit.Range(0, "chamber", "top");
-            var pid_unit = VariableUnit.Range(0, "kp", "ki", "kd");
-            var axis_unit = VariableUnit.Range(0, "x", "y", "z", "e");
-            var probe_unit = VariableUnit.Range(0, "plate_z", "tool_z", "tool_xy");
+            try
+            {
+                var bump_unit = VariableUnit.Range(0, "x", "y");
+                var chamber_unit = VariableUnit.Range(0, "main");
+                var drivers_unit = VariableUnit.Range(0, "xyz", "e");
+                var lock_unit = VariableUnit.Range(0, "chamber", "top");
+                var pid_unit = VariableUnit.Range(0, "kp", "ki", "kd");
+                var axis_unit = VariableUnit.Range(0, "x", "y", "z", "e");
+                var probe_unit = VariableUnit.Range(0, "plate_z", "tool_z", "tool_xy");
 
-            EXTRUSIONS = RegisterArray(new OSAI_ArrayNamedDouble(connection_provider, "EXTRUSIONS", 4, new OSAI_NamedAddress("!EXTR"), FluxMemReadPriority.MEDIUM));
+                var model = new OSAI_ModelBuilder(this);
+
+                model.CreateArray(c => c.EXTRUSIONS, 4, "!EXTR", FluxMemReadPriority.MEDIUM);
 
 
-            QUEUE_POS = RegisterVariable(new OSAI_VariableNamedQueuePosition(connection_provider, "QUEUE_POS", new OSAI_NamedAddress("!Q_POS"), FluxMemReadPriority.MEDIUM));
-            
-            QUEUE = RegisterVariable(new OSAI_VariableGP<Dictionary<QueuePosition, FluxJob>, Unit>(connection_provider, "QUEUE", FluxMemReadPriority.MEDIUM, GetQueueAsync));
-            STORAGE = RegisterVariable(new OSAI_VariableGP<Dictionary<Guid, Dictionary<BlockNumber, MCodePartProgram>>, Unit>(connection_provider, "STORAGE", FluxMemReadPriority.MEDIUM, GetStorageAsync));
+                model.CreateVariable(c => c.QUEUE_POS, "!Q_POS", FluxMemReadPriority.MEDIUM);
 
-            PROCESS_STATUS  = RegisterVariable(new OSAI_VariableGP<FLUX_ProcessStatus, Unit>(connection_provider, "PROCESS_STATUS", FluxMemReadPriority.ULTRAHIGH, GetProcessStatusAsync));
-            PROCESS_MODE    = RegisterVariable(new OSAI_VariableGP<OSAI_ProcessMode, OSAI_ProcessMode>(connection_provider, "PROCESS_MODE", FluxMemReadPriority.ULTRAHIGH, GetProcessModeAsync, SetProcessModeAsync));
+                model.CreateVariable(c => c.QUEUE, FluxMemReadPriority.MEDIUM, GetQueueAsync);
+                model.CreateVariable(c => c.STORAGE, FluxMemReadPriority.MEDIUM, GetStorageAsync);
 
-            BOOT_PHASE      = RegisterVariable(new OSAI_VariableGP<OSAI_BootPhase, Unit>(connection_provider, "BOOT_PHASE", FluxMemReadPriority.ULTRAHIGH, GetBootPhaseAsync));
+                model.CreateVariable(c => c.PROCESS_STATUS, FluxMemReadPriority.ULTRAHIGH, GetProcessStatusAsync);
+                model.CreateVariable(c => c.PROCESS_MODE, FluxMemReadPriority.ULTRAHIGH, GetProcessModeAsync, SetProcessModeAsync);
 
-            BOOT_MODE       = RegisterVariable(new OSAI_VariableGP<OSAI_BootMode, OSAI_BootMode>(connection_provider, "BOOT_MODE", FluxMemReadPriority.ULTRAHIGH, write_func: SetBootModeAsync));
-            PART_PROGRAM    = RegisterVariable(new OSAI_VariableGP<MCodePartProgram, Unit>(connection_provider, "PART_PROGRAM", FluxMemReadPriority.HIGH, GetPartProgramAsync));
-        
-            PROGRESS = RegisterVariable(new OSAI_VariableGP<ParamacroProgress, Unit>(connection_provider, "PROGRESS", FluxMemReadPriority.ULTRAHIGH, c => Task.FromResult(new ParamacroProgress("", 70).ToOptional())));
+                model.CreateVariable(c => c.BOOT_PHASE, FluxMemReadPriority.ULTRAHIGH, GetBootPhaseAsync);
 
-            MCODE_RECOVERY = RegisterVariable(new OSAI_VariableGP<IFLUX_MCodeRecovery, Unit>(connection_provider, "MCODE_RECOVERY", FluxMemReadPriority.MEDIUM, GetMCodeRecoveryAsync));
+                model.CreateVariable(c => c.BOOT_MODE, FluxMemReadPriority.ULTRAHIGH, write_func: SetBootModeAsync);
+                model.CreateVariable(c => c.PART_PROGRAM, FluxMemReadPriority.HIGH, GetPartProgramAsync);
 
-            IS_HOMED = RegisterVariable(new OSAI_VariableNamedBool(connection_provider, "IS HOMED", new OSAI_NamedAddress("!IS_HOMED"), FluxMemReadPriority.HIGH));
-            IS_HOMING = RegisterVariable(new OSAI_VariableNamedBool(connection_provider, "IS HOMING", new OSAI_NamedAddress("!IS_HOMING"), FluxMemReadPriority.HIGH));
-            IN_CHANGE = RegisterVariable(new OSAI_VariableNamedBool(connection_provider, "IN CHANGE", new OSAI_NamedAddress("!IN_CHANGE"), FluxMemReadPriority.HIGH));
+                model.CreateVariable(c => c.PROGRESS, FluxMemReadPriority.ULTRAHIGH, c => Task.FromResult(new ParamacroProgress("", 70).ToOptional()));
 
-            WATCH_VACUUM = RegisterVariable(new OSAI_VariableNamedBool(connection_provider, "WATCH VACUUM", new OSAI_NamedAddress("!WTC_VACUUM"), FluxMemReadPriority.ULTRALOW));
-            Z_BED_HEIGHT = RegisterVariable(new OSAI_VariableNamedDouble(connection_provider, "PLATE HEIGHT Z", new OSAI_NamedAddress("!Z_PLATE_H"), FluxMemReadPriority.ULTRALOW));
+                model.CreateVariable(c => c.MCODE_RECOVERY, FluxMemReadPriority.MEDIUM, GetMCodeRecoveryAsync);
 
-            X_USER_OFFSET_T = RegisterArray(new OSAI_ArrayNamedDouble(connection_provider, "X USER OFFSET TOOL", 4, new OSAI_NamedAddress("!X_USR_OF_T"), FluxMemReadPriority.LOW));
-            Y_USER_OFFSET_T = RegisterArray(new OSAI_ArrayNamedDouble(connection_provider, "Y USER OFFSET TOOL", 4, new OSAI_NamedAddress("!Y_USR_OF_T"), FluxMemReadPriority.LOW));
-            Z_USER_OFFSET_T = RegisterArray(new OSAI_ArrayNamedDouble(connection_provider, "Z USER OFFSET TOOL", 4, new OSAI_NamedAddress("!Z_USR_OF_T"), FluxMemReadPriority.LOW));
+                model.CreateVariable(c => c.IS_HOMED, "!IS_HOMED", FluxMemReadPriority.HIGH);
+                model.CreateVariable(c => c.IS_HOMING, "!IS_HOMING", FluxMemReadPriority.HIGH);
+                model.CreateVariable(c => c.IN_CHANGE, "!IN_CHANGE", FluxMemReadPriority.HIGH);
 
-            X_PROBE_OFFSET_T = RegisterArray(new OSAI_ArrayNamedDouble(connection_provider, "X PROBE OFFSET TOOL", 4, new OSAI_NamedAddress("!X_PRB_OF_T"), FluxMemReadPriority.LOW));
-            Y_PROBE_OFFSET_T = RegisterArray(new OSAI_ArrayNamedDouble(connection_provider, "Y PROBE OFFSET TOOL", 4, new OSAI_NamedAddress("!Y_PRB_OF_T"), FluxMemReadPriority.LOW));
-            Z_PROBE_OFFSET_T = RegisterArray(new OSAI_ArrayNamedDouble(connection_provider, "Z PROBE OFFSET TOOL", 4, new OSAI_NamedAddress("!Z_PRB_OF_T"), FluxMemReadPriority.LOW));
+                model.CreateVariable(c => c.WATCH_VACUUM, "!WTC_VACUUM", FluxMemReadPriority.ULTRALOW);
+                model.CreateVariable(c => c.Z_BED_HEIGHT, "!Z_PLATE_H", FluxMemReadPriority.ULTRALOW);
 
-            // GW VARIABLES                                                                                                                                                                                                                                                                              
-            TOOL_CUR = RegisterVariable(new OSAI_VariableShort(connection_provider, "TOOL CURRENT", new OSAI_IndexAddress(OSAI_VARCODE.GW_CODE, 0), FluxMemReadPriority.ULTRALOW));
-            TOOL_NUM = RegisterVariable(new OSAI_VariableWord(connection_provider, "TOOL NUMBER", new OSAI_IndexAddress(OSAI_VARCODE.GW_CODE, 1), FluxMemReadPriority.ULTRALOW));
-            DEBUG = RegisterVariable(new OSAI_VariableBool(connection_provider, "DEBUG", new OSAI_BitIndexAddress(OSAI_VARCODE.GW_CODE, 2, 0), FluxMemReadPriority.HIGH));
-            KEEP_CHAMBER = RegisterVariable(new OSAI_VariableBool(connection_provider, "KEEP CHAMBER WARM", new OSAI_BitIndexAddress(OSAI_VARCODE.GW_CODE, 3, 0), FluxMemReadPriority.HIGH));
-            KEEP_TOOL = RegisterVariable(new OSAI_VariableBool(connection_provider, "KEEP TOOL WARM", new OSAI_BitIndexAddress(OSAI_VARCODE.GW_CODE, 4, 0), FluxMemReadPriority.HIGH));
-            AUTO_FAN = RegisterVariable(new OSAI_VariableBool(connection_provider, "AUTO FAN", new OSAI_BitIndexAddress(OSAI_VARCODE.GW_CODE, 6, 0), FluxMemReadPriority.ULTRALOW));
-            QUEUE_SIZE = RegisterVariable(new OSAI_VariableWord(connection_provider, "QUEUE SIZE", new OSAI_IndexAddress(OSAI_VARCODE.GW_CODE, 7), FluxMemReadPriority.ULTRALOW));
+                model.CreateArray(c => c.X_USER_OFFSET_T, 4, "!X_USR_OF_T", FluxMemReadPriority.LOW);
+                model.CreateArray(c => c.Y_USER_OFFSET_T, 4, "!Y_USR_OF_T", FluxMemReadPriority.LOW);
+                model.CreateArray(c => c.Z_USER_OFFSET_T, 4, "!Z_USR_OF_T", FluxMemReadPriority.LOW);
 
-            MEM_TOOL_ON_TRAILER = RegisterArray(new OSAI_ArrayBool(connection_provider, "TOOL ON TRAILER", 4, new OSAI_BitIndexAddress(OSAI_VARCODE.GW_CODE, 100, 0), FluxMemReadPriority.HIGH));
-            MEM_TOOL_IN_MAGAZINE = RegisterArray(new OSAI_ArrayBool(connection_provider, "TOOL IN MAGAZINE", 4, new OSAI_BitIndexAddress(OSAI_VARCODE.GW_CODE, 101, 0), FluxMemReadPriority.HIGH));
+                model.CreateArray(c => c.X_PROBE_OFFSET_T, 4, "!X_PRB_OF_T", FluxMemReadPriority.LOW);
+                model.CreateArray(c => c.Y_PROBE_OFFSET_T, 4, "!Y_PRB_OF_T", FluxMemReadPriority.LOW);
+                model.CreateArray(c => c.Z_PROBE_OFFSET_T, 4, "!Z_PRB_OF_T", FluxMemReadPriority.LOW);
 
-            // GD VARIABLES                                                                                                                                                                                                                                                                
-            TEMP_WAIT = RegisterArray(new OSAI_ArrayDouble(connection_provider, "TEMP WAIT", 3, new OSAI_IndexAddress(OSAI_VARCODE.GD_CODE, 0), FluxMemReadPriority.ULTRALOW));
-            PID_TOOL = RegisterArray(new OSAI_ArrayDouble(connection_provider, "PID TOOL", 3, new OSAI_IndexAddress(OSAI_VARCODE.GD_CODE, 3), FluxMemReadPriority.ULTRALOW, custom_unit: pid_unit));
-            PID_CHAMBER = RegisterArray(new OSAI_ArrayDouble(connection_provider, "PID CHAMBER", 3, new OSAI_IndexAddress(OSAI_VARCODE.GD_CODE, 6), FluxMemReadPriority.ULTRALOW, custom_unit: pid_unit));
-            PID_PLATE = RegisterArray(new OSAI_ArrayDouble(connection_provider, "PID PLATE", 3, new OSAI_IndexAddress(OSAI_VARCODE.GD_CODE, 9), FluxMemReadPriority.ULTRALOW, custom_unit: pid_unit));
-            PID_RANGE = RegisterArray(new OSAI_ArrayDouble(connection_provider, "PID RANGE", 3, new OSAI_IndexAddress(OSAI_VARCODE.GD_CODE, 12), FluxMemReadPriority.ULTRALOW));
-            TEMP_WINDOW = RegisterArray(new OSAI_ArrayDouble(connection_provider, "TEMP WINDOW", 3, new OSAI_IndexAddress(OSAI_VARCODE.GD_CODE, 15), FluxMemReadPriority.ULTRALOW));
+                // GW VARIABLES                                                                                                                                                                                                                                                                              
+                model.CreateVariable(c => c.TOOL_CUR, (OSAI_VARCODE.GW_CODE, 0), FluxMemReadPriority.ULTRALOW);
+                model.CreateVariable(c => c.TOOL_NUM, (OSAI_VARCODE.GW_CODE, 1), FluxMemReadPriority.ULTRALOW);
+                model.CreateVariable(c => c.DEBUG, (OSAI_VARCODE.GW_CODE, 2, 0), FluxMemReadPriority.HIGH);
+                model.CreateVariable(c => c.KEEP_CHAMBER, (OSAI_VARCODE.GW_CODE, 3, 0), FluxMemReadPriority.HIGH);
+                model.CreateVariable(c => c.KEEP_TOOL, (OSAI_VARCODE.GW_CODE, 4, 0), FluxMemReadPriority.HIGH);
+                model.CreateVariable(c => c.AUTO_FAN, (OSAI_VARCODE.GW_CODE, 6, 0), FluxMemReadPriority.ULTRALOW);
+                model.CreateVariable(c => c.QUEUE_SIZE, (OSAI_VARCODE.GW_CODE, 7), FluxMemReadPriority.ULTRALOW);
 
-            FAN_ENABLE = RegisterArray(new OSAI_ArrayDouble(connection_provider, "FAN ENABLE", 2, new OSAI_IndexAddress(OSAI_VARCODE.GD_CODE, 18), FluxMemReadPriority.ULTRALOW));
-            PURGE_POSITION = RegisterArray(new OSAI_ArrayDouble(connection_provider, "PURGE POSITION", 2, new OSAI_IndexAddress(OSAI_VARCODE.GD_CODE, 21), FluxMemReadPriority.ULTRALOW, custom_unit: axis_unit));
-            Y_SAFE_MAX = RegisterVariable(new OSAI_VariableDouble(connection_provider, "Y SAFE MAX", new OSAI_IndexAddress(OSAI_VARCODE.GD_CODE, 23), FluxMemReadPriority.ULTRALOW));
-            Z_PROBE_MIN = RegisterVariable(new OSAI_VariableDouble(connection_provider, "Z PROBE MIN", new OSAI_IndexAddress(OSAI_VARCODE.GD_CODE, 24), FluxMemReadPriority.ULTRALOW));
-            Z_TOOL_CORRECTION = RegisterVariable(new OSAI_VariableDouble(connection_provider, "Z TOOL COR", new OSAI_IndexAddress(OSAI_VARCODE.GD_CODE, 25), FluxMemReadPriority.ULTRALOW));
-            TOOL_PROBE_POSITION = RegisterArray(new OSAI_ArrayDouble(connection_provider, "TOOL PROBE POSITION", 2, new OSAI_IndexAddress(OSAI_VARCODE.GD_CODE, 28), FluxMemReadPriority.ULTRALOW, custom_unit: axis_unit));
-            HOME_OFFSET = RegisterArray(new OSAI_ArrayDouble(connection_provider, "HOME OFFSET", 2, new OSAI_IndexAddress(OSAI_VARCODE.GD_CODE, 32), FluxMemReadPriority.ULTRALOW, custom_unit: axis_unit));
-            PLATE_PROBE_POSITION = RegisterArray(new OSAI_ArrayDouble(connection_provider, "PLATE PROBE POSITION", 2, new OSAI_IndexAddress(OSAI_VARCODE.GD_CODE, 34), FluxMemReadPriority.ULTRALOW, custom_unit: axis_unit));
+                model.CreateArray(c => c.MEM_TOOL_ON_TRAILER, 4, (OSAI_VARCODE.GW_CODE, 100, 0), FluxMemReadPriority.HIGH);
+                model.CreateArray(c => c.MEM_TOOL_IN_MAGAZINE, 4, (OSAI_VARCODE.GW_CODE, 101, 0), FluxMemReadPriority.HIGH);
 
-            PRESSURE_LEVEL = RegisterVariable(new OSAI_VariableDouble(connection_provider, "PRESSURE LEVEL", new OSAI_IndexAddress(OSAI_VARCODE.GD_CODE, 36), FluxMemReadPriority.ULTRALOW));
-            VACUUM_LEVEL = RegisterVariable(new OSAI_VariableDouble(connection_provider, "VACUUM LEVEL", new OSAI_IndexAddress(OSAI_VARCODE.GD_CODE, 37), FluxMemReadPriority.ULTRALOW));
+                // GD VARIABLES                                                                                                                                                                                                                                                                
+                model.CreateArray(c => c.TEMP_WAIT, 3, (OSAI_VARCODE.GD_CODE, 0), FluxMemReadPriority.ULTRALOW);
+                model.CreateArray(c => c.PID_TOOL, 3, (OSAI_VARCODE.GD_CODE, 3), FluxMemReadPriority.ULTRALOW, pid_unit);
+                model.CreateArray(c => c.PID_CHAMBER, 3, (OSAI_VARCODE.GD_CODE, 6), FluxMemReadPriority.ULTRALOW, pid_unit);
+                model.CreateArray(c => c.PID_PLATE, 3, (OSAI_VARCODE.GD_CODE, 9), FluxMemReadPriority.ULTRALOW, pid_unit);
+                model.CreateArray(c => c.PID_RANGE, 3, (OSAI_VARCODE.GD_CODE, 12), FluxMemReadPriority.ULTRALOW);
+                model.CreateArray(c => c.TEMP_WINDOW, 3, (OSAI_VARCODE.GD_CODE, 15), FluxMemReadPriority.ULTRALOW);
 
-            TOOL_OFF_TIME = RegisterVariable(new OSAI_VariableDouble(connection_provider, "TOOL OFF TIMER", new OSAI_IndexAddress(OSAI_VARCODE.GD_CODE, 38), FluxMemReadPriority.ULTRALOW));
-            CHAMBER_OFF_TIME = RegisterVariable(new OSAI_VariableDouble(connection_provider, "CHAMBER OFF TIMER", new OSAI_IndexAddress(OSAI_VARCODE.GD_CODE, 39), FluxMemReadPriority.ULTRALOW));
+                model.CreateArray(c => c.FAN_ENABLE, 2, (OSAI_VARCODE.GD_CODE, 18), FluxMemReadPriority.ULTRALOW);
+                model.CreateArray(c => c.PURGE_POSITION, 2, (OSAI_VARCODE.GD_CODE, 21), FluxMemReadPriority.ULTRALOW, axis_unit);
+                model.CreateVariable(c => c.Y_SAFE_MAX, (OSAI_VARCODE.GD_CODE, 23), FluxMemReadPriority.ULTRALOW);
+                model.CreateVariable(c => c.Z_PROBE_MIN, (OSAI_VARCODE.GD_CODE, 24), FluxMemReadPriority.ULTRALOW);
+                model.CreateVariable(c => c.Z_TOOL_CORRECTION, (OSAI_VARCODE.GD_CODE, 25), FluxMemReadPriority.ULTRALOW);
+                model.CreateArray(c => c.TOOL_PROBE_POSITION, 2, (OSAI_VARCODE.GD_CODE, 28), FluxMemReadPriority.ULTRALOW, axis_unit);
+                model.CreateArray(c => c.HOME_OFFSET, 2, (OSAI_VARCODE.GD_CODE, 32), FluxMemReadPriority.ULTRALOW, axis_unit);
+                model.CreateArray(c => c.PLATE_PROBE_POSITION, 2, (OSAI_VARCODE.GD_CODE, 34), FluxMemReadPriority.ULTRALOW, axis_unit);
 
-            // L VARIABLES                                                                                                                                                                                                                                                                         
-            X_MAGAZINE_POS = RegisterArray(new OSAI_ArrayDouble(connection_provider, "X MAGAZINE POSITION", 4, new OSAI_IndexAddress(OSAI_VARCODE.L_CODE, 1), FluxMemReadPriority.ULTRALOW));
-            Y_MAGAZINE_POS = RegisterArray(new OSAI_ArrayDouble(connection_provider, "Y MAGAZINE POSITION", 4, new OSAI_IndexAddress(OSAI_VARCODE.L_CODE, 18), FluxMemReadPriority.ULTRALOW));
+                model.CreateVariable(c => c.PRESSURE_LEVEL, (OSAI_VARCODE.GD_CODE, 36), FluxMemReadPriority.ULTRALOW);
+                model.CreateVariable(c => c.VACUUM_LEVEL, (OSAI_VARCODE.GD_CODE, 37), FluxMemReadPriority.ULTRALOW);
 
-            // STRINGS                                                                                                                                                                                                                                                                               
-            TEMP_CHAMBER = RegisterArray(new OSAI_ArrayTemp(connection_provider, "TEMP CHAMBER", 1, new OSAI_IndexAddress(OSAI_VARCODE.AA_CODE, 0), FluxMemReadPriority.ULTRAHIGH, (i, t) => $"M4140[{t}, 0]"));
-            TEMP_PLATE = RegisterVariable(new OSAI_VariableTemp(connection_provider, "TEMP PLATE", new OSAI_IndexAddress(OSAI_VARCODE.AA_CODE, 1), FluxMemReadPriority.ULTRAHIGH, t => $"M4141[{t}, 0]"));
-            TEMP_TOOL = RegisterArray(new OSAI_ArrayTemp(connection_provider, "TEMP TOOL", 4, new OSAI_IndexAddress(OSAI_VARCODE.AA_CODE, 2), FluxMemReadPriority.ULTRAHIGH, (i, t) => $"M4104[{i + 1}, {t}, 0]"));
+                model.CreateVariable(c => c.TOOL_OFF_TIME, (OSAI_VARCODE.GD_CODE, 38), FluxMemReadPriority.ULTRALOW);
+                model.CreateVariable(c => c.CHAMBER_OFF_TIME, (OSAI_VARCODE.GD_CODE, 39), FluxMemReadPriority.ULTRALOW);
 
-            // MW VARIABLES                                                                                                                                                                                                                                                                             
-            RUNNING_MACRO = RegisterVariable(new OSAI_VariableMacro(connection_provider, "RUNNING MACRO", new OSAI_IndexAddress(OSAI_VARCODE.MW_CODE, 11021)));
-            RUNNING_MCODE = RegisterVariable(new OSAI_VariableMCode(connection_provider, "RUNNING MCODE", new OSAI_IndexAddress(OSAI_VARCODE.MW_CODE, 9999)));
-            RUNNING_GCODE = RegisterVariable(new OSAI_VariableGCode(connection_provider, "RUNNING GCODE", new OSAI_IndexAddress(OSAI_VARCODE.MW_CODE, 11022)));
+                // L VARIABLES                                                                                                                                                                                                                                                                         
+                model.CreateArray(c => c.X_MAGAZINE_POS, 4, (OSAI_VARCODE.L_CODE, 1), FluxMemReadPriority.ULTRALOW);
+                model.CreateArray(c => c.Y_MAGAZINE_POS, 4, (OSAI_VARCODE.L_CODE, 18), FluxMemReadPriority.ULTRALOW);
 
-            // INPUTS                                                                                                                                                                                                                                                                             
-            LOCK_CLOSED = RegisterArray(new OSAI_ArrayBool(connection_provider, "LOCK CLOSED", 2, new OSAI_BitIndexAddress(OSAI_VARCODE.MW_CODE, 10201, 0), FluxMemReadPriority.ULTRAHIGH, new OSAI_BitIndexAddress(OSAI_VARCODE.IW_CODE, 3, 1), lock_unit));
-            TOOL_ON_TRAILER = RegisterArray(new OSAI_ArrayBool(connection_provider, "TOOL ON TRAILER", 4, new OSAI_BitIndexAddress(OSAI_VARCODE.MW_CODE, 10202, 0), FluxMemReadPriority.HIGH, new OSAI_BitIndexAddress(OSAI_VARCODE.IW_CODE, 3, 4)));
+                // STRINGS                                                                                                                                                                                                                                                                               
+                model.CreateArray(c => c.TEMP_CHAMBER, 1, (OSAI_VARCODE.AA_CODE, 0), FluxMemReadPriority.ULTRAHIGH, (i, t) => $"M4140[{t}, 0]", chamber_unit);
+                model.CreateVariable(c => c.TEMP_PLATE, (OSAI_VARCODE.AA_CODE, 1), FluxMemReadPriority.ULTRAHIGH, t => $"M4141[{t}, 0]");
+                model.CreateArray(c => c.TEMP_TOOL, 4, (OSAI_VARCODE.AA_CODE, 2), FluxMemReadPriority.ULTRAHIGH, (i, t) => $"M4104[{i + 1}, {t}, 0]");
 
-            FILAMENT_BEFORE_GEAR = RegisterArray(new OSAI_ArrayBool(connection_provider, "WIRE PRESENCE BEFORE GEAR", 4, new OSAI_BitIndexAddress(OSAI_VARCODE.MW_CODE, 10204, 0), FluxMemReadPriority.HIGH, new OSAI_BitIndexAddress(OSAI_VARCODE.IW_CODE, 4, 0)));
-            FILAMENT_AFTER_GEAR = RegisterArray(new OSAI_ArrayBool(connection_provider, "WIRE PRESENCE AFTER GEAR", 4, new OSAI_BitIndexAddress(OSAI_VARCODE.MW_CODE, 10205, 0), FluxMemReadPriority.HIGH, new OSAI_BitIndexAddress(OSAI_VARCODE.IW_CODE, 4, 4)));
-            FILAMENT_ON_HEAD = RegisterArray(new OSAI_ArrayBool(connection_provider, "WIRE PRESENCE ON HEAD", 4, new OSAI_BitIndexAddress(OSAI_VARCODE.MW_CODE, 10206, 0), FluxMemReadPriority.HIGH, new OSAI_BitIndexAddress(OSAI_VARCODE.IW_CODE, 4, 8)));
-            TOOL_IN_MAGAZINE = RegisterArray(new OSAI_ArrayBool(connection_provider, "TOOL IN MAGAZINE", 4, new OSAI_BitIndexAddress(OSAI_VARCODE.MW_CODE, 10207, 0), FluxMemReadPriority.HIGH, new OSAI_BitIndexAddress(OSAI_VARCODE.IW_CODE, 5, 0)));
+                // INPUTS                                                                                                                                                                                                                                                                             
+                model.CreateArray(c => c.LOCK_CLOSED, 2, (OSAI_VARCODE.MW_CODE, 10201, 0), FluxMemReadPriority.ULTRAHIGH, lock_unit);
+                model.CreateArray(c => c.TOOL_ON_TRAILER, 4, (OSAI_VARCODE.MW_CODE, 10202, 0), FluxMemReadPriority.HIGH);
 
-            AXIS_ENDSTOP = RegisterArray(new OSAI_ArrayBool(connection_provider, "AXIS ENDSTOP", 3, new OSAI_BitIndexAddress(OSAI_VARCODE.MW_CODE, 10209, 0), FluxMemReadPriority.HIGH, new OSAI_BitIndexAddress(OSAI_VARCODE.IW_CODE, 6, 0), axis_unit));
-            AXIS_PROBE = RegisterArray(new OSAI_ArrayBool(connection_provider, "AXIS PROBE", 3, new OSAI_BitIndexAddress(OSAI_VARCODE.MW_CODE, 10210, 0), FluxMemReadPriority.HIGH, new OSAI_BitIndexAddress(OSAI_VARCODE.IW_CODE, 6, 3), probe_unit));
+                model.CreateArray(c => c.FILAMENT_BEFORE_GEAR, 4, (OSAI_VARCODE.MW_CODE, 10204, 0), FluxMemReadPriority.HIGH);
+                model.CreateArray(c => c.FILAMENT_AFTER_GEAR, 4, (OSAI_VARCODE.MW_CODE, 10205, 0), FluxMemReadPriority.HIGH);
+                model.CreateArray(c => c.FILAMENT_ON_HEAD, 4, (OSAI_VARCODE.MW_CODE, 10206, 0), FluxMemReadPriority.HIGH);
+                model.CreateArray(c => c.TOOL_IN_MAGAZINE, 4, (OSAI_VARCODE.MW_CODE, 10207, 0), FluxMemReadPriority.HIGH);
 
-            DRIVER_EMERGENCY = RegisterVariable(new OSAI_VariableBool(connection_provider, "DRIVER EMERGENCY", new OSAI_BitIndexAddress(OSAI_VARCODE.MW_CODE, 10211, 0), FluxMemReadPriority.MEDIUM, new OSAI_BitIndexAddress(OSAI_VARCODE.IW_CODE, 6, 6)));
-            PRESSURE_PRESENCE = RegisterVariable(new OSAI_VariablePressure<AnalogSensors.PSE540>(connection_provider, "PRESSURE PRESENCE", new OSAI_IndexAddress(OSAI_VARCODE.MW_CODE, 10212), FluxMemReadPriority.MEDIUM, new OSAI_IndexAddress(OSAI_VARCODE.IW_CODE, 7)));
-            VACUUM_PRESENCE = RegisterVariable(new OSAI_VariablePressure<AnalogSensors.PSE541>(connection_provider, "VACUUM PRESENCE", new OSAI_IndexAddress(OSAI_VARCODE.MW_CODE, 10213), FluxMemReadPriority.MEDIUM, new OSAI_IndexAddress(OSAI_VARCODE.IW_CODE, 8)));
+                model.CreateArray(c => c.AXIS_ENDSTOP, 3, (OSAI_VARCODE.MW_CODE, 10209, 0), FluxMemReadPriority.HIGH, axis_unit);
+                model.CreateArray(c => c.AXIS_PROBE, 3, (OSAI_VARCODE.MW_CODE, 10210, 0), FluxMemReadPriority.HIGH, probe_unit);
 
-            // OUTPUTS                                                                                                                                                                                                                                                                                    
-            AUX_ON = RegisterVariable(new OSAI_VariableBool(connection_provider, "AUX ON", new OSAI_BitIndexAddress(OSAI_VARCODE.MW_CODE, 10016, 0), FluxMemReadPriority.LOW));
+                model.CreateVariable(c => c.DRIVER_EMERGENCY, (OSAI_VARCODE.MW_CODE, 10211, 0), FluxMemReadPriority.MEDIUM);
+                model.CreateVariable<AnalogSensors.PSE540>(c => c.PRESSURE_PRESENCE, (OSAI_VARCODE.MW_CODE, 10212), FluxMemReadPriority.MEDIUM);
+                model.CreateVariable<AnalogSensors.PSE541>(c => c.VACUUM_PRESENCE, (OSAI_VARCODE.MW_CODE, 10213), FluxMemReadPriority.MEDIUM);
 
-            ENABLE_DRIVERS = RegisterArray(new OSAI_ArrayBool(connection_provider, "ENABLE DRIVERS", 2, new OSAI_BitIndexAddress(OSAI_VARCODE.MW_CODE, 10750, 0), FluxMemReadPriority.HIGH, new OSAI_BitIndexAddress(OSAI_VARCODE.OW_CODE, 1, 0), drivers_unit));
-            DISABLE_24V = RegisterVariable(new OSAI_VariableBool(connection_provider, "DISABLE 24V", new OSAI_BitIndexAddress(OSAI_VARCODE.MW_CODE, 10751, 0), FluxMemReadPriority.LOW, new OSAI_BitIndexAddress(OSAI_VARCODE.OW_CODE, 1, 2)));
+                // OUTPUTS                                                                                                                                                                                                                                                                                    
+                model.CreateVariable(c => c.AUX_ON, (OSAI_VARCODE.MW_CODE, 10016, 0), FluxMemReadPriority.LOW);
 
-            OPEN_LOCK = RegisterArray(new OSAI_ArrayBool(connection_provider, "OPEN LOCK", 2, new OSAI_BitIndexAddress(OSAI_VARCODE.MW_CODE, 10752, 0), FluxMemReadPriority.ULTRAHIGH, new OSAI_BitIndexAddress(OSAI_VARCODE.OW_CODE, 1, 3), lock_unit));
+                model.CreateArray(c => c.ENABLE_DRIVERS, 2, (OSAI_VARCODE.MW_CODE, 10750, 0), FluxMemReadPriority.HIGH, drivers_unit);
+                model.CreateVariable(c => c.DISABLE_24V, (OSAI_VARCODE.MW_CODE, 10751, 0), FluxMemReadPriority.LOW);
 
-            CHAMBER_LIGHT = RegisterVariable(new OSAI_VariableBool(connection_provider, "CHAMBER LIGHT", new OSAI_BitIndexAddress(OSAI_VARCODE.MW_CODE, 10753, 0), FluxMemReadPriority.ULTRAHIGH, new OSAI_BitIndexAddress(OSAI_VARCODE.OW_CODE, 1, 5)));
-            ENABLE_VACUUM = RegisterVariable(new OSAI_VariableBool(connection_provider, "ENABLE VACUUM", new OSAI_BitIndexAddress(OSAI_VARCODE.MW_CODE, 10754, 1), FluxMemReadPriority.HIGH, new OSAI_BitIndexAddress(OSAI_VARCODE.OW_CODE, 1, 7)));
-            OPEN_HEAD_CLAMP = RegisterVariable(new OSAI_VariableBool(connection_provider, "OPEN HEAD CLAMP", new OSAI_BitIndexAddress(OSAI_VARCODE.MW_CODE, 10755, 0), FluxMemReadPriority.HIGH, new OSAI_BitIndexAddress(OSAI_VARCODE.OW_CODE, 1, 8)));
-            ENABLE_HEAD_FAN = RegisterVariable(new OSAI_VariableBool(connection_provider, "ENABLE HEAD FAN", new OSAI_BitIndexAddress(OSAI_VARCODE.MW_CODE, 10756, 0), FluxMemReadPriority.HIGH, new OSAI_BitIndexAddress(OSAI_VARCODE.OW_CODE, 1, 9)));
-            ENABLE_CHAMBER_FAN = RegisterVariable(new OSAI_VariableBool(connection_provider, "ENABLE CHAMBER FAN", new OSAI_BitIndexAddress(OSAI_VARCODE.MW_CODE, 10757, 0), FluxMemReadPriority.LOW, new OSAI_BitIndexAddress(OSAI_VARCODE.OW_CODE, 1, 10)));
+                model.CreateArray(c => c.OPEN_LOCK, 2, (OSAI_VARCODE.MW_CODE, 10752, 0), FluxMemReadPriority.ULTRAHIGH, lock_unit);
 
-            ENABLE_HOLDING_FAN = RegisterArray(new OSAI_ArrayBool(connection_provider, "ENABLE HOLDING FAN", 4, new OSAI_BitIndexAddress(OSAI_VARCODE.MW_CODE, 10759, 0), FluxMemReadPriority.LOW, new OSAI_BitIndexAddress(OSAI_VARCODE.OW_CODE, 2, 0)));    
+                model.CreateVariable(c => c.CHAMBER_LIGHT, (OSAI_VARCODE.MW_CODE, 10753, 0), FluxMemReadPriority.ULTRAHIGH);
+                model.CreateVariable(c => c.ENABLE_VACUUM, (OSAI_VARCODE.MW_CODE, 10754, 1), FluxMemReadPriority.HIGH);
+                model.CreateVariable(c => c.OPEN_HEAD_CLAMP, (OSAI_VARCODE.MW_CODE, 10755, 0), FluxMemReadPriority.HIGH);
+                model.CreateVariable(c => c.ENABLE_HEAD_FAN, (OSAI_VARCODE.MW_CODE, 10756, 0), FluxMemReadPriority.HIGH);
+                model.CreateVariable(c => c.ENABLE_CHAMBER_FAN, (OSAI_VARCODE.MW_CODE, 10757, 0), FluxMemReadPriority.LOW);
+
+                model.CreateArray(c => c.ENABLE_HOLDING_FAN, 4, (OSAI_VARCODE.MW_CODE, 10759, 0), FluxMemReadPriority.LOW);
+            }
+            catch (Exception ex)
+            {
+                Environment.Exit(0);
+            }
         }
 
         private static async Task<Optional<IFLUX_MCodeRecovery>> GetMCodeRecoveryAsync(OSAI_Connection connection)

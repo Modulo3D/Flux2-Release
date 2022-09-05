@@ -16,12 +16,7 @@ namespace Flux.ViewModels
         IOSAI_Address LogicalAddress { get; }
     }
 
-    public interface IOSAI_Variable : IOSAI_VariableBase, IFLUX_Variable
-    {
-        Optional<IOSAI_Address> PhysicalAddress { get; }
-    }
-
-    public abstract class OSAI_Variable<TRData, TWData, TAddress> : FLUX_Variable<TRData, TWData>, IOSAI_Variable
+    public abstract class OSAI_Variable<TRData, TWData, TAddress> : FLUX_Variable<TRData, TWData>, IOSAI_VariableBase
         where TAddress : IOSAI_Address<TAddress>, IOSAI_Address
     {
         private ObservableAsPropertyHelper<Optional<OSAI_Connection>> _Connection;
@@ -31,14 +26,12 @@ namespace Flux.ViewModels
         public Optional<TAddress> PhysicalAddress { get; }
         public override string Group => $"{LogicalAddress.VarCode}";
         IOSAI_Address IOSAI_VariableBase.LogicalAddress => LogicalAddress;
-        Optional<IOSAI_Address> IOSAI_Variable.PhysicalAddress => PhysicalAddress.Cast<TAddress, IOSAI_Address>();
 
         public OSAI_Variable(
             OSAI_ConnectionProvider connection_provider,
             string name,
-            TAddress logicalAddress,
+            TAddress address,
             FluxMemReadPriority priority,
-            Optional<TAddress> physicalAddress = default,
             VariableUnit unit = default)
             : base(name, priority, unit)
         {
@@ -46,8 +39,7 @@ namespace Flux.ViewModels
                 .WhenAnyValue(p => p.Connection)
                 .ToProperty(this, v => v.Connection);
 
-            LogicalAddress = logicalAddress;
-            PhysicalAddress = physicalAddress;
+            LogicalAddress = address;
         }
     }
 
@@ -70,11 +62,10 @@ namespace Flux.ViewModels
         public OSAI_VariableBool(
             OSAI_ConnectionProvider connection_provider,
             string name,
-            OSAI_BitIndexAddress logicalAddress,
+            OSAI_BitIndexAddress address,
             FluxMemReadPriority priority,
-            Optional<OSAI_BitIndexAddress> physicalAddress = default,
             VariableUnit unit = default)
-            : base(connection_provider, name, logicalAddress, priority, physicalAddress, unit)
+            : base(connection_provider, name, address, priority, unit)
         {
             var connection = connection_provider
                 .WhenAnyValue(c => c.Connection);
@@ -82,7 +73,7 @@ namespace Flux.ViewModels
             connection
                 .Convert(c => c.MemoryBuffer)
                 .ConvertMany(m => m.ObserveWordVar(this))
-                .Convert(b => b.IsBitSet(logicalAddress.BitIndex))
+                .Convert(b => b.IsBitSet(address.BitIndex))
                 .BindTo(this, v => v.Value);
         }
         public override Task<bool> WriteAsync(bool value) => Connection.ConvertOrAsync(c => c.WriteVariableAsync(LogicalAddress, value), () => false);
@@ -95,11 +86,10 @@ namespace Flux.ViewModels
         public OSAI_VariableWord(
             OSAI_ConnectionProvider connection_provider,
             string name,
-            OSAI_IndexAddress logicalAddress,
+            OSAI_IndexAddress address,
             FluxMemReadPriority priority,
-            Optional<OSAI_IndexAddress> physicalAddress = default,
             VariableUnit unit = default)
-            : base(connection_provider, name, logicalAddress, priority, physicalAddress, unit)
+            : base(connection_provider, name, address, priority, unit)
         {
             var connection = connection_provider
                 .WhenAnyValue(c => c.Connection);
@@ -118,11 +108,10 @@ namespace Flux.ViewModels
         public OSAI_VariableShort(
             OSAI_ConnectionProvider connection_provider,
             string name,
-            OSAI_IndexAddress logicalAddress,
+            OSAI_IndexAddress address,
             FluxMemReadPriority priority,
-            VariableUnit unit = default,
-            Optional<OSAI_IndexAddress> physicalAddress = default)
-            : base(connection_provider, name, logicalAddress, priority, physicalAddress, unit)
+            VariableUnit unit = default)
+            : base(connection_provider, name, address, priority, unit)
         {
             var connection = connection_provider
                 .WhenAnyValue(c => c.Connection);
@@ -142,11 +131,10 @@ namespace Flux.ViewModels
         public OSAI_VariableDouble(
             OSAI_ConnectionProvider connection_provider,
             string name,
-            OSAI_IndexAddress logicalAddress,
+            OSAI_IndexAddress address,
             FluxMemReadPriority priority,
-            Optional<OSAI_IndexAddress> physicalAddress = default,
             VariableUnit unit = default)
-            : base(connection_provider, name, logicalAddress, priority, physicalAddress, unit)
+            : base(connection_provider, name, address, priority, unit)
         {
             var connection = connection_provider
                 .WhenAnyValue(c => c.Connection);
@@ -165,10 +153,10 @@ namespace Flux.ViewModels
         public OSAI_VariableText(
             OSAI_ConnectionProvider connection_provider,
             string name,
-            OSAI_IndexAddress logicalAddress,
+            OSAI_IndexAddress address,
             FluxMemReadPriority priority,
             VariableUnit unit = default)
-            : base(connection_provider, name, logicalAddress, priority, unit: unit) { }
+            : base(connection_provider, name, address, priority, unit: unit) { }
 
         public override async Task<bool> UpdateAsync()
         {
@@ -190,11 +178,11 @@ namespace Flux.ViewModels
         public OSAI_VariableTemp(
             OSAI_ConnectionProvider connection_provider,
             string name,
-            OSAI_IndexAddress logicalAddress,
+            OSAI_IndexAddress address,
             FluxMemReadPriority priority,
             Func<double, string> write_temp,
             VariableUnit unit = default)
-            : base(connection_provider, name, logicalAddress, priority, unit: unit)
+            : base(connection_provider, name, address, priority, unit: unit)
         {
             WriteTemp = write_temp;
         }
@@ -342,11 +330,10 @@ namespace Flux.ViewModels
         public OSAI_VariablePressure(
             OSAI_ConnectionProvider connection_provider,
             string name,
-            OSAI_IndexAddress logicalAddress,
+            OSAI_IndexAddress address,
             FluxMemReadPriority priority,
-            Optional<OSAI_IndexAddress> physicalAddress = default,
             VariableUnit unit = default)
-            : base(connection_provider, name, logicalAddress, priority, physicalAddress, unit)
+            : base(connection_provider, name, address, priority, unit)
         {
             Sensor = new TSensor();
 
@@ -369,7 +356,7 @@ namespace Flux.ViewModels
         }
     }
 
-    public class OSAI_VariableMacro : OSAI_Variable<OSAI_Macro, Unit, OSAI_IndexAddress>
+    /*public class OSAI_VariableMacro : OSAI_Variable<OSAI_Macro, Unit, OSAI_IndexAddress>
     {
         public override bool ReadOnly => true;
         public OSAI_VariableMacro(
@@ -482,5 +469,5 @@ namespace Flux.ViewModels
         {
             throw new NotImplementedException();
         }
-    }
+    }*/
 }

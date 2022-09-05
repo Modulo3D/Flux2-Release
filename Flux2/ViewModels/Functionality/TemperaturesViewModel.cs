@@ -32,30 +32,25 @@ namespace Flux.ViewModels
                     if (!extr_key.HasValue)
                         continue;
 
-                    var extr_temp = Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_TOOL, extr_key.Value.Alias);
-                    yield return new TemperatureViewModel(this, $"Estrusore {i + 1}", $"{i}", t => Flux.ConnectionProvider.WriteVariableAsync(m => m.TEMP_TOOL, extr_key.Value.Alias, t), extr_temp);
+                    var extr_temp = Flux.ConnectionProvider.GetVariable(m => m.TEMP_TOOL, extr_key.Value.Alias);
+                    if (!extr_temp.HasValue)
+                        continue;
+
+                    yield return new TemperatureViewModel(this, extr_temp.Value);
                 }
             }
 
-            // TODO
-
-            if (Flux.ConnectionProvider.HasVariable(m => m.TEMP_CHAMBER, "main"))
+            var chamber_units = Flux.ConnectionProvider.GetArrayUnits(c => c.TEMP_CHAMBER);
+            foreach (var chamber_unit in chamber_units)
             {
-                var chamber_temp = Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_CHAMBER, "main");
-                yield return new TemperatureViewModel(this, "Camera", $"chamber", t => Flux.ConnectionProvider.WriteVariableAsync(m => m.TEMP_CHAMBER, "main", t), chamber_temp);
+                var chamber_temp = Flux.ConnectionProvider.GetVariable(m => m.TEMP_CHAMBER, chamber_unit.Alias);
+                if (chamber_temp.HasValue)
+                    yield return new TemperatureViewModel(this, chamber_temp.Value);
             }
 
-            if (Flux.ConnectionProvider.HasVariable(m => m.TEMP_CHAMBER, "spools"))
-            {
-                var chamber_temp = Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_CHAMBER, "spools");
-                yield return new TemperatureViewModel(this, "Portabobine", $"spools", t => Flux.ConnectionProvider.WriteVariableAsync(m => m.TEMP_CHAMBER, "spools", t), chamber_temp);
-            }
-
-            if (Flux.ConnectionProvider.HasVariable(m => m.TEMP_PLATE))
-            {
-                var plate_temp = Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_PLATE);
-                yield return new TemperatureViewModel(this, "Piatto", $"plate", t => Flux.ConnectionProvider.WriteVariableAsync(m => m.TEMP_PLATE, t), plate_temp);
-            }
+            var temp_plate = Flux.ConnectionProvider.GetVariable(c => c.TEMP_PLATE);
+            if (temp_plate.HasValue)
+                yield return new TemperatureViewModel(this, temp_plate.Value);
         }
     }
 }

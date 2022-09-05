@@ -1,4 +1,6 @@
-﻿namespace Flux.ViewModels
+﻿using System;
+
+namespace Flux.ViewModels
 {
     public interface IOSAI_Address
     {
@@ -37,8 +39,9 @@
         public OSAI_IndexAddress(OSAI_VARCODE varCode, ushort index) : base(varCode, index)
         {
         }
-        public override OSAI_IndexAddress Increment() => new OSAI_IndexAddress(VarCode, (ushort)(Index + 1));
         public override string ToString() => $"{VarCode} {Index}";
+        public override OSAI_IndexAddress Increment() => new OSAI_IndexAddress(VarCode, (ushort)(Index + 1));
+        public static implicit operator OSAI_IndexAddress((OSAI_VARCODE varcode, ushort index) address) => new OSAI_IndexAddress(address.varcode, address.index);
     }
 
     public class OSAI_BitIndexAddress : OSAI_Address<OSAI_BitIndexAddress>
@@ -48,8 +51,11 @@
         {
             BitIndex = bitIndex;
         }
-        public override OSAI_BitIndexAddress Increment() => new OSAI_BitIndexAddress(VarCode, Index, (ushort)(BitIndex + 1));
         public override string ToString() => $"{VarCode} {Index}_{BitIndex}";
+        public override OSAI_BitIndexAddress Increment() => new OSAI_BitIndexAddress(VarCode, Index, (ushort)(BitIndex + 1));
+        public static implicit operator OSAI_BitIndexAddress((OSAI_VARCODE varcode, ushort index) address) => new OSAI_BitIndexAddress(address.varcode, address.index, 0);
+
+        public static implicit operator OSAI_BitIndexAddress((OSAI_VARCODE varcode, ushort index, ushort bit_index) address) => new OSAI_BitIndexAddress(address.varcode, address.index, address.bit_index);
     }
 
     public class OSAI_NamedAddress : OSAI_Address<OSAI_NamedAddress>
@@ -58,6 +64,8 @@
         public OSAI_NamedAddress(string name, ushort index) : base(OSAI_VARCODE.NAMED, index)
         {
             Name = name;
+            if (!name.StartsWith("!"))
+                throw new Exception("Named addres must start with '!'");
         }
 
         public OSAI_NamedAddress(string name) : this(name, 0)

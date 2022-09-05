@@ -240,9 +240,6 @@ namespace Flux.ViewModels
                     _StatusText = Observable.CombineLatest(
                         StatusProvider.WhenAnyValue(v => v.FluxStatus),
                         StatusProvider.WhenAnyValue(v => v.PrintingEvaluation),
-                        ConnectionProvider.ObserveVariable(m => m.RUNNING_MACRO).ObservableOrDefault(),
-                        ConnectionProvider.ObserveVariable(m => m.RUNNING_MCODE).ObservableOrDefault(),
-                        ConnectionProvider.ObserveVariable(m => m.RUNNING_GCODE).ObservableOrDefault(),
                         GetStatusText)
                         .ToProperty(this, v => v.StatusText);
 
@@ -373,16 +370,16 @@ namespace Flux.ViewModels
             InitializeRemoteView();
             return Task.CompletedTask;
         }
-        private string GetStatusText(FLUX_ProcessStatus status, PrintingEvaluation printing_evaluation, Optional<OSAI_Macro> macro, Optional<OSAI_MCode> mcode, Optional<OSAI_GCode> gcode)
+        private string GetStatusText(FLUX_ProcessStatus status, PrintingEvaluation printing_evaluation)
         {
             return status switch
             {
                 FLUX_ProcessStatus.IDLE =>  "LIBERA",
                 FLUX_ProcessStatus.ERROR => "ERRORE",
                 FLUX_ProcessStatus.EMERG => "EMERGENZA",
+                FLUX_ProcessStatus.CYCLE => "IN FUNZIONE",
                 FLUX_ProcessStatus.NONE =>  "ACCENSIONE...",
                 FLUX_ProcessStatus.WAIT => wait(),
-                FLUX_ProcessStatus.CYCLE => cycle(),
                 _ => "ONLINE",
             };
 
@@ -391,66 +388,6 @@ namespace Flux.ViewModels
                 if (printing_evaluation.Recovery.HasValue)
                     return "IN PAUSA";
                 return "ATTESA OPERATORE";
-            }
-
-            string cycle()
-            {
-                if (!macro.HasValue)
-                    return "IN FUNZIONE";
-
-                switch (macro.Value)
-                {
-                    case OSAI_Macro.PROGRAM:
-                        return $"IN STAMPA";
-
-                    case OSAI_Macro.GCODE_OR_MCODE:
-                        if (!mcode.HasValue)
-                            return "IN FUNZIONE";
-                        switch (mcode.Value)
-                        {
-                            case OSAI_MCode.CHAMBER_TEMP:
-                                return "ATTESA CAMERA";
-                            case OSAI_MCode.PLATE_TEMP:
-                                return "ATTESA PIATTO";
-                            case OSAI_MCode.TOOL_TEMP:
-                                return "ATTESA ESTRUSORE";
-                            case OSAI_MCode.GCODE:
-                                if (!gcode.HasValue)
-                                    return "IN FUNZIONE";
-                                switch (gcode.Value)
-                                {
-                                    case OSAI_GCode.RAPID_MOVE:
-                                    case OSAI_GCode.INTERP_MOVE:
-                                        return "IN MOVIMENTO";
-                                    default:
-                                        return "IN FUNZIONE";
-                                }
-                            default:
-                                return "IN FUNZIONE";
-                        }
-                    case OSAI_Macro.HOME:
-                        return "AZZERAMENTO";
-                    case OSAI_Macro.PROBE_PLATE:
-                        return "TASTA PIATTO";
-                    case OSAI_Macro.PROBE_TOOL:
-                        return "TASTA UTENSILE";
-                    case OSAI_Macro.CHANGE_TOOL:
-                        return "CAMBIO UTENSILE";
-                    case OSAI_Macro.READ_TOOL:
-                        return "LEGGI UTENSILE";
-                    case OSAI_Macro.LOAD_FILAMENT:
-                        return "CARICO FILO";
-                    case OSAI_Macro.UNLOAD_FILAMENT:
-                        return "SCARICO FILO";
-                    case OSAI_Macro.PURGE_FILAMENT:
-                        return "SPURGO";
-                    case OSAI_Macro.END_PRINT:
-                        return "FINE STAMPA";
-                    case OSAI_Macro.PAUSE_PRINT:
-                        return "PAUSA";
-                    default:
-                        return "IN FUNZIONE";
-                }
             }
         }
 

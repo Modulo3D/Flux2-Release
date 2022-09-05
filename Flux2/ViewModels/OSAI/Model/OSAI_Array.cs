@@ -10,7 +10,7 @@ using System.Reactive.Linq;
 namespace Flux.ViewModels
 {
     public abstract class OSAI_Array<TVariable, TAddress, TRData, TWData> : FLUX_Array<TRData, TWData>, IOSAI_VariableBase
-        where TVariable : IFLUX_Variable<TRData, TWData>, IOSAI_Variable
+        where TVariable : IFLUX_Variable<TRData, TWData>, IOSAI_VariableBase
         where TAddress : IOSAI_Address<TAddress>
     {
         public override string Group => $"{LogicalAddress.VarCode}";
@@ -21,17 +21,15 @@ namespace Flux.ViewModels
         public OSAI_Array(
             string name,
             ushort count,
-            TAddress s_logical_address,
+            TAddress address,
             FluxMemReadPriority priority,
-            Func<string, TAddress, FluxMemReadPriority, VariableUnit, ushort, Optional<TAddress>, TVariable> create_var,
-            Optional<TAddress> s_physical_address = default,
+            Func<string, TAddress, FluxMemReadPriority, VariableUnit, ushort, TVariable> create_var,
             Optional<Dictionary<VariableAlias, VariableUnit>> custom_unit = default)
             : base(name, priority)
         {
-            LogicalAddress = s_logical_address;
+            LogicalAddress = address;
 
-            TAddress i_logical_address = s_logical_address;
-            Optional<TAddress> i_physical_address = s_physical_address;
+            TAddress i_logicaaddress = address;
 
             var source_cache = (SourceCache<IFLUX_Variable<TRData, TWData>, VariableAlias>)Variables;
             for (ushort i = 0; i < count; i++)
@@ -42,10 +40,9 @@ namespace Flux.ViewModels
                     .ValueOr(() => new VariableUnit((ushort)(i + 1)));
 
                 var i_name = $"{name} {v_unit}";
-                var i_var = create_var(i_name, i_logical_address, priority, v_unit, i, i_physical_address);
+                var i_var = create_var(i_name, i_logicaaddress, priority, v_unit, i);
 
-                i_logical_address = i_logical_address.Increment();
-                i_physical_address = i_physical_address.Convert(a => a.Increment());
+                i_logicaaddress = i_logicaaddress.Increment();
 
                 source_cache.AddOrUpdate(i_var);
             }
@@ -66,11 +63,10 @@ namespace Flux.ViewModels
             OSAI_ConnectionProvider connection_provider,
             string name,
             ushort count,
-            OSAI_BitIndexAddress s_logical_address,
+            OSAI_BitIndexAddress address,
             FluxMemReadPriority priority,
-            Optional<OSAI_BitIndexAddress> s_physical_address = default,
             Optional<Dictionary<VariableAlias, VariableUnit>> custom_unit = default)
-            : base(name, count, s_logical_address, priority, (name, l_addr, p, unit, i, p_addr) => new OSAI_VariableBool(connection_provider, name, l_addr, p, p_addr, unit), s_physical_address, custom_unit)
+            : base(name, count, address, priority, (name, addr, p, unit, i) => new OSAI_VariableBool(connection_provider, name, addr, p, unit), custom_unit)
         {
         }
     }
@@ -81,11 +77,10 @@ namespace Flux.ViewModels
             OSAI_ConnectionProvider connection_provider,
             string name,
             ushort count,
-            OSAI_IndexAddress s_logical_address,
+            OSAI_IndexAddress address,
             FluxMemReadPriority priority,
-            Optional<OSAI_IndexAddress> s_physical_address = default,
             Optional<Dictionary<VariableAlias, VariableUnit>> custom_unit = default)
-            : base(name, count, s_logical_address, priority, (name, l_addr, p, unit, i, p_addr) => new OSAI_VariableWord(connection_provider, name, l_addr, p, p_addr, unit), s_physical_address, custom_unit)
+            : base(name, count, address, priority, (name, addr, p, unit, i) => new OSAI_VariableWord(connection_provider, name, addr, p, unit), custom_unit)
         {
         }
     }
@@ -96,11 +91,10 @@ namespace Flux.ViewModels
             OSAI_ConnectionProvider connection_provider,
             string name,
             ushort count,
-            OSAI_IndexAddress s_logical_address,
+            OSAI_IndexAddress address,
             FluxMemReadPriority priority,
-            Optional<OSAI_IndexAddress> s_physical_address = default,
             Optional<Dictionary<VariableAlias, VariableUnit>> custom_unit = default)
-            : base(name, count, s_logical_address, priority, (name, l_addr, p, unit, i, p_addr) => new OSAI_VariableDouble(connection_provider, name, l_addr, p, p_addr, unit), s_physical_address, custom_unit)
+            : base(name, count, address, priority, (name, addr, p, unit, i) => new OSAI_VariableDouble(connection_provider, name, addr, p, unit), custom_unit)
         {
         }
     }
@@ -111,10 +105,10 @@ namespace Flux.ViewModels
             OSAI_ConnectionProvider connection_provider,
             string name,
             ushort count,
-            OSAI_IndexAddress s_logical_address,
+            OSAI_IndexAddress address,
             FluxMemReadPriority priority,
             Optional<Dictionary<VariableAlias, VariableUnit>> custom_unit = default)
-            : base(name, count, s_logical_address, priority, (name, l_addr, p, unit, i, p_addr) => new OSAI_VariableText(connection_provider, name, l_addr, p, unit), default, custom_unit)
+            : base(name, count, address, priority, (name, addr, p, unit, i) => new OSAI_VariableText(connection_provider, name, addr, p, unit), custom_unit)
         {
         }
     }
@@ -125,11 +119,11 @@ namespace Flux.ViewModels
             OSAI_ConnectionProvider connection_provider,
             string name,
             ushort count,
-            OSAI_IndexAddress s_logical_address,
+            OSAI_IndexAddress address,
             FluxMemReadPriority priority,
             Func<ushort, double, string> write_temp,
             Optional<Dictionary<VariableAlias, VariableUnit>> custom_unit = default)
-            : base(name, count, s_logical_address, priority, (name, l_addr, p, unit, i, p_addr) => new OSAI_VariableTemp(connection_provider, name, l_addr, p, t => write_temp(i, t), unit), default, custom_unit)
+            : base(name, count, address, priority, (name, addr, p, unit, i) => new OSAI_VariableTemp(connection_provider, name, addr, p, t => write_temp(i, t), unit), custom_unit)
         {
         }
     }
@@ -140,11 +134,11 @@ namespace Flux.ViewModels
         public OSAI_ArrayNamed(
             string name,
             ushort count,
-            OSAI_NamedAddress s_logical_address,
+            OSAI_NamedAddress address,
             FluxMemReadPriority priority,
             Func<string, OSAI_NamedAddress, FluxMemReadPriority, VariableUnit, TVariable> create_var,
             Optional<Dictionary<VariableAlias, VariableUnit>> custom_unit = default)
-            : base(name, count, s_logical_address, priority, (name, l_addr, p, unit, i, p_addr) => create_var(name, l_addr, p, unit), default, custom_unit)
+            : base(name, count, address, priority, (name, addr, p, unit, i) => create_var(name, addr, p, unit), custom_unit)
         {
         }
     }
@@ -155,10 +149,10 @@ namespace Flux.ViewModels
             OSAI_ConnectionProvider connection_provider,
             string name,
             ushort count,
-            OSAI_NamedAddress s_logical_address,
+            OSAI_NamedAddress address,
             FluxMemReadPriority priority,
             Optional<Dictionary<VariableAlias, VariableUnit>> custom_unit = default)
-            : base(name, count, s_logical_address, priority, (name, l_addr, p, unit) => new OSAI_VariableNamedDouble(connection_provider, name, l_addr, p, unit), custom_unit)
+            : base(name, count, address, priority, (name, addr, p, unit) => new OSAI_VariableNamedDouble(connection_provider, name, addr, p, unit), custom_unit)
         {
         }
     }
