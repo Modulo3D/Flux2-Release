@@ -380,7 +380,7 @@ namespace Flux.ViewModels
                 return true;
             if (plc_temp.Value.Target == 0)
                 return true;
-            return plc_temp.Value.Target - plc_temp.Value.Current > 10;
+            return plc_temp.Value.Target.ValueOr(() => 0) - plc_temp.Value.Current > 10;
         }
 
         private Optional<IFluxOffsetViewModel> FindOffset(IQuery<IFluxOffsetViewModel, ushort> offsets)

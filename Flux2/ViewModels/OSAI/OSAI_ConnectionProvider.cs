@@ -71,6 +71,16 @@ namespace Flux.ViewModels
                 this.WhenAnyValue(v => v.ConnectionPhase)
                 .Select(p => (double)p.ValueOr(() => OSAI_ConnectionPhase.START_PHASE) / connection_max_value * 100)
                 .ToProperty(this, v => v.ConnectionProgress);
+
+            Flux.NetProvider
+                .WhenAnyValue(n => n.PLCNetworkConnectivity)
+                .Where(c => c == false)
+                .Subscribe(_ => StartConnection());
+
+            Flux.MCodes.WhenAnyValue(c => c.OperatorUSB)
+                .ConvertOr(o => o.AdvancedSettings, () => false)
+                .DistinctUntilChanged()
+                .Subscribe(debug => WriteVariableAsync(m => m.DEBUG, debug));
         }
 
         public override void Initialize()
@@ -82,20 +92,30 @@ namespace Flux.ViewModels
             var memory_buffer_t = DateTime.Now;
 
             var plc_variables = VariableStore.Variables.Values
-                .Where(v => v.Priority != FluxMemReadPriority.DISABLED)
+                .SelectMany(var =>
+                {
+                    return var switch
+                    {
+                        IFLUX_Array array => array.Variables.Items,
+                        IFLUX_Variable variable => new[] { variable },
+                        _ => Array.Empty<IFLUX_Variable>(),
+                    };
+                })
+                .Where(v => v is IOSAI_AsyncVariable)
+                .Select(v => v as IOSAI_AsyncVariable)
                 .GroupBy(v => v.Priority)
                 .ToDictionary(group => group.Key, group => group.ToList());
 
             var memory_priorities_t = plc_variables
                 .ToDictionary(kvp => kvp.Key, kvp => DateTime.Now);
 
-            var memory_times = new Dictionary<FluxMemReadPriority, TimeSpan>()
+            var memory_times = new Dictionary<OSAI_ReadPriority, TimeSpan>()
             {
-                { FluxMemReadPriority.LOW, OSAI_Connection.LowPriority },
-                { FluxMemReadPriority.HIGH, OSAI_Connection.HighPriority },
-                { FluxMemReadPriority.MEDIUM, OSAI_Connection.MediumPriority },
-                { FluxMemReadPriority.ULTRALOW, OSAI_Connection.UltraLowPriority},
-                { FluxMemReadPriority.ULTRAHIGH, OSAI_Connection.UltraHighPriority },
+                { OSAI_ReadPriority.LOW, OSAI_Connection.LowPriority },
+                { OSAI_ReadPriority.HIGH, OSAI_Connection.HighPriority },
+                { OSAI_ReadPriority.MEDIUM, OSAI_Connection.MediumPriority },
+                { OSAI_ReadPriority.ULTRALOW, OSAI_Connection.UltraLowPriority},
+                { OSAI_ReadPriority.ULTRAHIGH, OSAI_Connection.UltraHighPriority },
             };
 
             DisposableThread.Start(async () =>
@@ -103,13 +123,22 @@ namespace Flux.ViewModels
                 try
                 {
                     if (DateTime.Now - status_t >= TimeSpan.FromMilliseconds(100))
-                        await update_status();
+                    { 
+                        await RollConnectionAsync();
+                        status_t = DateTime.Now;
+                    }
 
                     if (DateTime.Now - network_t >= TimeSpan.FromSeconds(10))
-                        await update_network();
+                    { 
+                        Flux.NetProvider.UpdateNetworkState();
+                        network_t = DateTime.Now;
+                    }
 
                     if (DateTime.Now - debug_t >= TimeSpan.FromSeconds(5))
-                        await update_debug();
+                    {
+                        Flux.MCodes.FindDrive();
+                        debug_t = DateTime.Now;
+                    }
 
                     if (ConnectionPhase.HasValue && ConnectionPhase.Value >= OSAI_ConnectionPhase.INITIALIZED_BOOT_PHASE)
                     {
@@ -117,7 +146,7 @@ namespace Flux.ViewModels
                             await update_memory_buffers();
 
                         foreach (var variable_group in plc_variables)
-                            await UpdateVariableGroup(variable_group);
+                            await update_variable_group(variable_group);
 
                         if (DateTime.Now - full_memory_t >= OSAI_Connection.UltraLowPriority)
                             Connection.IfHasValue(c => c.MemoryBuffer.HasFullMemoryRead = true);
@@ -132,37 +161,13 @@ namespace Flux.ViewModels
                 }
             }, TimeSpan.Zero);
 
-            async Task update_debug()
-            {
-                Flux.MCodes.FindDrive();
-                var debug = Flux.MCodes.OperatorUSB.ConvertOr(o => o.AdvancedSettings, () => false);
-                var debug_plc = await ReadVariableAsync(m => m.DEBUG);
-                if (debug_plc.HasValue && debug != debug_plc)
-                    await WriteVariableAsync(m => m.DEBUG, debug);
-                debug_t = DateTime.Now;
-            }
-            async Task update_network()
-            {
-                await Flux.NetProvider.UpdateNetworkStateAsync();
-                if (Flux.NetProvider.PLCNetworkConnectivity.ConvertOr(plc => !plc, () => false))
-                {
-                    ConnectionPhase = OSAI_ConnectionPhase.START_PHASE;
-                    Connection.IfHasValue(c => c.MemoryBuffer.HasFullMemoryRead = false);
-                }
-                network_t = DateTime.Now;
-            }
-            async Task update_status()
-            {
-                await RollConnectionAsync();
-                status_t = DateTime.Now;
-            }
             async Task update_memory_buffers()
             {
                 if (Connection.HasValue)
                     await Connection.Value.MemoryBuffer.UpdateBufferAsync();
                 memory_buffer_t = DateTime.Now;
             }
-            async Task UpdateVariableGroup(KeyValuePair<FluxMemReadPriority, List<IFLUX_VariableBase>> variable_group)
+            async Task update_variable_group(KeyValuePair<OSAI_ReadPriority, List<IOSAI_AsyncVariable>> variable_group)
             {
                 var memory_time = memory_times[variable_group.Key];
                 var memory_priority_t = memory_priorities_t[variable_group.Key];
@@ -183,7 +188,7 @@ namespace Flux.ViewModels
             try
             {
                 if (!ConnectionPhase.HasValue)
-                    ConnectionPhase = OSAI_ConnectionPhase.START_PHASE;
+                    StartConnection();
 
                 // PRELIMINARY PHASE
                 switch (ConnectionPhase.Value)
@@ -208,7 +213,7 @@ namespace Flux.ViewModels
                                 Flux.Messages.LogMessage(OSAI_ConnectResponse.CONNECT_INVALID_ADDRESS);
                                 return false;
                             }
-                            Connection = new OSAI_Connection(Flux, VariableStore, $"http://{plc_address.Value}/");
+                            Connection = new OSAI_Connection(Flux, VariableStore, plc_address.Value);
                             return true;
                         }
 
@@ -220,7 +225,7 @@ namespace Flux.ViewModels
                         if (boot_mode)
                             ConnectionPhase = OSAI_ConnectionPhase.INITIALIZED_BOOT_MODE;
                         else
-                            ConnectionPhase = OSAI_ConnectionPhase.START_PHASE;
+                            StartConnection();
                         break;
 
                     // INITIALIZE BOOT PHASE
@@ -229,7 +234,7 @@ namespace Flux.ViewModels
                         if (boot_phase)
                             ConnectionPhase = OSAI_ConnectionPhase.INITIALIZED_BOOT_PHASE;
                         else
-                            ConnectionPhase = OSAI_ConnectionPhase.START_PHASE;
+                            StartConnection();
                         async Task<bool> wait_system_up()
                         {
                             if (!Connection.HasValue)
@@ -260,7 +265,7 @@ namespace Flux.ViewModels
                     // Resets variables
                     if (HasVariable(m => m.WATCH_VACUUM) && !await WriteVariableAsync(m => m.WATCH_VACUUM, false))
                     {
-                        ConnectionPhase = OSAI_ConnectionPhase.START_PHASE;
+                        StartConnection();
                         Flux.Messages.LogMessage(m => m.WATCH_VACUUM, false);
                         return;
                     }
@@ -268,7 +273,7 @@ namespace Flux.ViewModels
 
                 if (!ConnectionPhase.HasValue)
                 {
-                    ConnectionPhase = OSAI_ConnectionPhase.START_PHASE;
+                    StartConnection();
                     return;
                 }
 

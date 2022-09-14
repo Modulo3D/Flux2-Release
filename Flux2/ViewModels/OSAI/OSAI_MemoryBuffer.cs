@@ -154,20 +154,20 @@ namespace Flux.ViewModels
         }
         private (ushort start_addr, ushort end_addr) GetRange(OSAI_VARCODE varcode)
         {
-            var variables = Connection.Variables.Values
-                .Select(v => v as IOSAI_VariableBase)
-                .Where(v => v?.LogicalAddress.VarCode == varcode);
-
-            var addr_range = variables.SelectMany(var =>
-            {
-                if (var is IFLUX_Array array)
+            var addr_range = Connection.Variables.Values
+                .SelectMany(var =>
                 {
-                    return array.Variables.Items
-                        .Where(v => v is IOSAI_VariableBase)
-                        .Select(v => ((IOSAI_VariableBase)v).LogicalAddress.Index);
-                }
-                return new[] { var.LogicalAddress.Index };
-            });
+                    return var switch
+                    {
+                        IFLUX_Array array => array.Variables.Items,
+                        IFLUX_Variable variable => new[] { variable },
+                        _ => Array.Empty<IFLUX_Variable>(),
+                    };
+                })
+                .Where(v => v is IOSAI_ObservableVariable)
+                .Select(v => v as IOSAI_ObservableVariable)
+                .Where(v => v.Address.VarCode == varcode)
+                .Select(v => v.Address.Index);
 
             var start_addr = addr_range.Min();
             var end_addr = addr_range.Max();
@@ -203,9 +203,9 @@ namespace Flux.ViewModels
                 mw_response.ErrNum))
                 MW_BUFFER = mw_response.Value;
         }
-        public IObservable<Optional<ushort>> ObserveWordVar(IOSAI_VariableBase variable)
+        public IObservable<Optional<ushort>> ObserveWordVar(IOSAI_Address address)
         {
-            switch (variable.LogicalAddress.VarCode)
+            switch (address.VarCode)
             {
                 case OSAI_VARCODE.GW_CODE:
                     return GW_BUFFER_CHANGED
@@ -216,7 +216,7 @@ namespace Flux.ViewModels
 
                             var start_addr = GW_BUFFER_RANGE.start_addr;
                             var end_addr = GW_BUFFER_RANGE.end_addr;
-                            var index = variable.LogicalAddress.Index;
+                            var index = address.Index;
                             if (index < start_addr || index > end_addr)
                                 return Optional<ushort>.None;
 
@@ -235,7 +235,7 @@ namespace Flux.ViewModels
 
                             var start_addr = MW_BUFFER_RANGE.start_addr;
                             var end_addr = MW_BUFFER_RANGE.end_addr;
-                            var index = variable.LogicalAddress.Index;
+                            var index = address.Index;
                             if (index < start_addr || index > end_addr)
                                 return Optional<ushort>.None;
 
@@ -248,9 +248,9 @@ namespace Flux.ViewModels
             }
             return Observable.Return(Optional<ushort>.None);
         }
-        public IObservable<Optional<double>> ObserveDWordVar(IOSAI_VariableBase variable)
+        public IObservable<Optional<double>> ObserveDWordVar(IOSAI_Address address)
         {
-            switch (variable.LogicalAddress.VarCode)
+            switch (address.VarCode)
             {
                 case OSAI_VARCODE.GD_CODE:
                     return GD_BUFFER_CHANGED
@@ -261,7 +261,7 @@ namespace Flux.ViewModels
 
                             var start_addr = GD_BUFFER_RANGE.start_addr;
                             var end_addr = GD_BUFFER_RANGE.end_addr;
-                            var index = variable.LogicalAddress.Index;
+                            var index = address.Index;
                             if (index < start_addr || index > end_addr)
                                 return Optional<double>.None;
 
@@ -280,7 +280,7 @@ namespace Flux.ViewModels
 
                             var start_addr = L_BUFFER_RANGE.start_addr;
                             var end_addr = L_BUFFER_RANGE.end_addr;
-                            var index = variable.LogicalAddress.Index;
+                            var index = address.Index;
                             if (index < start_addr || index > end_addr)
                                 return Optional<double>.None;
 

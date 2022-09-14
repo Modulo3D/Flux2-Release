@@ -110,22 +110,18 @@ namespace Flux.ViewModels
                     var operator_usb = Flux.MCodes.OperatorUSB;
                     var reading = await Flux.UseReader(h => ReadTag(h, true), r => r.HasValue);
 
-                    if (!reading.HasValue)
+                    if (operator_usb.ConvertOr(o => o.RewriteNFC, () => false))
                     {
-                        if (operator_usb.ConvertOr(o => o.RewriteNFC, () => false))
-                        {
-                            var tag = await CreateTagAsync();
-                            reading = new NFCReading<TNFCTag>(tag, VirtualCardId);
-                        }
-
-                        if (!reading.HasValue)
-                            return;
+                        var tag = await CreateTagAsync(reading);
+                        reading = new NFCReading<TNFCTag>(tag, VirtualCardId);
                     }
 
+                    if (!reading.HasValue)
+                        return;
+        
                     await StoreTagAsync(reading.Value);
                 },
-                Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation).Select(s => s.CanSafeCycle),
-                RxApp.MainThreadScheduler)
+                Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation).Select(s => s.CanSafeCycle))
                 .DisposeWith(Disposables);
 
             var stored_reading = tag_storage.Lookup(Position);
@@ -164,7 +160,7 @@ namespace Flux.ViewModels
             return Task.CompletedTask;
         }
         
-        public abstract Task<Optional<TNFCTag>> CreateTagAsync();
+        public abstract Task<Optional<TNFCTag>> CreateTagAsync(Optional<NFCReading<TNFCTag>> reading);
 
 
         // Backup nfc

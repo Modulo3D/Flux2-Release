@@ -37,8 +37,6 @@ namespace Flux.ViewModels
             set => this.RaiseAndSetIfChanged(ref _GlobalZOffset, value);
         }
 
-        public bool HasZProbe => Flux.ConnectionProvider.HasVariable(m => m.AXIS_PROBE, "tool_z");
-
         private ManualCalibrationViewModel ManualCalibration { get; set; }
 
         public CalibrationViewModel(FluxViewModel flux) : base(flux)
@@ -142,7 +140,8 @@ namespace Flux.ViewModels
 
             ProbeOffsetsCommand = ReactiveCommand.CreateFromTask(async () =>
             {
-                if (HasZProbe)
+                var has_tool_z_probe = Flux.ConnectionProvider.HasVariable(m => m.AXIS_PROBE, "tool_z");
+                if (has_tool_z_probe)
                 {
                     await ProbeOffsetsAsync(false);
                 }
@@ -201,60 +200,9 @@ namespace Flux.ViewModels
                 }
             }
 
-            var temp_chamber = Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_CHAMBER, "main");
-            if (temp_chamber.HasObservable)
-            { 
-                if (!await Flux.ConnectionProvider.WriteVariableAsync(m => m.TEMP_CHAMBER, "main", 40) ||
-                    !await WaitUtils.WaitForOptionalAsync(temp_chamber.Observable, t => t.Current >= t.Target, TimeSpan.FromMinutes(30)))
-                {
-                    await Flux.ConnectionProvider.CancelPrintAsync(true);
-                    Flux.Messages.LogMessage("Errore di tastatura", "Camera ancora calda o operazione annullata", MessageLevel.ERROR, 0);
-                    return;
-                }
-            }
-
-            var temp_plate = Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_PLATE);
-            if (temp_plate.HasObservable)
-            { 
-                if (!await Flux.ConnectionProvider.WriteVariableAsync(m => m.TEMP_PLATE, 40) ||
-                    !await WaitUtils.WaitForOptionalAsync(temp_plate.Observable, t => t.Current >= t.Target, TimeSpan.FromMinutes(30)))
-                {
-                    await Flux.ConnectionProvider.CancelPrintAsync(true);
-                    Flux.Messages.LogMessage("Errore di tastatura", "Piatto ancora caldo o operazione annullata", MessageLevel.ERROR, 0);
-                    return;
-                }
-            }
-
             foreach (var offset in sorted_valid_offsets)
                 await offset.ProbeOffsetAsync();
-
-            /*var offsets_by_temp = Offsets.Items
-                .Where(o => o.Feeder.ToolMaterial.ExtrusionTemp.HasValue)
-                .OrderBy(o => o.Feeder.ToolMaterial.ExtrusionTemp.Value);
-
-            foreach (var offset_by_temp in offsets_by_temp)
-            {
-                var feeder = offset_by_temp.Feeder;
-                if (!feeder.ToolMaterial.ExtrusionTemp.HasValue)
-                    continue;
-
-                var extrusion_temp = feeder.ToolMaterial.ExtrusionTemp.Value;
-                await Flux.ConnectionProvider.SetExtruderTemperatureAsync(feeder.Position, extrusion_temp, false);
-            }
-
-            foreach (var offset_by_temp in offsets_by_temp)
-            { 
-                if (!await offset_by_temp.ProbeOffsetAsync())
-                    break;
-            }
-
-            foreach (var offset_by_temp in offsets_by_temp)
-            {
-                var feeder = offset_by_temp.Feeder;
-                await Flux.ConnectionProvider.SetExtruderTemperatureAsync(feeder.Position, 0.0, false);
-            }*/
         }
-
     }
 
     public class LayerHeightComparer : IEqualityComparer<double>

@@ -62,6 +62,8 @@ namespace Flux.ViewModels
         public ReactiveCommand<Unit, Unit> EditFileCommand { get; }
         [RemoteCommand]
         public ReactiveCommand<Unit, Unit> ModifyFileCommand { get; }
+        [RemoteCommand]
+        public Optional<ReactiveCommand<Unit, Unit>> ExecuteFileCommand { get; }
 
         public FileViewModel(FilesViewModel files, Optional<FolderViewModel> folder, FLUX_File file, string path_separator) : base(files, folder, file, path_separator)
         {
@@ -70,6 +72,13 @@ namespace Flux.ViewModels
 
             ModifyFileCommand = ReactiveCommand.CreateFromTask(() => files.ModifyFSAsync(this))
                 .DisposeWith(Disposables);
+
+            if (folder.ConvertOr(f => f.FSFullPath.Contains(files.Flux.ConnectionProvider.MacroPath), () => false) ||
+                folder.ConvertOr(f => f.FSFullPath.Contains(files.Flux.ConnectionProvider.StoragePath), () => false))
+            { 
+                ExecuteFileCommand = ReactiveCommand.CreateFromTask(() => files.ExecuteFileAsync(this))
+                    .DisposeWith(Disposables);
+            }
         }
     }
 }

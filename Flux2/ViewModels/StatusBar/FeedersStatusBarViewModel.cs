@@ -27,8 +27,8 @@ namespace Flux.ViewModels
                 .StartWith(false);
 
             var error = Flux.Feeders.Feeders.Connect()
-                .TrueForAny(f => f.WhenAnyValue(f => f.ToolNozzle.State), s =>
-                    s.IsNotLoaded() ? false : !s.IsInMagazine() && !s.IsOnTrailer())
+                .TrueForAny(f => f.WhenAnyValue(f => f.FeederState), s =>
+                    s == EFeederState.ERROR)
                 .DistinctUntilChanged()
                 .StartWith(false);
 
@@ -47,7 +47,7 @@ namespace Flux.ViewModels
 
             var on = Flux.Feeders.WhenAnyValue(v => v.SelectedFeeder)
                 .ConvertMany(f => f.WhenAnyValue(f => f.ToolNozzle.NozzleTemperature))
-                .Select(t => t.ConvertOr(t => t.Target > 0, () => false))
+                .Select(t => t.ConvertOr(t => t.Target.Convert(t => t > 0), () => false))
                 .DistinctUntilChanged()
                 .StartWith(false);
 
@@ -83,7 +83,7 @@ namespace Flux.ViewModels
                         return StatusBarState.Error;
                     if (tool.hot)
                         return StatusBarState.Warning;
-                    if (tool.on)
+                    if (tool.on.ValueOr(() => false))
                         return StatusBarState.Stable;
                     return StatusBarState.Disabled;
                 });

@@ -51,9 +51,9 @@ namespace Flux.ViewModels
         [RemoteOutput(true, typeof(FluxTemperatureConverter))]
         public Optional<FLUX_Temp> CurrentTemperature => _CurrentTemperature.Value;
 
-        private ObservableAsPropertyHelper<double> _TemperaturePercentage;
+        private ObservableAsPropertyHelper<Optional<double>> _TemperaturePercentage;
         [RemoteOutput(true)]
-        public double TemperaturePercentage => _TemperaturePercentage.Value;
+        public Optional<double> TemperaturePercentage => _TemperaturePercentage.Value;
 
         public FeederOperationViewModel(FeederViewModel feeder) : base(feeder.Flux)
         {

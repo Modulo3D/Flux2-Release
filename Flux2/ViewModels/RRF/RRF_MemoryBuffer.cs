@@ -50,7 +50,7 @@ namespace Flux.ViewModels
 
         public RRF_ModelReader(RRF_Connection connection, string resource, Action<TData> action)
         {
-            Action = action; 
+            Action = action;
             Resource = resource;
             Connection = connection;
         }
@@ -150,8 +150,8 @@ namespace Flux.ViewModels
         public async Task TryScheduleAsync()
         {
             foreach (var memory_reader in MemoryReaders.Items)
-            { 
-                var cts = new CancellationTokenSource(Timeout);
+            {
+                using var cts = new CancellationTokenSource(Timeout);
                 await memory_reader.TryScheduleAsync(cts.Token);
             }
         }

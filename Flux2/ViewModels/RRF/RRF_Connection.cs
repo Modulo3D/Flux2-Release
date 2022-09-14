@@ -122,6 +122,7 @@ namespace Flux.ViewModels
         public override string StoragePath => "gcodes/storage";
         public override string QueuePath => "gcodes/queue";
         public override string PathSeparator => "/";
+        public override string MacroPath => "macros";
         public string GlobalPath => "sys/global";
         public override string RootPath => "";
 
@@ -320,12 +321,12 @@ namespace Flux.ViewModels
                 if (ct.IsCancellationRequested)
                     return false;
 
-                var file_list_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                using var file_list_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 var files = await ListFilesAsync(StoragePath, file_list_ctk.Token);
                 if (!files.HasValue)
                     return false;
 
-                var put_file_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                using var put_file_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 if (!files.Value.Files.Any(f => f.Name == "deselected.mcode"))
                     await PutFileAsync(StoragePath, "deselected.mcode", put_file_ctk.Token);
 
@@ -346,7 +347,7 @@ namespace Flux.ViewModels
                 if (ct.IsCancellationRequested)
                     return false;
 
-                var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
                 if (!await PostGCodeAsync(new[] { $"M23 storage/{partprogram}" }, cts.Token))
                 {
                     Flux.Messages.LogMessage("Errore selezione partprogram", "Impossibile eseguire il gcode", MessageLevel.ERROR, 0);
@@ -390,15 +391,15 @@ namespace Flux.ViewModels
                 else
                 {
                     // deselect part program
-                    var deselect_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    using var deselect_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                     var deselect_result = await DeselectPartProgramAsync(false, true, deselect_ctk.Token);
                     if (deselect_result == false)
                         return false;
 
-                    var delete_job_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    using var delete_job_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                     var delete_job_response = await DeleteFileAsync(StoragePath, "job.mcode", true, delete_job_ctk.Token);
 
-                    var delete_paramacro_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    using var delete_paramacro_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                     var delete_paramacro_response = await DeleteFileAsync(StoragePath, "paramacro.mcode", true, delete_paramacro_ctk.Token);
 
                     // put file
@@ -419,7 +420,7 @@ namespace Flux.ViewModels
                         return false;
 
                     // select part program
-                    var select_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    using var select_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                     var select_part_program_response = await SelectPartProgramAsync("job.mcode", true, true, select_ctk.Token);
                     if (select_part_program_response == false)
                         return false;
@@ -472,10 +473,12 @@ namespace Flux.ViewModels
                 content_stream.Headers.ContentLength = lines_stream.Length;
 
                 var plc_address = Flux.SettingsProvider.CoreSettings.Local.PLCAddress;
+                if (!plc_address.HasValue)
+                    return default;
 
                 using var client = new HttpClient();
                 client.Timeout = TimeSpan.FromHours(1);
-                client.BaseAddress = new Uri($"http://{plc_address}");
+                client.BaseAddress = new Uri(plc_address.Value);
                 client.DefaultRequestHeaders.Add("Connection", "Keep-Alive");
                 var response = await client.PostAsync($"rr_upload?name=0:/{folder}/{filename}&time={DateTime.Now:s}", content_stream, ct);
 
@@ -677,7 +680,7 @@ namespace Flux.ViewModels
                     return false;
 
                 var path = $"{folder}/{filename}".TrimStart('/');
-                var clear_folder_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                using var clear_folder_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 if (!await ClearFolderAsync(path, true, clear_folder_ctk.Token))
                     return false;
 
@@ -756,10 +759,6 @@ namespace Flux.ViewModels
         {
             return new[] { "M98 P\"/macros/center_position\"" };
         }
-        public override Optional<IEnumerable<string>> GetManualCalibrationPositionGCode()
-        {
-            return new[] { "M98 P\"/macros/manual_calibration_position\"" };
-        }
         public override Optional<IEnumerable<string>> GetSetLowCurrentGCode()
         {
             return new[] { "M98 P\"/macros/low_current\"" };
@@ -776,9 +775,13 @@ namespace Flux.ViewModels
         {
             return new[] { $"T{position}" };
         }
-        public override Optional<IEnumerable<string>> GetStartPartProgramGCode(string folder, string file_name)
+        public override Optional<IEnumerable<string>> GetManualCalibrationPositionGCode()
         {
-            return new[] { $"M32 {folder}/{file_name}" };
+            return new[] { "M98 P\"/macros/manual_calibration_position\"" };
+        }
+        public override Optional<IEnumerable<string>> GetExecuteMacroGCode(string folder, string filename)
+        {
+            return new[] { $"M98 P\"0:/{folder}/{filename}\"" };
         }
         public override Optional<IEnumerable<string>> GetCancelLoadFilamentGCode(ushort position)
         {
@@ -796,6 +799,10 @@ namespace Flux.ViewModels
                 "T-1"
             };
         }
+        public override Optional<IEnumerable<string>> GetStartPartProgramGCode(string folder, string file_name)
+        {
+            return new[] { $"M32 {folder}/{file_name}" };
+        }
         public override Optional<IEnumerable<string>> GetSetToolTemperatureGCode(ushort position, double temperature)
         {
             return new[] { $"M104 T{position} S{temperature}" };
@@ -809,7 +816,7 @@ namespace Flux.ViewModels
                 $"G10 P{position} Z{{{z * -1}}}",
             };
         }
-        public override Optional<IEnumerable<string>> GetProbeToolGCode(ushort position, Nozzle nozzle, double temperature)
+        public override Optional<IEnumerable<string>> GetProbeToolGCode(ushort position, double temperature)
         {
             throw new NotImplementedException();
         }

@@ -1053,7 +1053,23 @@ namespace Flux.ViewModels
                 }
             });
         }
+
+        public Optional<bool> IsInChange()
+        {
+            return Status.Convert(s =>
+            {
+                switch (s)
+                {
+                    case "changingTool":
+                        return true;
+                    default:
+                        return false;
+                }
+            });
+        }
     }
+
+
 
     public class RRF_ObjectModelRetraction
     {
@@ -1314,7 +1330,7 @@ namespace Flux.ViewModels
                 if (!files.Files.Any(f => f.Name == "resurrect.g"))
                     return default;
 
-                var get_resurrect_cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+                using var get_resurrect_cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
                 var resurrect_source = await connection.DownloadFileAsync(f => f.StoragePath, "resurrect.g", get_resurrect_cts.Token);
                 if (!resurrect_source.HasValue)
                     return default;
@@ -1394,7 +1410,7 @@ namespace Flux.ViewModels
                     if (!hold_feedrate.HasValue)
                         return default;
 
-                    var put_resurrect_cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+                    using var put_resurrect_cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
                     if (!await connection.PutFileAsync(
                         f => f.StoragePath,
                         mcode_recovery.FileName,

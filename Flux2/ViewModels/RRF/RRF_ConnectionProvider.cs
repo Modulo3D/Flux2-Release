@@ -96,7 +96,7 @@ namespace Flux.ViewModels
 
                     if (DateTime.Now - network_t >= TimeSpan.FromSeconds(5))
                     {
-                        await Flux.NetProvider.UpdateNetworkStateAsync();
+                        Flux.NetProvider.UpdateNetworkState();
                         if (Flux.NetProvider.PLCNetworkConnectivity.ConvertOr(plc => !plc, () => false))
                             StartConnection();
                         network_t = DateTime.Now;
@@ -148,7 +148,7 @@ namespace Flux.ViewModels
                                 return Task.CompletedTask;
                             }
 
-                            Connection = new RRF_Connection(Flux, VariableStore, $"http://{plc_address.Value}/");
+                            Connection = new RRF_Connection(Flux, VariableStore, plc_address.Value);
                             ConnectionPhase = RRF_ConnectionPhase.DISCONNECTING_CLIENT;
                             return Task.CompletedTask;
                         });
@@ -237,7 +237,7 @@ namespace Flux.ViewModels
         {
             try
             {
-                var cts = new CancellationTokenSource(timeout);
+                using var cts = new CancellationTokenSource(timeout);
                 await func(cts.Token);
             }
             catch

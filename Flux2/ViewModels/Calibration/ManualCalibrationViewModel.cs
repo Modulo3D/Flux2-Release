@@ -138,15 +138,109 @@ namespace Flux.ViewModels
         }
     }
 
+    public class ManualCalibrationItemViewModel : RemoteControl<ManualCalibrationItemViewModel>
+    {
+        [RemoteOutput(false)]
+        public ushort Position { get; }
+
+        private ObservableAsPropertyHelper<string> _ProbeStateBrush;
+        [RemoteOutput(true)]
+        public string ProbeStateBrush => _ProbeStateBrush.Value;
+        [RemoteCommand]
+        public ReactiveCommand<Unit, Unit> SelectToolCommand { get; }
+        public PerformManualCalibrationViewModel ManualCalibration { get; }
+
+        public ManualCalibrationItemViewModel(PerformManualCalibrationViewModel calibration, ushort position, IObservable<bool> not_executing) : base($"{typeof(ManualCalibrationItemViewModel).GetRemoteControlName()}??{position}")
+        {
+            ManualCalibration = calibration;
+            Position = position;
+
+            var print_temp = ManualCalibration.Flux.Feeders.Feeders.Connect()
+                .WatchOptional(Position)
+                .ConvertMany(f => f.WhenAnyValue(f => f.SelectedToolMaterial))
+                .ConvertMany(tm => tm.WhenAnyValue(tm => tm.Document))
+                .Convert(tm => tm[tm => tm.PrintTemperature, 0.0]);
+
+            var tool_offset = ManualCalibration.Calibration.Offsets.Connect()
+                .WatchOptional(Position)
+                .ConvertMany(o => o.WhenAnyValue(o => o.FluxOffset));
+
+            _ProbeStateBrush = ManualCalibration.Calibration.Offsets.Connect()
+                .WatchOptional(Position)
+                .ConvertMany(o => o.WhenAnyValue(o => o.ProbeStateBrush))
+                .ValueOr(() => FluxColors.Empty)
+                .ToProperty(this, v => v.ProbeStateBrush);
+
+            var can_execute = Observable.CombineLatest(
+                print_temp,
+                tool_offset,
+                not_executing,
+                ManualCalibration.WhenAnyValue(v => v.SelectedTool),
+                ManualCalibration.Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation).Select(s => s.IsIdle),
+                (temp, offset, ne, tool, idle) => temp.HasValue && offset.HasValue && ne && idle && tool != Position);
+
+            SelectToolCommand = ReactiveCommand.CreateFromTask(SelectToolAsync, can_execute);
+        }
+        private async Task SelectToolAsync()
+        {
+            var print_temperature = ManualCalibration.Flux.Feeders.Feeders
+                .Lookup(Position)
+                .Convert(f => f.SelectedToolMaterial)
+                .Convert(tm => tm.Document)
+                .Convert(tm => tm[tm => tm.PrintTemperature, 0.0]);
+            if (!print_temperature.HasValue)
+                return;
+
+            var offset = ManualCalibration.Calibration.Offsets.Lookup(Position);
+            var tool_offset = offset.Convert(o => o.ToolOffset);
+            if (!tool_offset.HasValue)
+                return;
+
+            using var put_select_tool_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var wait_select_tool_cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            await ManualCalibration.Flux.ConnectionProvider.ExecuteParamacroAsync(c =>
+            {
+                var gcode = new List<string>();
+                var select_tool_gcode = c.GetSelectToolGCode(Position);
+                if (!select_tool_gcode.HasValue)
+                    return default;
+                gcode.AddRange(select_tool_gcode.Value);
+
+                var set_tool_temp_gcode = c.GetSetToolTemperatureGCode(Position, print_temperature.Value);
+                if (!set_tool_temp_gcode.HasValue)
+                    return default;
+                gcode.AddRange(set_tool_temp_gcode.Value);
+
+                var set_tool_offset_gcode = c.GetSetToolOffsetGCode(Position, tool_offset.Value.X, tool_offset.Value.Y, 0);
+                if (!set_tool_offset_gcode.HasValue)
+                    return default;
+                gcode.AddRange(set_tool_offset_gcode.Value);
+
+                var manual_calibration_position_gcode = c.GetManualCalibrationPositionGCode();
+                if (!manual_calibration_position_gcode.HasValue)
+                    return default;
+                gcode.AddRange(manual_calibration_position_gcode.Value);
+
+                var raise_plate_gcode = c.GetRaisePlateGCode();
+                if (!raise_plate_gcode.HasValue)
+                    return default;
+                gcode.AddRange(raise_plate_gcode.Value);
+
+                return gcode;
+
+            }, put_select_tool_cts.Token, true, wait_select_tool_cts.Token);
+        }
+    }
+
     public class PerformManualCalibrationViewModel : ManualCalibrationPhaseViewModel<PerformManualCalibrationViewModel>
     {
         private ObservableAsPropertyHelper<Optional<FLUX_Temp>> _CurrentTemperature;
         [RemoteOutput(true, typeof(FluxTemperatureConverter))]
         public Optional<FLUX_Temp> CurrentTemperature => _CurrentTemperature.Value;
 
-        private ObservableAsPropertyHelper<double> _TemperaturePercentage;
+        private ObservableAsPropertyHelper<Optional<double>> _TemperaturePercentage;
         [RemoteOutput(true)]
-        public double TemperaturePercentage => _TemperaturePercentage.Value;
+        public Optional<double> TemperaturePercentage => _TemperaturePercentage.Value;
 
         [RemoteContent(true)]
         public ISourceList<CmdButton> MoveUpButtons { get; }
@@ -154,7 +248,8 @@ namespace Flux.ViewModels
         public ISourceList<CmdButton> MoveDownButtons { get; }
 
         [RemoteContent(true)]
-        public IObservableList<CmdButton> ToolButtons { get; }
+        public IObservableList<ManualCalibrationItemViewModel> ToolItems { get; }
+
         private ObservableAsPropertyHelper<string> _AxisPosition;
         [RemoteOutput(true)]
         public string AxisPosition => _AxisPosition.Value;
@@ -215,9 +310,9 @@ namespace Flux.ViewModels
                 (up_not_executing, down_not_executing) => up_not_executing && down_not_executing)
                 .Delay(ne => Observable.Timer(TimeSpan.FromSeconds(ne ? 1 : 0)));
 
-            ToolButtons = Flux.SettingsProvider
+            ToolItems = Flux.SettingsProvider
                 .WhenAnyValue(v => v.ExtrudersCount)
-                .Select(e => FindToolButtons(e, not_executing))
+                .Select(e => FindCalibrationItems(e, not_executing))
                 .ToObservableChangeSet()
                 .AsObservableList()
                 .DisposeWith(Disposables);
@@ -283,9 +378,9 @@ namespace Flux.ViewModels
                         return false;
                     if (!temp.HasValue)
                         return false;
-                    if (temp.Value.Target <= 0)
+                    if (temp.Value.Target.ValueOr(() => 0) <= 0)
                         return false;
-                    if (temp.Value.Percentage < 85)
+                    if (temp.Value.Percentage.ValueOr(() => 0) < 85)
                         return default;
                     if (!can_safe_cycle)
                         return can_unsafe_cycle;
@@ -304,87 +399,16 @@ namespace Flux.ViewModels
                 await Flux.ConnectionProvider.ExecuteParamacroAsync(c => c.GetRelativeZMovementGCode(d, 500), put_relative_movement_cts.Token);
             }
         }
-        private IEnumerable<CmdButton> FindToolButtons(Optional<(ushort machine_extruders, ushort mixing_extruders)> extruders, IObservable<bool> not_executing)
+        private IEnumerable<ManualCalibrationItemViewModel> FindCalibrationItems(Optional<(ushort machine_extruders, ushort mixing_extruders)> extruders, IObservable<bool> not_executing)
         {
             if (!extruders.HasValue)
                 yield break;
 
             for (ushort extruder = 0; extruder < extruders.Value.machine_extruders; extruder++)
             {
-                var e = extruder;
-
-                var print_temp = Flux.Feeders.Feeders.Connect()
-                    .WatchOptional(e)
-                    .ConvertMany(f => f.WhenAnyValue(f => f.SelectedToolMaterial))
-                    .ConvertMany(tm => tm.WhenAnyValue(tm => tm.Document))
-                    .Convert(tm => tm[tm => tm.PrintTemperature, 0.0]);
-
-                var tool_offset = Calibration.Offsets.Connect()
-                    .WatchOptional(e)
-                    .ConvertMany(o => o.WhenAnyValue(o => o.FluxOffset));
-
-                var can_execute = Observable.CombineLatest(
-                    print_temp,
-                    tool_offset,
-                    not_executing,
-                    this.WhenAnyValue(v => v.SelectedTool),
-                    Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation).Select(s => s.IsIdle),
-                    (temp, offset, ne, tool, idle) => temp.HasValue && offset.HasValue && ne && idle && tool != e)
-                    .ToOptional();
-
-                var button = new CmdButton($"selectExtruder??{e + 1}", select_tool, can_execute);
-                button.InitializeRemoteView();
-                yield return button;
-
-                async Task select_tool()
-                {
-                    var print_temperature = Flux.Feeders.Feeders
-                        .Lookup(e)
-                        .Convert(f => f.SelectedToolMaterial)
-                        .Convert(tm => tm.Document)
-                        .Convert(tm => tm[tm => tm.PrintTemperature, 0.0]);
-                    if (!print_temperature.HasValue)
-                        return;
-
-                    var offset = Calibration.Offsets.Lookup(e);
-                    var tool_offset = offset.Convert(o => o.ToolOffset);
-                    if (!tool_offset.HasValue)
-                        return;
-
-                    using var put_select_tool_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                    using var wait_select_tool_cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-                    await Flux.ConnectionProvider.ExecuteParamacroAsync(c =>
-                    {
-                        var gcode = new List<string>();
-                        var select_tool_gcode = c.GetSelectToolGCode(e);
-                        if (!select_tool_gcode.HasValue)
-                            return default;
-                        gcode.AddRange(select_tool_gcode.Value);
-
-                        var set_tool_temp_gcode = c.GetSetToolTemperatureGCode(e, print_temperature.Value);
-                        if (!set_tool_temp_gcode.HasValue)
-                            return default;
-                        gcode.AddRange(set_tool_temp_gcode.Value);
-
-                        var set_tool_offset_gcode = c.GetSetToolOffsetGCode(e, tool_offset.Value.X, tool_offset.Value.Y, 0);
-                        if (!set_tool_offset_gcode.HasValue)
-                            return default;
-                        gcode.AddRange(set_tool_offset_gcode.Value);
-
-                        var manual_calibration_position_gcode = c.GetManualCalibrationPositionGCode();
-                        if (!manual_calibration_position_gcode.HasValue)
-                            return default;
-                        gcode.AddRange(manual_calibration_position_gcode.Value);
-
-                        var raise_plate_gcode = c.GetRaisePlateGCode();
-                        if (!raise_plate_gcode.HasValue)
-                            return default;
-                        gcode.AddRange(raise_plate_gcode.Value);
-
-                        return gcode;
-
-                    }, put_select_tool_cts.Token, true, wait_select_tool_cts.Token);
-                }
+                var manual_calibration = new ManualCalibrationItemViewModel(this, extruder, not_executing);
+                manual_calibration.InitializeRemoteView();
+                yield return manual_calibration;
             }
         }
     }

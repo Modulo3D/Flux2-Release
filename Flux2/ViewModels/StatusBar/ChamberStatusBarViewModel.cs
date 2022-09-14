@@ -53,7 +53,7 @@ namespace Flux.ViewModels
                         return StatusBarState.Error;
                     if (chamber.temp.Value.IsHot)
                         return StatusBarState.Warning;
-                    if (chamber.temp.Value.IsOn)
+                    if (chamber.temp.Value.IsOn.ValueOr(() => false))
                         return StatusBarState.Stable;
                     return StatusBarState.Disabled;
                 });
@@ -104,7 +104,7 @@ namespace Flux.ViewModels
                         return StatusBarState.Error;
                     if (plate.temp.Value.IsHot)
                         return StatusBarState.Warning;
-                    if (plate.temp.Value.IsOn)
+                    if (plate.temp.Value.IsOn.ValueOr(() => false))
                         return StatusBarState.Stable;
                     return StatusBarState.Disabled;
                 });

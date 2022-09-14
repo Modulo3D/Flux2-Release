@@ -24,13 +24,13 @@ namespace Flux.ViewModels
         // GP
         public void CreateVariable<TRData, TWData>(
             Expression<Func<OSAI_VariableStore, IFLUX_Variable<TRData, TWData>>> variable_expression,
-            FluxMemReadPriority priority,
+            OSAI_ReadPriority priority,
             Func<OSAI_Connection, Task<Optional<TRData>>> read_func = default,
             Func<OSAI_Connection, TWData, Task<bool>> write_func = default)
         {
             var variable_setter = VariableStore.GetCachedSetterDelegate(variable_expression);
             var variable_name = string.Join('/', variable_expression.GetMembersName());
-            var variable = new OSAI_VariableGP<TRData, TWData>(ConnectionProvider, variable_name, priority, read_func, write_func);
+            var variable = new OSAI_AsyncVariable<TRData, TWData>(ConnectionProvider, variable_name, priority, read_func, write_func);
             variable_setter.Invoke(VariableStore.RegisterVariable(variable));
         }
 
@@ -38,7 +38,7 @@ namespace Flux.ViewModels
         public void CreateVariable(
             Expression<Func<OSAI_VariableStore, IFLUX_Variable<QueuePosition, QueuePosition>>> variable_expression,
             OSAI_NamedAddress address,
-            FluxMemReadPriority priority)
+            OSAI_ReadPriority priority)
         {
             var variable_setter = VariableStore.GetCachedSetterDelegate(variable_expression);
             var variable_name = string.Join('/', variable_expression.GetMembersName());
@@ -48,7 +48,7 @@ namespace Flux.ViewModels
         public void CreateVariable(
            Expression<Func<OSAI_VariableStore, Optional<IFLUX_Variable<QueuePosition, QueuePosition>>>> variable_expression,
            OSAI_NamedAddress address,
-           FluxMemReadPriority priority)
+           OSAI_ReadPriority priority)
         {
             var variable_setter = VariableStore.GetCachedSetterDelegate(variable_expression);
             var variable_name = string.Join('/', variable_expression.GetMembersName());
@@ -59,7 +59,7 @@ namespace Flux.ViewModels
         public void CreateVariable(
             Expression<Func<OSAI_VariableStore, IFLUX_Variable<bool, bool>>> variable_expression,
             OSAI_NamedAddress address,
-            FluxMemReadPriority priority)
+            OSAI_ReadPriority priority)
         {
             var variable_setter = VariableStore.GetCachedSetterDelegate(variable_expression);
             var variable_name = string.Join('/', variable_expression.GetMembersName());
@@ -69,7 +69,7 @@ namespace Flux.ViewModels
         public void CreateVariable(
            Expression<Func<OSAI_VariableStore, Optional<IFLUX_Variable<bool, bool>>>> variable_expression,
            OSAI_NamedAddress address,
-           FluxMemReadPriority priority)
+           OSAI_ReadPriority priority)
         {
             var variable_setter = VariableStore.GetCachedSetterDelegate(variable_expression);
             var variable_name = string.Join('/', variable_expression.GetMembersName());
@@ -80,7 +80,7 @@ namespace Flux.ViewModels
         public void CreateVariable(
             Expression<Func<OSAI_VariableStore, IFLUX_Variable<double, double>>> variable_expression,
             OSAI_NamedAddress address,
-            FluxMemReadPriority priority)
+            OSAI_ReadPriority priority)
         {
             var variable_setter = VariableStore.GetCachedSetterDelegate(variable_expression);
             var variable_name = string.Join('/', variable_expression.GetMembersName());
@@ -90,7 +90,7 @@ namespace Flux.ViewModels
         public void CreateVariable(
             Expression<Func<OSAI_VariableStore, Optional<IFLUX_Variable<double, double>>>> variable_expression,
             OSAI_NamedAddress address,
-            FluxMemReadPriority priority)
+            OSAI_ReadPriority priority)
         {
             var variable_setter = VariableStore.GetCachedSetterDelegate(variable_expression);
             var variable_name = string.Join('/', variable_expression.GetMembersName());
@@ -102,8 +102,8 @@ namespace Flux.ViewModels
             Expression<Func<OSAI_VariableStore, IFLUX_Array<double, double>>> array_expression,
             ushort count,
             OSAI_NamedAddress address,
-            FluxMemReadPriority priority,
-            Optional<Dictionary<VariableAlias, VariableUnit>> variable_units = default)
+            OSAI_ReadPriority priority,
+            Optional<VariableUnits> variable_units = default)
         {
             var array_setter = VariableStore.GetCachedSetterDelegate(array_expression);
             var array_name = string.Join('/', array_expression.GetMembersName());
@@ -114,8 +114,8 @@ namespace Flux.ViewModels
             Expression<Func<OSAI_VariableStore, Optional<IFLUX_Array<double, double>>>> array_expression,
             ushort count,
             OSAI_NamedAddress address,
-            FluxMemReadPriority priority,
-            Optional<Dictionary<VariableAlias, VariableUnit>> variable_units = default)
+            OSAI_ReadPriority priority,
+            Optional<VariableUnits> variable_units = default)
         {
             var array_setter = VariableStore.GetCachedSetterDelegate(array_expression);
             var array_name = string.Join('/', array_expression.GetMembersName());
@@ -126,115 +126,105 @@ namespace Flux.ViewModels
         // MW
         public void CreateVariable<TSensor>(
             Expression<Func<OSAI_VariableStore, IFLUX_Variable<Pressure, Unit>>> variable_expression,
-            OSAI_IndexAddress address,
-            FluxMemReadPriority priority)
+            OSAI_IndexAddress address)
             where TSensor : AnalogSensor<Pressure>, new()
         {
             var variable_setter = VariableStore.GetCachedSetterDelegate(variable_expression);
             var variable_name = string.Join('/', variable_expression.GetMembersName());
-            var variable = new OSAI_VariablePressure<TSensor>(ConnectionProvider, variable_name, address, priority);
+            var variable = new OSAI_VariablePressure<TSensor>(ConnectionProvider, variable_name, address);
             variable_setter.Invoke(VariableStore.RegisterVariable(variable));
         }
         public void CreateVariable<TSensor>(
             Expression<Func<OSAI_VariableStore, Optional<IFLUX_Variable<Pressure, Unit>>>> variable_expression,
-            OSAI_IndexAddress address,
-            FluxMemReadPriority priority)
+            OSAI_IndexAddress address)
             where TSensor : AnalogSensor<Pressure>, new()
         {
             var variable_setter = VariableStore.GetCachedSetterDelegate(variable_expression);
             var variable_name = string.Join('/', variable_expression.GetMembersName());
-            var variable = new OSAI_VariablePressure<TSensor>(ConnectionProvider, variable_name, address, priority);
+            var variable = new OSAI_VariablePressure<TSensor>(ConnectionProvider, variable_name, address);
             variable_setter.Invoke(VariableStore.RegisterVariable(variable));
         }
 
         public void CreateVariable(
             Expression<Func<OSAI_VariableStore, IFLUX_Variable<double, double>>> variable_expression,
-            OSAI_IndexAddress address,
-            FluxMemReadPriority priority)
+            OSAI_IndexAddress address)
         {
             var variable_setter = VariableStore.GetCachedSetterDelegate(variable_expression);
             var variable_name = string.Join('/', variable_expression.GetMembersName());
-            var variable = new OSAI_VariableDouble(ConnectionProvider, variable_name, address, priority);
+            var variable = new OSAI_VariableDouble(ConnectionProvider, variable_name, address);
             variable_setter.Invoke(VariableStore.RegisterVariable(variable));
         }
         public void CreateVariable(
            Expression<Func<OSAI_VariableStore, Optional<IFLUX_Variable<double, double>>>> variable_expression,
-           OSAI_IndexAddress address,
-           FluxMemReadPriority priority)
+           OSAI_IndexAddress address)
         {
             var variable_setter = VariableStore.GetCachedSetterDelegate(variable_expression);
             var variable_name = string.Join('/', variable_expression.GetMembersName());
-            var variable = new OSAI_VariableDouble(ConnectionProvider, variable_name, address, priority);
+            var variable = new OSAI_VariableDouble(ConnectionProvider, variable_name, address);
             variable_setter.Invoke(VariableStore.RegisterVariable(variable));
         }
 
         public void CreateVariable(
             Expression<Func<OSAI_VariableStore, IFLUX_Variable<ushort, ushort>>> variable_expression,
-            OSAI_IndexAddress address,
-            FluxMemReadPriority priority)
+            OSAI_IndexAddress address)
         {
             var variable_setter = VariableStore.GetCachedSetterDelegate(variable_expression);
             var variable_name = string.Join('/', variable_expression.GetMembersName());
-            var variable = new OSAI_VariableWord(ConnectionProvider, variable_name, address, priority);
+            var variable = new OSAI_VariableUShort(ConnectionProvider, variable_name, address);
             variable_setter.Invoke(VariableStore.RegisterVariable(variable));
         }
         public void CreateVariable(
            Expression<Func<OSAI_VariableStore, Optional<IFLUX_Variable<ushort, ushort>>>> variable_expression,
-           OSAI_IndexAddress address,
-           FluxMemReadPriority priority)
+           OSAI_IndexAddress address)
         {
             var variable_setter = VariableStore.GetCachedSetterDelegate(variable_expression);
             var variable_name = string.Join('/', variable_expression.GetMembersName());
-            var variable = new OSAI_VariableWord(ConnectionProvider, variable_name, address, priority);
+            var variable = new OSAI_VariableUShort(ConnectionProvider, variable_name, address);
             variable_setter.Invoke(VariableStore.RegisterVariable(variable));
         }
 
         public void CreateVariable(
             Expression<Func<OSAI_VariableStore, IFLUX_Variable<short, short>>> variable_expression,
-            OSAI_IndexAddress address,
-            FluxMemReadPriority priority)
+            OSAI_IndexAddress address)
         {
             var variable_setter = VariableStore.GetCachedSetterDelegate(variable_expression);
             var variable_name = string.Join('/', variable_expression.GetMembersName());
-            var variable = new OSAI_VariableShort(ConnectionProvider, variable_name, address, priority);
+            var variable = new OSAI_VariableShort(ConnectionProvider, variable_name, address);
             variable_setter.Invoke(VariableStore.RegisterVariable(variable));
         }
         public void CreateVariable(
            Expression<Func<OSAI_VariableStore, Optional<IFLUX_Variable<short, short>>>> variable_expression,
-           OSAI_IndexAddress address,
-           FluxMemReadPriority priority)
+           OSAI_IndexAddress address)
         {
             var variable_setter = VariableStore.GetCachedSetterDelegate(variable_expression);
             var variable_name = string.Join('/', variable_expression.GetMembersName());
-            var variable = new OSAI_VariableShort(ConnectionProvider, variable_name, address, priority);
+            var variable = new OSAI_VariableShort(ConnectionProvider, variable_name, address);
             variable_setter.Invoke(VariableStore.RegisterVariable(variable));
         }
 
         public void CreateVariable(
             Expression<Func<OSAI_VariableStore, IFLUX_Variable<bool, bool>>> variable_expression,
-            OSAI_BitIndexAddress address,
-            FluxMemReadPriority priority)
+            OSAI_BitIndexAddress address)
         {
             var variable_setter = VariableStore.GetCachedSetterDelegate(variable_expression);
             var variable_name = string.Join('/', variable_expression.GetMembersName());
-            var variable = new OSAI_VariableBool(ConnectionProvider, variable_name, address, priority);
+            var variable = new OSAI_VariableBool(ConnectionProvider, variable_name, address);
             variable_setter.Invoke(VariableStore.RegisterVariable(variable));
         }
         public void CreateVariable(
            Expression<Func<OSAI_VariableStore, Optional<IFLUX_Variable<bool, bool>>>> variable_expression,
-           OSAI_BitIndexAddress address,
-           FluxMemReadPriority priority)
+           OSAI_BitIndexAddress address)
         {
             var variable_setter = VariableStore.GetCachedSetterDelegate(variable_expression);
             var variable_name = string.Join('/', variable_expression.GetMembersName());
-            var variable = new OSAI_VariableBool(ConnectionProvider, variable_name, address, priority);
+            var variable = new OSAI_VariableBool(ConnectionProvider, variable_name, address);
             variable_setter.Invoke(VariableStore.RegisterVariable(variable));
         }
 
         public void CreateVariable(
             Expression<Func<OSAI_VariableStore, IFLUX_Variable<FLUX_Temp, double>>> variable_expression,
             OSAI_IndexAddress address,
-            FluxMemReadPriority priority,
+            OSAI_ReadPriority priority,
             Func<double, string> write_temp)
         {
             var variable_setter = VariableStore.GetCachedSetterDelegate(variable_expression);
@@ -245,7 +235,7 @@ namespace Flux.ViewModels
         public void CreateVariable(
            Expression<Func<OSAI_VariableStore, Optional<IFLUX_Variable<FLUX_Temp, double>>>> variable_expression,
            OSAI_IndexAddress address,
-           FluxMemReadPriority priority,
+           OSAI_ReadPriority priority,
             Func<double, string> write_temp)
         {
             var variable_setter = VariableStore.GetCachedSetterDelegate(variable_expression);
@@ -258,24 +248,22 @@ namespace Flux.ViewModels
             Expression<Func<OSAI_VariableStore, IFLUX_Array<double, double>>> array_expression,
             ushort count,
             OSAI_IndexAddress address,
-            FluxMemReadPriority priority,
-            Optional<Dictionary<VariableAlias, VariableUnit>> variable_units = default)
+            Optional<VariableUnits> variable_units = default)
         {
             var array_setter = VariableStore.GetCachedSetterDelegate(array_expression);
             var array_name = string.Join('/', array_expression.GetMembersName());
-            var array = new OSAI_ArrayDouble(ConnectionProvider, array_name, count, address, priority, variable_units);
+            var array = new OSAI_ArrayDouble(ConnectionProvider, array_name, count, address, variable_units);
             array_setter.Invoke(VariableStore.RegisterArray(array));
         }
         public void CreateArray(
-           Expression<Func<OSAI_VariableStore, Optional<IFLUX_Array<double, double>>>> array_expression,
+            Expression<Func<OSAI_VariableStore, Optional<IFLUX_Array<double, double>>>> array_expression,
             ushort count,
-           OSAI_IndexAddress address,
-           FluxMemReadPriority priority,
-            Optional<Dictionary<VariableAlias, VariableUnit>> variable_units = default)
+            OSAI_IndexAddress address,
+            Optional<VariableUnits> variable_units = default)
         {
             var array_setter = VariableStore.GetCachedSetterDelegate(array_expression);
             var array_name = string.Join('/', array_expression.GetMembersName());
-            var array = new OSAI_ArrayDouble(ConnectionProvider, array_name, count, address, priority, variable_units);
+            var array = new OSAI_ArrayDouble(ConnectionProvider, array_name, count, address, variable_units);
             array_setter.Invoke(VariableStore.RegisterArray(array));
         }
 
@@ -283,24 +271,22 @@ namespace Flux.ViewModels
             Expression<Func<OSAI_VariableStore, IFLUX_Array<ushort, ushort>>> array_expression,
             ushort count,
             OSAI_IndexAddress address,
-            FluxMemReadPriority priority,
-            Optional<Dictionary<VariableAlias, VariableUnit>> variable_units = default)
+            Optional<VariableUnits> variable_units = default)
         {
             var array_setter = VariableStore.GetCachedSetterDelegate(array_expression);
             var array_name = string.Join('/', array_expression.GetMembersName());
-            var array = new OSAI_ArrayWord(ConnectionProvider, array_name, count, address, priority, variable_units);
+            var array = new OSAI_ArrayWord(ConnectionProvider, array_name, count, address, variable_units);
             array_setter.Invoke(VariableStore.RegisterArray(array));
         }
         public void CreateArray(
            Expression<Func<OSAI_VariableStore, Optional<IFLUX_Array<ushort, ushort>>>> array_expression,
             ushort count,
-           OSAI_IndexAddress address,
-           FluxMemReadPriority priority,
-            Optional<Dictionary<VariableAlias, VariableUnit>> variable_units = default)
+            OSAI_IndexAddress address,
+            Optional<VariableUnits> variable_units = default)
         {
             var array_setter = VariableStore.GetCachedSetterDelegate(array_expression);
             var array_name = string.Join('/', array_expression.GetMembersName());
-            var array = new OSAI_ArrayWord(ConnectionProvider, array_name, count, address, priority, variable_units);
+            var array = new OSAI_ArrayWord(ConnectionProvider, array_name, count, address, variable_units);
             array_setter.Invoke(VariableStore.RegisterArray(array));
         }
 
@@ -308,24 +294,22 @@ namespace Flux.ViewModels
             Expression<Func<OSAI_VariableStore, IFLUX_Array<bool, bool>>> array_expression,
             ushort count,
             OSAI_BitIndexAddress address,
-            FluxMemReadPriority priority,
-            Optional<Dictionary<VariableAlias, VariableUnit>> variable_units = default)
+            Optional<VariableUnits> variable_units = default)
         {
             var array_setter = VariableStore.GetCachedSetterDelegate(array_expression);
             var array_name = string.Join('/', array_expression.GetMembersName());
-            var array = new OSAI_ArrayBool(ConnectionProvider, array_name, count, address, priority, variable_units);
+            var array = new OSAI_ArrayBool(ConnectionProvider, array_name, count, address, variable_units);
             array_setter.Invoke(VariableStore.RegisterArray(array));
         }
         public void CreateArray(
            Expression<Func<OSAI_VariableStore, Optional<IFLUX_Array<bool, bool>>>> array_expression,
             ushort count,
-           OSAI_BitIndexAddress address,
-           FluxMemReadPriority priority,
-            Optional<Dictionary<VariableAlias, VariableUnit>> variable_units = default)
+            OSAI_BitIndexAddress address,
+            Optional<VariableUnits> variable_units = default)
         {
             var array_setter = VariableStore.GetCachedSetterDelegate(array_expression);
             var array_name = string.Join('/', array_expression.GetMembersName());
-            var array = new OSAI_ArrayBool(ConnectionProvider, array_name, count, address, priority, variable_units);
+            var array = new OSAI_ArrayBool(ConnectionProvider, array_name, count, address, variable_units);
             array_setter.Invoke(VariableStore.RegisterArray(array));
         }
 
@@ -333,9 +317,9 @@ namespace Flux.ViewModels
             Expression<Func<OSAI_VariableStore, IFLUX_Array<FLUX_Temp, double>>> array_expression,
             ushort count,
             OSAI_IndexAddress address,
-            FluxMemReadPriority priority,
+            OSAI_ReadPriority priority,
             Func<ushort, double, string> write_temp,
-            Optional<Dictionary<VariableAlias, VariableUnit>> variable_units = default)
+            Optional<VariableUnits> variable_units = default)
         {
             var array_setter = VariableStore.GetCachedSetterDelegate(array_expression);
             var array_name = string.Join('/', array_expression.GetMembersName());
@@ -346,9 +330,9 @@ namespace Flux.ViewModels
            Expression<Func<OSAI_VariableStore, Optional<IFLUX_Array<FLUX_Temp, double>>>> array_expression,
             ushort count,
             OSAI_IndexAddress address,
-            FluxMemReadPriority priority,
+            OSAI_ReadPriority priority,
             Func<ushort, double, string> write_temp,
-            Optional<Dictionary<VariableAlias, VariableUnit>> variable_units = default)
+            Optional<VariableUnits> variable_units = default)
         {
             var array_setter = VariableStore.GetCachedSetterDelegate(array_expression);
             var array_name = string.Join('/', array_expression.GetMembersName());

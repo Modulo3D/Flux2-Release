@@ -109,13 +109,17 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public override bool HasValue => _HasValue.Value;
 
-        public NumericOption(string name, string title, double value, double step, double min = double.MinValue, double max = double.MaxValue, Type converter = default, Func<double, bool> has_value = default) : base(name, title)
+        public NumericOption(string name, string title, double value, double step, double min = double.MinValue, double max = double.MaxValue, Action<double> value_changed = default, Type converter = default, Func<double, bool> has_value = default) : base(name, title)
         {
             Min = min;
             Max = max;
             Step = step;
             Value = value;
             AddInput("value", this.WhenAnyValue(v => v.Value), SetValue, step: step, converter: converter);
+
+            this.WhenAnyValue(v => v.Value)
+                .Subscribe(v => value_changed?.Invoke(v))
+                .DisposeWith(Disposables);
 
             _HasValue = this.WhenAnyValue(v => v.Value)
                .Select(v => has_value?.Invoke(v) ?? true)
@@ -272,6 +276,7 @@ namespace Flux.ViewModels
         public static string Warning = "#fec02f";
         public static string Error = "#f75a5c";
         public static string Inactive = "#AAA";
+        public static string Idle = "#275ac3";
         public static string Active = "#FFF";
         public static string Empty = "#444";
     }

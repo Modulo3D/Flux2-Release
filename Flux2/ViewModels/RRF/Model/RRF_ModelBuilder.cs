@@ -34,31 +34,91 @@ namespace Flux.ViewModels
 
             public void CreateVariable<TRData, TWData>(
                 Expression<Func<RRF_VariableStoreBase, IFLUX_Variable<TRData, TWData>>> variable_expression,
+                Func<RRF_Connection, TModel, Optional<TRData>> get_data)
+            {
+                var variable_setter = VariableStore.GetCachedSetterDelegate(variable_expression);
+                var variable_name = string.Join('/', variable_expression.GetMembersName());
+                var variable = new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, variable_name, ReadModel, GetModel, get_data);
+                variable_setter.Invoke(VariableStore.RegisterVariable(variable));
+            }
+
+            public void CreateVariable<TRData, TWData>(
+                Expression<Func<RRF_VariableStoreBase, IFLUX_Variable<TRData, TWData>>> variable_expression,
+                Func<RRF_Connection, TModel, Task<Optional<TRData>>> get_data)
+            {
+                var variable_setter = VariableStore.GetCachedSetterDelegate(variable_expression);
+                var variable_name = string.Join('/', variable_expression.GetMembersName());
+                var variable = new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, variable_name, ReadModel, GetModel, get_data);
+                variable_setter.Invoke(VariableStore.RegisterVariable(variable));
+            }
+
+            public void CreateVariable<TRData, TWData>(
+                Expression<Func<RRF_VariableStoreBase, IFLUX_Variable<TRData, TWData>>> variable_expression,
                 Func<RRF_Connection, TModel, Optional<TRData>> get_data,
-                VariableUnit unit = default,
                 Func<RRF_Connection, TWData, Task<bool>> write_data = default)
             {
                 var variable_setter = VariableStore.GetCachedSetterDelegate(variable_expression);
                 var variable_name = string.Join('/', variable_expression.GetMembersName());
-                var variable = new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, variable_name, ReadModel, GetModel, get_data, write_data, unit);
+                var variable = new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, variable_name, ReadModel, GetModel, get_data, write_data);
                 variable_setter.Invoke(VariableStore.RegisterVariable(variable));
             }
 
             public void CreateVariable<TRData, TWData>(
                 Expression<Func<RRF_VariableStoreBase, IFLUX_Variable<TRData, TWData>>> variable_expression,
                 Func<RRF_Connection, TModel, Task<Optional<TRData>>> get_data,
-                VariableUnit unit = default,
                 Func<RRF_Connection, TWData, Task<bool>> write_data = default)
             {
                 var variable_setter = VariableStore.GetCachedSetterDelegate(variable_expression);
                 var variable_name = string.Join('/', variable_expression.GetMembersName());
-                var variable = new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, variable_name, ReadModel, GetModel, get_data, write_data, unit);
+                var variable = new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, variable_name, ReadModel, GetModel, get_data, write_data);
+                variable_setter.Invoke(VariableStore.RegisterVariable(variable));
+            }
+
+            public void CreateVariable<TRData, TWData>(
+                Expression<Func<RRF_VariableStoreBase, Optional<IFLUX_Variable<TRData, TWData>>>> variable_expression,
+                Func<RRF_Connection, TModel, Optional<TRData>> get_data)
+            {
+                var variable_setter = VariableStore.GetCachedSetterDelegate(variable_expression);
+                var variable_name = string.Join('/', variable_expression.GetMembersName());
+                var variable = new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, variable_name, ReadModel, GetModel, get_data);
+                variable_setter.Invoke(VariableStore.RegisterVariable(variable));
+            }
+
+            public void CreateVariable<TRData, TWData>(
+                Expression<Func<RRF_VariableStoreBase, Optional<IFLUX_Variable<TRData, TWData>>>> variable_expression,
+                Func<RRF_Connection, TModel, Task<Optional<TRData>>> get_data)
+            {
+                var variable_setter = VariableStore.GetCachedSetterDelegate(variable_expression);
+                var variable_name = string.Join('/', variable_expression.GetMembersName());
+                var variable = new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, variable_name, ReadModel, GetModel, get_data);
+                variable_setter.Invoke(VariableStore.RegisterVariable(variable));
+            }
+
+            public void CreateVariable<TRData, TWData>(
+                Expression<Func<RRF_VariableStoreBase, Optional<IFLUX_Variable<TRData, TWData>>>> variable_expression,
+                Func<RRF_Connection, TModel, Optional<TRData>> get_data,
+                Func<RRF_Connection, TWData, Task<bool>> write_data = default)
+            {
+                var variable_setter = VariableStore.GetCachedSetterDelegate(variable_expression);
+                var variable_name = string.Join('/', variable_expression.GetMembersName());
+                var variable = new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, variable_name, ReadModel, GetModel, get_data, write_data);
+                variable_setter.Invoke(VariableStore.RegisterVariable(variable));
+            }
+
+            public void CreateVariable<TRData, TWData>(
+                Expression<Func<RRF_VariableStoreBase, Optional<IFLUX_Variable<TRData, TWData>>>> variable_expression,
+                Func<RRF_Connection, TModel, Task<Optional<TRData>>> get_data,
+                Func<RRF_Connection, TWData, Task<bool>> write_data = default)
+            {
+                var variable_setter = VariableStore.GetCachedSetterDelegate(variable_expression);
+                var variable_name = string.Join('/', variable_expression.GetMembersName());
+                var variable = new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, variable_name, ReadModel, GetModel, get_data, write_data);
                 variable_setter.Invoke(VariableStore.RegisterVariable(variable));
             }
 
             public class RRF_ArrayBuilder<TList>
             {
-                private Dictionary<VariableAlias, VariableUnit> Units { get; }
+                private VariableUnits Units { get; }
 
                 public RRF_ConnectionProvider ConnectionProvider { get; }
                 public Func<TModel, Optional<List<TList>>> GetVariables { get; }
@@ -71,7 +131,7 @@ namespace Flux.ViewModels
                     Func<RRF_MemoryBuffer, Task<Optional<TModel>>> read_model,
                     Func<RRF_ObjectModel, IObservable<Optional<TModel>>> get_model,
                     Func<TModel, Optional<List<TList>>> get_list,
-                    Dictionary<VariableAlias, VariableUnit> units)
+                    VariableUnits units)
                 {
                     Units = units;
                     GetModel = get_model;
@@ -84,8 +144,7 @@ namespace Flux.ViewModels
                 public void CreateArray<TRData, TWData>(
                     Expression<Func<RRF_VariableStoreBase, IFLUX_Array<TRData, TWData>>> array_expression,
                     Func<RRF_Connection, TList, Optional<TRData>> get_data,
-                    VariableRange variables_range = default,
-                    Func<RRF_Connection, TWData, VariableUnit, Task<bool>> write_data = default)
+                    params VariableRange[] variables_range)
                 {
                     var array_setter = VariableStore.GetCachedSetterDelegate(array_expression);
                     var array_name = string.Join('/', array_expression.GetMembersName());
@@ -95,22 +154,63 @@ namespace Flux.ViewModels
                         if (!unit.HasValue)
                             return default;
 
-                        Task<bool> write_unit_data(RRF_Connection c, TWData d) => write_data(c, d, unit.Value);
                         Optional<TList> get_value(List<TList> list) => list.ElementAtOrDefault(unit.Value.Address);
                         Optional<TRData> get_variable(RRF_Connection c, TModel m) => GetVariables(m).Convert(get_value).Convert(m => get_data(c, m));
-                        return new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, $"{array_name} {alias}", ReadModel, GetModel, get_variable, write_unit_data, unit.Value);
+                        return new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, $"{array_name} {alias}", ReadModel, GetModel, get_variable, unit: unit.Value);
                     }
 
-                    variables_range = variables_range.ToOptional().ValueOr(() => VariableRange.Range(0, (ushort)Units.Count));
-                    var variable_units = Units.Skip(variables_range.Start).Take(variables_range.Count).ToDictionary();
+
+                    IEnumerable<VariableUnit> find_units(VariableRange range)
+                    {
+                        foreach (var alias in range.Aliases)
+                            if (Units.TryGetValue(alias, out var unit))
+                                yield return unit;
+                    }
+
+                    var variable_units = variables_range.Length == 0 ? Units : variables_range
+                        .SelectMany(find_units)
+                        .ToArray();
+
                     var array = new RRF_ArrayObjectModel<TModel, TRData, TWData>(array_name, variable_units, get_variable);
                     array_setter.Invoke(VariableStore.RegisterArray(array));
                 }
                 public void CreateArray<TRData, TWData>(
                     Expression<Func<RRF_VariableStoreBase, Optional<IFLUX_Array<TRData, TWData>>>> array_expression,
                     Func<RRF_Connection, TList, Optional<TRData>> get_data,
-                    VariableRange variables_range = default,
-                    Func<RRF_Connection, TWData, VariableUnit, Task<bool>> write_data = default)
+                    params VariableRange[] variables_range)
+                {
+                    var array_setter = VariableStore.GetCachedSetterDelegate(array_expression);
+                    var array_name = string.Join('/', array_expression.GetMembersName());
+                    Optional<RRF_VariableObjectModel<TModel, TRData, TWData>> get_variable(VariableAlias alias)
+                    {
+                        var unit = Units.Lookup(alias);
+                        if (!unit.HasValue)
+                            return default;
+
+                        Optional<TList> get_value(List<TList> list) => list.ElementAtOrDefault(unit.Value.Address);
+                        Optional<TRData> get_variable(RRF_Connection c, TModel m) => GetVariables(m).Convert(get_value).Convert(m => get_data(c, m));
+                        return new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, $"{array_name} {alias}", ReadModel, GetModel, get_variable, unit: unit.Value);
+                    }
+
+                    IEnumerable<VariableUnit> find_units(VariableRange range)
+                    {
+                        foreach (var alias in range.Aliases)
+                            if (Units.TryGetValue(alias, out var unit))
+                                yield return unit;
+                    }
+
+                    var variable_units = variables_range.Length == 0 ? Units : variables_range
+                        .SelectMany(find_units)
+                        .ToArray();
+
+                    var array = new RRF_ArrayObjectModel<TModel, TRData, TWData>(array_name, variable_units, get_variable);
+                    array_setter.Invoke(VariableStore.RegisterArray(array));
+                }
+                public void CreateArray<TRData, TWData>(
+                    Expression<Func<RRF_VariableStoreBase, IFLUX_Array<TRData, TWData>>> array_expression,
+                    Func<RRF_Connection, TList, Optional<TRData>> get_data,
+                    Func<RRF_Connection, TWData, VariableUnit, Task<bool>> write_data ,
+                    params VariableRange[] variables_range)
                 {
                     var array_setter = VariableStore.GetCachedSetterDelegate(array_expression);
                     var array_name = string.Join('/', array_expression.GetMembersName());
@@ -126,8 +226,53 @@ namespace Flux.ViewModels
                         return new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, $"{array_name} {alias}", ReadModel, GetModel, get_variable, write_unit_data, unit.Value);
                     }
 
-                    variables_range = variables_range.ToOptional().ValueOr(() => VariableRange.Range(0, (ushort)Units.Count));
-                    var variable_units = Units.Skip(variables_range.Start).Take(variables_range.Count).ToDictionary();
+
+                    IEnumerable<VariableUnit> find_units(VariableRange range)
+                    {
+                        foreach (var alias in range.Aliases)
+                            if (Units.TryGetValue(alias, out var unit))
+                                yield return unit;
+                    }
+
+                    var variable_units = variables_range.Length == 0 ? Units : variables_range
+                        .SelectMany(find_units)
+                        .ToArray();
+
+                    var array = new RRF_ArrayObjectModel<TModel, TRData, TWData>(array_name, variable_units, get_variable);
+                    array_setter.Invoke(VariableStore.RegisterArray(array));
+                }
+                public void CreateArray<TRData, TWData>(
+                    Expression<Func<RRF_VariableStoreBase, Optional<IFLUX_Array<TRData, TWData>>>> array_expression,
+                    Func<RRF_Connection, TList, Optional<TRData>> get_data,
+                    Func<RRF_Connection, TWData, VariableUnit, Task<bool>> write_data,
+                    params VariableRange[] variables_range)
+                {
+                    var array_setter = VariableStore.GetCachedSetterDelegate(array_expression);
+                    var array_name = string.Join('/', array_expression.GetMembersName());
+                    Optional<RRF_VariableObjectModel<TModel, TRData, TWData>> get_variable(VariableAlias alias)
+                    {
+                        var unit = Units.Lookup(alias);
+                        if (!unit.HasValue)
+                            return default;
+
+                        Task<bool> write_unit_data(RRF_Connection c, TWData d) => write_data(c, d, unit.Value);
+                        Optional<TList> get_value(List<TList> list) => list.ElementAtOrDefault(unit.Value.Address);
+                        Optional<TRData> get_variable(RRF_Connection c, TModel m) => GetVariables(m).Convert(get_value).Convert(m => get_data(c, m));
+                        return new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, $"{array_name} {alias}", ReadModel, GetModel, get_variable, write_unit_data, unit.Value);
+                    }
+
+
+                    IEnumerable<VariableUnit> find_units(VariableRange range)
+                    {
+                        foreach (var alias in range.Aliases)
+                            if (Units.TryGetValue(alias, out var unit))
+                                yield return unit;
+                    }
+
+                    var variable_units = variables_range.Length == 0 ? Units : variables_range
+                        .SelectMany(find_units)
+                        .ToArray();
+
                     var array = new RRF_ArrayObjectModel<TModel, TRData, TWData>(array_name, variable_units, get_variable);
                     array_setter.Invoke(VariableStore.RegisterArray(array));
                 }
@@ -135,8 +280,33 @@ namespace Flux.ViewModels
                 public void CreateVariable<TRData, TWData>(
                     Expression<Func<RRF_VariableStoreBase, Optional<IFLUX_Variable<TRData, TWData>>>> variable_expression,
                     Func<RRF_Connection, TList, Optional<TRData>> get_data,
-                    VariableAlias alias,
-                    Func<RRF_Connection, TWData, VariableUnit, Task<bool>> write_data = default)
+                    VariableAlias alias)
+                {
+                    var variable_setter = VariableStore.GetCachedSetterDelegate(variable_expression);
+                    var variable_name = string.Join('/', variable_expression.GetMembersName());
+                    Optional<RRF_VariableObjectModel<TModel, TRData, TWData>> get_variable(VariableAlias alias)
+                    {
+                        var unit = Units.Lookup(alias);
+                        if (!unit.HasValue)
+                            return default;
+
+                        Optional<TList> get_value(List<TList> list) => list.ElementAtOrDefault(unit.Value.Address);
+                        Optional<TRData> get_variable(RRF_Connection c, TModel m) => GetVariables(m).Convert(get_value).Convert(m => get_data(c, m));
+                        return new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, $"{variable_name} {alias}", ReadModel, GetModel, get_variable, unit: unit.Value);
+                    }
+
+                    var variable = get_variable(alias);
+                    if (!variable.HasValue)
+                        return;
+
+                    variable_setter.Invoke(VariableStore.RegisterVariable(variable.Value));
+                }
+
+                public void CreateVariable<TRData, TWData>(
+                    Expression<Func<RRF_VariableStoreBase, Optional<IFLUX_Variable<TRData, TWData>>>> variable_expression,
+                    Func<RRF_Connection, TList, Optional<TRData>> get_data,
+                    Func<RRF_Connection, TWData, VariableUnit, Task<bool>> write_data,
+                    VariableAlias alias)
                 {
                     var variable_setter = VariableStore.GetCachedSetterDelegate(variable_expression);
                     var variable_name = string.Join('/', variable_expression.GetMembersName());
@@ -159,7 +329,7 @@ namespace Flux.ViewModels
                     variable_setter.Invoke(VariableStore.RegisterVariable(variable.Value));
                 }
             }
-            public RRF_ArrayBuilder<TList> CreateArray<TList>(Func<TModel, Optional<List<TList>>> get_list, Dictionary<VariableAlias, VariableUnit> units)
+            public RRF_ArrayBuilder<TList> CreateArray<TList>(Func<TModel, Optional<List<TList>>> get_list, VariableUnits units)
             {
                 return new RRF_ArrayBuilder<TList>(VariableStore, ReadModel, GetModel, get_list, units);
             }
@@ -181,7 +351,7 @@ namespace Flux.ViewModels
             return new RRF_InnerModelBuilder<TModel>(variable_store, read_model, m => m.WhenAnyValue(model_expr));
             async Task<Optional<TModel>> read_model(RRF_MemoryBuffer buffer)
             {
-                var cts = new CancellationTokenSource(read_timeout);
+                using var cts = new CancellationTokenSource(read_timeout);
                 return await buffer.GetModelDataAsync(model_expr, cts.Token);
             }
         }
@@ -201,7 +371,7 @@ namespace Flux.ViewModels
             }
             async Task<Optional<(TModel1, TModel2)>> read_models(RRF_MemoryBuffer buffer)
             {
-                var cts = new CancellationTokenSource(read_timeout);
+                using var cts = new CancellationTokenSource(read_timeout);
                 var m1 = await buffer.GetModelDataAsync(model_expr_1, cts.Token);
                 var m2 = await buffer.GetModelDataAsync(model_expr_2, cts.Token);
                 return combine_models(m1, m2);
@@ -229,7 +399,7 @@ namespace Flux.ViewModels
             }
             async Task<Optional<(TModel1, TModel2, TModel3)>> read_models(RRF_MemoryBuffer buffer)
             {
-                var cts = new CancellationTokenSource(read_timeout);
+                using var cts = new CancellationTokenSource(read_timeout);
                 var m1 = await buffer.GetModelDataAsync(model_expr_1, cts.Token);
                 var m2 = await buffer.GetModelDataAsync(model_expr_2, cts.Token);
                 var m3 = await buffer.GetModelDataAsync(model_expr_3, cts.Token);
@@ -260,7 +430,7 @@ namespace Flux.ViewModels
             }
             async Task<Optional<(TModel1, TModel2, TModel3, TModel4)>> read_models(RRF_MemoryBuffer buffer)
             {
-                var cts = new CancellationTokenSource(read_timeout);
+                using var cts = new CancellationTokenSource(read_timeout);
                 var m1 = await buffer.GetModelDataAsync(model_expr_1, cts.Token);
                 var m2 = await buffer.GetModelDataAsync(model_expr_2, cts.Token);
                 var m3 = await buffer.GetModelDataAsync(model_expr_3, cts.Token);
@@ -289,7 +459,9 @@ namespace Flux.ViewModels
 
             public void CreateVariable<TData>(
                 Expression<Func<RRF_VariableStoreBase, IFLUX_Variable<TData, TData>>> variable_expression,
-                bool stored, TData default_value, Func<object, TData> convert_value = default)
+                bool stored,
+                TData default_value, 
+                Func<object, TData> convert_value = default)
             {
                 var variable_setter = VariableStore.GetCachedSetterDelegate(variable_expression);
                 var variable_name = string.Join('/', variable_expression.GetMembersName());
@@ -298,7 +470,9 @@ namespace Flux.ViewModels
             }
             public void CreateVariable<TData>(
                 Expression<Func<RRF_VariableStoreBase, Optional<IFLUX_Variable<TData, TData>>>> variable_expression,
-                bool stored, TData default_value, Func<object, TData> convert_value = default)
+                bool stored,
+                TData default_value,
+                Func<object, TData> convert_value = default)
             {
                 var variable_setter = VariableStore.GetCachedSetterDelegate(variable_expression);
                 var variable_name = string.Join('/', variable_expression.GetMembersName());
@@ -308,17 +482,52 @@ namespace Flux.ViewModels
 
             public void CreateArray<TData>(
                 Expression<Func<RRF_VariableStoreBase, IFLUX_Array<TData, TData>>> array_expression,
-                bool stored, TData default_value, Dictionary<VariableAlias, VariableUnit> variable_units, Func<object, TData> convert_value = default)
+                bool stored,
+                TData default_value,
+                params VariableRange[] variables_range)
             {
+                var variable_units = new VariableUnits(0, variables_range);
+                var array_setter = VariableStore.GetCachedSetterDelegate(array_expression);
+                var array_name = string.Join('/', array_expression.GetMembersName());
+                var array = new RRF_ArrayGlobalModel<TData>(ConnectionProvider, array_name, stored, default_value, variable_units);
+                array_setter.Invoke(VariableStore.RegisterArray(array));
+            }
+
+            public void CreateArray<TData>(
+                Expression<Func<RRF_VariableStoreBase, Optional<IFLUX_Array<TData, TData>>>> array_expression,
+                bool stored,
+                TData default_value,
+                params VariableRange[] variables_range)
+            {
+                var variable_units = new VariableUnits(0, variables_range);
+                var array_setter = VariableStore.GetCachedSetterDelegate(array_expression);
+                var array_name = string.Join('/', array_expression.GetMembersName());
+                var array = new RRF_ArrayGlobalModel<TData>(ConnectionProvider, array_name, stored, default_value, variable_units);
+                array_setter.Invoke(VariableStore.RegisterArray(array));
+            }
+
+            public void CreateArray<TData>(
+                Expression<Func<RRF_VariableStoreBase, IFLUX_Array<TData, TData>>> array_expression,
+                bool stored,
+                TData default_value,
+                Func<object, TData> convert_value, 
+                params VariableRange[] variables_range)
+            {
+                var variable_units = new VariableUnits(0, variables_range);
                 var array_setter = VariableStore.GetCachedSetterDelegate(array_expression);
                 var array_name = string.Join('/', array_expression.GetMembersName());
                 var array = new RRF_ArrayGlobalModel<TData>(ConnectionProvider, array_name, stored, default_value, variable_units, convert_value);
                 array_setter.Invoke(VariableStore.RegisterArray(array));
             }
+
             public void CreateArray<TData>(
                 Expression<Func<RRF_VariableStoreBase, Optional<IFLUX_Array<TData, TData>>>> array_expression,
-                bool stored, TData default_value, Dictionary<VariableAlias, VariableUnit> variable_units, Func<object, TData> convert_value = default)
+                bool stored,
+                TData default_value, 
+                Func<object, TData> convert_value = default,
+                params VariableRange[] variables_range)
             {
+                var variable_units = new VariableUnits(0, variables_range);
                 var array_setter = VariableStore.GetCachedSetterDelegate(array_expression);
                 var array_name = string.Join('/', array_expression.GetMembersName());
                 var array = new RRF_ArrayGlobalModel<TData>(ConnectionProvider, array_name, stored, default_value, variable_units, convert_value);

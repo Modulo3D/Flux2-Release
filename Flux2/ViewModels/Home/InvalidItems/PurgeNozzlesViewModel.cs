@@ -31,7 +31,7 @@ namespace Flux.ViewModels
                    if (!temp.HasValue)
                        return FluxColors.Error;
                    var target_temp = temp.Value.Target;
-                   if (target_temp < expected_temp)
+                   if (target_temp.ValueOr(() => 0) < expected_temp)
                        return FluxColors.Error;
                    var current_temp = temp.Value.Current;
                    var missing_temp = expected_temp - current_temp;

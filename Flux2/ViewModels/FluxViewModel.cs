@@ -482,6 +482,7 @@ namespace Flux.ViewModels
             });
 
             var success = await Task.WhenAll(dialog_result, reading_result);
+
             return (success[1], result);
         }
 

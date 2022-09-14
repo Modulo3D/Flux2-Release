@@ -175,6 +175,72 @@ namespace Flux.ViewModels
                 return false;
             }
 
+            var has_filament_after_gear = Flux.ConnectionProvider.HasVariable(c => c.FILAMENT_AFTER_GEAR);
+            if (!has_filament_after_gear)
+            {
+                var iterations = 0;
+                var max_iterations = 2;
+                var iteration_dist = 10;
+                var dialog_result = ContentDialogResult.None;
+                do
+                {
+                    using var put_move_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    using var wait_move_cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                    var move_result = await Flux.ConnectionProvider.ExecuteParamacroAsync(c =>
+                    {
+                        var gcode = new List<string>();
+
+                        var select_tool_gcode = c.GetSelectToolGCode(Feeder.Position);
+                        if (!select_tool_gcode.HasValue)
+                            return default;
+                        gcode.Add(select_tool_gcode.Value);
+
+                        var movement_gcode = c.GetRelativeEMovementGCode(iteration_dist, 100);
+                        if (!movement_gcode.HasValue)
+                            return default;
+                        gcode.Add(movement_gcode.Value);
+
+                        return gcode;
+                    }, put_move_cts.Token, true, wait_move_cts.Token);
+                    if (!move_result)
+                        return false;
+
+                    dialog_result = await Flux.ShowConfirmDialogAsync("CARICO FILO", "FILO INSERITO CORRETTAMENTE?");
+                } while (dialog_result != ContentDialogResult.Primary && ++iterations < max_iterations);
+
+                if (dialog_result != ContentDialogResult.Primary)
+                {
+                    using var put_move_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    using var wait_move_cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                    var move_result = await Flux.ConnectionProvider.ExecuteParamacroAsync(c =>
+                    {
+                        var gcode = new List<string>();
+
+                        var select_tool_gcode = c.GetSelectToolGCode(Feeder.Position);
+                        if (!select_tool_gcode.HasValue)
+                            return default;
+                        gcode.Add(select_tool_gcode.Value);
+
+                        var extract_distance = (iteration_dist * max_iterations) + 50;
+                        var movement_gcode = c.GetRelativeEMovementGCode(-iteration_dist, 500);
+                        if (!movement_gcode.HasValue)
+                            return default;
+                        gcode.Add(movement_gcode.Value);
+
+                        var park_tool_gcode = c.GetParkToolGCode();
+                        if (!park_tool_gcode.HasValue)
+                            return default;
+                        gcode.Add(park_tool_gcode.Value);
+
+                        return gcode;
+                    }, put_move_cts.Token, true, wait_move_cts.Token);
+                    if (!move_result)
+                        return false;
+
+                    return false;
+                }
+            }
+
             if (!Flux.ConnectionProvider.HasVariable(c => c.FILAMENT_ON_HEAD))
                 material.Value.StoreTag(t => t.SetLoaded(Feeder.Position));
 
@@ -274,7 +340,7 @@ namespace Flux.ViewModels
 
                         if (value.document.ConvertOr(d => d.Id == 0, () => true)) 
                             return state.Create(false, "LEGGI UN MATERIALE", "nFC", UpdateNFCAsync, can_update_nfc);
-
+                        
                         if (value.tool_material.Convert(tm => tm.Compatible).ConvertOr(c => !c, () => true))
                             return state.Create(false, $"{value.document} NON COMPATIBILE");
 
@@ -298,17 +364,14 @@ namespace Flux.ViewModels
                 var operator_usb = Flux.MCodes.OperatorUSB;
                 var reading = await Flux.UseReader(h => material.Value.ReadTag(h, true), r => r.HasValue);
 
-                if (!reading.HasValue)
+                if (operator_usb.ConvertOr(o => o.RewriteNFC, () => false))
                 {
-                    if (operator_usb.ConvertOr(o => o.RewriteNFC, () => false))
-                    {
-                        var tag = await material.Value.CreateTagAsync();
-                        reading = new NFCReading<NFCMaterial>(tag, material.Value.VirtualCardId);
-                    }
-
-                    if (!reading.HasValue)
-                        return false;
+                    var tag = await material.Value.CreateTagAsync(reading);
+                    reading = new NFCReading<NFCMaterial>(tag, material.Value.VirtualCardId);
                 }
+
+                if (!reading.HasValue)
+                    return false;
 
                 await material.Value.StoreTagAsync(reading.Value);
             }
@@ -446,17 +509,14 @@ namespace Flux.ViewModels
                 var operator_usb = Flux.MCodes.OperatorUSB;
                 var reading = await Flux.UseReader(h => material.Value.ReadTag(h, true), r => r.HasValue);
 
-                if (!reading.HasValue)
+                if (operator_usb.ConvertOr(o => o.RewriteNFC, () => false))
                 {
-                    if (operator_usb.ConvertOr(o => o.RewriteNFC, () => false))
-                    {
-                        var tag = await material.Value.CreateTagAsync();
-                        reading = new NFCReading<NFCMaterial>(tag, material.Value.VirtualCardId);
-                    }
-
-                    if (!reading.HasValue)
-                        return false;
+                    var tag = await material.Value.CreateTagAsync(reading);
+                    reading = new NFCReading<NFCMaterial>(tag, material.Value.VirtualCardId);
                 }
+
+                if (!reading.HasValue)
+                    return false;
 
                 await material.Value.StoreTagAsync(reading.Value);
             }

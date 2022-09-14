@@ -268,7 +268,7 @@ namespace Flux.ViewModels
         }
         private async Task<Optional<Dictionary<Guid, Dictionary<BlockNumber, MCodePartProgram>>>> ReadMCodeStorageAsync()
         {
-            var qctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var qctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             var queue = await Flux.ConnectionProvider.ListFilesAsync(
                 c => c.StoragePath,
                 qctk.Token);
@@ -286,7 +286,7 @@ namespace Flux.ViewModels
 
             Directories.Clear(Directories.MCodes);
 
-            var clear_queue_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var clear_queue_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             if (!await Flux.ConnectionProvider.ClearFolderAsync(c => c.StoragePath, true, clear_queue_cts.Token))
                 return false;
 
@@ -371,8 +371,8 @@ namespace Flux.ViewModels
                 if (files.Value.TryGetValue(file.MCodeGuid, out var mcodes))
                 {
                     foreach (var mcode in mcodes)
-                    { 
-                        var delete_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    {
+                        using var delete_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                         if (!await Flux.ConnectionProvider.DeleteFileAsync(c => c.StoragePath, $"{mcode}", true, delete_cts.Token))
                             return false;
                     }
@@ -397,11 +397,11 @@ namespace Flux.ViewModels
         // QUEUE
         public async Task<bool> ClearQueueAsync()
         {
-            var clear_queue_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var clear_queue_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             if (!await Flux.ConnectionProvider.ClearFolderAsync(c => c.QueuePath, true, clear_queue_cts.Token))
                 return false;
 
-            var clear_inner_queue_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var clear_inner_queue_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             if (!await Flux.ConnectionProvider.ClearFolderAsync(c => c.InnerQueuePath, true, clear_inner_queue_cts.Token))
                 return false;
 
@@ -460,7 +460,7 @@ namespace Flux.ViewModels
             if (!await PrepareMCodeAsync(mcode, false))
                 return false;
 
-            var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             if (!await Flux.ConnectionProvider.PutFileAsync(
                 c => c.QueuePath,
                 $"{last_queue_pos + 1};{Guid.NewGuid()};{mcode.MCodeGuid}",
@@ -510,7 +510,7 @@ namespace Flux.ViewModels
                 if (!queue.Value.TryGetValue(current_position, out var current_job))
                     continue;
 
-                var delete_queue_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                using var delete_queue_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 if (!await Flux.ConnectionProvider.DeleteFileAsync(
                     c => c.QueuePath,
                     $"{current_position};{current_job.JobGuid};{current_job.MCodeGuid}",
@@ -521,7 +521,7 @@ namespace Flux.ViewModels
                 if (!queue.Value.TryGetValue(next_position, out var next_job))
                     continue;
 
-                var put_queue_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                using var put_queue_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 if (!await Flux.ConnectionProvider.PutFileAsync(
                    c => c.QueuePath,
                    $"{current_position};{next_job.JobGuid};{next_job.MCodeGuid}",
@@ -572,28 +572,28 @@ namespace Flux.ViewModels
             if (!other_job.HasValue)
                 return false;
 
-            var delete_current_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var delete_current_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             if (!await Flux.ConnectionProvider.DeleteFileAsync(
                 c => c.QueuePath,
                 $"{current_index};{current_job.Value.JobGuid};{current_job.Value.MCodeGuid}",
                 true, delete_current_cts.Token))
                 return false;
 
-            var delete_other_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var delete_other_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             if (!await Flux.ConnectionProvider.DeleteFileAsync(
                 c => c.QueuePath,
                 $"{other_index};{other_job.Value.JobGuid};{other_job.Value.MCodeGuid}",
                 true, delete_other_cts.Token))
                 return false;
 
-            var put_other_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var put_other_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             if (!await Flux.ConnectionProvider.PutFileAsync(
                c => c.QueuePath,
                $"{current_index};{other_job.Value.JobGuid};{other_job.Value.MCodeGuid}",
                put_other_cts.Token))
                 return false;
 
-            var put_current_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var put_current_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             if (!await Flux.ConnectionProvider.PutFileAsync(
                c => c.QueuePath,
                $"{other_index};{current_job.Value.JobGuid};{current_job.Value.MCodeGuid}",
@@ -605,7 +605,7 @@ namespace Flux.ViewModels
 
         private async Task<Optional<Dictionary<QueuePosition, FluxJob>>> ReadMCodeQueueAsync()
         {
-            var qctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var qctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             var queue = await Flux.ConnectionProvider.ListFilesAsync(
                 c => c.QueuePath,
                 qctk.Token);

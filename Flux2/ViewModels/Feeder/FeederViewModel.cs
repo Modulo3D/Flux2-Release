@@ -19,6 +19,10 @@ namespace Flux.ViewModels
         public FluxViewModel Flux { get; }
         public FeedersViewModel Feeders { get; }
 
+        public ObservableAsPropertyHelper<Optional<FLUX_Humidity>> _Humidity;
+        [RemoteOutput(true, typeof(HumidityConverter))]
+        public Optional<FLUX_Humidity> Humidity => _Humidity.Value;
+
         // FEEDER
         private ObservableAsPropertyHelper<EFeederState> _FeederState;
         public EFeederState FeederState => _FeederState.Value;
@@ -131,6 +135,7 @@ namespace Flux.ViewModels
                     EFeederState.FEEDER_SELECTED => "ATTIVA",
                     EFeederState.FEEDER_WAIT => "ATTESA",
                     EFeederState.FEEDER_EMPTY => "VUOTA",
+                    EFeederState.IN_CHANGE => "CAMBIO",
                     _ => "ERRORE",
                 })
                 .ToProperty(this, v => v.FeederStateStr)
@@ -142,6 +147,7 @@ namespace Flux.ViewModels
                     EFeederState.FEEDER_SELECTED => FluxColors.Selected,
                     EFeederState.FEEDER_WAIT => FluxColors.Inactive,
                     EFeederState.FEEDER_EMPTY => FluxColors.Empty,
+                    EFeederState.IN_CHANGE => FluxColors.Idle,
                     _ => FluxColors.Error,
                 })
                 .ToProperty(this, v => v.FeederBrush)
@@ -162,6 +168,25 @@ namespace Flux.ViewModels
                 })
                 .ToProperty(this, v => v.ToolNozzleBrush)
                 .DisposeWith(Disposables);
+
+            var humidity_units = Flux.ConnectionProvider.GetArrayUnits(c => c.FILAMENT_HUMIDITY);
+            _Humidity = Flux.SettingsProvider.WhenAnyValue(s => s.ExtrudersCount)
+                .SelectMany(e =>
+                {
+                    if (!e.HasValue)
+                        return Observable.Return(Optional<FLUX_Humidity>.None);
+                    var spool_count = e.Value.machine_extruders * e.Value.mixing_extruders;
+                    if (spool_count != humidity_units.Count())
+                        return Observable.Return(Optional<FLUX_Humidity>.None);
+                    var humidity_unit = Flux.ConnectionProvider.GetArrayUnit(c => c.FILAMENT_HUMIDITY, Position);
+                    if(humidity_unit.HasValue)
+                        return Observable.Return(Optional<FLUX_Humidity>.None);
+                    var humidity = Flux.ConnectionProvider.ObserveVariable(c => c.FILAMENT_HUMIDITY, humidity_unit.Value.Alias);
+                    if (!humidity.HasObservable)
+                        return Observable.Return(Optional<FLUX_Humidity>.None);
+                    return humidity.Observable;
+                })
+                .ToProperty(this, v => v.Humidity);
         }
 
         private IEnumerable<IFluxMaterialViewModel> CreateMaterials(Optional<(ushort machine_extruders, ushort mixing_extruders)> extruders)
@@ -202,15 +227,17 @@ namespace Flux.ViewModels
         // FEEDER
         private EFeederState FindFeederState(ToolNozzleState tool)
         {
+            if (tool.InChange)
+                return EFeederState.IN_CHANGE;
             if (tool.ChangeError)
                 return EFeederState.ERROR;
             if (!tool.Inserted)
                 return EFeederState.FEEDER_EMPTY;
             if (tool.InMateinance)
                 return EFeederState.FEEDER_WAIT;
-            if (!tool.Selected || tool.IsInMagazine())
+            if (!tool.Selected || (tool.IsInMagazine() && !tool.IsOnTrailer()))
                 return EFeederState.FEEDER_WAIT;
-            if (tool.Selected && tool.IsOnTrailer())
+            if (tool.Selected && tool.IsOnTrailer() && !tool.IsInMagazine())
                 return EFeederState.FEEDER_SELECTED;
             return EFeederState.ERROR;
         }

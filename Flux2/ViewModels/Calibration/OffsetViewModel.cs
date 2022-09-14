@@ -233,11 +233,12 @@ namespace Flux.ViewModels
             _ProbeState = Observable.CombineLatest(
                 this.WhenAnyValue(s => s.ToolOffset),
                 this.WhenAnyValue(s => s.ProbeOffset),
+                Feeder.WhenAnyValue(f => f.FeederState),
                 Feeder.ToolNozzle.WhenAnyValue(f => f.State),
                 material.ConvertMany(m => m.WhenAnyValue(f => f.State)),
-                (tool_offset, probe_offset, tool_state, material_state) =>
+                (tool_offset, probe_offset, feeder_state, tool_state, material_state) =>
                 {
-                    if (!tool_state.IsInMagazine() && !tool_state.IsOnTrailer())
+                    if (feeder_state == EFeederState.ERROR)
                         return FluxProbeState.ERROR_PROBE;
                     if (!tool_offset.HasValue)
                         return FluxProbeState.ERROR_PROBE;
@@ -251,10 +252,13 @@ namespace Flux.ViewModels
                     if (probe_offset.HasValue && probe_offset.Value.Z > tool_offset.Value.Z)
                         return FluxProbeState.ERROR_PROBE;
 
-                    if (!tool_state.IsLoaded() || !material_state.HasValue || !material_state.Value.IsLoaded())
+                    if (!tool_state.IsLoaded() || 
+                        !material_state.HasValue ||
+                        !material_state.Value.IsLoaded())
                         return FluxProbeState.NO_PROBE;
 
-                    if (!probe_offset.HasValue || probe_offset.Value.Z == tool_offset.Value.Z)
+                    if (!probe_offset.HasValue || 
+                        probe_offset.Value.Z == tool_offset.Value.Z)
                         return FluxProbeState.INVALID_PROBE;
 
                     return FluxProbeState.VALID_PROBE;
@@ -403,13 +407,8 @@ namespace Flux.ViewModels
             if (!ProbeOffsetKey.HasValue)
                 return;
 
-            var settings = Flux.SettingsProvider.UserSettings.Local;
-
             var offset_z = await Flux.ConnectionProvider.ProbeOffsetAsync(Feeder.Position);
             if (!offset_z.HasValue)
-                return;
-
-            if (offset_z.Value == 0)
                 return;
 
             ModifyProbeOffset(p => new ProbeOffset(p.Key, p.X, p.Y, offset_z.Value));

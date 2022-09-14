@@ -39,7 +39,7 @@ namespace Flux.ViewModels
     {
         public override string Group => "";
         public override Optional<VariableUnit> GetArrayUnit(ushort position) => default;
-        public Dummy_Array() : base("", FluxMemReadPriority.DISABLED)
+        public Dummy_Array() : base("")
         {
         }
     }
@@ -47,7 +47,7 @@ namespace Flux.ViewModels
     {
         public override bool ReadOnly => false;
         public override string Group => "";
-        public Dummy_Variable() : base("", FluxMemReadPriority.DISABLED, new VariableUnit(0))
+        public Dummy_Variable() : base("", new VariableUnit(0))
         {
         }
         public override Task<Optional<TRData>> ReadAsync()
@@ -78,12 +78,12 @@ namespace Flux.ViewModels
             CreateDummy(s => s.DEBUG);
             CreateDummy(s => s.QUEUE_SIZE);
             CreateDummy(s => s.QUEUE_POS);
-            CreateDummy(s => s.X_USER_OFFSET_T);
-            CreateDummy(s => s.Y_USER_OFFSET_T);
-            CreateDummy(s => s.Z_USER_OFFSET_T);
-            CreateDummy(s => s.X_PROBE_OFFSET_T);
-            CreateDummy(s => s.Y_PROBE_OFFSET_T);
-            CreateDummy(s => s.Z_PROBE_OFFSET_T);
+            CreateDummy(s => s.X_USER_OFFSET);
+            CreateDummy(s => s.Y_USER_OFFSET);
+            CreateDummy(s => s.Z_USER_OFFSET);
+            CreateDummy(s => s.X_PROBE_OFFSET);
+            CreateDummy(s => s.Y_PROBE_OFFSET);
+            CreateDummy(s => s.Z_PROBE_OFFSET);
             CreateDummy(s => s.X_HOME_OFFSET);
             CreateDummy(s => s.Y_HOME_OFFSET);
         }
@@ -104,6 +104,7 @@ namespace Flux.ViewModels
         public override Dummy_MemoryBuffer MemoryBuffer { get; }
         public override string RootPath => throw new NotImplementedException();
         public override string QueuePath => throw new NotImplementedException();
+        public override string MacroPath => throw new NotImplementedException();
         public override ushort ArrayBase => throw new NotImplementedException();
         public override string StoragePath => throw new NotImplementedException();
         public override string PathSeparator => throw new NotImplementedException();
@@ -154,7 +155,7 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override Optional<IEnumerable<string>> GetProbeToolGCode(ushort position, Nozzle nozzle, double temperature)
+        public override Optional<IEnumerable<string>> GetProbeToolGCode(ushort position, double temperature)
         {
             throw new NotImplementedException();
         }
@@ -283,6 +284,11 @@ namespace Flux.ViewModels
         }
 
         public override Optional<IEnumerable<string>> GetManualCalibrationPositionGCode()
+        {
+            throw new NotImplementedException();
+        }
+
+        public override Optional<IEnumerable<string>> GetExecuteMacroGCode(string folder, string filename)
         {
             throw new NotImplementedException();
         }

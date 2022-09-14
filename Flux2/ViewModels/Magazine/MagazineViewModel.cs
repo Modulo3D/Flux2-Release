@@ -25,7 +25,7 @@ namespace Flux.ViewModels
                 .WhenAnyValue(s => s.StatusEvaluation)
                 .Select(s => s.IsIdle);
 
-            ResetMagazineCommand = ReactiveCommand.CreateFromTask(async () => { await Flux.SettingsProvider.ResetMagazineAsync(); }, is_idle);
+            ResetMagazineCommand = ReactiveCommand.CreateFromTask(async () => { await Flux.ConnectionProvider.ResetMagazineAsync(); }, is_idle);
 
             if (Flux.ConnectionProvider.HasVariable(m => m.OPEN_HEAD_CLAMP))
                 AddCommand("toggleClamp", ReactiveCommand.CreateFromTask(async () => { await Flux.ConnectionProvider.ToggleVariableAsync(c => c.OPEN_HEAD_CLAMP); }));

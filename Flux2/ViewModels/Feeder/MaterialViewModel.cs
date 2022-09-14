@@ -207,7 +207,7 @@ namespace Flux.ViewModels
                 Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation).Select(s => s.CanSafeCycle),
                 (tool_nozzle, material, tool_material, can_cycle) => new
                 {
-                    can_unload = can_cycle, // && CanUnloadMaterial(tool_nozzle, material, tool_material),
+                    can_unload = can_cycle,
                     can_purge = CanPurgeMaterial(can_cycle, tool_nozzle, material, tool_material),
                     can_load = CanLoadMaterial(can_cycle, tool_nozzle, material, tool_material),
                 });
@@ -255,20 +255,6 @@ namespace Flux.ViewModels
 
             return Observable.CombineLatest(inserted, known, locked, loaded,
                  (inserted, known, locked, loaded) => new MaterialState(inserted, known, selected, locked, loaded));
-        }
-        private bool CanUnloadMaterial(bool can_cycle, ToolNozzleState tool_nozzle, MaterialState material,  Optional<ToolMaterialState> tool_material)
-        {
-            if (!can_cycle)
-                return false;
-            if (!tool_nozzle.IsLoaded())
-                return false;
-            if (material.IsNotLoaded())
-                return false;
-            if (!tool_material.HasValue)
-                return false;
-            if (tool_material.Value.Compatible.HasValue && !tool_material.Value.Compatible.Value)
-                return false;
-            return true;
         }
         private bool CanLoadMaterial(bool can_cycle, ToolNozzleState tool_nozzle, MaterialState material,  Optional<ToolMaterialState> tool_material)
         {
@@ -332,7 +318,7 @@ namespace Flux.ViewModels
                 Flux.Navigator.Navigate(LoadMaterialViewModel);
             }
         }
-        public override async Task<Optional<NFCMaterial>> CreateTagAsync()
+        public override async Task<Optional<NFCMaterial>> CreateTagAsync(Optional<NFCReading<NFCMaterial>> reading)
         {
             var database = Flux.DatabaseProvider.Database;
             if (!database.HasValue)
@@ -357,18 +343,21 @@ namespace Flux.ViewModels
                 .AsObservableChangeSet(m => m.Id)
                 .AsObservableCache();
 
-            var material_weights = new[] { 2000.0, 1000.0, 750.0 }
-                .AsObservableChangeSet(w => (int)w)
-                .AsObservableCache();
+            var last_tag = reading.Convert(r => r.Tag);
+
+            var last_loaded = last_tag.Convert(t => t.Loaded);
+            var last_cur_weight = last_tag.Convert(t => t.CurWeightG).ValueOr(() => 1000.0);
+            var last_max_weight = last_tag.Convert(t => t.MaxWeightG).ValueOr(() => 1000.0);
+            var last_printer_guid = last_tag.ConvertOr(t => t.PrinterGuid, () => Guid.Empty);
+            var last_material_guid = last_tag.ConvertOr(t => t.MaterialGuid, () => Guid.Empty);
 
             var material_option = ComboOption.Create("material", "MATERIALE:", materials);
-            var cur_weight_option = new NumericOption("curWeight", "PESO CORRENTE:", 1000.0, 50.0, converter: typeof(WeightConverter));
-            var max_weight_option = ComboOption.Create("maxWeight", "PESO TOTALE:", material_weights, selection_changed:
-            v =>
+            var cur_weight_option = new NumericOption("curWeight", "PESO CORRENTE:", last_cur_weight, 50.0, converter: typeof(WeightConverter));
+            var max_weight_option = new NumericOption("maxWeight", "PESO TOTALE:", last_max_weight, 50.0, value_changed: v =>
             {
                 cur_weight_option.Min = 0f;
-                cur_weight_option.Max = v.ValueOr(() => 0);
-                cur_weight_option.Value = v.ValueOr(() => 0);
+                cur_weight_option.Max = v;
+                cur_weight_option.Value = v;
             }, converter: typeof(WeightConverter));
 
             var result = await Flux.ShowSelectionAsync(
@@ -384,12 +373,9 @@ namespace Flux.ViewModels
                 return default;
 
             var max_weight = max_weight_option.Value;
-            if (!max_weight.HasValue)
-                return default;
-
             var cur_weight = cur_weight_option.Value;
 
-            return new NFCMaterial(material.Value, max_weight.Value, cur_weight);
+            return new NFCMaterial(material.Value, max_weight, cur_weight, last_printer_guid, last_loaded);
         }
     }
 }

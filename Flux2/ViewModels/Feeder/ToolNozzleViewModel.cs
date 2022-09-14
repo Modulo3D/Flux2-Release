@@ -136,14 +136,13 @@ namespace Flux.ViewModels
                 .DistinctUntilChanged();
 
             var in_change = Flux.ConnectionProvider.ObserveVariable(m => m.IN_CHANGE)
-                .ObservableOrDefault()
+                .ObservableOr(() => false)
                 .DistinctUntilChanged();
 
             var in_change_error = Observable.CombineLatest(
                 in_idle,
                 in_change,
-                (in_idle, in_change) => in_change.Convert(in_change => in_idle && in_change))
-                .Throttle(TimeSpan.FromSeconds(1));
+                (in_idle, in_change) => in_idle && in_change);
 
             var inserted = this.WhenAnyValue(v => v.NozzleTemperature)
                 .ConvertOr(t => t.Current > -100 && t.Current < 1000, () => false)
@@ -186,17 +185,44 @@ namespace Flux.ViewModels
             var array_base = Flux.ConnectionProvider.ArrayBase;
 
             return Observable.CombineLatest(
-                in_change_error, tool_cur, inserted, mem_trailer, input_trailer, mem_magazine, input_magazine, known, locked, loaded, in_mateinance,
-                (in_change_error, tool_cur, inserted, mem_trailer, input_trailer, mem_magazine, input_magazine, known, locked, loaded, in_mateinance) =>
+                in_change, in_change_error, tool_cur, inserted, mem_trailer, input_trailer, mem_magazine, input_magazine, known, locked, loaded, in_mateinance,
+                (in_change, in_change_error, tool_cur, inserted, mem_trailer, input_trailer, mem_magazine, input_magazine, known, locked, loaded, in_mateinance) =>
                 {
-                    var on_trailer = !mem_trailer.HasChange || !input_trailer.HasChange || mem_trailer.Change.Convert(t => t && t == input_trailer.Change.ValueOr(() => t)).ValueOr(() => false);
-                    var in_magazine = mem_magazine.HasChange && input_magazine.HasChange && mem_magazine.Change.Convert(t => t && t == input_magazine.Change.ValueOr(() => t)).ValueOr(() => false);
+                    var on_trailer = false;
+                    if (input_trailer.HasChange)
+                    {
+                        on_trailer = input_trailer.Change.ValueOr(() => false);
+                        if (mem_trailer.HasChange && mem_trailer.Change != input_trailer.Change)
+                            in_change_error = true;
+                    }
+                    else 
+                    {
+                        if(mem_trailer.HasChange)
+                            on_trailer = mem_trailer.Change.ValueOr(() => false);
+                    }
+
+                    var in_magazine = false;
+                    if (input_magazine.HasChange)
+                    {
+                        in_magazine = input_magazine.Change.ValueOr(() => false);
+                        if (mem_magazine.HasChange && mem_magazine.Change != input_magazine.Change)
+                            in_change_error = true;
+                    }
+                    else
+                    {
+                        if (mem_magazine.HasChange)
+                            in_magazine = mem_magazine.Change.ValueOr(() => false);
+                    }
+
+                    if (has_tool_change && on_trailer == in_magazine)
+                        in_change_error = true;
+
                     var selected = tool_cur.Convert(t => t.ToOptional(t => t > -1)).Convert(t => Position == (ushort)(t - array_base)).ValueOr(() => false);
-                    return new ToolNozzleState(has_tool_change, selected, inserted, known, locked, loaded, on_trailer, in_magazine, in_mateinance, in_change_error.ValueOr(() => false));
+                    return new ToolNozzleState(has_tool_change, in_change, selected, inserted, known, locked, loaded, on_trailer, in_magazine, in_mateinance, in_change_error);
                 });
         }
 
-        public async Task<(bool result, Optional<Tool> tool)> FindNewToolAsync()
+        public async Task<(bool result, Optional<Tool> tool)> FindNewToolAsync(Optional<NFCReading<NFCToolNozzle>> last_reading)
         {
             var database = Flux.DatabaseProvider.Database;
             if (!database.HasValue)
@@ -216,6 +242,9 @@ namespace Flux.ViewModels
                 .AsObservableChangeSet(t => t.Id)
                 .AsObservableCache();
 
+            var last_tag = last_reading.Convert(r => r.Tag);
+            var last_tool_guid = last_tag.ConvertOr(t => t.NozzleGuid, () => Guid.Empty);
+
             var tool_option = ComboOption.Create("tool", "Utensile:", tools);
             var tool_result = await Flux.ShowSelectionAsync(
                 $"UTENSILE N.{Position + 1}",
@@ -231,7 +260,7 @@ namespace Flux.ViewModels
 
             return (true, tool.Value);
         }
-        public async Task<(bool result, Optional<Nozzle> nozzle, double max_weight, double cur_weight)> FindNewNozzleAsync(Tool tool)
+        public async Task<(bool result, Optional<Nozzle> nozzle, double max_weight, double cur_weight)> FindNewNozzleAsync(Tool tool, Optional<NFCReading<NFCToolNozzle>> last_reading)
         {
             var database = Flux.DatabaseProvider.Database;
             if (!database.HasValue)
@@ -254,14 +283,19 @@ namespace Flux.ViewModels
                 .AsObservableChangeSet(w => (int)w)
                 .AsObservableCache();
 
+            var last_tag = last_reading.Convert(r => r.Tag);
+            var last_nozzle_guid = last_tag.ConvertOr(t => t.NozzleGuid, () => Guid.Empty);
+            var last_cur_weight = last_tag.Convert(t => t.CurWeightG).ValueOr(() => 10000.0);
+            var last_max_weight = last_tag.Convert(t => t.MaxWeightG).ValueOr(() => 10000.0);
+
             var nozzle_option = ComboOption.Create("nozzle", "UGELLO:", nozzles);
-            var cur_weight_option = new NumericOption("curWeight", "PESO CORRENTE:", 10000.0, 500.0, converter: typeof(WeightConverter));
-            var max_weight_option = ComboOption.Create("maxWeight", "PESO TOTALE:", nozzle_weights, selection_changed:
+            var cur_weight_option = new NumericOption("curWeight", "PESO CORRENTE:", last_cur_weight, 1000.0, converter: typeof(WeightConverter));
+            var max_weight_option = new NumericOption("maxWeight", "PESO TOTALE:", last_max_weight, 1000.0, value_changed:
             v =>
             {
                 cur_weight_option.Min = 0f;
-                cur_weight_option.Max = v.ValueOr(() => 0);
-                cur_weight_option.Value = v.ValueOr(() => 0);
+                cur_weight_option.Max = v;
+                cur_weight_option.Value = v;
             }, converter: typeof(WeightConverter));
 
             var nozzle_result = await Flux.ShowSelectionAsync(
@@ -277,28 +311,31 @@ namespace Flux.ViewModels
                 return (true, default, default, default);
 
             var max_weight = max_weight_option.Value;
-            if (!max_weight.HasValue)
-                return (true, default, default, default);
-
             var cur_weight = cur_weight_option.Value;
 
-            return (true, nozzle.Value, max_weight.Value, cur_weight);
+            return (true, nozzle.Value, max_weight, cur_weight);
         }
 
-        public override async Task<Optional<NFCToolNozzle>> CreateTagAsync()
+        public override async Task<Optional<NFCToolNozzle>> CreateTagAsync(Optional<NFCReading<NFCToolNozzle>> last_reading)
         {
-            var tool = await FindNewToolAsync();
+            var tool = await FindNewToolAsync(last_reading);
             if (!tool.result)
                 return default;
 
             if (!tool.tool.HasValue)
                 return default;
 
-            var nozzle = await FindNewNozzleAsync(tool.tool.Value);
+            var nozzle = await FindNewNozzleAsync(tool.tool.Value, last_reading);
             if (!nozzle.result)
                 return default;
 
-            return new NFCToolNozzle(tool.tool.Value, nozzle.nozzle, nozzle.max_weight, nozzle.cur_weight);
+
+            var last_tag = last_reading.Convert(r => r.Tag);
+            var last_loaded = last_tag.Convert(t => t.Loaded);
+            var last_break_temp = last_tag.Convert(t => t.LastBreakTemperature);
+            var last_printer_guid = last_tag.ConvertOr(t => t.PrinterGuid, () => Guid.Empty);
+
+            return new NFCToolNozzle(tool.tool.Value, nozzle.nozzle, nozzle.max_weight, nozzle.cur_weight, last_printer_guid, last_loaded, last_break_temp);
         }
     }
 }

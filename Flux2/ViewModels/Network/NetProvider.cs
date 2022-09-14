@@ -182,10 +182,18 @@ namespace Flux.ViewModels
     {
         public const int WebServerPort = 8080;
 
-        public Ping Pinger { get; }
         public RestClient Client { get; }
         public FluxViewModel Flux { get; }
+        public Ping PLCNetworkPinger { get; }
+        public Ping InterNetworkPinger { get; }
         public UdpDiscovery UdpDiscovery { get; }
+
+        private bool _IsUpdatingNetwork;
+        public bool IsUpdatingNetwork
+        {
+            get => _IsUpdatingNetwork;
+            set => this.RaiseAndSetIfChanged(ref _IsUpdatingNetwork, value);
+        }
 
         private Optional<bool> _InterNetworkConnectivity;
         public Optional<bool> InterNetworkConnectivity
@@ -204,10 +212,11 @@ namespace Flux.ViewModels
         public NetProvider(FluxViewModel main)
         {
             Flux = main;
-            Pinger = new Ping();
             Client = new RestClient();
-            Client.UseSerializer(() => new JsonNetRestSerializer());
+            PLCNetworkPinger = new Ping();
+            InterNetworkPinger = new Ping();
             UdpDiscovery = new UdpDiscovery();
+            Client.UseSerializer(() => new JsonNetRestSerializer());
         }
 
         public void Initialize()
@@ -216,67 +225,28 @@ namespace Flux.ViewModels
             InitializeUDPDiscovery();
         }
 
-        public async Task UpdateNetworkStateAsync()
+        public void UpdateNetworkState()
         {
+            if (IsUpdatingNetwork)
+                return;
+            IsUpdatingNetwork = true;
             var core_settings = Flux.SettingsProvider.CoreSettings.Local;
-
-            PLCNetworkConnectivity = await OptionsAsync(
-                core_settings.PLCAddress,
-                TimeSpan.FromSeconds(5));
-
-            InterNetworkConnectivity = await PingAsync(
-                "8.8.8.8",
-                TimeSpan.FromSeconds(5));
-        }
-
-        public async Task<bool> PingAsync(Optional<string> address, TimeSpan timeout)
-        {
-            for (int i = 0; i < 5; i++)
+            Task.Run(async () =>
             {
-                try
-                {
-                    if (!address.HasValue)
-                        return false;
+                var ping_plc = Task.Run(() => PLCNetworkPinger.PingAsync(
+                    core_settings.PLCAddress,
+                    TimeSpan.FromSeconds(5)));
 
-                    address = address.Value.Split(":", StringSplitOptions.RemoveEmptyEntries)
-                        .FirstOrDefault();
+                var ping_network = Task.Run(() => InterNetworkPinger.PingAsync(
+                    "8.8.8.8",
+                    TimeSpan.FromSeconds(5)));
 
-                    var result = await Pinger.SendPingAsync(address.Value, (int)timeout.TotalMilliseconds);
+                var ping_result = await Task.WhenAll(ping_plc, ping_network);
 
-                    if (result.Status == IPStatus.Success)
-                        return true;
-                }
-                catch (Exception ex)
-                {
-                    return false;
-                }
-            }
-            return false;
-        }
-
-        public async Task<bool> OptionsAsync(Optional<string> address, TimeSpan timeout)
-        {
-            if (!address.HasValue)
-                return false;
-            for (int i = 0; i < 5; i++)
-            {
-                try
-                {
-                    var request = new RestRequest($"http://{address}", Method.Options);
-
-                    var cts = new CancellationTokenSource(timeout);
-                    var response = await Client.ExecuteAsync(request, cts.Token);
-
-                    if (response.StatusCode == HttpStatusCode.OK ||
-                        response.StatusCode == HttpStatusCode.NoContent)
-                        return true;
-                }
-                catch (Exception ex)
-                {
-                    return false;
-                }
-            }
-            return false;
+                PLCNetworkConnectivity = ping_result[0];
+                InterNetworkConnectivity = ping_result[1];
+                IsUpdatingNetwork = false;
+            });
         }
 
         private void InitializeWebServer()

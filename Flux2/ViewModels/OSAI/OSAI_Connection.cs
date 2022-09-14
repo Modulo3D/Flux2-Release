@@ -35,6 +35,7 @@ namespace Flux.ViewModels
 
         public override string RootPath => "DEVICE";
         public override string PathSeparator => "\\";
+        public override string MacroPath => "MACRO";
         public override string QueuePath => "PROGRAMS\\QUEUE";
         public override string StoragePath => "PROGRAMS\\STORAGE";
         public override string InnerQueuePath => "PROGRAMS\\QUEUE\\INNER";
@@ -862,7 +863,6 @@ namespace Flux.ViewModels
         {
             ushort file_id;
             uint block_number = 0;
-            uint skipped_blocks = 0;
             ushort transaction = 0;
 
             try
@@ -891,53 +891,17 @@ namespace Flux.ViewModels
                 file_id = open_file_response.FileID;
 
 
-                // Write recovery
-                var recovery = await ReadVariableAsync(c => c.MCODE_RECOVERY);
-                if (recovery.HasValue)
-                {
-                    skipped_blocks = ((OSAI_MCodeRecovery)recovery.Value).BlockNumber;
-                    using (var recovery_writer = new StringWriter())
-                    {
-                        recovery_writer.WriteLine("; recovery");
-                        foreach (var line in GenerateRecoveryLines((OSAI_MCodeRecovery)recovery.Value))
-                            recovery_writer.WriteLine(line);
-                        recovery_writer.WriteLine("");
-
-                        var byte_data = Encoding.UTF8.GetBytes(recovery_writer.ToString());
-                        var write_record_request = new LogFSWriteRecordRequest(file_id, transaction++, (uint)byte_data.Length, byte_data);
-                        var write_record_response = await Client.LogFSWriteRecordAsync(write_record_request);
-
-                        if (!ProcessResponse(
-                            write_record_response.retval,
-                            write_record_response.ErrClass,
-                            write_record_response.ErrNum))
-                        {
-                            var close_file_request = new LogFSCloseFileRequest(file_id, (ushort)(transaction - 1));
-                            var close_file_response = await Client.LogFSCloseFileAsync(close_file_request);
-
-                            ProcessResponse(
-                                close_file_response.retval,
-                                close_file_response.ErrClass,
-                                close_file_response.ErrNum);
-
-                            return false;
-                        }
-                    }
-                }
-
                 // Write actual gcode
-                var chunk_counter = 0;
                 var chunk_size = 10000;
-                var actual_blocks_count = source_blocks.Convert(s => s - skipped_blocks);
                 if (source.HasValue)
                 {
-                    foreach (var chunk in source.Value.UIntSkip(skipped_blocks).AsChunks(chunk_size))
+                    foreach (var chunk in get_full_source().AsChunks(chunk_size))
                     {
                         using (var gcode_writer = new StringWriter())
                         {
                             foreach (var line in chunk)
                             {
-                                gcode_writer.WriteLine($"N{skipped_blocks + block_number} {line}");
+                                gcode_writer.WriteLine($"N{block_number} {line}");
                                 block_number++;
                             }
                             gcode_writer.WriteLine("");
@@ -963,13 +927,6 @@ namespace Flux.ViewModels
                             }
                         }
                     }
-
-                    chunk_counter += chunk_size;
-                    if (actual_blocks_count.HasValue)
-                    {
-                        var percentage = (double)chunk_counter / actual_blocks_count.Value * 100;
-                        report_progress?.Invoke(Math.Max(0, Math.Min(100, percentage)));
-                    }
                 }
 
                 var byte_data_newline = Encoding.UTF8.GetBytes(Environment.NewLine);
@@ -984,6 +941,37 @@ namespace Flux.ViewModels
                     var close_file_request = new LogFSCloseFileRequest(file_id, (ushort)(transaction - 1));
                     var close_file_response = await Client.LogFSCloseFileAsync(close_file_request);
                     return false;
+                }
+
+                IEnumerable<string> get_full_source()
+                {
+                    long current_block = 0;
+                    if (source.HasValue)
+                    {
+                        if (source_blocks.HasValue && source_blocks.Value > 0)
+                        {
+                            foreach (var line in source.Value)
+                            {
+                                var progress = (double)current_block++ / source_blocks.Value * 100;
+                                if (progress - (int)progress < 0.001)
+                                    report_progress((int)progress);
+                                yield return line;
+                            }
+                        }
+                        else
+                        {
+                            foreach (var line in source.Value)
+                                yield return line;
+                        }
+                    }
+
+                    if (end.HasValue)
+                    {
+                        yield return "; end";
+                        foreach (var line in end.Value)
+                            yield return line;
+                        yield return "";
+                    }
                 }
             }
             catch (Exception ex)
@@ -1120,7 +1108,7 @@ namespace Flux.ViewModels
         }
         public override Optional<IEnumerable<string>> GetParkToolGCode()
         {
-            return new[] { "(CLS, MACRO\\change_tool, T0)" };
+            return new[] { "(CLS, MACRO\\change_tool, 0)" };
         }
         public override Optional<IEnumerable<string>> GetProbePlateGCode()
         {
@@ -1136,7 +1124,7 @@ namespace Flux.ViewModels
         }
         public override Optional<IEnumerable<string>> GetSelectToolGCode(ushort position)
         {
-            return new[] { $"(CLS, MACRO\\change_tool, T{position + 1})" };
+            return new[] { $"(CLS, MACRO\\change_tool, {position + 1})" };
         }
         public override Optional<IEnumerable<string>> GetStartPartProgramGCode(string folder, string file_name)
         {
@@ -1146,9 +1134,9 @@ namespace Flux.ViewModels
         {
             return new[] { $"M4104 [{position + 1}, {temperature}, 0]" };
         }
-        public override Optional<IEnumerable<string>> GetProbeToolGCode(ushort position, Nozzle nozzle, double temperature)
+        public override Optional<IEnumerable<string>> GetProbeToolGCode(ushort position, double temperature)
         {
-            return new[] { $"(CLS, MACRO\\probe_tool, T{position + 1}, S{temperature})" };
+            return new[] { $"(CLS, MACRO\\probe_tool, {position + 1}, {temperature})" };
         }
         public override Optional<IEnumerable<string>> GetRelativeXMovementGCode(double distance, double feedrate)
         {
@@ -1254,12 +1242,12 @@ namespace Flux.ViewModels
             try
             {
                 // deselect part program
-                var deselect_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                using var deselect_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 var deselect_result = await DeselectPartProgramAsync(false, true, deselect_ctk.Token);
                 if (deselect_result == false)
                     return false;
 
-                var delete_paramacro_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                using var delete_paramacro_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 var delete_paramacro_response = await DeleteFileAsync(StoragePath, "paramacro.mcode", true, delete_paramacro_ctk.Token);
 
                 // put file
@@ -1272,7 +1260,7 @@ namespace Flux.ViewModels
                     return false;
 
                 // select part program
-                var select_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                using var select_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 var select_part_program_response = await SelectPartProgramAsync("paramacro.mcode", true, true, select_ctk.Token);
                 if (select_part_program_response == false)
                     return false;
@@ -1300,6 +1288,11 @@ namespace Flux.ViewModels
         public override Optional<IEnumerable<string>> GetManualCalibrationPositionGCode()
         {
             throw new NotImplementedException();
+        }
+
+        public override Optional<IEnumerable<string>> GetExecuteMacroGCode(string folder, string filename)
+        {
+            return new[] { $"(CLS, {folder}\\{filename})" };
         }
     }
 }

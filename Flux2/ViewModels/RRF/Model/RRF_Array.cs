@@ -16,9 +16,9 @@ namespace Flux.ViewModels
         public override string Group => "ObjectModel";
         public RRF_ArrayObjectModel(
             string name,
-            Dictionary<VariableAlias, VariableUnit> variable_units,
+            VariableUnits variable_units,
             Func<VariableAlias, Optional<RRF_VariableObjectModel<TModel, TRData, TWData>>> get_variable)
-            : base(name, FluxMemReadPriority.DISABLED)
+            : base(name)
         {
             var source_cache = (SourceCache<IFLUX_Variable<TRData, TWData>, VariableAlias>)Variables;
             foreach (var unit in variable_units)
@@ -39,36 +39,32 @@ namespace Flux.ViewModels
         }
     }
 
-    public class RRF_ArrayVariableGlobalModel<TData> : FLUX_VariableGP<RRF_ConnectionProvider, RRF_Connection, TData, TData>, IRRF_VariableGlobalModel
+    public class RRF_ArrayVariableGlobalModel<TData> : FLUX_ObservableVariable<RRF_ConnectionProvider, RRF_Connection, TData, TData>, IRRF_VariableGlobalModel
     {
         public bool Stored { get; }
         public string Variable { get; }
         public TData DefaultValue { get; }
         public override string Group => "Global";
-        public string LoadVariableMacro => $"load_{Variable}_{Unit}.g";
+        public string LoadVariableMacro => $"load_{Variable}_{Unit.Address}.g";
 
         public RRF_ArrayVariableGlobalModel(
             RRF_ConnectionProvider connection_provider,
-            string variable,
+            string name,
             VariableUnit unit,
             bool stored,
             TData default_value,
             Func<object, TData> convert_data = default)
             : base(
                 connection_provider,
-                $"{variable} {unit.Alias}",
-                FluxMemReadPriority.DISABLED,
-                read_func: c => read_variable(c, variable, unit, convert_data),
-                write_func: (c, v) => write_variable(c, variable, unit, v, stored),
+                $"{name} {unit.Alias}",
+                observe_func: c => observe_func(c, name.ToLower(), unit, convert_data),
+                read_func: c => read_variable(c, name.ToLower(), unit, convert_data),
+                write_func: (c, v) => write_variable(c, name.ToLower(), unit, v, stored),
                 unit: unit)
         {
             Stored = stored;
-            Variable = variable;
+            Variable = name.ToLower();
             DefaultValue = default_value;
-            connection_provider.WhenAnyValue(c => c.Connection)
-                .Convert(c => c.MemoryBuffer)
-                .ConvertMany(c => c.ObserveGlobalModel(m => get_data(m, variable, unit, convert_data)))
-                .BindTo(this, v => v.Value);
         }
 
         static string sanitize_value(TData value)
@@ -78,15 +74,21 @@ namespace Flux.ViewModels
                 .Replace(',', '.');
         }
 
+        static IObservable<Optional<TData>> observe_func(RRF_Connection connection, string variable, VariableUnit unit, Func<object, TData> convert_data)
+        {
+            return connection.MemoryBuffer
+                .ObserveGlobalModel(m => get_data(m, variable, unit, convert_data));
+        }
+
         static Optional<TData> get_data(RRF_ObjectModelGlobal global, string variable, VariableUnit unit, Func<object, TData> convert_data)
         {
-            return global.Lookup($"{variable}_{unit}")
+            return global.Lookup($"{variable}_{unit.Address}")
                 .Convert(v => convert_data != null ? convert_data(v) : v.ToObject<TData>());
         }
 
         static async Task<Optional<TData>> read_variable(RRF_Connection connection, string variable, VariableUnit unit, Func<object, TData> convert_data = default)
         {
-            var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             var global = await connection.MemoryBuffer.GetModelDataAsync<RRF_ObjectModelGlobal>(cts.Token);
             if (!global.HasValue)
                 return default;
@@ -96,21 +98,21 @@ namespace Flux.ViewModels
         static async Task<bool> write_variable(RRF_Connection c, string variable, VariableUnit unit, TData v, bool stored)
         {
             var s_value = sanitize_value(v);
-            var write_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            if (!await c.PostGCodeAsync(new[] { $"set global.{variable}_{unit} = {s_value}" }, write_cts.Token))
+            using var write_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            if (!await c.PostGCodeAsync(new[] { $"set global.{variable}_{unit.Address} = {s_value}" }, write_cts.Token))
             {
-                c.Flux.Messages.LogMessage($"Impossibile scrivere la variabile {variable}_{unit}", "Errore durante l'esecuzione del gcode", MessageLevel.ERROR, 0);
+                c.Flux.Messages.LogMessage($"Impossibile scrivere la variabile {variable}_{unit.Address}", "Errore durante l'esecuzione del gcode", MessageLevel.ERROR, 0);
                 return false;
             }
 
             if (stored)
             {
-                var load_var_macro = $"load_{variable}_{unit}.g";
+                var load_var_macro = $"load_{variable}_{unit.Address}.g";
                 var gcode = WriteVariableString(variable, unit, v).ToOptional();
-                var put_file_cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                using var put_file_cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
                 if (!await c.PutFileAsync(c => ((RRF_Connection)c).GlobalPath, load_var_macro, put_file_cts.Token, gcode))
                 {
-                    c.Flux.Messages.LogMessage($"Impossibile salvare la variabile {variable}_{unit}", "Errore durante la scrittura del file", MessageLevel.ERROR, 0);
+                    c.Flux.Messages.LogMessage($"Impossibile salvare la variabile {variable}_{unit.Address}", "Errore durante la scrittura del file", MessageLevel.ERROR, 0);
                     return false;
                 }
             }
@@ -130,10 +132,10 @@ namespace Flux.ViewModels
         private static IEnumerable<string> WriteVariableString(string variable, VariableUnit unit, TData value)
         {
             var s_value = sanitize_value(value);
-            yield return $"if (!exists(global.{variable}_{unit}))";
-            yield return $"    global {variable}_{unit} = {s_value}";
+            yield return $"if (!exists(global.{variable}_{unit.Address}))";
+            yield return $"    global {variable}_{unit.Address} = {s_value}";
             yield return $"else";
-            yield return $"    set global.{variable}_{unit} = {s_value}";
+            yield return $"    set global.{variable}_{unit.Address} = {s_value}";
         }
     }
 
@@ -146,9 +148,9 @@ namespace Flux.ViewModels
             string variable,
             bool stored,
             TData default_value,
-            Dictionary<VariableAlias, VariableUnit> variable_units,
+            VariableUnits variable_units,
             Func<object, TData> convert_data = default)
-            : base(variable, FluxMemReadPriority.DISABLED)
+            : base(variable)
         {
             var source_cache = (SourceCache<IFLUX_Variable<TData, TData>, VariableAlias>)Variables;
             foreach (var unit in variable_units)
