@@ -124,30 +124,50 @@ namespace Flux.ViewModels
             }
         }
 
-        protected Task<bool> SetPlateTemperature(RRF_Connection connection, double temperature, VariableUnit unit)
+        protected async Task<bool> SetPlateTemperatureAsync(RRF_ConnectionProvider connection_provider, double temperature, VariableUnit unit)
         {
+            var connection = connection_provider.Connection;
+            if (!connection.HasValue)
+                return false;
+
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-            return connection.PostGCodeAsync(new[] { $"M140 S{temperature}" }, cts.Token);
+            return await connection.Value.PostGCodeAsync(new[] { $"M140 S{temperature}" }, cts.Token);
         }
-        protected Task<bool> SetChamberTemperature(RRF_Connection connection, double temperature, VariableUnit unit)
+        protected async Task<bool> SetChamberTemperatureAsync(RRF_ConnectionProvider connection_provider, double temperature, VariableUnit unit)
         {
+            var connection = connection_provider.Connection;
+            if (!connection.HasValue)
+                return false;
+
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-            return connection.PostGCodeAsync(new[] { $"M141 P{unit.Index} S{temperature}" }, cts.Token);
+            return await connection.Value.PostGCodeAsync(new[] { $"M141 P{unit.Index} S{temperature}" }, cts.Token);
         }
-        protected Task<bool> EnableDriverAsync(RRF_Connection connection, bool enable, VariableUnit unit)
+        protected async Task<bool> EnableDriverAsync(RRF_ConnectionProvider connection_provider, bool enable, VariableUnit unit)
         {
+            var connection = connection_provider.Connection;
+            if (!connection.HasValue)
+                return false;
+
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-            return connection.PostGCodeAsync(new[] { $"{(enable ? "M17" : "M18")} {unit.Alias}" }, cts.Token);
+            return await connection.Value.PostGCodeAsync(new[] { $"{(enable ? "M17" : "M18")} {unit.Alias}" }, cts.Token);
         }
-        protected Task<bool> SetToolTemperatureAsync(RRF_Connection connection, double temperature, VariableUnit unit)
+        protected async Task<bool> SetToolTemperatureAsync(RRF_ConnectionProvider connection_provider, double temperature, VariableUnit unit)
         {
+            var connection = connection_provider.Connection;
+            if (!connection.HasValue)
+                return false;
+
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-            return connection.PostGCodeAsync(new[] { $"M104 T{unit.Index} S{temperature}" }, cts.Token);
+            return await connection.Value.PostGCodeAsync(new[] { $"M104 T{unit.Index} S{temperature}" }, cts.Token);
         }
-        protected Task<bool> WriteGpOutAsync(RRF_Connection connection, bool pwm, VariableUnit unit)
+        protected async Task<bool> WriteGpOutAsync(RRF_ConnectionProvider connection_provider, bool pwm, VariableUnit unit)
         {
+            var connection = connection_provider.Connection;
+            if (!connection.HasValue)
+                return false;
+
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-            return connection.PostGCodeAsync(new[] { $"M42 P{unit.Address} S{(pwm ? 1 : 0)}" }, cts.Token);
+            return await connection.Value.PostGCodeAsync(new[] { $"M42 P{unit.Address} S{(pwm ? 1 : 0)}" }, cts.Token);
         }
     }
 
@@ -186,7 +206,7 @@ namespace Flux.ViewModels
                     return tool_list.ToOptional();
                 }, (0, 4));
 
-                Heaters.CreateVariable(c => c.TEMP_PLATE,           (c, m) => m.GetTemperature(), SetPlateTemperature,      "bed");
+                Heaters.CreateVariable(c => c.TEMP_PLATE,           (c, m) => m.GetTemperature(), SetPlateTemperatureAsync,      "bed");
                 Heaters.CreateArray(c =>    c.TEMP_TOOL,            (c, m) => m.GetTemperature(), SetToolTemperatureAsync,  ("T", 4));
 
                 tool_array.CreateArray(c => c.MEM_TOOL_ON_TRAILER,  (c, m) => m.selected_tool > -1 && (m.selected_tool == m.position && m.tool_presence));
@@ -221,9 +241,9 @@ namespace Flux.ViewModels
         {
             try
             {
-                Heaters.CreateArray(c =>    c.TEMP_CHAMBER,         (c, m) => m.GetTemperature(),   SetChamberTemperature,      "main");
+                Heaters.CreateArray(c =>    c.TEMP_CHAMBER,         (c, m) => m.GetTemperature(),   SetChamberTemperatureAsync,      "main");
                 Heaters.CreateArray(c =>    c.TEMP_TOOL,            (c, m) => m.GetTemperature(),   SetToolTemperatureAsync,    ("T", 2));
-                Heaters.CreateVariable(c => c.TEMP_PLATE,           (c, m) => m.GetTemperature(),   SetPlateTemperature,        "bed");
+                Heaters.CreateVariable(c => c.TEMP_PLATE,           (c, m) => m.GetTemperature(),   SetPlateTemperatureAsync,        "bed");
 
                 GpOut.CreateArray(c =>      c.OPEN_LOCK,            (c, m) => m.Pwm == 1,           WriteGpOutAsync,            "chamber", "spools");
                 GpOut.CreateVariable(c =>   c.CHAMBER_LIGHT,        (c, m) => m.Pwm == 1,           WriteGpOutAsync,            "light");

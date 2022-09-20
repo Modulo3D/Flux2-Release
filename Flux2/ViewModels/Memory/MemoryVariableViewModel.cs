@@ -35,7 +35,7 @@ namespace Flux.ViewModels
         public Optional<ReactiveCommand<Unit, Unit>> SetValueCommand { get; }
 
         private ObservableAsPropertyHelper<Optional<object>> _Value;
-        [RemoteOutput(true)]
+        [RemoteOutput(true, typeof(MemoryConverter))]
         public Optional<object> Value => _Value.Value;
 
 

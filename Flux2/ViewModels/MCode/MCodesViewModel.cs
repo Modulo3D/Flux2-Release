@@ -462,9 +462,9 @@ namespace Flux.ViewModels
 
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             if (!await Flux.ConnectionProvider.PutFileAsync(
-                c => c.QueuePath,
+                c => c.QueuePath, 
                 $"{last_queue_pos + 1};{Guid.NewGuid()};{mcode.MCodeGuid}",
-                cts.Token))
+                true, cts.Token))
             {
                 Flux.Messages.LogMessage("Errore durante la selezione del lavoro", "Impossibile aggiungere alla coda", MessageLevel.ERROR, 0);
                 return false;
@@ -525,7 +525,7 @@ namespace Flux.ViewModels
                 if (!await Flux.ConnectionProvider.PutFileAsync(
                    c => c.QueuePath,
                    $"{current_position};{next_job.JobGuid};{next_job.MCodeGuid}",
-                   put_queue_cts.Token))
+                   true, put_queue_cts.Token))
                     return false;
             }
 
@@ -590,14 +590,14 @@ namespace Flux.ViewModels
             if (!await Flux.ConnectionProvider.PutFileAsync(
                c => c.QueuePath,
                $"{current_index};{other_job.Value.JobGuid};{other_job.Value.MCodeGuid}",
-               put_other_cts.Token))
+               true, put_other_cts.Token))
                 return false;
 
             using var put_current_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             if (!await Flux.ConnectionProvider.PutFileAsync(
                c => c.QueuePath,
                $"{other_index};{current_job.Value.JobGuid};{current_job.Value.MCodeGuid}",
-               put_current_cts.Token))
+               true, put_current_cts.Token))
                 return false;
 
             return await Flux.ConnectionProvider.GenerateInnerQueueAsync();

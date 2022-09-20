@@ -23,7 +23,7 @@ namespace Flux.ViewModels
         INITIALIZED_AXIS_REFERENCE = 7,
         END_PHASE = 8
     }
-    public class OSAI_ConnectionProvider : FLUX_ConnectionProvider<OSAI_Connection, OSAI_VariableStore>
+    public class OSAI_ConnectionProvider : FLUX_ConnectionProvider<OSAI_ConnectionProvider, OSAI_Connection, OSAI_MemoryBuffer, OSAI_VariableStore>
     {
         private ObservableAsPropertyHelper<Optional<bool>> _IsInitializing;
         public override Optional<bool> IsInitializing => _IsInitializing.Value;
@@ -43,17 +43,15 @@ namespace Flux.ViewModels
 
         public FluxViewModel Flux { get; }
         public override IFlux IFlux => Flux;
-        protected override OSAI_VariableStore VariableStore { get; }
+        public override OSAI_MemoryBuffer MemoryBuffer { get; }
+        public override OSAI_VariableStore VariableStore { get; }
 
         public OSAI_ConnectionProvider(FluxViewModel flux)
         {
             Flux = flux;
             VariableStore = new OSAI_VariableStore(this);
 
-            var connection = this.WhenAnyValue(v => v.Connection);
-            var full_memory_read = connection.Convert(c => c.MemoryBuffer)
-                .ConvertMany(b => b.WhenAnyValue(v => v.HasFullMemoryRead))
-                .ValueOr(() => false);
+            var full_memory_read = MemoryBuffer.WhenAnyValue(v => v.HasFullMemoryRead);
 
             _IsInitializing = Observable.CombineLatest(
                 this.WhenAnyValue(c => c.ConnectionPhase), full_memory_read,
@@ -149,11 +147,11 @@ namespace Flux.ViewModels
                             await update_variable_group(variable_group);
 
                         if (DateTime.Now - full_memory_t >= OSAI_Connection.UltraLowPriority)
-                            Connection.IfHasValue(c => c.MemoryBuffer.HasFullMemoryRead = true);
+                            MemoryBuffer.HasFullMemoryRead = true;
                     }
                     else
                     {
-                        Connection.IfHasValue(c => c.MemoryBuffer.HasFullMemoryRead = false);
+                        MemoryBuffer.HasFullMemoryRead = false;
                     }
                 }
                 catch (Exception ex)
@@ -164,7 +162,7 @@ namespace Flux.ViewModels
             async Task update_memory_buffers()
             {
                 if (Connection.HasValue)
-                    await Connection.Value.MemoryBuffer.UpdateBufferAsync();
+                    await MemoryBuffer.UpdateBufferAsync();
                 memory_buffer_t = DateTime.Now;
             }
             async Task update_variable_group(KeyValuePair<OSAI_ReadPriority, List<IOSAI_AsyncVariable>> variable_group)
@@ -213,7 +211,7 @@ namespace Flux.ViewModels
                                 Flux.Messages.LogMessage(OSAI_ConnectResponse.CONNECT_INVALID_ADDRESS);
                                 return false;
                             }
-                            Connection = new OSAI_Connection(Flux, VariableStore, plc_address.Value);
+                            Connection = new OSAI_Connection(this, plc_address.Value);
                             return true;
                         }
 
@@ -400,6 +398,31 @@ namespace Flux.ViewModels
         public override Optional<IEnumerable<string>> GenerateEndMCodeLines(MCode mcode, Optional<ushort> queue_size)
         {
             return default;
+        }
+
+        public override Optional<IEnumerable<string>> GenerateStartMCodeLines(MCode mcode)
+        {
+            return new[]
+            {
+                "; preprocessing",
+                "(GTO, end_preprocess)",
+
+                "M4140[0, 0]",
+                "M4141[0, 0]",
+                "M4104[0, 0, 0]",
+                "M4999[0, 0, 0, 0]",
+
+                "(CLS, MACRO\\probe_plate)",
+                "(CLS, MACRO\\cancel_print)",
+                "(CLS, MACRO\\home_printer)",
+                "(CLS, MACRO\\change_tool, 0)",
+
+                "G92 A0",
+                "G1 X0 Y0 Z0 F1000",
+
+                "\"end_preprocess\"",
+                "(PAS)",
+            };
         }
     }
 }

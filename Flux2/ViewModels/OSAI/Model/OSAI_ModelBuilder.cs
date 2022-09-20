@@ -25,8 +25,8 @@ namespace Flux.ViewModels
         public void CreateVariable<TRData, TWData>(
             Expression<Func<OSAI_VariableStore, IFLUX_Variable<TRData, TWData>>> variable_expression,
             OSAI_ReadPriority priority,
-            Func<OSAI_Connection, Task<Optional<TRData>>> read_func = default,
-            Func<OSAI_Connection, TWData, Task<bool>> write_func = default)
+            Func<OSAI_ConnectionProvider, Task<Optional<TRData>>> read_func = default,
+            Func<OSAI_ConnectionProvider, TWData, Task<bool>> write_func = default)
         {
             var variable_setter = VariableStore.GetCachedSetterDelegate(variable_expression);
             var variable_name = string.Join('/', variable_expression.GetMembersName());

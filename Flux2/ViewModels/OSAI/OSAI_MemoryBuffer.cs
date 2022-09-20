@@ -9,9 +9,9 @@ using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
-    public class OSAI_MemoryBuffer : FLUX_MemoryBuffer
+    public class OSAI_MemoryBuffer : FLUX_MemoryBuffer<OSAI_ConnectionProvider>
     {
-        public override OSAI_Connection Connection { get; }
+        public override OSAI_ConnectionProvider ConnectionProvider { get; }
 
         private (ushort start_addr, ushort end_addr) _GD_BUFFER_RANGE;
         public (ushort start_addr, ushort end_addr) GD_BUFFER_RANGE
@@ -32,7 +32,7 @@ namespace Flux.ViewModels
                 if (_GD_BUFFER_REQ == default)
                 {
                     var count = (ushort)(GD_BUFFER_RANGE.end_addr - GD_BUFFER_RANGE.start_addr + 1);
-                    _GD_BUFFER_REQ = new ReadVarDoubleRequest((ushort)OSAI_VARCODE.GD_CODE, Connection.ProcessNumber, GD_BUFFER_RANGE.start_addr, count);
+                    _GD_BUFFER_REQ = new ReadVarDoubleRequest((ushort)OSAI_VARCODE.GD_CODE, OSAI_Connection.ProcessNumber, GD_BUFFER_RANGE.start_addr, count);
                 }
                 return _GD_BUFFER_REQ;
             }
@@ -63,7 +63,7 @@ namespace Flux.ViewModels
                 if (_GW_BUFFER_REQ == default)
                 {
                     var count = (ushort)(GW_BUFFER_RANGE.end_addr - GW_BUFFER_RANGE.start_addr + 1);
-                    _GW_BUFFER_REQ = new ReadVarWordRequest((ushort)OSAI_VARCODE.GW_CODE, Connection.ProcessNumber, GW_BUFFER_RANGE.start_addr, count);
+                    _GW_BUFFER_REQ = new ReadVarWordRequest((ushort)OSAI_VARCODE.GW_CODE, OSAI_Connection.ProcessNumber, GW_BUFFER_RANGE.start_addr, count);
                 }
                 return _GW_BUFFER_REQ;
             }
@@ -94,7 +94,7 @@ namespace Flux.ViewModels
                 if (_L_BUFFER_REQ == default)
                 {
                     var count = (ushort)(L_BUFFER_RANGE.end_addr - L_BUFFER_RANGE.start_addr + 1);
-                    _L_BUFFER_REQ = new ReadVarDoubleRequest((ushort)OSAI_VARCODE.L_CODE, Connection.ProcessNumber, L_BUFFER_RANGE.start_addr, count);
+                    _L_BUFFER_REQ = new ReadVarDoubleRequest((ushort)OSAI_VARCODE.L_CODE, OSAI_Connection.ProcessNumber, L_BUFFER_RANGE.start_addr, count);
                 }
                 return _L_BUFFER_REQ;
             }
@@ -125,7 +125,7 @@ namespace Flux.ViewModels
                 if (_MW_BUFFER_REQ == default)
                 {
                     var count = (ushort)(MW_BUFFER_RANGE.end_addr - MW_BUFFER_RANGE.start_addr + 1);
-                    _MW_BUFFER_REQ = new ReadVarWordRequest((ushort)OSAI_VARCODE.MW_CODE, Connection.ProcessNumber, MW_BUFFER_RANGE.start_addr, count);
+                    _MW_BUFFER_REQ = new ReadVarWordRequest((ushort)OSAI_VARCODE.MW_CODE, OSAI_Connection.ProcessNumber, MW_BUFFER_RANGE.start_addr, count);
                 }
                 return _MW_BUFFER_REQ;
             }
@@ -144,9 +144,9 @@ namespace Flux.ViewModels
             set => this.RaiseAndSetIfChanged(ref _HasFullMemoryRead, value);
         }
 
-        public OSAI_MemoryBuffer(OSAI_Connection connection)
+        public OSAI_MemoryBuffer(OSAI_ConnectionProvider connection_provider)
         {
-            Connection = connection;
+            ConnectionProvider = connection_provider;
             GD_BUFFER_CHANGED = this.WhenAnyValue(plc => plc.GD_BUFFER);
             GW_BUFFER_CHANGED = this.WhenAnyValue(plc => plc.GW_BUFFER);
             MW_BUFFER_CHANGED = this.WhenAnyValue(plc => plc.MW_BUFFER);
@@ -154,7 +154,8 @@ namespace Flux.ViewModels
         }
         private (ushort start_addr, ushort end_addr) GetRange(OSAI_VARCODE varcode)
         {
-            var addr_range = Connection.Variables.Values
+            var variables = ConnectionProvider.VariableStore.Variables;
+            var addr_range = variables.Values
                 .SelectMany(var =>
                 {
                     return var switch
@@ -175,29 +176,33 @@ namespace Flux.ViewModels
         }
         public async Task UpdateBufferAsync()
         {
-            var gd_response = await Connection.Client.ReadVarDoubleAsync(GD_BUFFER_REQ);
-            if (Connection.ProcessResponse(
+            var connection = ConnectionProvider.Connection;
+            if (!connection.HasValue)
+                return;
+
+            var gd_response = await connection.Value.Client.ReadVarDoubleAsync(GD_BUFFER_REQ);
+            if (OSAI_Connection.ProcessResponse(
                 gd_response.retval,
                 gd_response.ErrClass,
                 gd_response.ErrNum))
                 GD_BUFFER = gd_response.Value;
 
-            var gw_response = await Connection.Client.ReadVarWordAsync(GW_BUFFER_REQ);
-            if (Connection.ProcessResponse(
+            var gw_response = await connection.Value.Client.ReadVarWordAsync(GW_BUFFER_REQ);
+            if (OSAI_Connection.ProcessResponse(
                 gw_response.retval,
                 gw_response.ErrClass,
                 gw_response.ErrNum))
                 GW_BUFFER = gw_response.Value;
 
-            var l_response = await Connection.Client.ReadVarDoubleAsync(L_BUFFER_REQ);
-            if (Connection.ProcessResponse(
+            var l_response = await connection.Value.Client.ReadVarDoubleAsync(L_BUFFER_REQ);
+            if (OSAI_Connection.ProcessResponse(
                 l_response.retval,
                 l_response.ErrClass,
                 l_response.ErrNum))
                 L_BUFFER = l_response.Value;
 
-            var mw_response = await Connection.Client.ReadVarWordAsync(MW_BUFFER_REQ);
-            if (Connection.ProcessResponse(
+            var mw_response = await connection.Value.Client.ReadVarWordAsync(MW_BUFFER_REQ);
+            if (OSAI_Connection.ProcessResponse(
                 mw_response.retval,
                 mw_response.ErrClass,
                 mw_response.ErrNum))

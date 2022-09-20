@@ -68,7 +68,7 @@ namespace Flux.ViewModels
                 model.CreateVariable(c => c.BOOT_MODE,      OSAI_ReadPriority.ULTRAHIGH, write_func: SetBootModeAsync);    
                 model.CreateVariable(c => c.PART_PROGRAM,   OSAI_ReadPriority.HIGH,      GetPartProgramAsync);   
                 model.CreateVariable(c => c.PROGRESS,       OSAI_ReadPriority.ULTRAHIGH, c => Task.FromResult(new ParamacroProgress("", 70).ToOptional())); 
-                model.CreateVariable(c => c.MCODE_RECOVERY, OSAI_ReadPriority.MEDIUM,    GetMCodeRecoveryAsync); 
+                //model.CreateVariable(c => c.MCODE_RECOVERY, OSAI_ReadPriority.MEDIUM,    GetMCodeRecoveryAsync); 
 
 
                 // GW VARIABLES                                                                                                                                                                                                                                                                              
@@ -155,23 +155,27 @@ namespace Flux.ViewModels
             }
         }
 
-        private static async Task<Optional<IFLUX_MCodeRecovery>> GetMCodeRecoveryAsync(OSAI_Connection connection)
+        /*private static async Task<Optional<IFLUX_MCodeRecovery>> GetMCodeRecoveryAsync(OSAI_ConnectionProvider connection_provider)
         {
             try
             {
-                var hold_tool = await connection.ReadNamedShortAsync("!HOLD_TOOL");
+                var connection = connection_provider.Connection;
+                if (!connection.HasValue)
+                    return default;
+
+                var hold_tool = await connection.Value.ReadNamedShortAsync("!HOLD_TOOL");
                 if (!hold_tool.HasValue)
                     return default;
 
-                var hold_blk_num = await connection.ReadNamedDoubleAsync("!HOLD_BLK");
+                var hold_blk_num = await connection.Value.ReadNamedDoubleAsync("!HOLD_BLK");
                 if (!hold_blk_num.HasValue)
                     return default;
 
-                var req_hold = await connection.ReadNamedBoolAsync("!REQ_HOLD");
+                var req_hold = await connection.Value.ReadNamedBoolAsync("!REQ_HOLD");
                 if (!req_hold.HasValue)
                     return default;
 
-                var is_hold = await connection.ReadNamedBoolAsync("!IS_HOLD");
+                var is_hold = await connection.Value.ReadNamedBoolAsync("!IS_HOLD");
                 if (!is_hold.HasValue)
                     return default;
 
@@ -181,7 +185,7 @@ namespace Flux.ViewModels
                 var hold_temperatures = new Dictionary<ushort, double>();
                 for (ushort position = 0; position < 4; position++)
                 {
-                    var hold_temperature = await connection.ReadNamedDoubleAsync(new OSAI_NamedAddress("!HOLD_TEMP", position));
+                    var hold_temperature = await connection.Value.ReadNamedDoubleAsync(new OSAI_NamedAddress("!HOLD_TEMP", position));
                     if (!hold_temperature.HasValue)
                         continue;
                     hold_temperatures.Add(position, hold_temperature.Value);
@@ -193,7 +197,7 @@ namespace Flux.ViewModels
                 var hold_positions = new Dictionary<ushort, double>();
                 for (ushort position = 0; position < 4; position++)
                 {
-                    var hold_position = await connection.ReadNamedDoubleAsync(new OSAI_NamedAddress("!HOLD_POS", position));
+                    var hold_position = await connection.Value.ReadNamedDoubleAsync(new OSAI_NamedAddress("!HOLD_POS", position));
                     if (!hold_position.HasValue)
                         continue;
                     hold_positions.Add(position, hold_position.Value);
@@ -202,7 +206,7 @@ namespace Flux.ViewModels
                 if (hold_positions.Count < 1)
                     return default;
 
-                var hold_pp_str = await connection.ReadNamedStringAsync("!HOLD_PP", 36);
+                var hold_pp_str = await connection.Value.ReadNamedStringAsync("!HOLD_PP", 36);
                 if (!hold_pp_str.HasValue)
                     return default;
 
@@ -218,7 +222,7 @@ namespace Flux.ViewModels
                 if (!hold_analyzer.HasValue)
                     return default;
 
-                var selected_pp = await connection.ReadVariableAsync(m => m.PART_PROGRAM);
+                var selected_pp = await connection.Value.ReadVariableAsync(m => m.PART_PROGRAM);
                 var is_selected = selected_pp.ConvertOr(pp =>
                 {
                     if (!is_hold.Value)
@@ -245,12 +249,16 @@ namespace Flux.ViewModels
             {
                 return default;
             }
-        }
+        }*/
 
-        private static async Task<Optional<Dictionary<Guid, Dictionary<BlockNumber, MCodePartProgram>>>> GetStorageAsync(OSAI_Connection connection)
+        private static async Task<Optional<Dictionary<Guid, Dictionary<BlockNumber, MCodePartProgram>>>> GetStorageAsync(OSAI_ConnectionProvider connection_provider)
         {
+            var connection = connection_provider.Connection;
+            if (!connection.HasValue)
+                return default;
+
             using var qctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            var storage = await connection.ListFilesAsync(
+            var storage = await connection.Value.ListFilesAsync(
                 c => c.StoragePath,
                 qctk.Token);
             if (!storage.HasValue)
@@ -258,10 +266,14 @@ namespace Flux.ViewModels
             return storage.Value.GetPartProgramDictionaryFromStorage();
         }
 
-        private static async Task<Optional<Dictionary<QueuePosition, FluxJob>>> GetQueueAsync(OSAI_Connection connection)
+        private static async Task<Optional<Dictionary<QueuePosition, FluxJob>>> GetQueueAsync(OSAI_ConnectionProvider connection_provider)
         {
+            var connection = connection_provider.Connection;
+            if (!connection.HasValue)
+                return default;
+
             using var qctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            var queue = await connection.ListFilesAsync(
+            var queue = await connection.Value.ListFilesAsync(
                 c => c.QueuePath,
                 qctk.Token);
             if (!queue.HasValue)
@@ -269,13 +281,17 @@ namespace Flux.ViewModels
             return queue.Value.GetJobDictionaryFromQueue();
         }
 
-        private static async Task<Optional<LineNumber>> GetBlockNumAsync(OSAI_Connection connection)
+        private static async Task<Optional<LineNumber>> GetBlockNumAsync(OSAI_ConnectionProvider connection_provider)
         {
             try
             {
-                var get_blk_num_response = await connection.Client.GetBlkNumAsync(connection.ProcessNumber);
+                var connection = connection_provider.Connection;
+                if (!connection.HasValue)
+                    return default;
 
-                if (!connection.ProcessResponse(
+                var get_blk_num_response = await connection.Value.Client.GetBlkNumAsync(OSAI_Connection.ProcessNumber);
+
+                if (!OSAI_Connection.ProcessResponse(
                     get_blk_num_response.Body.retval,
                     get_blk_num_response.Body.ErrClass,
                     get_blk_num_response.Body.ErrNum))
@@ -289,14 +305,18 @@ namespace Flux.ViewModels
                 return default;
             }
         }
-        private static async Task<Optional<OSAI_BootPhase>> GetBootPhaseAsync(OSAI_Connection connection)
+        private static async Task<Optional<OSAI_BootPhase>> GetBootPhaseAsync(OSAI_ConnectionProvider connection_provider)
         {
             try
             {
-                var boot_phase_request = new BootPhaseEnquiryRequest();
-                var boot_phase_response = await connection.Client.BootPhaseEnquiryAsync(boot_phase_request);
+                var connection = connection_provider.Connection;
+                if (!connection.HasValue)
+                    return default;
 
-                if (!connection.ProcessResponse(
+                var boot_phase_request = new BootPhaseEnquiryRequest();
+                var boot_phase_response = await connection.Value.Client.BootPhaseEnquiryAsync(boot_phase_request);
+
+                if (!OSAI_Connection.ProcessResponse(
                     boot_phase_response.retval,
                     boot_phase_response.ErrClass,
                     boot_phase_response.ErrNum))
@@ -310,14 +330,18 @@ namespace Flux.ViewModels
                 return default;
             }
         }
-        private static async Task<bool> SetBootModeAsync(OSAI_Connection connection, OSAI_BootMode boot_mode)
+        private static async Task<bool> SetBootModeAsync(OSAI_ConnectionProvider connection_provider, OSAI_BootMode boot_mode)
         {
             try
             {
-                var boot_mode_request = new BootModeRequest((ushort)boot_mode);
-                var boot_mode_response = await connection.Client.BootModeAsync(boot_mode_request);
+                var connection = connection_provider.Connection;
+                if (!connection.HasValue)
+                    return default;
 
-                if (!connection.ProcessResponse(
+                var boot_mode_request = new BootModeRequest((ushort)boot_mode);
+                var boot_mode_response = await connection.Value.Client.BootModeAsync(boot_mode_request);
+
+                if (!OSAI_Connection.ProcessResponse(
                     boot_mode_response.retval,
                     boot_mode_response.ErrClass,
                     boot_mode_response.ErrNum))
@@ -331,22 +355,26 @@ namespace Flux.ViewModels
                 return false;
             }
         }
-        private static async Task<Optional<MCodePartProgram>> GetPartProgramAsync(OSAI_Connection connection)
+        private static async Task<Optional<MCodePartProgram>> GetPartProgramAsync(OSAI_ConnectionProvider connection_provider)
         {
             try
             {
-                var queue_pos = await connection.ReadVariableAsync(c => c.QUEUE_POS);
+                var connection = connection_provider.Connection;
+                if (!connection.HasValue)
+                    return default;
+
+                var queue_pos = await connection.Value.ReadVariableAsync(c => c.QUEUE_POS);
                 if (queue_pos.Value < 0)
                     return default;
  
-                var job_queue = await connection.ReadVariableAsync(c => c.QUEUE);
+                var job_queue = await connection.Value.ReadVariableAsync(c => c.QUEUE);
                 if (!job_queue.HasValue)
                     return default;
 
                 if (!job_queue.Value.TryGetValue(queue_pos.Value, out var current_job))
                     return default;
 
-                var storage_dict = await connection.ReadVariableAsync(c => c.STORAGE);
+                var storage_dict = await connection.Value.ReadVariableAsync(c => c.STORAGE);
                 if (!storage_dict.HasValue)
                     return default;
 
@@ -354,10 +382,10 @@ namespace Flux.ViewModels
                     return default;
 
                 // Full part program from filename
-                var get_active_pp_request = new GetActivePartProgramRequest(connection.ProcessNumber);
-                var get_active_pp_response = await connection.Client.GetActivePartProgramAsync(get_active_pp_request);
+                var get_active_pp_request = new GetActivePartProgramRequest(OSAI_Connection.ProcessNumber);
+                var get_active_pp_response = await connection.Value.Client.GetActivePartProgramAsync(get_active_pp_request);
 
-                if (!connection.ProcessResponse(
+                if (!OSAI_Connection.ProcessResponse(
                     get_active_pp_response.retval,
                     get_active_pp_response.ErrClass,
                     get_active_pp_response.ErrNum))
@@ -381,13 +409,17 @@ namespace Flux.ViewModels
                 return default;
             }
         }
-        private static async Task<Optional<OSAI_ProcessMode>> GetProcessModeAsync(OSAI_Connection connection)
+        private static async Task<Optional<OSAI_ProcessMode>> GetProcessModeAsync(OSAI_ConnectionProvider connection_provider)
         {
             try
             {
-                var process_status_response = await connection.Client.GetProcessStatusAsync(connection.ProcessNumber);
+                var connection = connection_provider.Connection;
+                if (!connection.HasValue)
+                    return default;
 
-                if (!connection.ProcessResponse(
+                var process_status_response = await connection.Value.Client.GetProcessStatusAsync(OSAI_Connection.ProcessNumber);
+
+                if (!OSAI_Connection.ProcessResponse(
                     process_status_response.Body.retval,
                     process_status_response.Body.ErrClass,
                     process_status_response.Body.ErrNum))
@@ -401,13 +433,17 @@ namespace Flux.ViewModels
                 return default;
             }
         }
-        private static async Task<Optional<FLUX_ProcessStatus>> GetProcessStatusAsync(OSAI_Connection connection)
+        private static async Task<Optional<FLUX_ProcessStatus>> GetProcessStatusAsync(OSAI_ConnectionProvider connection_provider)
         {
             try
             {
-                var process_status_response = await connection.Client.GetProcessStatusAsync(connection.ProcessNumber);
+                var connection = connection_provider.Connection;
+                if (!connection.HasValue)
+                    return default;
 
-                if (!connection.ProcessResponse(
+                var process_status_response = await connection.Value.Client.GetProcessStatusAsync(OSAI_Connection.ProcessNumber);
+
+                if (!OSAI_Connection.ProcessResponse(
                     process_status_response.Body.retval,
                     process_status_response.Body.ErrClass,
                     process_status_response.Body.ErrNum))
@@ -447,20 +483,24 @@ namespace Flux.ViewModels
                 return default;
             }
         }
-        private static async Task<bool> SetProcessModeAsync(OSAI_Connection connection, OSAI_ProcessMode process_mode)
+        private static async Task<bool> SetProcessModeAsync(OSAI_ConnectionProvider connection_provider, OSAI_ProcessMode process_mode)
         {
             try
             {
-                var set_process_mode_request = new SetProcessModeRequest(connection.ProcessNumber, (ushort)process_mode);
-                var set_process_mode_response = await connection.Client.SetProcessModeAsync(set_process_mode_request);
+                var connection = connection_provider.Connection;
+                if (!connection.HasValue)
+                    return default;
 
-                if (!connection.ProcessResponse(
+                var set_process_mode_request = new SetProcessModeRequest(OSAI_Connection.ProcessNumber, (ushort)process_mode);
+                var set_process_mode_response = await connection.Value.Client.SetProcessModeAsync(set_process_mode_request);
+
+                if (!OSAI_Connection.ProcessResponse(
                     set_process_mode_response.retval,
                     set_process_mode_response.ErrClass,
                     set_process_mode_response.ErrNum))
                     return false;
 
-                return await connection.WaitProcessModeAsync(
+                return await connection.Value.WaitProcessModeAsync(
                     m => m == process_mode,
                     TimeSpan.FromSeconds(0),
                     TimeSpan.FromSeconds(0.1),

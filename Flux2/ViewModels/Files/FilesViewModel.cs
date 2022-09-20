@@ -86,7 +86,7 @@ namespace Flux.ViewModels
             switch (options.Value.Value)
             {
                 case FLUX_FileType.File:
-                    await Flux.ConnectionProvider.PutFileAsync(path, name.Value, fs_cts.Token);
+                    await Flux.ConnectionProvider.PutFileAsync(path, name.Value, true, fs_cts.Token);
                     break;
                 case FLUX_FileType.Directory:
                     await Flux.ConnectionProvider.CreateFolderAsync(path, name.Value, fs_cts.Token);
@@ -189,7 +189,7 @@ namespace Flux.ViewModels
                 .ToOptional();
 
             using var upload_cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            await Flux.ConnectionProvider.PutFileAsync(file.FSPath, file.FSName, upload_cts.Token, source);
+            await Flux.ConnectionProvider.PutFileAsync(file.FSPath, file.FSName, true, upload_cts.Token, source);
 
             IEnumerable<string> read_source(string source)
             {

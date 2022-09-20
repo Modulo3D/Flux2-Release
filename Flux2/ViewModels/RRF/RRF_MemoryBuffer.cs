@@ -22,12 +22,12 @@ namespace Flux.ViewModels
     public interface IRRF_MemoryReaderBase : IReactiveObject
     {
         bool HasMemoryRead { get; }
-        RRF_Connection Connection { get; }
+        RRF_ConnectionProvider ConnectionProvider { get; }
     }
     public interface IRRF_MemoryReader : IRRF_MemoryReaderBase
     {
         string Resource { get; }
-        Task TryScheduleAsync(CancellationToken ct);
+        Task TryScheduleAsync(TimeSpan timeout);
     }
     public interface IRRF_MemoryReaderGroup : IRRF_MemoryReaderBase, IDisposable
     {
@@ -39,7 +39,7 @@ namespace Flux.ViewModels
     {
         public string Resource { get; }
         public Action<TData> Action { get; }
-        public RRF_Connection Connection { get; }
+        public RRF_ConnectionProvider ConnectionProvider { get; }
 
         private bool _HasMemeoryRead;
         public bool HasMemoryRead
@@ -48,17 +48,22 @@ namespace Flux.ViewModels
             private set => this.RaiseAndSetIfChanged(ref _HasMemeoryRead, value);
         }
 
-        public RRF_ModelReader(RRF_Connection connection, string resource, Action<TData> action)
+        public RRF_ModelReader(RRF_ConnectionProvider connection_provider, string resource, Action<TData> action)
         {
             Action = action;
             Resource = resource;
-            Connection = connection;
+            ConnectionProvider = connection_provider;
         }
 
-        public async Task TryScheduleAsync(CancellationToken ct)
+        public async Task TryScheduleAsync(TimeSpan timeout)
         {
-            var request = new RRF_Request($"rr_model?key={Resource}&flags=d99v", Method.Get, RRF_RequestPriority.Medium, ct);
-            var rrf_response = await Connection.Client.ExecuteAsync(request);
+            var connection = ConnectionProvider.Connection;
+            if (!connection.HasValue)
+                return;
+
+            using var cts = new CancellationTokenSource(timeout);
+            var request = new RRF_Request($"rr_model?key={Resource}&flags=d99v", Method.Get, RRF_RequestPriority.Medium, cts.Token);
+            var rrf_response = await connection.Value.Client.ExecuteAsync(request);
             if (!rrf_response.Ok)
                 return;
 
@@ -72,7 +77,7 @@ namespace Flux.ViewModels
     public class RRF_FileSystemReader : ReactiveObject, IRRF_MemoryReader
     {
         public string Resource { get; }
-        public RRF_Connection Connection { get; }
+        public RRF_ConnectionProvider ConnectionProvider { get; }
         public Action<FLUX_FileList> Action { get; }
 
         private bool _HasMemoryRead;
@@ -82,23 +87,28 @@ namespace Flux.ViewModels
             private set => this.RaiseAndSetIfChanged(ref _HasMemoryRead, value);
         }
 
-        public RRF_FileSystemReader(RRF_Connection connection, string resource, Action<FLUX_FileList> action)
+        public RRF_FileSystemReader(RRF_ConnectionProvider connection_provider, string resource, Action<FLUX_FileList> action)
         {
             Action = action;
             Resource = resource;
-            Connection = connection;
+            ConnectionProvider = connection_provider;
         }
 
-        public async Task TryScheduleAsync(CancellationToken ct)
+        public async Task TryScheduleAsync(TimeSpan timeout)
         {
+            var connection = ConnectionProvider.Connection;
+            if (!connection.HasValue)
+                return;
+
             Optional<FLUX_FileList> file_list = default;
             var full_file_list = new FLUX_FileList(Resource);
             do
             {
+                using var cts = new CancellationTokenSource(timeout);
                 var first = file_list.ConvertOr(f => f.Next, () => 0);
-                var request = new RRF_Request($"rr_filelist?dir={Resource}&first={first}", Method.Get, RRF_RequestPriority.Immediate, ct);
+                var request = new RRF_Request($"rr_filelist?dir={Resource}&first={first}", Method.Get, RRF_RequestPriority.Immediate, cts.Token);
                 
-                var rrf_response = await Connection.Client.ExecuteAsync(request);
+                var rrf_response = await connection.Value.Client.ExecuteAsync(request);
                 if (!rrf_response.Ok)
                     return;
 
@@ -121,18 +131,18 @@ namespace Flux.ViewModels
         public SourceCache<IRRF_MemoryReader, string> MemoryReaders { get; }
         ISourceCache<IRRF_MemoryReader, string> IRRF_MemoryReaderGroup.MemoryReaders => MemoryReaders;
 
-        public RRF_Connection Connection { get; }
+        public RRF_ConnectionProvider ConnectionProvider { get; }
 
         private ObservableAsPropertyHelper<bool> _HasMemoryRead;
         public bool HasMemoryRead => _HasMemoryRead.Value;
 
         public CompositeDisposable Disposables { get; }
 
-        public RRF_MemoryReaderGroup(RRF_Connection connection, TimeSpan period, TimeSpan timeout)
+        public RRF_MemoryReaderGroup(RRF_ConnectionProvider connection_provider, TimeSpan period, TimeSpan timeout)
         {
             Period = period;
             Timeout = timeout;
-            Connection = connection;
+            ConnectionProvider = connection_provider;
             Disposables = new CompositeDisposable();
 
             Thread = DisposableThread.Start(TryScheduleAsync, period)
@@ -150,10 +160,7 @@ namespace Flux.ViewModels
         public async Task TryScheduleAsync()
         {
             foreach (var memory_reader in MemoryReaders.Items)
-            {
-                using var cts = new CancellationTokenSource(Timeout);
-                await memory_reader.TryScheduleAsync(cts.Token);
-            }
+                await memory_reader.TryScheduleAsync(Timeout);
         }
 
         public void AddModelReader<TData>(RRF_MemoryBuffer buffer, Action<TData> model)
@@ -162,13 +169,13 @@ namespace Flux.ViewModels
             if (!key.HasValue)
                 return;
 
-            var reader = new RRF_ModelReader<TData>(Connection, key.Value, model);
+            var reader = new RRF_ModelReader<TData>(ConnectionProvider, key.Value, model);
             MemoryReaders.AddOrUpdate(reader);
         }
 
         public void AddFileSytemReader(string key, Action<FLUX_FileList> file_system)
         {
-            var reader = new RRF_FileSystemReader(Connection, key, file_system);
+            var reader = new RRF_FileSystemReader(ConnectionProvider, key, file_system);
             MemoryReaders.AddOrUpdate(reader);
         }
 
@@ -178,9 +185,9 @@ namespace Flux.ViewModels
         }
     }
 
-    public class RRF_MemoryBuffer : FLUX_MemoryBuffer
+    public class RRF_MemoryBuffer : FLUX_MemoryBuffer<RRF_ConnectionProvider>
     {
-        public override RRF_Connection Connection { get; }
+        public override RRF_ConnectionProvider ConnectionProvider { get; }
 
         private SourceCache<RRF_MemoryReaderGroup, TimeSpan> MemoryReaders { get; }
 
@@ -191,16 +198,16 @@ namespace Flux.ViewModels
 
         public Dictionary<Type, string> ModelKeys { get; }
 
-        public RRF_MemoryBuffer(RRF_Connection connection)
+        public RRF_MemoryBuffer(RRF_ConnectionProvider connection_provider)
         {
-            Connection = connection;
+            ConnectionProvider = connection_provider;
             RRFObjectModel = new RRF_ObjectModel();
 
             var ultra_fast = TimeSpan.FromMilliseconds(100);
             var fast = TimeSpan.FromMilliseconds(200);
             var medium = TimeSpan.FromMilliseconds(350);
             var slow = TimeSpan.FromMilliseconds(500);
-            var timeout = TimeSpan.FromMilliseconds(5000);
+            var timeout = TimeSpan.FromMilliseconds(1000);
 
             ModelKeys = new Dictionary<Type, string>()
             {
@@ -226,10 +233,10 @@ namespace Flux.ViewModels
             AddModelReader<RRF_ObjectModelMove>(medium, timeout, m => RRFObjectModel.Move = m);
             AddModelReader<RRF_ObjectModelHeat>(medium, timeout, h => RRFObjectModel.Heat = h);
             AddModelReader<RRF_ObjectModelJob>(medium, timeout, j => RRFObjectModel.Job = j);
-
+            
             AddFileSytemReader("gcodes/storage", medium, timeout, f => RRFObjectModel.Storage = f);
             AddFileSytemReader("gcodes/queue", medium, timeout, f => RRFObjectModel.Queue = f);
-            
+
             _HasFullMemoryRead = MemoryReaders.Connect()
                 .TrueForAll(f => f.WhenAnyValue(f => f.HasMemoryRead), r => r)
                 .ToProperty(this, v => v.HasFullMemoryRead)
@@ -240,7 +247,7 @@ namespace Flux.ViewModels
         {
             var memory_reader = MemoryReaders.Lookup(period);
             if (!memory_reader.HasValue)
-                MemoryReaders.AddOrUpdate(new RRF_MemoryReaderGroup(Connection, period, timeout));
+                MemoryReaders.AddOrUpdate(new RRF_MemoryReaderGroup(ConnectionProvider, period, timeout));
             memory_reader = MemoryReaders.Lookup(period);
             if (!memory_reader.HasValue)
                 return;
@@ -251,7 +258,7 @@ namespace Flux.ViewModels
         {
             var memory_reader = MemoryReaders.Lookup(period);
             if (!memory_reader.HasValue)
-                MemoryReaders.AddOrUpdate(new RRF_MemoryReaderGroup(Connection, period, timeout));
+                MemoryReaders.AddOrUpdate(new RRF_MemoryReaderGroup(ConnectionProvider, period, timeout));
             memory_reader = MemoryReaders.Lookup(period);
             if (!memory_reader.HasValue)
                 return;
@@ -260,24 +267,32 @@ namespace Flux.ViewModels
 
         public async Task<Optional<T>> GetModelDataAsync<T>(CancellationToken ct)
         {
+            var connection = ConnectionProvider.Connection;
+            if (!connection.HasValue)
+                return default;
+
             var key = ModelKeys.Lookup(typeof(T));
             if (!key.HasValue)
                 return default;
 
             var request = new RRF_Request($"rr_model?key={key.Value}&flags=d99v", Method.Get, RRF_RequestPriority.Immediate, ct);
-            var response = await Connection.Client.ExecuteAsync(request);
+            var response = await connection.Value.Client.ExecuteAsync(request);
             return response.GetContent<RRF_ObjectModelResponse<T>>()
                 .Convert(r => r.Result);
         }
 
         public async Task<Optional<T>> GetModelDataAsync<T>(Expression<Func<RRF_ObjectModel, Optional<T>>> dummy_expression, CancellationToken ct)
         {
+            var connection = ConnectionProvider.Connection;
+            if (!connection.HasValue)
+                return default;
+
             var key = ModelKeys.Lookup(typeof(T));
             if (!key.HasValue)
                 return default;
 
             var request = new RRF_Request($"rr_model?key={key.Value}&flags=d99v", Method.Get, RRF_RequestPriority.Immediate, ct);
-            var response = await Connection.Client.ExecuteAsync(request);
+            var response = await connection.Value.Client.ExecuteAsync(request);
             return response.GetContent<RRF_ObjectModelResponse<T>>()
                 .Convert(r => r.Result);
         }
@@ -289,18 +304,18 @@ namespace Flux.ViewModels
         }
         public IObservable<Optional<TRData>> ObserveModel<TModel, TRData>(
             Func<RRF_ObjectModel, IObservable<Optional<TModel>>> get_model,
-            Func<RRF_Connection, TModel, Optional<TRData>> get_data)
+            Func<RRF_ConnectionProvider, TModel, Optional<TRData>> get_data)
         {
             return get_model(RRFObjectModel)
-                .Convert(s => get_data(Connection, s))
+                .Convert(s => get_data(ConnectionProvider, s))
                 .DistinctUntilChanged();
         }
         public IObservable<Optional<TRData>> ObserveModel<TModel, TRData>(
             Func<RRF_ObjectModel, IObservable<Optional<TModel>>> get_model,
-            Func<RRF_Connection, TModel, Task<Optional<TRData>>> get_data)
+            Func<RRF_ConnectionProvider, TModel, Task<Optional<TRData>>> get_data)
         {
             return get_model(RRFObjectModel)
-                .Select(s => Observable.FromAsync(() => s.ConvertAsync(async s => await get_data(Connection, s))))
+                .Select(s => Observable.FromAsync(() => s.ConvertAsync(async s => await get_data(ConnectionProvider, s))))
                 .Merge(1)
                 .DistinctUntilChanged();
         }

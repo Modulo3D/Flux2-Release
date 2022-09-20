@@ -39,7 +39,7 @@ namespace Flux.ViewModels
         }
     }
 
-    public class RRF_ArrayVariableGlobalModel<TData> : FLUX_ObservableVariable<RRF_ConnectionProvider, RRF_Connection, TData, TData>, IRRF_VariableGlobalModel
+    public class RRF_ArrayVariableGlobalModel<TData> : FLUX_ObservableVariable<RRF_ConnectionProvider, TData, TData>, IRRF_VariableGlobalModel
     {
         public bool Stored { get; }
         public string Variable { get; }
@@ -74,7 +74,7 @@ namespace Flux.ViewModels
                 .Replace(',', '.');
         }
 
-        static IObservable<Optional<TData>> observe_func(RRF_Connection connection, string variable, VariableUnit unit, Func<object, TData> convert_data)
+        static IObservable<Optional<TData>> observe_func(RRF_ConnectionProvider connection, string variable, VariableUnit unit, Func<object, TData> convert_data)
         {
             return connection.MemoryBuffer
                 .ObserveGlobalModel(m => get_data(m, variable, unit, convert_data));
@@ -86,7 +86,7 @@ namespace Flux.ViewModels
                 .Convert(v => convert_data != null ? convert_data(v) : v.ToObject<TData>());
         }
 
-        static async Task<Optional<TData>> read_variable(RRF_Connection connection, string variable, VariableUnit unit, Func<object, TData> convert_data = default)
+        static async Task<Optional<TData>> read_variable(RRF_ConnectionProvider connection, string variable, VariableUnit unit, Func<object, TData> convert_data = default)
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             var global = await connection.MemoryBuffer.GetModelDataAsync<RRF_ObjectModelGlobal>(cts.Token);
@@ -95,13 +95,17 @@ namespace Flux.ViewModels
             return get_data(global.Value, variable, unit, convert_data);
         }
 
-        static async Task<bool> write_variable(RRF_Connection c, string variable, VariableUnit unit, TData v, bool stored)
+        static async Task<bool> write_variable(RRF_ConnectionProvider connection_provider, string variable, VariableUnit unit, TData v, bool stored)
         {
+            var connection = connection_provider.Connection;
+            if (!connection.HasValue)
+                return false;
+
             var s_value = sanitize_value(v);
             using var write_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            if (!await c.PostGCodeAsync(new[] { $"set global.{variable}_{unit.Address} = {s_value}" }, write_cts.Token))
+            if (!await connection.Value.PostGCodeAsync(new[] { $"set global.{variable}_{unit.Address} = {s_value}" }, write_cts.Token))
             {
-                c.Flux.Messages.LogMessage($"Impossibile scrivere la variabile {variable}_{unit.Address}", "Errore durante l'esecuzione del gcode", MessageLevel.ERROR, 0);
+                connection_provider.Flux.Messages.LogMessage($"Impossibile scrivere la variabile {variable}_{unit.Address}", "Errore durante l'esecuzione del gcode", MessageLevel.ERROR, 0);
                 return false;
             }
 
@@ -110,9 +114,9 @@ namespace Flux.ViewModels
                 var load_var_macro = $"load_{variable}_{unit.Address}.g";
                 var gcode = WriteVariableString(variable, unit, v).ToOptional();
                 using var put_file_cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-                if (!await c.PutFileAsync(c => ((RRF_Connection)c).GlobalPath, load_var_macro, put_file_cts.Token, gcode))
+                if (!await connection_provider.PutFileAsync(c => ((RRF_Connection)c).GlobalPath, load_var_macro, true, put_file_cts.Token, gcode))
                 {
-                    c.Flux.Messages.LogMessage($"Impossibile salvare la variabile {variable}_{unit.Address}", "Errore durante la scrittura del file", MessageLevel.ERROR, 0);
+                    connection_provider.Flux.Messages.LogMessage($"Impossibile salvare la variabile {variable}_{unit.Address}", "Errore durante la scrittura del file", MessageLevel.ERROR, 0);
                     return false;
                 }
             }
@@ -126,7 +130,7 @@ namespace Flux.ViewModels
 
             return await ConnectionProvider.PutFileAsync(
                 c => ((RRF_Connection)c).GlobalPath,
-                LoadVariableMacro,
+                LoadVariableMacro, true,
                 ct, gcode.ToOptional());
         }
         private static IEnumerable<string> WriteVariableString(string variable, VariableUnit unit, TData value)

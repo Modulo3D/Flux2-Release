@@ -10,17 +10,21 @@ using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
-    public class Dummy_ConnectionProvider : FLUX_ConnectionProvider<Dummy_Connection, Dummy_VariableStore>
+    public class Dummy_ConnectionProvider : FLUX_ConnectionProvider<Dummy_ConnectionProvider, Dummy_Connection, Dummy_MemoryBuffer, Dummy_VariableStore>
     {
         public FluxViewModel Flux { get; }
         public override IFlux IFlux => Flux;
         public override double ConnectionProgress => 0;
         public override Optional<bool> IsConnecting => true;
         public override Optional<bool> IsInitializing => true;
-        protected override Dummy_VariableStore VariableStore => new Dummy_VariableStore(this);
+        public override Dummy_MemoryBuffer MemoryBuffer { get; }
+        public override Dummy_VariableStore VariableStore { get; }
+
         public Dummy_ConnectionProvider(FluxViewModel flux)
         {
             Flux = flux;
+            MemoryBuffer = new Dummy_MemoryBuffer(this);
+            VariableStore = new Dummy_VariableStore(this);
         }
 
         public override void Initialize()
@@ -33,6 +37,11 @@ namespace Flux.ViewModels
         public override Task<bool> ParkToolAsync() => Task.FromResult(false);
         public override Task<bool> ResetClampAsync() => Task.FromResult(false);
         public override Optional<IEnumerable<string>> GenerateEndMCodeLines(MCode mcode, Optional<ushort> queue_size) => default;
+
+        public override Optional<IEnumerable<string>> GenerateStartMCodeLines(MCode mcode)
+        {
+            throw new NotImplementedException();
+        }
     }
 
     public class Dummy_Array<TRData, TWData> : FLUX_Array<TRData, TWData>
@@ -99,9 +108,8 @@ namespace Flux.ViewModels
             array_setter.Invoke(new Dummy_Variable<TRData, TWData>());
         }
     }
-    public class Dummy_Connection : FLUX_Connection<Dummy_VariableStore, Unit, Dummy_MemoryBuffer>
+    public class Dummy_Connection : FLUX_Connection<Dummy_ConnectionProvider, Dummy_VariableStore, IDisposable>
     {
-        public override Dummy_MemoryBuffer MemoryBuffer { get; }
         public override string RootPath => throw new NotImplementedException();
         public override string QueuePath => throw new NotImplementedException();
         public override string MacroPath => throw new NotImplementedException();
@@ -110,9 +118,8 @@ namespace Flux.ViewModels
         public override string PathSeparator => throw new NotImplementedException();
         public override string InnerQueuePath => throw new NotImplementedException();
 
-        public Dummy_Connection(Dummy_VariableStore variable_store) : base(variable_store, Unit.Default)
+        public Dummy_Connection(Dummy_ConnectionProvider connection_provider) : base(connection_provider, default)
         {
-            MemoryBuffer = new Dummy_MemoryBuffer(this);
         }
 
         public override Task<bool> ClearFolderAsync(string folder, bool wait, CancellationToken ct = default)
@@ -233,12 +240,21 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override Task<bool> CancelPrintAsync(bool hard_cancel)
+        public override Task<bool> CancelPrintAsync()
         {
             throw new NotImplementedException();
         }
 
-        public override Task<bool> PutFileAsync(string folder, string filename, CancellationToken ct, Optional<IEnumerable<string>> source = default, Optional<IEnumerable<string>> end = default, Optional<uint> source_blocks = default, Action<double> report_progress = null)
+        public override Task<bool> PutFileAsync(
+            string folder,
+            string filename,
+            bool is_paramacro, 
+            CancellationToken ct,
+            Optional<IEnumerable<string>> source = default,
+            Optional<IEnumerable<string>> start = default,
+            Optional<IEnumerable<string>> end = default,
+            Optional<uint> source_blocks = default,
+            Action<double> report_progress = null)
         {
             throw new NotImplementedException();
         }
@@ -292,13 +308,18 @@ namespace Flux.ViewModels
         {
             throw new NotImplementedException();
         }
-    }
-    public class Dummy_MemoryBuffer : FLUX_MemoryBuffer
-    {
-        public override Dummy_Connection Connection { get; }
-        public Dummy_MemoryBuffer(Dummy_Connection connection)
+
+        public override Optional<IEnumerable<string>> GetCancelOperationGCode()
         {
-            Connection = connection;         
+            throw new NotImplementedException();
+        }
+    }
+    public class Dummy_MemoryBuffer : FLUX_MemoryBuffer<Dummy_ConnectionProvider>
+    {
+        public override Dummy_ConnectionProvider ConnectionProvider { get; }
+        public Dummy_MemoryBuffer(Dummy_ConnectionProvider connection_provider)
+        {
+            ConnectionProvider = connection_provider;         
         }
     }
 }

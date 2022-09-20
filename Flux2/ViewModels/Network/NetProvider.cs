@@ -388,7 +388,8 @@ namespace Flux.ViewModels
         [Route(HttpVerbs.Get, "/memory")]
         public async Task GetMemory()
         {
-            var variables = Flux.ConnectionProvider.Variables.SelectMany(v =>
+            var variables = Flux.ConnectionProvider.VariableStore.Variables;
+            var full_variables = variables.SelectMany(v =>
             {
                 switch (v.Value)
                 {
@@ -403,7 +404,7 @@ namespace Flux.ViewModels
 
             var sb = new StringBuilder();
             var text_format = "{0, -35} {1,-20} {2,-10}";
-            foreach (var variable in variables)
+            foreach (var variable in full_variables)
                 sb.AppendLine(string.Format(text_format, variable.Name, variable.Unit, variable.IValue));
 
             await HttpContext.SendStringAsync(sb.ToString(), "text/plain", Encoding.UTF8);

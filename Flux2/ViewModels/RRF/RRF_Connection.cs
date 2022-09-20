@@ -5,6 +5,7 @@ using Modulo3DStandard;
 using ReactiveUI;
 using RestSharp;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -32,26 +33,37 @@ namespace Flux.ViewModels
         Low = 0
     }
 
+
+
     public struct RRF_Request
     {
         public RestRequest Request { get; }
         public RRF_RequestPriority Priority { get; }
         public CancellationToken CancellationToken { get; }
         public TaskCompletionSource<RRF_Response> Response { get; }
-        public RRF_Request(string request, Method method, RRF_RequestPriority priority, CancellationToken ct = default)
+        public RRF_Request(string request, Method method, RRF_RequestPriority priority, CancellationToken ct)
         {
             Priority = priority;
             CancellationToken = ct;
             Request = new RestRequest(request, method);
-            Response = new TaskCompletionSource<RRF_Response>();
+            Response = new TaskCompletionSource<RRF_Response>(TaskCreationOptions.RunContinuationsAsynchronously);
         }
+
         public override string ToString() => $"{nameof(RRF_Request)} Method:{Request.Method} Resource:{Request.Resource}?{string.Join("&", Request.Parameters.Select(p => $"{p.Name}={p.Value}"))}";
     }
 
     public struct RRF_Response
     {
-        public RestResponse Response { get; }
-        public bool Ok => Response.StatusCode == HttpStatusCode.OK;
+        public Optional<RestResponse> Response { get; }
+        public bool Ok 
+        {
+            get
+            {
+                if (!Response.HasValue)
+                    return false;
+                return Response.Value.StatusCode == HttpStatusCode.OK;
+            }
+        }
         public RRF_Response(RestResponse response)
         {
             Response = response;
@@ -59,12 +71,21 @@ namespace Flux.ViewModels
 
         public Optional<T> GetContent<T>()
         {
-            if (!Ok)
+            if (!Response.HasValue)
                 return default;
-            return JsonUtils.Deserialize<T>(Response.Content);
+            if (Response.Value.StatusCode != HttpStatusCode.OK)
+                return default;
+            return JsonUtils.Deserialize<T>(Response.Value.Content);
         }
 
-        public override string ToString() => $"{nameof(RRF_Response)} Status:{Enum.GetName(typeof(HttpStatusCode), Response.StatusCode)}, Error: {Response.ErrorMessage}";
+        public override string ToString()
+        {
+            if (!Response.HasValue)
+                return $"{nameof(RRF_Response)} Task cancellata";
+            if(Response.Value.StatusCode == HttpStatusCode.OK)
+                return $"{nameof(RRF_Response)} {Response.Value.ResponseUri} OK";
+            return $"{nameof(RRF_Response)} Status:{Enum.GetName(typeof(HttpStatusCode), Response.Value.StatusCode)}, Error: {Response.Value.ErrorMessage}";
+        }
     }
 
     public class RRF_Client : IDisposable
@@ -76,20 +97,12 @@ namespace Flux.ViewModels
         {
             Client = new RestClient(address);
             Disposables = new CompositeDisposable();
+
             var values = ((RRF_RequestPriority[])Enum.GetValues(typeof(RRF_RequestPriority)))
                 .OrderByDescending(e => (ushort)e);
             Requests = new PriorityQueueNotifierUC<RRF_RequestPriority, RRF_Request>(values);
 
-            new DisposableThread(async () =>
-                {
-                    await Requests.EnqueuedItemsAsync();
-                    while (Requests.TryDequeu(out var rrf_request))
-                    {
-                        var response = await Client.ExecuteAsync(rrf_request.Request, rrf_request.CancellationToken);
-                        var rrf_response = new RRF_Response(response);
-                        rrf_request.Response.SetResult(rrf_response);
-                    }
-                }, TimeSpan.Zero)
+            DisposableThread.Start(TryDequeueAsync, TimeSpan.Zero)
                 .DisposeWith(Disposables);
         }
 
@@ -98,6 +111,15 @@ namespace Flux.ViewModels
             Requests.Enqueue(rrf_request.Priority, rrf_request);
             return await rrf_request.Response.Task;
         }
+        private async Task TryDequeueAsync()
+        {
+            await Requests.EnqueuedItemsAsync();
+            while (Requests.TryDequeu(out var rrf_request))
+            {
+                var response = await Client.ExecuteAsync(rrf_request.Request, rrf_request.CancellationToken);
+                rrf_request.Response.TrySetResult(new RRF_Response(response));
+            }
+        }
 
         public void Dispose()
         {
@@ -105,19 +127,8 @@ namespace Flux.ViewModels
         }
     }
 
-    public class RRF_Connection : FLUX_Connection<RRF_VariableStoreBase, RRF_Client, RRF_MemoryBuffer>
+    public class RRF_Connection : FLUX_Connection<RRF_ConnectionProvider, RRF_VariableStoreBase, RRF_Client>
     {
-        private RRF_MemoryBuffer _MemoryBuffer;
-        public override RRF_MemoryBuffer MemoryBuffer
-        {
-            get
-            {
-                if (_MemoryBuffer == default)
-                    _MemoryBuffer = new RRF_MemoryBuffer(this);
-                return _MemoryBuffer;
-            }
-        }
-
         public override string InnerQueuePath => "gcodes/queue/inner";
         public override string StoragePath => "gcodes/storage";
         public override string QueuePath => "gcodes/queue";
@@ -125,14 +136,15 @@ namespace Flux.ViewModels
         public override string MacroPath => "macros";
         public string GlobalPath => "sys/global";
         public override string RootPath => "";
-
-        public FluxViewModel Flux { get; }
         public override ushort ArrayBase => 0;
 
-        public RRF_Connection(FluxViewModel flux, RRF_VariableStoreBase variable_store, string address) : base(variable_store, new RRF_Client(address))
+        public FluxViewModel Flux { get; }
+        public RRF_ConnectionProvider ConnectionProvider { get; }
+
+        public RRF_Connection(RRF_ConnectionProvider connection_provider, string address) : base(connection_provider, new RRF_Client(address))
         {
-            Flux = flux;
-            Client.DisposeWith(Disposables);
+            ConnectionProvider = connection_provider;
+            Flux = ConnectionProvider.Flux;
         }
 
         public async Task<bool> InitializeVariablesAsync(CancellationToken ct)
@@ -168,7 +180,7 @@ namespace Flux.ViewModels
             }, () => "");
 
             if (written_hash != source_hash)
-                if (!await PutFileAsync(c => ((RRF_Connection)c).GlobalPath, "initialize_variables.g", ct, source_variables))
+                if (!await PutFileAsync(c => ((RRF_Connection)c).GlobalPath, "initialize_variables.g", true, ct, source_variables))
                     return false;
 
             return await PostGCodeAsync(new[] { "M98 P\"/sys/global/initialize_variables.g\"" }, ct);
@@ -297,7 +309,7 @@ namespace Flux.ViewModels
         {
             return $"rr_gcode?gcode={string.Join("%0A", paramacro)}".Length;
         }
-        public override async Task<bool> CancelPrintAsync(bool hard_cancel)
+        public override async Task<bool> CancelPrintAsync()
         {
             // TODO
             using var put_cancel_print_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
@@ -328,7 +340,7 @@ namespace Flux.ViewModels
 
                 using var put_file_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 if (!files.Value.Files.Any(f => f.Name == "deselected.mcode"))
-                    await PutFileAsync(StoragePath, "deselected.mcode", put_file_ctk.Token);
+                    await PutFileAsync(StoragePath, "deselected.mcode", true, put_file_ctk.Token);
 
                 if (!await SelectPartProgramAsync("deselected.mcode", true, wait, ct))
                     return false;
@@ -354,7 +366,7 @@ namespace Flux.ViewModels
                     return false;
                 }
 
-                var selected_pp = MemoryBuffer.RRFObjectModel
+                var selected_pp = ConnectionProvider.MemoryBuffer.RRFObjectModel
                     .WhenAnyValue(o => o.Job)
                     .Convert(j => 
                     {
@@ -405,7 +417,7 @@ namespace Flux.ViewModels
                     // put file
                     var put_paramacro_response = await PutFileAsync(
                         StoragePath,
-                        "paramacro.mcode",
+                        "paramacro.mcode", true,
                         put_ct, get_paramacro_gcode().ToOptional());
 
                     if (put_paramacro_response == false)
@@ -413,7 +425,7 @@ namespace Flux.ViewModels
 
                     var put_job_response = await PutFileAsync(
                         StoragePath,
-                        "job.mcode",
+                        "job.mcode", true,
                         put_ct, get_job_gcode().ToOptional());
 
                     if (put_job_response == false)
@@ -455,8 +467,10 @@ namespace Flux.ViewModels
         public override async Task<bool> PutFileAsync(
             string folder,
             string filename,
+            bool is_paramacro,
             CancellationToken ct,
             Optional<IEnumerable<string>> source = default,
+            Optional<IEnumerable<string>> start = default,
             Optional<IEnumerable<string>> end = default,
             Optional<uint> source_blocks = default,
             Action<double> report_progress = null)
@@ -617,7 +631,7 @@ namespace Flux.ViewModels
                                 var del_f_res = await Client.ExecuteAsync(del_f_req);
                                 if (!del_f_res.Ok)
                                 {
-                                    Flux.Messages.LogMessage("Errore durante la pulizia della cartella", $"Impossibile cancellare il file: {del_f_res.Response.StatusCode}", MessageLevel.ERROR, 0);
+                                    Flux.Messages.LogMessage("Errore durante la pulizia della cartella", $"Impossibile cancellare il file: {del_f_res.Response}", MessageLevel.ERROR, 0);
                                     return false;
                                 }
                                 break;
@@ -644,7 +658,7 @@ namespace Flux.ViewModels
                     var del_d_res = await Client.ExecuteAsync(del_d_req);
                     if (!del_d_res.Ok)
                     {
-                        Flux.Messages.LogMessage("Errore durante la pulizia della cartella", $"Impossibile cancellare la cartella: {del_d_res.Response.StatusCode}", MessageLevel.ERROR, 0);
+                        Flux.Messages.LogMessage("Errore durante la pulizia della cartella", $"Impossibile cancellare la cartella: {del_d_res.Response}", MessageLevel.ERROR, 0);
                         return false;
                     }
                     return true;
@@ -665,7 +679,7 @@ namespace Flux.ViewModels
 
                 var request = new RRF_Request($"rr_download?name=0:/{folder}/{filename}", Method.Get, RRF_RequestPriority.Immediate, ct);
                 var response = await Client.ExecuteAsync(request);
-                return response.Response.Content.ToOptional();
+                return response.Response.Convert(r => r.Content);
             }
             catch
             {
@@ -833,5 +847,10 @@ namespace Flux.ViewModels
         public override Optional<IEnumerable<string>> GetRelativeYMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 Y{distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
         public override Optional<IEnumerable<string>> GetRelativeZMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 Z{distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
         public override Optional<IEnumerable<string>> GetRelativeEMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 E{distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
+
+        public override Optional<IEnumerable<string>> GetCancelOperationGCode()
+        {
+            return new[] { "M98 P\"0:/macros/cancel_print\"", "M99" };
+        }
     }
 }

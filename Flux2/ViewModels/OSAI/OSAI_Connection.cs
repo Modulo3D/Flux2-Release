@@ -15,35 +15,27 @@ using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
-    public class OSAI_Connection : FLUX_Connection<OSAI_VariableStore, OPENcontrolPortTypeClient, OSAI_MemoryBuffer>
+    public class OSAI_Connection : FLUX_Connection<OSAI_ConnectionProvider, OSAI_VariableStore, OPENcontrolPortTypeClient>
     {
         public const ushort AxisNum = 4;
-        public ushort ProcessNumber => 1;
+        public const ushort ProcessNumber = 1;
+
         public override ushort ArrayBase => 1;
-
-        public FluxViewModel Flux { get; }
-        private OSAI_MemoryBuffer _MemoryBuffer;
-        public override OSAI_MemoryBuffer MemoryBuffer
-        {
-            get
-            {
-                if (_MemoryBuffer == default)
-                    _MemoryBuffer = new OSAI_MemoryBuffer(this);
-                return _MemoryBuffer;
-            }
-        }
-
         public override string RootPath => "DEVICE";
         public override string PathSeparator => "\\";
         public override string MacroPath => "MACRO";
         public override string QueuePath => "PROGRAMS\\QUEUE";
         public override string StoragePath => "PROGRAMS\\STORAGE";
         public override string InnerQueuePath => "PROGRAMS\\QUEUE\\INNER";
-        
+
+        public FluxViewModel Flux { get; }
+        public OSAI_ConnectionProvider ConnectionProvider { get; }
+
         // MEMORY VARIABLES
-        public OSAI_Connection(FluxViewModel flux, OSAI_VariableStore variable_store, string address) : base(variable_store, new OPENcontrolPortTypeClient(OPENcontrolPortTypeClient.EndpointConfiguration.OPENcontrol, address))
+        public OSAI_Connection(OSAI_ConnectionProvider connection_provider, string address) : base(connection_provider, new OPENcontrolPortTypeClient(OPENcontrolPortTypeClient.EndpointConfiguration.OPENcontrol, address))
         {
-            Flux = flux;
+            ConnectionProvider = connection_provider;
+            Flux = ConnectionProvider.Flux;
         }
 
         // MEMORY R/W
@@ -540,7 +532,7 @@ namespace Flux.ViewModels
         }
 
         // BASIC FUNCTIONS
-        public bool ProcessResponse(ushort retval, uint ErrClass, uint ErrNum, string @params = default, [CallerMemberName] string callerMember = null)
+        public static bool ProcessResponse(ushort retval, uint ErrClass, uint ErrNum, string @params = default, [CallerMemberName] string callerMember = null)
         {
             if (retval == 0)
             {
@@ -852,11 +844,14 @@ namespace Flux.ViewModels
             
             return files_data;
         }
+
         public override async Task<bool> PutFileAsync(
             string folder,
             string filename,
+            bool is_paramacro,
             CancellationToken ct,
-            Optional<IEnumerable<string>> source,
+            Optional<IEnumerable<string>> source = default,
+            Optional<IEnumerable<string>> start = default,
             Optional<IEnumerable<string>> end = default,
             Optional<uint> source_blocks = default,
             Action<double> report_progress = default)
@@ -897,34 +892,29 @@ namespace Flux.ViewModels
                 {
                     foreach (var chunk in get_full_source().AsChunks(chunk_size))
                     {
-                        using (var gcode_writer = new StringWriter())
+                        using var gcode_writer = new StringWriter();
+                        foreach (var line in chunk)
+                            gcode_writer.WriteLine(line);
+                        gcode_writer.WriteLine("");
+
+                        var byte_data = Encoding.UTF8.GetBytes(gcode_writer.ToString());
+                        var write_record_request = new LogFSWriteRecordRequest(file_id, transaction++, (uint)byte_data.Length, byte_data);
+                        var write_record_response = await Client.LogFSWriteRecordAsync(write_record_request);
+
+                        if (!ProcessResponse(
+                            write_record_response.retval,
+                            write_record_response.ErrClass,
+                            write_record_response.ErrNum))
                         {
-                            foreach (var line in chunk)
-                            {
-                                gcode_writer.WriteLine($"N{block_number} {line}");
-                                block_number++;
-                            }
-                            gcode_writer.WriteLine("");
+                            var close_file_request = new LogFSCloseFileRequest(file_id, (ushort)(transaction - 1));
+                            var close_file_response = await Client.LogFSCloseFileAsync(close_file_request);
 
-                            var byte_data = Encoding.UTF8.GetBytes(gcode_writer.ToString());
-                            var write_record_request = new LogFSWriteRecordRequest(file_id, transaction++, (uint)byte_data.Length, byte_data);
-                            var write_record_response = await Client.LogFSWriteRecordAsync(write_record_request);
+                            ProcessResponse(
+                                close_file_response.retval,
+                                close_file_response.ErrClass,
+                                close_file_response.ErrNum);
 
-                            if (!ProcessResponse(
-                                write_record_response.retval,
-                                write_record_response.ErrClass,
-                                write_record_response.ErrNum))
-                            {
-                                var close_file_request = new LogFSCloseFileRequest(file_id, (ushort)(transaction - 1));
-                                var close_file_response = await Client.LogFSCloseFileAsync(close_file_request);
-
-                                ProcessResponse(
-                                    close_file_response.retval,
-                                    close_file_response.ErrClass,
-                                    close_file_response.ErrNum);
-
-                                return false;
-                            }
+                            return false;
                         }
                     }
                 }
@@ -945,33 +935,41 @@ namespace Flux.ViewModels
 
                 IEnumerable<string> get_full_source()
                 {
+                    if (start.HasValue)
+                    { 
+                        foreach (var line in start.Value)
+                            yield return line;
+                    }
+
                     long current_block = 0;
                     if (source.HasValue)
                     {
-                        if (source_blocks.HasValue && source_blocks.Value > 0)
+                        foreach (var line in source.Value)
                         {
-                            foreach (var line in source.Value)
-                            {
-                                var progress = (double)current_block++ / source_blocks.Value * 100;
-                                if (progress - (int)progress < 0.001)
-                                    report_progress((int)progress);
+                            if (is_paramacro)
                                 yield return line;
-                            }
-                        }
-                        else
-                        {
-                            foreach (var line in source.Value)
-                                yield return line;
+                            else
+                                yield return $"N{block_number++} {line}";
+
+                            if (!source_blocks.HasValue)
+                                continue;
+
+                            if (source_blocks.Value == 0)
+                                continue;
+
+                            var progress = (double)current_block++ / source_blocks.Value * 100;
+                            if (progress - (int)progress < 0.001)
+                                report_progress?.Invoke((int)progress);
                         }
                     }
 
                     if (end.HasValue)
-                    {
-                        yield return "; end";
+                    { 
                         foreach (var line in end.Value)
                             yield return line;
-                        yield return "";
                     }
+
+                    yield return "";
                 }
             }
             catch (Exception ex)
@@ -1190,8 +1188,11 @@ namespace Flux.ViewModels
             return new[] { $"(UTO, 0, X({x_offset}), Y({y_offset}), Z({z}))" };
         }
 
-        public override async Task<bool> CancelPrintAsync(bool hard_cancel)
+        public override async Task<bool> CancelPrintAsync()
         {
+            if (!await ResetAsync())
+                return false;
+
             using var put_cancel_print_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             using var wait_cancel_print_cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             return await ExecuteParamacroAsync(new[] { "(CLS, MACRO\\cancel_print)" }, 
@@ -1253,7 +1254,7 @@ namespace Flux.ViewModels
                 // put file
                 var put_paramacro_response = await PutFileAsync(
                     StoragePath,
-                    "paramacro.mcode",
+                    "paramacro.mcode", true,
                     put_ct, get_paramacro_gcode().ToOptional());
 
                 if (put_paramacro_response == false)
@@ -1293,6 +1294,11 @@ namespace Flux.ViewModels
         public override Optional<IEnumerable<string>> GetExecuteMacroGCode(string folder, string filename)
         {
             return new[] { $"(CLS, {folder}\\{filename})" };
+        }
+
+        public override Optional<IEnumerable<string>> GetCancelOperationGCode()
+        {
+            return new[] { "(REL)" };
         }
     }
 }
