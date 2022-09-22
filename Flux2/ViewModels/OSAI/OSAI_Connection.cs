@@ -54,11 +54,7 @@ namespace Flux.ViewModels
 
                 return true;
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return false;
-            }
+            catch { return false; }
         }
         public async Task<bool> WriteVariableAsync(OSAI_IndexAddress address, short value)
         {
@@ -75,11 +71,7 @@ namespace Flux.ViewModels
 
                 return true;
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return false;
-            }
+            catch { return false; }
         }
         public async Task<bool> WriteVariableAsync(OSAI_IndexAddress address, string value)
         {
@@ -99,11 +91,7 @@ namespace Flux.ViewModels
 
                 return true;
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return false;
-            }
+            catch { return false; }
         }
         public async Task<bool> WriteVariableAsync(OSAI_IndexAddress address, ushort value)
         {
@@ -120,11 +108,7 @@ namespace Flux.ViewModels
 
                 return true;
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return false;
-            }
+            catch { return false; }
         }
         public async Task<bool> WriteVariableAsync(OSAI_IndexAddress address, double value)
         {
@@ -141,11 +125,7 @@ namespace Flux.ViewModels
 
                 return true;
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return false;
-            }
+            catch { return false; }
         }
         public async Task<bool> WriteVariableAsync(OSAI_IndexAddress address, ushort bit_index, bool value)
         {
@@ -162,11 +142,7 @@ namespace Flux.ViewModels
 
                 return true;
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return false;
-            }
+            catch { return false; }
         }
 
         public async Task<bool> WriteVariableAsync(OSAI_NamedAddress address, bool value)
@@ -184,11 +160,7 @@ namespace Flux.ViewModels
 
                 return true;
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return false;
-            }
+            catch { return false; }
         }
         public async Task<bool> WriteVariableAsync(OSAI_NamedAddress address, short value)
         {
@@ -205,11 +177,7 @@ namespace Flux.ViewModels
 
                 return true;
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return false;
-            }
+            catch { return false; }
         }
         public async Task<bool> WriteVariableAsync(OSAI_NamedAddress address, ushort value)
         {
@@ -226,11 +194,7 @@ namespace Flux.ViewModels
 
                 return true;
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return false;
-            }
+            catch { return false; }
         }
         public async Task<bool> WriteVariableAsync(OSAI_NamedAddress address, double value)
         {
@@ -247,11 +211,7 @@ namespace Flux.ViewModels
 
                 return true;
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return false;
-            }
+            catch { return false; }
         }
         public async Task<bool> WriteVariableAsync(OSAI_NamedAddress address, string value, ushort lenght)
         {
@@ -272,14 +232,10 @@ namespace Flux.ViewModels
 
                 return true;
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return false;
-            }
+            catch { return false; }
         }
 
-        public async Task<Optional<bool>> ReadBoolAsync(OSAI_BitIndexAddress address)
+        public async Task<ValueResult<bool>> ReadBoolAsync(OSAI_BitIndexAddress address)
         {
             try
             {
@@ -294,13 +250,9 @@ namespace Flux.ViewModels
 
                 return read_response.Value[0].IsBitSet(address.BitIndex);
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return default;
-            }
+            catch { return default; }
         }
-        public async Task<Optional<ushort>> ReadUshortAsync(OSAI_IndexAddress address)
+        public async Task<ValueResult<ushort>> ReadUshortAsync(OSAI_IndexAddress address)
         {
             try
             {
@@ -315,13 +267,9 @@ namespace Flux.ViewModels
 
                 return read_response.Value[0];
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return default;
-            }
+            catch { return default; }
         }
-        public async Task<Optional<short>> ReadShortAsync(OSAI_IndexAddress address)
+        public async Task<ValueResult<short>> ReadShortAsync(OSAI_IndexAddress address)
         {
             try
             {
@@ -336,13 +284,9 @@ namespace Flux.ViewModels
 
                 return ShortConverter.Convert(read_response.Value[0]);
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return default;
-            }
+            catch { return default; }
         }
-        public async Task<Optional<string>> ReadTextAsync(OSAI_IndexAddress address)
+        public async Task<ValueResult<string>> ReadTextAsync(OSAI_IndexAddress address)
         {
             try
             {
@@ -357,13 +301,9 @@ namespace Flux.ViewModels
 
                 return read_response.Text;
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return default;
-            }
+            catch { return default; }
         }
-        public async Task<Optional<double>> ReadDoubleAsync(OSAI_IndexAddress address)
+        public async Task<ValueResult<double>> ReadDoubleAsync(OSAI_IndexAddress address)
         {
             try
             {
@@ -378,13 +318,9 @@ namespace Flux.ViewModels
 
                 return read_response.Value[0];
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return default;
-            }
+            catch { return default; }
         }
-        public async Task<Optional<bool>> ReadBoolAsync(OSAI_IndexAddress address, ushort bit_index)
+        public async Task<ValueResult<bool>> ReadBoolAsync(OSAI_IndexAddress address, ushort bit_index)
         {
             try
             {
@@ -399,14 +335,10 @@ namespace Flux.ViewModels
 
                 return read_response.Value[0].IsBitSet(bit_index);
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return default;
-            }
+            catch { return default; }
         }
 
-        public async Task<Optional<bool>> ReadNamedBoolAsync(OSAI_NamedAddress address)
+        public async Task<ValueResult<bool>> ReadNamedBoolAsync(OSAI_NamedAddress address)
         {
             try
             {
@@ -422,13 +354,9 @@ namespace Flux.ViewModels
 
                 return read_named_variable_response.Value[0] == 1.0 ? true : false;
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return default;
-            }
+            catch { return default; }
         }
-        public async Task<Optional<short>> ReadNamedShortAsync(OSAI_NamedAddress address)
+        public async Task<ValueResult<short>> ReadNamedShortAsync(OSAI_NamedAddress address)
         {
             try
             {
@@ -444,13 +372,9 @@ namespace Flux.ViewModels
 
                 return (short)read_named_variable_response.Value[0];
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return default;
-            }
+            catch { return default; }
         }
-        public async Task<Optional<ushort>> ReadNamedUShortAsync(OSAI_NamedAddress address)
+        public async Task<ValueResult<ushort>> ReadNamedUShortAsync(OSAI_NamedAddress address)
         {
             try
             {
@@ -466,13 +390,9 @@ namespace Flux.ViewModels
 
                 return (ushort)read_named_variable_response.Value[0];
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return default;
-            }
+            catch { return default; }
         }
-        public async Task<Optional<double>> ReadNamedDoubleAsync(OSAI_NamedAddress address)
+        public async Task<ValueResult<double>> ReadNamedDoubleAsync(OSAI_NamedAddress address)
         {
             try
             {
@@ -488,13 +408,9 @@ namespace Flux.ViewModels
 
                 return read_named_variable_response.Value[0];
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return default;
-            }
+            catch { return default; }
         }
-        public async Task<Optional<string>> ReadNamedStringAsync(OSAI_NamedAddress address, ushort lenght)
+        public async Task<ValueResult<string>> ReadNamedStringAsync(OSAI_NamedAddress address, ushort lenght)
         {
             try
             {
@@ -510,11 +426,7 @@ namespace Flux.ViewModels
 
                 return Encoding.ASCII.GetString(read_named_variable_response.Value);
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return default;
-            }
+            catch { return default; }
         }
 
         public async Task<(OSAI_CloseResponse response, CommunicationState state)> CloseAsync()
@@ -524,11 +436,7 @@ namespace Flux.ViewModels
                 await Client.CloseAsync();
                 return (OSAI_CloseResponse.CLOSE_SUCCESS, CommunicationState.Closed);
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return (OSAI_CloseResponse.CLOSE_EXCEPTION, CommunicationState.Faulted);
-            }
+            catch { return (OSAI_CloseResponse.CLOSE_EXCEPTION, CommunicationState.Faulted); }
         }
 
         // BASIC FUNCTIONS
@@ -548,7 +456,7 @@ namespace Flux.ViewModels
             var read_boot_phase = Observable.Timer(dueTime, sample)
                 .SelectMany(t => ReadVariableAsync(c => c.BOOT_PHASE));
 
-            return await WaitUtils.WaitForOptionalAsync(read_boot_phase,
+            return await WaitUtils.WaitForValueResultAsync(read_boot_phase,
                 phase => phase_func(phase), timeout);
         }
         public async Task<bool> WaitProcessModeAsync(Func<OSAI_ProcessMode, bool> status_func, TimeSpan dueTime, TimeSpan sample, TimeSpan timeout)
@@ -556,7 +464,7 @@ namespace Flux.ViewModels
             var read_boot_mode = Observable.Timer(dueTime, sample)
                 .SelectMany(t => ReadVariableAsync(c => c.PROCESS_MODE));
 
-            return await WaitUtils.WaitForOptionalAsync(read_boot_mode,
+            return await WaitUtils.WaitForValueResultAsync(read_boot_mode,
                 process => status_func(process), timeout);
         }
 
@@ -576,11 +484,7 @@ namespace Flux.ViewModels
 
                 return true;
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return false;
-            }
+            catch { return false; }
         }
         public async Task<bool> HoldAsync(bool on)
         {
@@ -597,11 +501,7 @@ namespace Flux.ViewModels
 
                 return true;
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return false;
-            }
+            catch { return false; }
         }
         public override async Task<bool> ResetAsync()
         {
@@ -622,11 +522,7 @@ namespace Flux.ViewModels
                     TimeSpan.FromSeconds(0.1),
                     TimeSpan.FromSeconds(5));
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return false;
-            }
+            catch { return false; }
         }
         public override async Task<bool> CycleAsync(bool start, bool wait, CancellationToken ct = default)
         {
@@ -660,11 +556,7 @@ namespace Flux.ViewModels
 
                 return true;
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return false;
-            }
+            catch { return false; }
         }
 
         public override async Task<bool> DeselectPartProgramAsync(bool from_drive, bool wait, CancellationToken ct = default)
@@ -696,11 +588,7 @@ namespace Flux.ViewModels
 
                 return true;
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return false;
-            }
+            catch { return false; }
         }
         public override async Task<bool> HoldAsync()
         {
@@ -735,11 +623,7 @@ namespace Flux.ViewModels
 
                 return true;
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return false;
-            }
+            catch { return false; }
         }
 
         // FILES
@@ -762,11 +646,7 @@ namespace Flux.ViewModels
 
                 return true;
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return false;
-            }
+            catch { return false; }
         }
         public override async Task<Optional<FLUX_FileList>> ListFilesAsync(string folder, CancellationToken ct = default)
         {
@@ -826,20 +706,19 @@ namespace Flux.ViewModels
                 }
                 while (find_next_result.ConvertOr(r => r.Body.Found, () => false));
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return default;
-            }
+            catch { return default; }
             finally
             {
-                var close_request = new LogFSFindCloseRequest(find_first_result.Value.Body.Finder);
-                var close_response = await Client.LogFSFindCloseAsync(close_request);
+                if (find_first_result.HasValue)
+                {
+                    var close_request = new LogFSFindCloseRequest(find_first_result.Value.Body.Finder);
+                    var close_response = await Client.LogFSFindCloseAsync(close_request);
 
-                ProcessResponse(
-                    close_response.retval,
-                    close_response.ErrClass,
-                    close_response.ErrNum);
+                    ProcessResponse(
+                        close_response.retval,
+                        close_response.ErrClass,
+                        close_response.ErrNum);
+                }
             }
             
             return files_data;
@@ -972,11 +851,7 @@ namespace Flux.ViewModels
                     yield return "";
                 }
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return false;
-            }
+            catch { return false; }
 
             try
             {
@@ -1001,11 +876,7 @@ namespace Flux.ViewModels
 
                 return true;
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return false;
-            }
+            catch { return false; }
         }
 
         public IEnumerable<string> GenerateRecoveryLines(OSAI_MCodeRecovery recovery)
@@ -1071,11 +942,7 @@ namespace Flux.ViewModels
 
                 return true;
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return false;
-            }
+            catch { return false; }
         }
         public async Task<Optional<OSAI_AxisPositionDictionary>> GetAxisPosition()
         {
@@ -1092,11 +959,7 @@ namespace Flux.ViewModels
 
                 return new OSAI_AxisPositionDictionary(axes_ref_response.IntPos);
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return default;
-            }
+            catch { return default; }
         }
         public override Task<bool> ClearFolderAsync(string folder, bool wait, CancellationToken ct = default) => DeleteFileAsync(folder, "*", wait, ct);
 

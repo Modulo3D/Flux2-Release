@@ -86,7 +86,7 @@ namespace Flux.ViewModels
                 .Convert(v => convert_data != null ? convert_data(v) : v.ToObject<TData>());
         }
 
-        static async Task<Optional<TData>> read_variable(RRF_ConnectionProvider connection, string variable, VariableUnit unit, Func<object, TData> convert_data = default)
+        static async Task<ValueResult<TData>> read_variable(RRF_ConnectionProvider connection, string variable, VariableUnit unit, Func<object, TData> convert_data = default)
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             var global = await connection.MemoryBuffer.GetModelDataAsync<RRF_ObjectModelGlobal>(cts.Token);

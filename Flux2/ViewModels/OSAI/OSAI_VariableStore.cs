@@ -17,7 +17,7 @@ namespace Flux.ViewModels
     public class OSAI_VariableStore : FLUX_VariableStore<OSAI_VariableStore, OSAI_ConnectionProvider>
     {
         public IFLUX_Variable<OSAI_ProcessMode, OSAI_ProcessMode> PROCESS_MODE { get; set; }
-        public IFLUX_Variable<OSAI_BootMode, OSAI_BootMode> BOOT_MODE { get; set; }
+        public IFLUX_Variable<Unit, OSAI_BootMode> BOOT_MODE { get; set; }
         public IFLUX_Variable<OSAI_BootPhase, Unit> BOOT_PHASE { get; set; }
         public IFLUX_Variable<bool, bool> AUX_ON { get; set; }
 
@@ -50,7 +50,7 @@ namespace Flux.ViewModels
                 model.CreateVariable(c => c.Z_BED_HEIGHT,   "!Z_PLATE_H",   OSAI_ReadPriority.ULTRALOW); 
                 model.CreateVariable(c => c.IN_CHANGE,      "!IN_CHANGE",   OSAI_ReadPriority.HIGH);     
 
-                model.CreateArray(c    => c.EXTRUSIONS,     4, "!EXTR",        OSAI_ReadPriority.MEDIUM); 
+                //model.CreateArray(c    => c.EXTRUSIONS,     4, "!EXTR",        OSAI_ReadPriority.MEDIUM); 
                 model.CreateArray(c    => c.X_USER_OFFSET,  4, "!X_USR_OF_T",  OSAI_ReadPriority.LOW);    
                 model.CreateArray(c    => c.Y_USER_OFFSET,  4, "!Y_USR_OF_T",  OSAI_ReadPriority.LOW);    
                 model.CreateArray(c    => c.Z_USER_OFFSET,  4, "!Z_USR_OF_T",  OSAI_ReadPriority.LOW);    
@@ -65,10 +65,10 @@ namespace Flux.ViewModels
                 model.CreateVariable(c => c.PROCESS_STATUS, OSAI_ReadPriority.ULTRAHIGH, GetProcessStatusAsync); 
                 model.CreateVariable(c => c.PROCESS_MODE,   OSAI_ReadPriority.ULTRAHIGH, GetProcessModeAsync, SetProcessModeAsync); 
                 model.CreateVariable(c => c.BOOT_PHASE,     OSAI_ReadPriority.ULTRAHIGH, GetBootPhaseAsync);     
-                model.CreateVariable(c => c.BOOT_MODE,      OSAI_ReadPriority.ULTRAHIGH, write_func: SetBootModeAsync);    
+                model.CreateVariable(c => c.BOOT_MODE,      OSAI_ReadPriority.ULTRAHIGH, _ => Task.FromResult(new ValueResult<Unit>(Unit.Default)), SetBootModeAsync);    
                 model.CreateVariable(c => c.PART_PROGRAM,   OSAI_ReadPriority.HIGH,      GetPartProgramAsync);   
-                model.CreateVariable(c => c.PROGRESS,       OSAI_ReadPriority.ULTRAHIGH, c => Task.FromResult(new ParamacroProgress("", 70).ToOptional())); 
-                //model.CreateVariable(c => c.MCODE_RECOVERY, OSAI_ReadPriority.MEDIUM,    GetMCodeRecoveryAsync); 
+                model.CreateVariable(c => c.PROGRESS,       OSAI_ReadPriority.ULTRAHIGH, _ => Task.FromResult(new ValueResult<ParamacroProgress>(new ParamacroProgress("", 70)))); 
+                model.CreateVariable(c => c.MCODE_RECOVERY, OSAI_ReadPriority.MEDIUM,    GetMCodeRecoveryAsync); 
 
 
                 // GW VARIABLES                                                                                                                                                                                                                                                                              
@@ -155,9 +155,10 @@ namespace Flux.ViewModels
             }
         }
 
-        /*private static async Task<Optional<IFLUX_MCodeRecovery>> GetMCodeRecoveryAsync(OSAI_ConnectionProvider connection_provider)
+        private static Task<ValueResult<IFLUX_MCodeRecovery>> GetMCodeRecoveryAsync(OSAI_ConnectionProvider connection_provider)
         {
-            try
+            return Task.FromResult(new ValueResult<IFLUX_MCodeRecovery>(default));
+            /*try
             {
                 var connection = connection_provider.Connection;
                 if (!connection.HasValue)
@@ -248,10 +249,10 @@ namespace Flux.ViewModels
             catch (Exception ex)
             {
                 return default;
-            }
-        }*/
+            }*/
+        }
 
-        private static async Task<Optional<Dictionary<Guid, Dictionary<BlockNumber, MCodePartProgram>>>> GetStorageAsync(OSAI_ConnectionProvider connection_provider)
+        private static async Task<ValueResult<Dictionary<Guid, Dictionary<BlockNumber, MCodePartProgram>>>> GetStorageAsync(OSAI_ConnectionProvider connection_provider)
         {
             var connection = connection_provider.Connection;
             if (!connection.HasValue)
@@ -266,7 +267,7 @@ namespace Flux.ViewModels
             return storage.Value.GetPartProgramDictionaryFromStorage();
         }
 
-        private static async Task<Optional<Dictionary<QueuePosition, FluxJob>>> GetQueueAsync(OSAI_ConnectionProvider connection_provider)
+        private static async Task<ValueResult<Dictionary<QueuePosition, FluxJob>>> GetQueueAsync(OSAI_ConnectionProvider connection_provider)
         {
             var connection = connection_provider.Connection;
             if (!connection.HasValue)
@@ -281,7 +282,7 @@ namespace Flux.ViewModels
             return queue.Value.GetJobDictionaryFromQueue();
         }
 
-        private static async Task<Optional<LineNumber>> GetBlockNumAsync(OSAI_ConnectionProvider connection_provider)
+        private static async Task<ValueResult<LineNumber>> GetBlockNumAsync(OSAI_ConnectionProvider connection_provider)
         {
             try
             {
@@ -299,13 +300,9 @@ namespace Flux.ViewModels
 
                 return (LineNumber)get_blk_num_response.Body.GetBlkNum.MainActBlk;
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return default;
-            }
+            catch { return default; }
         }
-        private static async Task<Optional<OSAI_BootPhase>> GetBootPhaseAsync(OSAI_ConnectionProvider connection_provider)
+        private static async Task<ValueResult<OSAI_BootPhase>> GetBootPhaseAsync(OSAI_ConnectionProvider connection_provider)
         {
             try
             {
@@ -324,11 +321,7 @@ namespace Flux.ViewModels
 
                 return (OSAI_BootPhase)boot_phase_response.Phase;
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return default;
-            }
+            catch { return default; }
         }
         private static async Task<bool> SetBootModeAsync(OSAI_ConnectionProvider connection_provider, OSAI_BootMode boot_mode)
         {
@@ -349,13 +342,9 @@ namespace Flux.ViewModels
 
                 return true;
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return false;
-            }
+            catch { return false; }
         }
-        private static async Task<Optional<MCodePartProgram>> GetPartProgramAsync(OSAI_ConnectionProvider connection_provider)
+        private static async Task<ValueResult<MCodePartProgram>> GetPartProgramAsync(OSAI_ConnectionProvider connection_provider)
         {
             try
             {
@@ -364,22 +353,34 @@ namespace Flux.ViewModels
                     return default;
 
                 var queue_pos = await connection.Value.ReadVariableAsync(c => c.QUEUE_POS);
+                if (!queue_pos.Result)
+                    return default;
+
+                if (!queue_pos.HasValue)
+                    return new ValueResult<MCodePartProgram>(default);
+
                 if (queue_pos.Value < 0)
-                    return default;
- 
+                    return new ValueResult<MCodePartProgram>(default);
+
                 var job_queue = await connection.Value.ReadVariableAsync(c => c.QUEUE);
-                if (!job_queue.HasValue)
+                if (!job_queue.Result)
                     return default;
+
+                if (!job_queue.HasValue)
+                    return new ValueResult<MCodePartProgram>(default);
 
                 if (!job_queue.Value.TryGetValue(queue_pos.Value, out var current_job))
-                    return default;
+                    return new ValueResult<MCodePartProgram>(default);
 
                 var storage_dict = await connection.Value.ReadVariableAsync(c => c.STORAGE);
-                if (!storage_dict.HasValue)
+                if (!storage_dict.Result)
                     return default;
 
+                if (!storage_dict.HasValue)
+                    return new ValueResult<MCodePartProgram>(default);
+
                 if (!storage_dict.Value.ContainsKey(current_job.MCodeGuid))
-                    return default;
+                    return new ValueResult<MCodePartProgram>(default);
 
                 // Full part program from filename
                 var get_active_pp_request = new GetActivePartProgramRequest(OSAI_Connection.ProcessNumber);
@@ -409,7 +410,7 @@ namespace Flux.ViewModels
                 return default;
             }
         }
-        private static async Task<Optional<OSAI_ProcessMode>> GetProcessModeAsync(OSAI_ConnectionProvider connection_provider)
+        private static async Task<ValueResult<OSAI_ProcessMode>> GetProcessModeAsync(OSAI_ConnectionProvider connection_provider)
         {
             try
             {
@@ -427,13 +428,9 @@ namespace Flux.ViewModels
 
                 return (OSAI_ProcessMode)process_status_response.Body.ProcStat.Mode;
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return default;
-            }
+            catch { return default; }
         }
-        private static async Task<Optional<FLUX_ProcessStatus>> GetProcessStatusAsync(OSAI_ConnectionProvider connection_provider)
+        private static async Task<ValueResult<FLUX_ProcessStatus>> GetProcessStatusAsync(OSAI_ConnectionProvider connection_provider)
         {
             try
             {
@@ -477,11 +474,7 @@ namespace Flux.ViewModels
                         return FLUX_ProcessStatus.NONE;
                 }
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return default;
-            }
+            catch { return default; }
         }
         private static async Task<bool> SetProcessModeAsync(OSAI_ConnectionProvider connection_provider, OSAI_ProcessMode process_mode)
         {
@@ -506,11 +499,7 @@ namespace Flux.ViewModels
                     TimeSpan.FromSeconds(0.1),
                     TimeSpan.FromSeconds(1));
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return false;
-            }
+            catch { return false; }
         }
     }
 }

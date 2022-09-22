@@ -219,7 +219,7 @@ namespace Flux.ViewModels
                 this.WhenAnyValue(v => v.LevelFilter),
                 (connecting, level) =>
                 {
-                    bool filter(IFluxMessage message) => connecting.HasValue && !connecting.Value && message.Level >= level;
+                    bool filter(IFluxMessage message) => !connecting && message.Level >= level;
                     return (Func<IFluxMessage, bool>)filter;
                 });
 

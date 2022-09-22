@@ -66,7 +66,7 @@ namespace Flux.ViewModels
         {
             return connection_provider.MemoryBuffer.ObserveModel(get_model, get_data);
         }
-        static async Task<Optional<TRData>> read_variable(
+        static async Task<ValueResult<TRData>> read_variable(
             RRF_ConnectionProvider connection_provider,
             Func<RRF_MemoryBuffer, Task<Optional<TModel>>> read_model, 
             Func<TModel, Optional<TRData>> get_data)
@@ -76,7 +76,7 @@ namespace Flux.ViewModels
                 return default;
             return get_data(model.Value);
         }
-        static async Task<Optional<TRData>> read_variable(
+        static async Task<ValueResult<TRData>> read_variable(
             RRF_ConnectionProvider connection_provider,
             Func<RRF_MemoryBuffer, Task<Optional<TModel>>> read_model, 
             Func<TModel, Task<Optional<TRData>>> get_data)
@@ -87,8 +87,6 @@ namespace Flux.ViewModels
             return await get_data(model.Value);
         }
     }
-
-   
 
     public interface IRRF_VariableGlobalModel : IFLUX_Variable
     {
@@ -140,7 +138,7 @@ namespace Flux.ViewModels
         {
             return connection_provider.MemoryBuffer.ObserveGlobalModel(m => get_data(m, variable, convert_data));
         }
-        static async Task<Optional<TData>> read_variable(RRF_ConnectionProvider connection_provider, string variable, Func<object, TData> convert_data = default)
+        static async Task<ValueResult<TData>> read_variable(RRF_ConnectionProvider connection_provider, string variable, Func<object, TData> convert_data = default)
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             var global = await connection_provider.MemoryBuffer.GetModelDataAsync<RRF_ObjectModelGlobal>(cts.Token);

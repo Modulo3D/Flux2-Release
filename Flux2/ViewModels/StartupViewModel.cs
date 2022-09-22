@@ -28,19 +28,15 @@ namespace Flux.ViewModels
         {
             var startup = Observable.CombineLatest(
                 Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation),
-                Flux.ConnectionProvider.WhenAnyValue(c => c.IsInitializing),
-                (e, initializing) => (e.IsHomed, initializing))
+                Flux.ConnectionProvider.WhenAnyValue(c => c.IsConnecting),
+                (e, connecting) => (e.IsHomed, connecting))
                 .DistinctUntilChanged();
 
-            startup.Where(t =>
-                t.initializing.HasValue && 
-                (t.initializing.Value || !t.IsHomed))
+            startup.Where(t => t.connecting || !t.IsHomed)
                 .ObserveOn(RxApp.MainThreadScheduler)
                 .Subscribe(t => Flux.Navigator?.Navigate(this));
 
-            startup.Where(t =>
-                t.initializing.HasValue &&
-                (!t.initializing.Value && t.IsHomed))
+            startup.Where(t => !t.connecting && t.IsHomed)
                 .ObserveOn(RxApp.MainThreadScheduler)
                 .Subscribe(_ => Flux.Navigator?.NavigateHome());
 

@@ -335,10 +335,10 @@ namespace Flux.ViewModels
                     advanced_mode_source));
 
             AddModal(Temperatures);
-            AddCommand("reloadDatabase", () => Flux.DatabaseProvider.Initialize(), can_execute: IS_IDLE, visible: advanced_mode);
-            AddCommand("resetPrinter", Flux.Startup.ResetPrinter, visible: advanced_mode);
+            AddCommand("resetPrinter", Flux.ConnectionProvider.StartConnection, visible: advanced_mode);
             AddCommand("vacuumPump", m => m.ENABLE_VACUUM, can_execute: IS_IDLE, visible: advanced_mode);
             AddCommand("openClamp", m => m.OPEN_HEAD_CLAMP, can_execute: IS_IDLE, visible: advanced_mode);
+            AddCommand("reloadDatabase", () => Flux.DatabaseProvider.Initialize(), visible: advanced_mode);
 
             AddModal(Memory, visible: advanced_mode);
             AddModal(Files, visible: advanced_mode);

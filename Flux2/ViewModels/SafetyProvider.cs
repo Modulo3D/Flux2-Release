@@ -134,8 +134,6 @@ namespace Flux.ViewModels
 
     public class ConditionViewModel<T> : RemoteControl<ConditionViewModel<T>>, IConditionViewModel
     {
-        public FluxViewModel Flux { get; }
-
         private ObservableAsPropertyHelper<ConditionState> _State;
         [RemoteContent(true)]
         public ConditionState State => _State.Value;
@@ -147,29 +145,28 @@ namespace Flux.ViewModels
         public IObservable<T> ValueChanged { get; }
         public IObservable<ConditionState> StateChanged { get; }
 
-        public ConditionViewModel(FluxViewModel flux, string name, IObservable<T> value_changed, Func<ConditionStateCreator, T, ConditionState> get_state, Optional<TimeSpan> throttle = default) : base($"condition??{name}")
+        public ConditionViewModel(StatusProvider status_provider, string name, IObservable<T> value_changed, Func<ConditionStateCreator, T, ConditionState> get_state, TimeSpan sample = default) : base($"condition??{name}")
         {
-            Flux = flux;
-
             ValueChanged = value_changed;
 
             _Value = ValueChanged
-                .ToProperty(this, v => v.Value);
+                .ToProperty(this, v => v.Value)
+                .DisposeWith(Disposables);
 
-            var state_creator = new ConditionStateCreator(flux);
-            
+            if(sample != default)
+                value_changed = value_changed.Sample(sample);
+
+            var state_creator = status_provider.StateCreator;
             var current_state = value_changed
                 .DistinctUntilChanged()
                 .Select(v => get_state(state_creator, v));
-            
-            if (throttle.HasValue)
-                current_state = current_state
-                    .Throttle(throttle.Value, RxApp.MainThreadScheduler);
 
             _State = current_state
                 .DistinctUntilChanged()
                 .StartWith(new ConditionState(false, ""))
-                .ToProperty(this, e => e.State);
+                .DisposePrevious()
+                .ToProperty(this, e => e.State)
+                .DisposeWith(Disposables);
 
             StateChanged = this.WhenAnyValue(v => v.State);
         }
@@ -178,18 +175,18 @@ namespace Flux.ViewModels
     public class ConditionViewModel
     {
         public static ConditionViewModel<TIn> Create<TIn>(
-            FluxViewModel flux,
+            StatusProvider status_provider,
             string name,
             IObservable<TIn> value_changed,
-            Func<ConditionStateCreator, TIn, ConditionState> get_state,
-            Optional<TimeSpan> throttle = default)
-            => new ConditionViewModel<TIn>(flux, name, value_changed, get_state, throttle);
+            Func<ConditionStateCreator, TIn, ConditionState> get_state, 
+            TimeSpan sample = default)
+            => new ConditionViewModel<TIn>(status_provider, name, value_changed, get_state, sample);
         public static Optional<ConditionViewModel<TIn>> Create<TIn>(
-            FluxViewModel flux,
+            StatusProvider status_provider,
             string name,
             OptionalObservable<TIn> value_changed,
             Func<ConditionStateCreator, TIn, ConditionState> get_state,
-            Optional<TimeSpan> throttle = default)
-            => value_changed.Convert(v => new ConditionViewModel<TIn>(flux, name, v, get_state, throttle));
+            TimeSpan sample = default)
+            => value_changed.Convert(v => new ConditionViewModel<TIn>(status_provider, name, v, get_state, sample));
     }
 }

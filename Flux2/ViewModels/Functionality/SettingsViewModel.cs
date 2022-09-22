@@ -113,10 +113,7 @@ namespace Flux.ViewModels
             user_settings.WhenAnyValue(s => s.StandbyMinutes)
                 .BindTo(this, v => v.StandbyMinutes);
 
-            var canSave = Printers.SelectedValueChanged
-                .Select(p => p.HasValue);
-
-            SaveSettingsCommand = ReactiveCommand.Create(SaveSettings, canSave);
+            SaveSettingsCommand = ReactiveCommand.Create(SaveSettings);
         }
 
         public void SaveSettings()

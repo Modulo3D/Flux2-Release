@@ -35,7 +35,6 @@ namespace Flux.ViewModels
     {
         public WelcomeViewModel WelcomePhase { get; }
         public PrintingViewModel PrintingPhase { get; }
-        public RecoveryViewModel RecoveryPhase { get; }
         public LowNozzlesViewModel LowNozzlesPhase { get; }
         public PurgeNozzlesViewModel ColdNozzlesPhase { get; }
         public PreparePrintViewModel PreparePrintPhase { get; }
@@ -52,7 +51,6 @@ namespace Flux.ViewModels
         public HomeViewModel(FluxViewModel flux) : base(flux)
         {
             WelcomePhase = new WelcomeViewModel(Flux);
-            RecoveryPhase = new RecoveryViewModel(Flux);
             PrintingPhase = new PrintingViewModel(Flux);
             ColdNozzlesPhase = new PurgeNozzlesViewModel(Flux);
             PreparePrintPhase = new PreparePrintViewModel(Flux);
@@ -80,10 +78,6 @@ namespace Flux.ViewModels
 
         private IHomePhaseViewModel GetHomeViewModel(StatusEvaluation status_eval, StartEvaluation start_eval, PrintingEvaluation printing_eval)
         {
-            if (printing_eval.Recovery.HasValue)
-                if(!printing_eval.Recovery.Value.IsSelected)
-                    return RecoveryPhase;
-
             if (!printing_eval.SelectedMCode.HasValue)
                 return WelcomePhase;
 

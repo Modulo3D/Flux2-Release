@@ -37,17 +37,17 @@ namespace Flux.ViewModels
                 .DistinctUntilChanged();
 
             chamber.Throttle(TimeSpan.FromSeconds(5))
-                .Where(c => c.connecting.HasValue && !c.connecting.Value && c.temp.HasValue && c.temp.Value.IsDisconnected)
+                .Where(c => !c.connecting && c.temp.HasValue && c.temp.Value.IsDisconnected)
                 .Subscribe(_ => Flux.Messages.LogMessage("Camera calda", "Sensore di temperatura non trovato", MessageLevel.EMERG, 29001));
 
             chamber.Throttle(TimeSpan.FromSeconds(5))
-                .Where(c => c.connecting.HasValue && !c.connecting.Value && c.temp.HasValue && c.temp.Value.IsHot && c.open)
+                .Where(c => !c.connecting && c.temp.HasValue && c.temp.Value.IsHot && c.open)
                 .Subscribe(_ => Flux.Messages.LogMessage("Camera calda", "Temperatura della camera elevata", MessageLevel.WARNING, 29002));
 
             return chamber.Select(
                 chamber =>
                 {
-                    if (!chamber.connecting.HasValue || chamber.connecting.Value || !chamber.temp.HasValue)
+                    if (chamber.connecting || !chamber.temp.HasValue)
                         return StatusBarState.Hidden;
                     if (chamber.temp.Value.IsDisconnected)
                         return StatusBarState.Error;
@@ -88,17 +88,17 @@ namespace Flux.ViewModels
                 .DistinctUntilChanged();
 
             plate.Throttle(TimeSpan.FromSeconds(1))
-                .Where(p => p.connecting.HasValue && !p.connecting.Value && p.temp.HasValue && p.temp.Value.IsDisconnected)
+                .Where(p => !p.connecting && p.temp.HasValue && p.temp.Value.IsDisconnected)
                 .Subscribe(_ => Flux.Messages.LogMessage("Piatto caldo", "Sensore di temperatura non trovato", MessageLevel.EMERG, 30001));
 
             plate.Throttle(TimeSpan.FromSeconds(1))
-                .Where(p => p.connecting.HasValue && !p.connecting.Value && p.temp.HasValue && p.temp.Value.IsHot && p.open)
+                .Where(p => !p.connecting && p.temp.HasValue && p.temp.Value.IsHot && p.open)
                 .Subscribe(_ => Flux.Messages.LogMessage("Piatto caldo", "Temperatura del piatto elevata", MessageLevel.WARNING, 30002));
 
             return plate.Select(
                 plate =>
                 {
-                    if (!plate.connecting.HasValue || plate.connecting.Value || !plate.temp.HasValue)
+                    if (plate.connecting || !plate.temp.HasValue)
                         return StatusBarState.Hidden;
                     if (plate.temp.Value.IsDisconnected)
                         return StatusBarState.Error;

@@ -409,7 +409,10 @@ namespace Flux.ViewModels
         }
         public async Task<bool> AddToQueueAsync(IFluxMCodeStorageViewModel mcode)
         {
-            var queue_pos = await Flux.ConnectionProvider.ReadVariableAsync(c => c.QUEUE_POS);
+            var queue_pos = await Flux.ConnectionProvider
+                .ReadVariableAsync(c => c.QUEUE_POS)
+                .ToOptionalAsync();
+
             if (!queue_pos.HasValue)
             {
                 Flux.Messages.LogMessage("Errore durante la selezione del lavoro", "Posizione della coda non trovata", MessageLevel.ERROR, 0);
@@ -433,7 +436,8 @@ namespace Flux.ViewModels
             }
 
             var optional_queue_size = await Flux.ConnectionProvider
-                .ReadVariableAsync(c => c.QUEUE_SIZE);
+                .ReadVariableAsync(c => c.QUEUE_SIZE)
+                .ToOptionalAsync();
 
             var queue_size = optional_queue_size
                 .ConvertOr(s => s > 0 ? s : (ushort)1, () => (ushort)1);

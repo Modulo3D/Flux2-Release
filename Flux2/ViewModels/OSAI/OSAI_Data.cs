@@ -290,16 +290,14 @@ namespace Flux.ViewModels
     {
         public Guid MCodeGuid { get; }
         public bool IsSelected { get; }
-        public uint BlockNumber { get; }
         public short ToolNumber { get; }
         public BlockNumber StartBlock { get; }
         public string FileName => $"{MCodeGuid}.{StartBlock}";
         public Dictionary<ushort, double> Positions { get; }
         public Dictionary<ushort, double> Temperatures { get; }
 
-        public OSAI_MCodeRecovery(Guid mcode_guid, BlockNumber start_block, bool is_selected, uint hold_block, short hold_tool, Dictionary<ushort, double> hold_temp, Dictionary<ushort, double> hold_pos)
+        public OSAI_MCodeRecovery(Guid mcode_guid, BlockNumber start_block, bool is_selected, short hold_tool, Dictionary<ushort, double> hold_temp, Dictionary<ushort, double> hold_pos)
         {
-            BlockNumber = hold_block;
             Temperatures = hold_temp;
             IsSelected = is_selected;
             StartBlock = start_block;

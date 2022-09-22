@@ -48,13 +48,6 @@ namespace Flux.ViewModels
                 .DistinctUntilChanged()
                 .ThrottleMax(TimeSpan.FromMilliseconds(50), TimeSpan.FromMilliseconds(200))
                 .Subscribe(async d => await SendRemoteControlDataAsync(d));
-
-            /*var send_data_thread = new DisposableThread(async () =>
-                {
-                    var data = flux.RemoteControlData;
-                    await SendRemoteControlDataAsync(data);
-                }, TimeSpan.FromMilliseconds(50))
-                .DisposeWith(Disposables);*/
         }
         private async Task SendRemoteControlDataAsync(Optional<RemoteControlData> rc)
         {
@@ -188,22 +181,15 @@ namespace Flux.ViewModels
         public Ping InterNetworkPinger { get; }
         public UdpDiscovery UdpDiscovery { get; }
 
-        private bool _IsUpdatingNetwork;
-        public bool IsUpdatingNetwork
-        {
-            get => _IsUpdatingNetwork;
-            set => this.RaiseAndSetIfChanged(ref _IsUpdatingNetwork, value);
-        }
-
-        private Optional<bool> _InterNetworkConnectivity;
-        public Optional<bool> InterNetworkConnectivity
+        private bool _InterNetworkConnectivity;
+        public bool InterNetworkConnectivity
         {
             get => _InterNetworkConnectivity;
             set => this.RaiseAndSetIfChanged(ref _InterNetworkConnectivity, value);
         }
 
-        private Optional<bool> _PLCNetworkConnectivity;
-        public Optional<bool> PLCNetworkConnectivity
+        private bool _PLCNetworkConnectivity;
+        public bool PLCNetworkConnectivity
         {
             get => _PLCNetworkConnectivity;
             set => this.RaiseAndSetIfChanged(ref _PLCNetworkConnectivity, value);
@@ -223,30 +209,23 @@ namespace Flux.ViewModels
         {
             InitializeWebServer();
             InitializeUDPDiscovery();
+
+            DisposableThread.Start(PingPLCNetworkAsync, TimeSpan.FromSeconds(5));
+            DisposableThread.Start(PingInterNetworkAsync, TimeSpan.FromSeconds(10));
         }
 
-        public void UpdateNetworkState()
+        private async Task PingPLCNetworkAsync()
         {
-            if (IsUpdatingNetwork)
-                return;
-            IsUpdatingNetwork = true;
             var core_settings = Flux.SettingsProvider.CoreSettings.Local;
-            Task.Run(async () =>
-            {
-                var ping_plc = Task.Run(() => PLCNetworkPinger.PingAsync(
+            PLCNetworkConnectivity = await PLCNetworkPinger.PingAsync(
                     core_settings.PLCAddress,
-                    TimeSpan.FromSeconds(5)));
-
-                var ping_network = Task.Run(() => InterNetworkPinger.PingAsync(
-                    "8.8.8.8",
-                    TimeSpan.FromSeconds(5)));
-
-                var ping_result = await Task.WhenAll(ping_plc, ping_network);
-
-                PLCNetworkConnectivity = ping_result[0];
-                InterNetworkConnectivity = ping_result[1];
-                IsUpdatingNetwork = false;
-            });
+                    TimeSpan.FromSeconds(5));
+        }
+        private async Task PingInterNetworkAsync()
+        {
+            InterNetworkConnectivity = await InterNetworkPinger.PingAsync(
+                "8.8.8.8",
+                TimeSpan.FromSeconds(10));
         }
 
         private void InitializeWebServer()

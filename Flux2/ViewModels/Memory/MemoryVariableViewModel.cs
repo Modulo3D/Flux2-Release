@@ -38,7 +38,6 @@ namespace Flux.ViewModels
         [RemoteOutput(true, typeof(MemoryConverter))]
         public Optional<object> Value => _Value.Value;
 
-
         public MemoryVariableViewModel(FluxViewModel flux, IFLUX_Variable variable) : base($"{typeof(MemoryVariableViewModel).GetRemoteControlName()}??{variable.Name}")
         {
             Flux = flux;

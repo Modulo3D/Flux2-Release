@@ -45,6 +45,7 @@ namespace Flux.ViewModels
     public class StatusProvider : ReactiveObject, IFluxStatusProvider
     {
         public FluxViewModel Flux { get; }
+        public ConditionStateCreator StateCreator { get; }
 
         private ObservableAsPropertyHelper<OdometerExtrusions> _OdometerExtrusions;
         public OdometerExtrusions OdometerExtrusions => _OdometerExtrusions.Value;
@@ -94,6 +95,7 @@ namespace Flux.ViewModels
         public StatusProvider(FluxViewModel flux)
         {
             Flux = flux;
+            StateCreator = new ConditionStateCreator(flux);
 
             // Status
             var is_idle = Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS)
@@ -112,18 +114,18 @@ namespace Flux.ViewModels
                     return (new Pressure(0), 0);
                 });
 
-            PressurePresence = ConditionViewModel.Create(flux, "pressure", pressure_in,
+            PressurePresence = ConditionViewModel.Create(this, "pressure", pressure_in,
                 (state, value) =>
                 {
                     if (value.Item1.Kpa < value.Item2)
                         return state.Create(false, "ATTIVARE L'ARIA COMPRESSA");
                     return state.Create(true, "ARIA COMPRESSA ATTIVA");
-                });
+                }, TimeSpan.FromSeconds(1));
 
             var clamp_open = Flux.ConnectionProvider.ObserveVariable(m => m.OPEN_HEAD_CLAMP)
                 .ValueOr(() => false);
 
-            ClampOpen = ConditionViewModel.Create(flux, "clampOpen", clamp_open,
+            ClampOpen = ConditionViewModel.Create(this, "clampOpen", clamp_open,
                 (state, value) =>
                 {
                     if (!value)
@@ -131,7 +133,7 @@ namespace Flux.ViewModels
                     return state.Create(true, "PINZA APERTA", "clamp", c => c.OPEN_HEAD_CLAMP, is_idle);
                 });
 
-            ClampClosed = ConditionViewModel.Create(flux, "clampClosed", clamp_open,
+            ClampClosed = ConditionViewModel.Create(this, "clampClosed", clamp_open,
                 (state, value) =>
                 {
                     if (value)
@@ -150,13 +152,13 @@ namespace Flux.ViewModels
                     return (new Pressure(0), 0, false);
                 });
 
-            VacuumPresence = ConditionViewModel.Create(flux, "vacuum", vacuum,
+            VacuumPresence = ConditionViewModel.Create(this, "vacuum", vacuum,
                 (state, value) =>
                 {
                     if (!value.Item3 || value.Item1.Kpa > value.Item2)
                         return state.Create(false, "INSERIRE UN FOGLIO", "vacuum", c => c.ENABLE_VACUUM, is_idle);
                     return state.Create(true, "FOGLIO INSERITO", "vacuum", c => c.ENABLE_VACUUM, is_idle);
-                });
+                }, TimeSpan.FromSeconds(1));
 
             var top_lock = OptionalObservable.CombineLatest(
                 Flux.ConnectionProvider.ObserveVariable(m => m.LOCK_CLOSED, "top"),
@@ -168,7 +170,7 @@ namespace Flux.ViewModels
                     return (false, false);
                 });
 
-            TopLockClosed = ConditionViewModel.Create(flux, "topLockClosed", top_lock,
+            TopLockClosed = ConditionViewModel.Create(this, "topLockClosed", top_lock,
                 (state, value) =>
                 {
                     if (!value.Item1 || value.Item2)
@@ -176,7 +178,7 @@ namespace Flux.ViewModels
                     return state.Create(true, "CAPPELLO CHIUSO", "lock", c => c.OPEN_LOCK, "top", is_idle);
                 });
 
-            TopLockOpen = ConditionViewModel.Create(flux, "topLockOpen", top_lock,
+            TopLockOpen = ConditionViewModel.Create(this, "topLockOpen", top_lock,
                 (state, value) =>
                 {
                     if (value.Item1)
@@ -195,7 +197,7 @@ namespace Flux.ViewModels
                     return (false, false);
                 });
 
-            SpoolsLock = ConditionViewModel.Create(flux, "spoolsLock", spools_lock,
+            SpoolsLock = ConditionViewModel.Create(this, "spoolsLock", spools_lock,
                 (state, value) =>
                 {
                     if (!value.Item1 || value.Item2)
@@ -213,7 +215,7 @@ namespace Flux.ViewModels
                     return (false, false);
                 });
 
-            ChamberLockClosed = ConditionViewModel.Create(flux, "chamberLockClosed", chamber_lock,
+            ChamberLockClosed = ConditionViewModel.Create(this, "chamberLockClosed", chamber_lock,
                 (state, value) =>
                 {
                     if (!value.Item1 || value.Item2)
@@ -221,7 +223,7 @@ namespace Flux.ViewModels
                     return state.Create(true, "PORTELLA CHIUSA", "lock", c => c.OPEN_LOCK, "chamber", is_idle);
                 });
 
-            ChamberLockOpen = ConditionViewModel.Create(flux, "chamberLockOpen", chamber_lock,
+            ChamberLockOpen = ConditionViewModel.Create(this, "chamberLockOpen", chamber_lock,
                 (state, value) =>
                 {
                     if (value.Item1)
@@ -245,7 +247,7 @@ namespace Flux.ViewModels
             var not_in_change = Flux.ConnectionProvider.ObserveVariable(m => m.IN_CHANGE)
                 .ValueOr(() => false);
 
-            NotInChange = ConditionViewModel.Create(flux, "notInChange", not_in_change,
+            NotInChange = ConditionViewModel.Create(this, "notInChange", not_in_change,
                 (state, value) =>
                 {
                     if (value)
@@ -254,7 +256,7 @@ namespace Flux.ViewModels
                 });
 
             var has_safe_state = Observable.CombineLatest(
-                Flux.ConnectionProvider.WhenAnyValue(v => v.IsInitializing),
+                Flux.ConnectionProvider.WhenAnyValue(v => v.IsConnecting),
                 Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS),
                 //RaisedPistons.ConvertToObservable(c => c.StateChanged),
                 PressurePresence.ConvertToObservable(c => c.StateChanged),
@@ -491,7 +493,7 @@ namespace Flux.ViewModels
             var z_bed_height = Flux.ConnectionProvider.ObserveVariable(m => m.Z_BED_HEIGHT)
                 .ValueOr(() => FluxViewModel.MaxZBedHeight);
 
-            HasZBedHeight = ConditionViewModel.Create(flux, "hasZBedHeight", z_bed_height,
+            HasZBedHeight = ConditionViewModel.Create(this, "hasZBedHeight", z_bed_height,
                 (state, value) =>
                 {
                     if (value >= FluxViewModel.MaxZBedHeight)
@@ -645,7 +647,7 @@ namespace Flux.ViewModels
                 Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS),
                 this.WhenAnyValue(v => v.PrintingEvaluation),
                 Flux.Navigator.WhenAnyValue(nav => nav.CurrentViewModel),
-                Flux.ConnectionProvider.WhenAnyValue(c => c.IsInitializing),
+                Flux.ConnectionProvider.WhenAnyValue(c => c.IsConnecting),
                 FindFluxStatus)
                 .DistinctUntilChanged()
                 .ToProperty(this, s => s.FluxStatus);
@@ -725,7 +727,7 @@ namespace Flux.ViewModels
             Optional<FLUX_ProcessStatus> status,
             PrintingEvaluation printing_eval,
             Optional<IFluxRoutableViewModel> current_vm,
-            Optional<bool> initializing_connection)
+            bool is_connecting)
         {
             if (!status.HasValue)
                 return FLUX_ProcessStatus.NONE;
@@ -733,7 +735,7 @@ namespace Flux.ViewModels
             if (!status.HasValue)
                 return FLUX_ProcessStatus.NONE;
 
-            if (!initializing_connection.HasValue || initializing_connection.Value)
+            if (is_connecting)
                 return FLUX_ProcessStatus.NONE;
 
             var has_emerg = messages.Any(message => message.Level == MessageLevel.EMERG);
@@ -761,7 +763,7 @@ namespace Flux.ViewModels
         }
 
         private bool CanPrinterSafeCycle(
-            Optional<bool> is_initializing,
+            bool is_connecting,
             Optional<FLUX_ProcessStatus> status,
             /*OptionalChange<ConditionState> raised_pistons,*/
             OptionalChange<ConditionState> pressure,
@@ -771,7 +773,7 @@ namespace Flux.ViewModels
             short selected_extruder,
             OptionalChange<ConditionState> clamp_closed)
         {
-            if (!is_initializing.HasValue || is_initializing.Value)
+            if (is_connecting)
                 return false;
             if (!status.HasValue)
                 return false;

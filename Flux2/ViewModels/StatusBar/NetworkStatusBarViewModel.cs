@@ -16,15 +16,11 @@ namespace Flux.ViewModels
         {
             var plc = Flux.NetProvider
                 .WhenAnyValue(v => v.PLCNetworkConnectivity)
-                .Where(plc => plc.HasValue)
-                .Select(plc => plc.Value)
                 .DistinctUntilChanged()
                 .StartWith(true);
 
             var inter = Flux.NetProvider
                 .WhenAnyValue(v => v.InterNetworkConnectivity)
-                .Where(inter => inter.HasValue)
-                .Select(inter => inter.Value)
                 .DistinctUntilChanged()
                 .StartWith(true);
 

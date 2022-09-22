@@ -192,21 +192,21 @@ namespace Flux.ViewModels
                         _ => new Dummy_ConnectionProvider(this)
                     };
 
-                    Messages = new MessagesViewModel(this);
-                    NetProvider = new NetProvider(this);
-                    Feeders = new FeedersViewModel(this);
-                    MCodes = new MCodesViewModel(this);
-                    StatusProvider = new StatusProvider(this);
-                    Calibration = new CalibrationViewModel(this);
-                    Startup = new StartupViewModel(this);
-                    Webcam = new WebcamViewModel(this);
-                    StatsProvider = new StatsProvider(this);
-                    Magazine = new MagazineViewModel(this);
-                    Home = new HomeViewModel(this);
-                    StatusBar = new StatusBarViewModel(this);
-                    Functionality = new FunctionalityViewModel(this);
-                    Navigator = new FluxNavigatorViewModel(this);
+                    Messages        = new MessagesViewModel(this);
+                    NetProvider     = new NetProvider(this);
+                    Feeders         = new FeedersViewModel(this);
+                    MCodes          = new MCodesViewModel(this);
+                    StatusProvider  = new StatusProvider(this);
+                    Calibration     = new CalibrationViewModel(this);
+                    Webcam          = new WebcamViewModel(this);
+                    StatsProvider   = new StatsProvider(this);
+                    Magazine        = new MagazineViewModel(this);
+                    Home            = new HomeViewModel(this);
+                    StatusBar       = new StatusBarViewModel(this);
+                    Functionality   = new FunctionalityViewModel(this);
+                    Navigator       = new FluxNavigatorViewModel(this);
                     LoggingProvider = new LoggingProvider(this);
+                    Startup         = new StartupViewModel(this);
 
                     _LeftIconForeground = ConnectionProvider.ObserveVariable(m => m.OPEN_LOCK, "chamber")
                         .ObservableOrDefault()
@@ -267,6 +267,8 @@ namespace Flux.ViewModels
                             };
                         })
                         .ToProperty(this, v => v.StatusBrush);
+
+                    InitializeRemoteView();
                 }
                 catch (Exception ex)
                 { 
@@ -369,7 +371,6 @@ namespace Flux.ViewModels
         }
         public Task StartAsync(CancellationToken cancellationToken)
         {
-            InitializeRemoteView();
             return Task.CompletedTask;
         }
         private string GetStatusText(FLUX_ProcessStatus status, PrintingEvaluation printing_evaluation)

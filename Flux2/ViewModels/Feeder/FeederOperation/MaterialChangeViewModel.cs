@@ -321,7 +321,7 @@ namespace Flux.ViewModels
             var can_update_nfc = FindCanUpdateNFC();
 
             yield return (ConditionViewModel.Create(
-                Flux,
+                Flux.StatusProvider,
                 "material",
                 Observable.CombineLatest(
                     Feeder.ToolNozzle.WhenAnyValue(f => f.MaterialLoaded),
@@ -474,7 +474,7 @@ namespace Flux.ViewModels
                 .WatchOptional(Material.Position);
 
             yield return (ConditionViewModel.Create(
-                Flux,
+                Flux.StatusProvider,
                 "material",
                 Observable.CombineLatest(
                     Feeder.ToolNozzle.WhenAnyValue(f => f.MaterialLoaded),

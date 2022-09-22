@@ -10,28 +10,21 @@ using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
-    public class Dummy_ConnectionProvider : FLUX_ConnectionProvider<Dummy_ConnectionProvider, Dummy_Connection, Dummy_MemoryBuffer, Dummy_VariableStore>
+    public enum Dummy_ConnectionPhase
+    {
+        Start,
+        End
+    }
+    public class Dummy_ConnectionProvider : FLUX_ConnectionProvider<Dummy_ConnectionProvider, Dummy_Connection, Dummy_MemoryBuffer, Dummy_VariableStore, Dummy_ConnectionPhase>
     {
         public FluxViewModel Flux { get; }
-        public override IFlux IFlux => Flux;
-        public override double ConnectionProgress => 0;
-        public override Optional<bool> IsConnecting => true;
-        public override Optional<bool> IsInitializing => true;
-        public override Dummy_MemoryBuffer MemoryBuffer { get; }
-        public override Dummy_VariableStore VariableStore { get; }
 
-        public Dummy_ConnectionProvider(FluxViewModel flux)
+        public Dummy_ConnectionProvider(FluxViewModel flux) : base(flux,
+            Dummy_ConnectionPhase.Start, Dummy_ConnectionPhase.End, p => (int)p,
+            c => new Dummy_MemoryBuffer(c),
+            c => new Dummy_VariableStore(c))
         {
             Flux = flux;
-            MemoryBuffer = new Dummy_MemoryBuffer(this);
-            VariableStore = new Dummy_VariableStore(this);
-        }
-
-        public override void Initialize()
-        {
-        }
-        public override void StartConnection()
-        {
         }
         protected override Task RollConnectionAsync() => Task.CompletedTask;
         public override Task<bool> ParkToolAsync() => Task.FromResult(false);
@@ -59,9 +52,9 @@ namespace Flux.ViewModels
         public Dummy_Variable() : base("", new VariableUnit(0))
         {
         }
-        public override Task<Optional<TRData>> ReadAsync()
+        public override Task<ValueResult<TRData>> ReadAsync()
         {
-            return Task.FromResult(Optional<TRData>.None);
+            return Task.FromResult(default(ValueResult<TRData>));
         }
         public override Task<bool> WriteAsync(TWData data)
         {
@@ -95,6 +88,7 @@ namespace Flux.ViewModels
             CreateDummy(s => s.Z_PROBE_OFFSET);
             CreateDummy(s => s.X_HOME_OFFSET);
             CreateDummy(s => s.Y_HOME_OFFSET);
+            CreateDummy(s => s.TEMP_TOOL);
         }
 
         private void CreateDummy<TRData, TWData>(Expression<Func<Dummy_VariableStore, IFLUX_Array<TRData, TWData>>> array_expression)
@@ -102,9 +96,9 @@ namespace Flux.ViewModels
             var array_setter = this.GetCachedSetterDelegate(array_expression);
             array_setter.Invoke(new Dummy_Array<TRData, TWData>());
         }
-        private void CreateDummy<TRData, TWData>(Expression<Func<Dummy_VariableStore, IFLUX_Variable<TRData, TWData>>> array_expression)
+        private void CreateDummy<TRData, TWData>(Expression<Func<Dummy_VariableStore, IFLUX_Variable<TRData, TWData>>> variable_expression)
         {
-            var array_setter = this.GetCachedSetterDelegate(array_expression);
+            var array_setter = this.GetCachedSetterDelegate(variable_expression);
             array_setter.Invoke(new Dummy_Variable<TRData, TWData>());
         }
     }
@@ -314,12 +308,17 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
     }
-    public class Dummy_MemoryBuffer : FLUX_MemoryBuffer<Dummy_ConnectionProvider>
+    public class Dummy_MemoryBuffer : FLUX_MemoryBuffer<Dummy_ConnectionProvider, Dummy_VariableStore>
     {
         public override Dummy_ConnectionProvider ConnectionProvider { get; }
+        public override bool HasFullMemoryRead => false;
         public Dummy_MemoryBuffer(Dummy_ConnectionProvider connection_provider)
         {
             ConnectionProvider = connection_provider;         
+        }
+
+        public override void Initialize(Dummy_VariableStore variableStore)
+        {
         }
     }
 }

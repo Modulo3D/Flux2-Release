@@ -63,21 +63,21 @@ namespace Flux.ViewModels
                 .DistinctUntilChanged();
 
             tool.Throttle(TimeSpan.FromSeconds(5))
-                .Where(t => t.connecting.HasValue && !t.connecting.Value && !t.in_mateinance && t.not_found)
+                .Where(t => !t.connecting && !t.in_mateinance && t.not_found)
                 .Subscribe(_ => Flux.Messages.LogMessage("Utensile", "Sensore di temperatura non trovato", MessageLevel.EMERG, 27001));
 
             tool.Throttle(TimeSpan.FromSeconds(5))
-                .Where(t => t.connecting.HasValue && !t.connecting.Value && !t.in_mateinance && t.error)
+                .Where(t => !t.connecting && !t.in_mateinance && t.error)
                 .Subscribe(_ => Flux.Messages.LogMessage("Utensile", "Stato utensile non corretto", MessageLevel.ERROR, 27002));
 
             tool.Throttle(TimeSpan.FromSeconds(5))
-                .Where(t => t.connecting.HasValue && !t.connecting.Value && !t.in_mateinance && !t.not_found && t.hot && t.open)
+                .Where(t => !t.connecting && !t.in_mateinance && !t.not_found && t.hot && t.open)
                 .Subscribe(_ => Flux.Messages.LogMessage("Utensile", "Temperatura dell'utensile elevata", MessageLevel.WARNING, 27003));
 
             return tool.Select(
                 tool =>
                 {
-                    if (!tool.connecting.HasValue || tool.connecting.Value)
+                    if (tool.connecting)
                         return StatusBarState.Hidden;
                     if (tool.error)
                         return StatusBarState.Error;

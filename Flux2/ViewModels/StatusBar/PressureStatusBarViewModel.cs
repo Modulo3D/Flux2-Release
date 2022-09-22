@@ -35,17 +35,17 @@ namespace Flux.ViewModels
                 .DistinctUntilChanged();
 
             pressure.Throttle(TimeSpan.FromSeconds(5))
-                .Where(p => p.connecting.HasValue && !p.connecting.Value && p.not_found.HasChange && p.not_found.Change)
+                .Where(p => !p.connecting && p.not_found.HasChange && p.not_found.Change)
                 .Subscribe(_ => Flux.Messages.LogMessage("Pressione", "Sensore della pressione non trovato", MessageLevel.EMERG, 28001));
 
             pressure.Throttle(TimeSpan.FromSeconds(5))
-                .Where(p => p.connecting.HasValue && !p.connecting.Value && p.low.HasChange && p.low.Change)
+                .Where(p => !p.connecting && p.low.HasChange && p.low.Change)
                 .Subscribe(_ => Flux.Messages.LogMessage("Pressione", "Livello di pressione troppo basso", MessageLevel.EMERG, 28002));
 
             return pressure.Select(
                 pressure =>
                 {
-                    if (!pressure.connecting.HasValue || pressure.connecting.Value || !pressure.not_found.HasChange || !pressure.low.HasChange)
+                    if (pressure.connecting || !pressure.not_found.HasChange || !pressure.low.HasChange)
                         return StatusBarState.Hidden;
                     if (pressure.not_found.HasChange && pressure.not_found.Change)
                         return StatusBarState.Error;

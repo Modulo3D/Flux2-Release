@@ -45,22 +45,21 @@ namespace Flux.ViewModels
                 .DistinctUntilChanged();
 
             vacuum.Throttle(TimeSpan.FromSeconds(5))
-                .Where(v => v.connecting.HasValue && !v.connecting.Value && v.not_found.HasChange && v.not_found.Change)
+                .Where(v => !v.connecting && v.not_found.HasChange && v.not_found.Change)
                 .Subscribe(_ => Flux.Messages.LogMessage("Vuoto", "Sensore del vuoto non trovato", MessageLevel.EMERG, 32001));
 
             vacuum.Throttle(TimeSpan.FromSeconds(5))
-               .Where(v => v.connecting.HasValue && !v.connecting.Value && v.enabled.HasChange && v.enabled.Change && v.low.HasChange && v.low.Change && v.cycle)
+               .Where(v => !v.connecting && v.enabled.HasChange && v.enabled.Change && v.low.HasChange && v.low.Change && v.cycle)
                .Subscribe(_ => Flux.Messages.LogMessage("Vuoto", "Vuoto perso durante la lavorazione", MessageLevel.EMERG, 32002));
 
             vacuum.Throttle(TimeSpan.FromSeconds(60))
-                .Where(v => v.connecting.HasValue && !v.connecting.Value && v.enabled.HasChange && v.enabled.Change && v.low.HasChange && v.low.Change)
+                .Where(v => !v.connecting && v.enabled.HasChange && v.enabled.Change && v.low.HasChange && v.low.Change)
                 .Subscribe(_ => Flux.Messages.LogMessage("Vuoto", "Inserire un foglio", MessageLevel.WARNING, 32003));
 
             return vacuum.Select(
                 vacuum =>
                 {
-                    if (!vacuum.connecting.HasValue ||
-                        vacuum.connecting.Value || 
+                    if (vacuum.connecting || 
                         !vacuum.not_found.HasChange ||
                         !vacuum.enabled.HasChange ||
                         !vacuum.low.HasChange)

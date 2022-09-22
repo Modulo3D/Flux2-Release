@@ -27,114 +27,21 @@ namespace Flux.ViewModels
         END_PHASE = 7,
     }
 
-    public class RRF_ConnectionProvider : FLUX_ConnectionProvider<RRF_ConnectionProvider, RRF_Connection, RRF_MemoryBuffer, RRF_VariableStoreBase>
+    public class RRF_ConnectionProvider : FLUX_ConnectionProvider<RRF_ConnectionProvider, RRF_Connection, RRF_MemoryBuffer, RRF_VariableStoreBase, RRF_ConnectionPhase>
     {
         public FluxViewModel Flux { get; }
-        public override IFlux IFlux => Flux;
 
-        private ObservableAsPropertyHelper<Optional<bool>> _IsConnecting;
-        public override Optional<bool> IsConnecting => _IsConnecting.Value;
-
-        private ObservableAsPropertyHelper<Optional<bool>> _IsInitializing;
-        public override Optional<bool> IsInitializing => _IsInitializing.Value;
-
-        private ObservableAsPropertyHelper<double> _ConnectionProgress;
-        public override double ConnectionProgress => _ConnectionProgress.Value;
-
-        private Optional<RRF_ConnectionPhase> _ConnectionPhase;
-        protected Optional<RRF_ConnectionPhase> ConnectionPhase
-        {
-            get => _ConnectionPhase;
-            set => this.RaiseAndSetIfChanged(ref _ConnectionPhase, value);
-        }
-
-        public override RRF_MemoryBuffer MemoryBuffer { get; }
-        public override RRF_VariableStoreBase VariableStore { get; }
-
-        public RRF_ConnectionProvider(FluxViewModel flux) : base(flux)
+        public RRF_ConnectionProvider(FluxViewModel flux) : base(flux,
+            RRF_ConnectionPhase.START_PHASE, RRF_ConnectionPhase.END_PHASE, p => (int)p,
+            c => new RRF_MemoryBuffer(c), c => new RRF_VariableStoreS300(c))
         {
             Flux = flux;
-            MemoryBuffer = new RRF_MemoryBuffer(this);
-            VariableStore = new RRF_VariableStoreS300(this);
-
-            var full_memory_read = MemoryBuffer.WhenAnyValue(v => v.HasFullMemoryRead);
-
-            _IsInitializing = Observable.CombineLatest(
-                this.WhenAnyValue(c => c.ConnectionPhase), full_memory_read,
-                (phase, full_read) => phase.Convert(p => p < RRF_ConnectionPhase.END_PHASE || !full_read))
-                .ToProperty(this, v => v.IsInitializing);
-
-            _IsConnecting = Observable.CombineLatest(
-                this.WhenAnyValue(c => c.ConnectionPhase), full_memory_read,
-                (phase, full_read) => phase.Convert(p => p < RRF_ConnectionPhase.END_PHASE || !full_read))
-                .ToProperty(this, v => v.IsConnecting);
-
-            var connection_max_value = (double)RRF_ConnectionPhase.END_PHASE;
-
-            _ConnectionProgress =
-                this.WhenAnyValue(v => v.ConnectionPhase)
-                .Select(p => (double)p.ValueOr(() => RRF_ConnectionPhase.START_PHASE) / connection_max_value * 100)
-                .ToProperty(this, v => v.ConnectionProgress);
-
-            Flux.NetProvider
-                .WhenAnyValue(n => n.PLCNetworkConnectivity)
-                .Where(c => c == false)
-                .Subscribe(_ => StartConnection());
-
-            Flux.SettingsProvider.CoreSettings.Local
-               .WhenAnyValue(n => n.PLCAddress)
-               .Subscribe(_ => StartConnection());
-        }
-
-        public override void Initialize()
-        {
-            var debug_t = DateTime.Now;
-            var status_t = DateTime.Now;
-            var network_t = DateTime.Now;
-
-            StartConnection();
-            DisposableThread.Start(async () =>
-            {
-                try
-                {
-                    if (DateTime.Now - status_t >= TimeSpan.FromMilliseconds(100))
-                    {
-                        await RollConnectionAsync();
-                        status_t = DateTime.Now;
-                    }
-
-                    if (DateTime.Now - network_t >= TimeSpan.FromSeconds(10))
-                    {
-                        Flux.NetProvider.UpdateNetworkState();
-                        network_t = DateTime.Now;
-                    }
-
-                    // TODO
-                    /*if (DateTime.Now - debug_t >= TimeSpan.FromSeconds(5))
-                    {
-                        Flux.MCodes.FindDrive();
-                        var debug = Flux.MCodes.OperatorUSB.ConvertOr(o => o.AdvancedSettings, () => false);
-                        var debug_plc = await ReadVariableAsync(m => m.DEBUG);
-                        if (debug_plc.HasValue && debug != debug_plc)
-                            await WriteVariableAsync(m => m.DEBUG, debug);
-                        debug_t = DateTime.Now;
-                    }*/
-                }
-                catch
-                {
-                }
-
-            }, TimeSpan.Zero);
-        }
-        public override void StartConnection()
-        {
-            ConnectionPhase = RRF_ConnectionPhase.START_PHASE;
         }
         protected override async Task RollConnectionAsync()
         {
             try
             {
-                switch (ConnectionPhase.Value)
+                switch (ConnectionPhase)
                 {
                     case RRF_ConnectionPhase.START_PHASE:
                         await CreateTimeoutAsync(TimeSpan.FromSeconds(5), ct =>
@@ -144,6 +51,9 @@ namespace Flux.ViewModels
                                 Connection.Value.Dispose();
                                 Connection = default;
                             }
+
+                            if (!Flux.NetProvider.PLCNetworkConnectivity)
+                                return Task.CompletedTask;
 
                             var plc_address = Flux.SettingsProvider.CoreSettings.Local.PLCAddress;
                             if (!plc_address.HasValue || string.IsNullOrEmpty(plc_address.Value))

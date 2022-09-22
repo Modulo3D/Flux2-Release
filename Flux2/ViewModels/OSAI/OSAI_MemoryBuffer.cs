@@ -1,15 +1,49 @@
-﻿using DynamicData.Kernel;
+﻿using DynamicData;
+using DynamicData.Kernel;
 using Modulo3DStandard;
 using OSAI;
 using ReactiveUI;
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
-    public class OSAI_MemoryBuffer : FLUX_MemoryBuffer<OSAI_ConnectionProvider>
+
+    public class OSAI_MemoryReader : FLUX_MemoryReader<OSAI_ConnectionProvider>
+    {
+        public IEnumerable<IOSAI_AsyncVariable> Variables { get; }
+        public OSAI_MemoryReader(OSAI_ConnectionProvider connection_provider, string resource, IEnumerable<IOSAI_AsyncVariable> variables) : base(connection_provider, resource)
+        {
+            Variables = variables;
+        }
+        public override async Task TryScheduleAsync(TimeSpan timeout)
+        {
+            var has_memory_read = true;
+            foreach (var variable in Variables)
+            {
+                var memory_updated = await variable.UpdateAsync();
+                has_memory_read = has_memory_read && memory_updated;
+            }
+            HasMemoryRead = has_memory_read;
+        }
+    }
+
+    public class OSAI_MemoryReaderGroup : FLUX_MemoryReaderGroup<OSAI_ConnectionProvider, OSAI_Connection, OSAI_VariableStore>
+    {
+        public OSAI_MemoryReaderGroup(OSAI_ConnectionProvider connection_provider, TimeSpan period, TimeSpan timeout) : base(connection_provider, period, timeout)
+        {
+        }
+        public void AddMemoryReader(IGrouping<OSAI_ReadPriority, IOSAI_AsyncVariable> variables)
+        {
+            MemoryReaders.AddOrUpdate(new OSAI_MemoryReader(ConnectionProvider, $"{variables.Key}", variables));
+        }
+    }
+
+    public class OSAI_MemoryBuffer : FLUX_MemoryBuffer<OSAI_ConnectionProvider, OSAI_VariableStore>
     {
         public override OSAI_ConnectionProvider ConnectionProvider { get; }
 
@@ -137,12 +171,10 @@ namespace Flux.ViewModels
             set => this.RaiseAndSetIfChanged(ref _MW_BUFFER, value);
         }
 
-        private bool _HasFullMemoryRead;
-        public bool HasFullMemoryRead
-        {
-            get => _HasFullMemoryRead;
-            set => this.RaiseAndSetIfChanged(ref _HasFullMemoryRead, value);
-        }
+        private ObservableAsPropertyHelper<bool> _HasFullMemoryRead;
+        public override bool HasFullMemoryRead => _HasFullMemoryRead.Value;
+
+        private SourceCache<OSAI_MemoryReaderGroup, TimeSpan> MemoryReaders { get; }
 
         public OSAI_MemoryBuffer(OSAI_ConnectionProvider connection_provider)
         {
@@ -151,6 +183,62 @@ namespace Flux.ViewModels
             GW_BUFFER_CHANGED = this.WhenAnyValue(plc => plc.GW_BUFFER);
             MW_BUFFER_CHANGED = this.WhenAnyValue(plc => plc.MW_BUFFER);
             L_BUFFER_CHANGED = this.WhenAnyValue(plc => plc.L_BUFFER);
+
+            MemoryReaders = new SourceCache<OSAI_MemoryReaderGroup, TimeSpan>(g => g.Period);
+        }
+        public override void Initialize(OSAI_VariableStore variableStore)
+        {
+            var variables = variableStore.Variables;
+            var plc_variables = variables.Values
+                .SelectMany(var =>
+                {
+                    return var switch
+                    {
+                        IFLUX_Array array => array.Variables.Items,
+                        IFLUX_Variable variable => new[] { variable },
+                        _ => Array.Empty<IFLUX_Variable>(),
+                    };
+                })
+                .Where(v => v is IOSAI_AsyncVariable)
+                .Select(v => v as IOSAI_AsyncVariable)
+                .GroupBy(v => v.Priority)
+                .ToDictionary(group => group.Key, group => group);
+
+            DisposableThread.Start(UpdateBuffersAsync, TimeSpan.FromMilliseconds(100));
+
+            AddModelReader(plc_variables, OSAI_ReadPriority.LOW, OSAI_Connection.LowPriority);
+            AddModelReader(plc_variables, OSAI_ReadPriority.HIGH, OSAI_Connection.HighPriority);
+            AddModelReader(plc_variables, OSAI_ReadPriority.MEDIUM, OSAI_Connection.MediumPriority);
+            AddModelReader(plc_variables, OSAI_ReadPriority.ULTRALOW, OSAI_Connection.UltraLowPriority);
+            AddModelReader(plc_variables, OSAI_ReadPriority.ULTRAHIGH, OSAI_Connection.UltraHighPriority);
+
+            var has_full_variables_read = MemoryReaders.Connect()
+                .TrueForAll(f => f.WhenAnyValue(f => f.HasMemoryRead), r => r);
+
+            _HasFullMemoryRead = Observable.CombineLatest(
+                GD_BUFFER_CHANGED,
+                GW_BUFFER_CHANGED,
+                MW_BUFFER_CHANGED,
+                L_BUFFER_CHANGED,
+                has_full_variables_read,
+                (gd, gw, mw, l, v) => gd.HasValue && gw.HasValue && mw.HasValue && l.HasValue && v)
+                .ToProperty(this, v => v.HasFullMemoryRead)
+                .DisposeWith(Disposables);
+        }
+        private void AddModelReader(Dictionary<OSAI_ReadPriority, IGrouping<OSAI_ReadPriority, IOSAI_AsyncVariable>> variables, OSAI_ReadPriority priority, TimeSpan period)
+        {
+            var priority_variables = variables.Lookup(priority);
+            if(!priority_variables.HasValue || !priority_variables.Value.Any())
+                return;
+
+            var memory_reader = MemoryReaders.Lookup(period);
+            if (!memory_reader.HasValue)
+                MemoryReaders.AddOrUpdate(new OSAI_MemoryReaderGroup(ConnectionProvider, period, default));
+            memory_reader = MemoryReaders.Lookup(period);
+            if (!memory_reader.HasValue)
+                return;
+
+            memory_reader.Value.AddMemoryReader(priority_variables.Value);
         }
         private (ushort start_addr, ushort end_addr) GetRange(OSAI_VARCODE varcode)
         {
@@ -174,39 +262,60 @@ namespace Flux.ViewModels
             var end_addr = addr_range.Max();
             return (start_addr, end_addr);
         }
-        public async Task UpdateBufferAsync()
+        private async Task UpdateBuffersAsync()
         {
-            var connection = ConnectionProvider.Connection;
-            if (!connection.HasValue)
-                return;
+            GD_BUFFER = await UpdateDoubleBufferAsync(GD_BUFFER_REQ);
+            L_BUFFER = await UpdateDoubleBufferAsync(L_BUFFER_REQ);
 
-            var gd_response = await connection.Value.Client.ReadVarDoubleAsync(GD_BUFFER_REQ);
-            if (OSAI_Connection.ProcessResponse(
-                gd_response.retval,
-                gd_response.ErrClass,
-                gd_response.ErrNum))
-                GD_BUFFER = gd_response.Value;
+            GW_BUFFER = await UpdateWordBufferAsync(GW_BUFFER_REQ);
+            MW_BUFFER = await UpdateWordBufferAsync(MW_BUFFER_REQ);
+        }
+        private async Task<Optional<doublearray>> UpdateDoubleBufferAsync(ReadVarDoubleRequest request)
+        {
+            try
+            {
+                var connection = ConnectionProvider.Connection;
+                if (!connection.HasValue)
+                    return default;
+                
+                var response = await connection.Value.Client.ReadVarDoubleAsync(request);
+                if (OSAI_Connection.ProcessResponse(
+                    response.retval,
+                    response.ErrClass,
+                    response.ErrNum))
+                    return response.Value;
+                return default;
+            }
+            catch
+            {
+                return default;
+            }
+        }
+        private async Task<Optional<unsignedshortarray>> UpdateWordBufferAsync(ReadVarWordRequest request)
+        {
+            try
+            {
+                var connection = ConnectionProvider.Connection;
+                if (!connection.HasValue)
+                    return default;
 
-            var gw_response = await connection.Value.Client.ReadVarWordAsync(GW_BUFFER_REQ);
-            if (OSAI_Connection.ProcessResponse(
-                gw_response.retval,
-                gw_response.ErrClass,
-                gw_response.ErrNum))
-                GW_BUFFER = gw_response.Value;
-
-            var l_response = await connection.Value.Client.ReadVarDoubleAsync(L_BUFFER_REQ);
-            if (OSAI_Connection.ProcessResponse(
-                l_response.retval,
-                l_response.ErrClass,
-                l_response.ErrNum))
-                L_BUFFER = l_response.Value;
-
-            var mw_response = await connection.Value.Client.ReadVarWordAsync(MW_BUFFER_REQ);
-            if (OSAI_Connection.ProcessResponse(
-                mw_response.retval,
-                mw_response.ErrClass,
-                mw_response.ErrNum))
-                MW_BUFFER = mw_response.Value;
+                var response = await connection.Value.Client.ReadVarWordAsync(request);
+                if (OSAI_Connection.ProcessResponse(
+                    response.retval,
+                    response.ErrClass,
+                    response.ErrNum))
+                    return response.Value;
+                return default;
+            }
+            catch
+            {
+                return default;
+            }
+        }
+        public async Task UpdateVariablesAsync(IEnumerable<IOSAI_AsyncVariable> variables)
+        {
+            foreach (var variable in variables)
+                await variable.UpdateAsync();
         }
         public IObservable<Optional<ushort>> ObserveWordVar(IOSAI_Address address)
         {
