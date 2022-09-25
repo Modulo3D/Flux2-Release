@@ -307,6 +307,16 @@ namespace Flux.ViewModels
         {
             throw new NotImplementedException();
         }
+
+        public override Optional<IEnumerable<string>> GetManualFilamentInsertGCode(ushort position, double iteration_distance, double feedrate)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override Optional<IEnumerable<string>> GetManualFilamentExtractGCode(ushort position, ushort iterations, double iteration_distance, double feedrate)
+        {
+            throw new NotImplementedException();
+        }
     }
     public class Dummy_MemoryBuffer : FLUX_MemoryBuffer<Dummy_ConnectionProvider, Dummy_VariableStore>
     {

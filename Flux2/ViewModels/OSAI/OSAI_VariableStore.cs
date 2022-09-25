@@ -33,9 +33,10 @@ namespace Flux.ViewModels
             try
             {
                 var chamber_unit    = new VariableUnits("main");
+                var plate_unit      = new VariableUnits("main");
                 var bump_unit       = new VariableUnits("x", "y");
                 var drivers_unit    = new VariableUnits("xyz", "e");
-                var lock_unit       = new VariableUnits("chamber", "top");
+                var lock_unit       = new VariableUnits("main", "top");
                 var pid_unit        = new VariableUnits("kp", "ki", "kd");
                 var axis_unit       = new VariableUnits("x", "y", "z", "e");
                 var probe_unit      = new VariableUnits("plate_z", "tool_z", "tool_xy");
@@ -112,7 +113,7 @@ namespace Flux.ViewModels
 
                 // STRINGS                                                                                                                                                                                                                                                                               
                 model.CreateArray(c => c.TEMP_CHAMBER,  1,  (OSAI_VARCODE.AA_CODE, 0), OSAI_ReadPriority.MEDIUM, (i, t) => $"M4140[{t}, 0]", chamber_unit);
-                model.CreateVariable(c => c.TEMP_PLATE,     (OSAI_VARCODE.AA_CODE, 1), OSAI_ReadPriority.MEDIUM, t => $"M4141[{t}, 0]");
+                model.CreateArray(c => c.TEMP_PLATE,    1,  (OSAI_VARCODE.AA_CODE, 1), OSAI_ReadPriority.MEDIUM, (i, t) => $"M4141[{t}, 0]", plate_unit);
                 model.CreateArray(c => c.TEMP_TOOL,     4,  (OSAI_VARCODE.AA_CODE, 2), OSAI_ReadPriority.MEDIUM, (i, t) => $"M4104[{i + 1}, {t}, 0]");
 
                 // INPUTS                                                                                                                                                                                                                                                                             

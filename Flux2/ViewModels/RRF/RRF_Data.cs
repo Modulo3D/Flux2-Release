@@ -1237,7 +1237,7 @@ namespace Flux.ViewModels
                 var file_position = job.FilePosition;
                 if (!file_position.HasValue)
                     return default;
-                var percentage = (double)file_position.Value / file_size.Value * 100.0;
+                var percentage = Math.Max(0, Math.Min(100, (double)file_position.Value / file_size.Value * 100.0));
                 return new ParamacroProgress(file_name.Value, percentage);
             }
             catch

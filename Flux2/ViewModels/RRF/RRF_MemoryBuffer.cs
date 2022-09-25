@@ -213,11 +213,11 @@ namespace Flux.ViewModels
             ConnectionProvider = connection_provider;
             RRFObjectModel = new RRF_ObjectModel();
 
-            var ultra_fast = TimeSpan.FromMilliseconds(100);
-            var fast = TimeSpan.FromMilliseconds(200);
-            var medium = TimeSpan.FromMilliseconds(350);
-            var slow = TimeSpan.FromMilliseconds(500);
-            var timeout = TimeSpan.FromMilliseconds(1000);
+            var ultra_fast = TimeSpan.FromMilliseconds(150);
+            var fast = TimeSpan.FromMilliseconds(250);
+            var medium = TimeSpan.FromMilliseconds(450);
+            var slow = TimeSpan.FromMilliseconds(750);
+            var timeout = TimeSpan.FromMilliseconds(5000);
 
             ModelKeys = new Dictionary<Type, string>()
             {
@@ -244,8 +244,8 @@ namespace Flux.ViewModels
             AddModelReader<RRF_ObjectModelHeat>(medium, timeout, h => RRFObjectModel.Heat = h);
             AddModelReader<RRF_ObjectModelJob>(medium, timeout, j => RRFObjectModel.Job = j);
             
-            AddFileSytemReader("gcodes/storage", medium, timeout, f => RRFObjectModel.Storage = f);
-            AddFileSytemReader("gcodes/queue", medium, timeout, f => RRFObjectModel.Queue = f);
+            AddFileSytemReader("gcodes/storage", slow, timeout, f => RRFObjectModel.Storage = f);
+            AddFileSytemReader("gcodes/queue", slow, timeout, f => RRFObjectModel.Queue = f);
 
             _HasFullMemoryRead = MemoryReaders.Connect()
                 .TrueForAll(f => f.WhenAnyValue(f => f.HasMemoryRead), r => r)

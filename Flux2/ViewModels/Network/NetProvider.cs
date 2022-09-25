@@ -182,7 +182,7 @@ namespace Flux.ViewModels
         public UdpDiscovery UdpDiscovery { get; }
 
         private bool _InterNetworkConnectivity;
-        public bool InterNetworkConnectivity
+        public bool InterNetworkConnectivity    
         {
             get => _InterNetworkConnectivity;
             set => this.RaiseAndSetIfChanged(ref _InterNetworkConnectivity, value);

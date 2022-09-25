@@ -148,23 +148,21 @@ namespace Flux.ViewModels
                 {
                     var array_setter = VariableStore.GetCachedSetterDelegate(array_expression);
                     var array_name = string.Join('/', array_expression.GetMembersName());
-                    Optional<RRF_VariableObjectModel<TModel, TRData, TWData>> get_variable(VariableAlias alias)
+                    Optional<RRF_VariableObjectModel<TModel, TRData, TWData>> get_variable(VariableUnit unit)
                     {
-                        var unit = Units.Lookup(alias);
-                        if (!unit.HasValue)
-                            return default;
-
-                        Optional<TList> get_value(List<TList> list) => list.ElementAtOrDefault(unit.Value.Address);
+                        Optional<TList> get_value(List<TList> list) => list.ElementAtOrDefault(unit.Address);
                         Optional<TRData> get_variable(RRF_ConnectionProvider c, TModel m) => GetVariables(m).Convert(get_value).Convert(m => get_data(c, m));
-                        return new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, $"{array_name} {alias}", ReadModel, GetModel, get_variable, unit: unit.Value);
+                        return new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, $"{array_name} {unit.Alias}", ReadModel, GetModel, get_variable, unit: unit);
                     }
-
 
                     IEnumerable<VariableUnit> find_units(VariableRange range)
                     {
                         foreach (var alias in range.Aliases)
-                            if (Units.TryGetValue(alias, out var unit))
-                                yield return unit;
+                        {
+                            var unit = Units.Keys.FirstOrOptional(u => u.Alias == alias);
+                            if (unit.HasValue)
+                                yield return unit.Value;
+                        }
                     }
 
                     var variable_units = variables_range.Length == 0 ? Units : variables_range
@@ -181,22 +179,21 @@ namespace Flux.ViewModels
                 {
                     var array_setter = VariableStore.GetCachedSetterDelegate(array_expression);
                     var array_name = string.Join('/', array_expression.GetMembersName());
-                    Optional<RRF_VariableObjectModel<TModel, TRData, TWData>> get_variable(VariableAlias alias)
+                    Optional<RRF_VariableObjectModel<TModel, TRData, TWData>> get_variable(VariableUnit unit)
                     {
-                        var unit = Units.Lookup(alias);
-                        if (!unit.HasValue)
-                            return default;
-
-                        Optional<TList> get_value(List<TList> list) => list.ElementAtOrDefault(unit.Value.Address);
+                        Optional<TList> get_value(List<TList> list) => list.ElementAtOrDefault(unit.Address);
                         Optional<TRData> get_variable(RRF_ConnectionProvider c, TModel m) => GetVariables(m).Convert(get_value).Convert(m => get_data(c, m));
-                        return new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, $"{array_name} {alias}", ReadModel, GetModel, get_variable, unit: unit.Value);
+                        return new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, $"{array_name} {unit.Alias}", ReadModel, GetModel, get_variable, unit: unit);
                     }
 
                     IEnumerable<VariableUnit> find_units(VariableRange range)
                     {
                         foreach (var alias in range.Aliases)
-                            if (Units.TryGetValue(alias, out var unit))
-                                yield return unit;
+                        {
+                            var unit = Units.Keys.FirstOrOptional(u => u.Alias == alias);
+                            if (unit.HasValue)
+                                yield return unit.Value;
+                        }
                     }
 
                     var variable_units = variables_range.Length == 0 ? Units : variables_range
@@ -214,24 +211,22 @@ namespace Flux.ViewModels
                 {
                     var array_setter = VariableStore.GetCachedSetterDelegate(array_expression);
                     var array_name = string.Join('/', array_expression.GetMembersName());
-                    Optional<RRF_VariableObjectModel<TModel, TRData, TWData>> get_variable(VariableAlias alias)
+                    Optional<RRF_VariableObjectModel<TModel, TRData, TWData>> get_variable(VariableUnit unit)
                     {
-                        var unit = Units.Lookup(alias);
-                        if (!unit.HasValue)
-                            return default;
-
-                        Task<bool> write_unit_data(RRF_ConnectionProvider c, TWData d) => write_data(c, d, unit.Value);
-                        Optional<TList> get_value(List<TList> list) => list.ElementAtOrDefault(unit.Value.Address);
+                        Task<bool> write_unit_data(RRF_ConnectionProvider c, TWData d) => write_data(c, d, unit);
+                        Optional<TList> get_value(List<TList> list) => list.ElementAtOrDefault(unit.Address);
                         Optional<TRData> get_variable(RRF_ConnectionProvider c, TModel m) => GetVariables(m).Convert(get_value).Convert(m => get_data(c, m));
-                        return new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, $"{array_name} {alias}", ReadModel, GetModel, get_variable, write_unit_data, unit.Value);
+                        return new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, $"{array_name} {unit.Alias}", ReadModel, GetModel, get_variable, write_unit_data, unit);
                     }
-
 
                     IEnumerable<VariableUnit> find_units(VariableRange range)
                     {
                         foreach (var alias in range.Aliases)
-                            if (Units.TryGetValue(alias, out var unit))
-                                yield return unit;
+                        {
+                            var unit = Units.Keys.FirstOrOptional(u => u.Alias == alias);
+                            if (unit.HasValue)
+                                yield return unit.Value;
+                        }
                     }
 
                     var variable_units = variables_range.Length == 0 ? Units : variables_range
@@ -249,24 +244,22 @@ namespace Flux.ViewModels
                 {
                     var array_setter = VariableStore.GetCachedSetterDelegate(array_expression);
                     var array_name = string.Join('/', array_expression.GetMembersName());
-                    Optional<RRF_VariableObjectModel<TModel, TRData, TWData>> get_variable(VariableAlias alias)
+                    Optional<RRF_VariableObjectModel<TModel, TRData, TWData>> get_variable(VariableUnit unit)
                     {
-                        var unit = Units.Lookup(alias);
-                        if (!unit.HasValue)
-                            return default;
-
-                        Task<bool> write_unit_data(RRF_ConnectionProvider c, TWData d) => write_data(c, d, unit.Value);
-                        Optional<TList> get_value(List<TList> list) => list.ElementAtOrDefault(unit.Value.Address);
+                        Task<bool> write_unit_data(RRF_ConnectionProvider c, TWData d) => write_data(c, d, unit);
+                        Optional<TList> get_value(List<TList> list) => list.ElementAtOrDefault(unit.Address);
                         Optional<TRData> get_variable(RRF_ConnectionProvider c, TModel m) => GetVariables(m).Convert(get_value).Convert(m => get_data(c, m));
-                        return new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, $"{array_name} {alias}", ReadModel, GetModel, get_variable, write_unit_data, unit.Value);
+                        return new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, $"{array_name} {unit.Alias}", ReadModel, GetModel, get_variable, write_unit_data, unit);
                     }
-
 
                     IEnumerable<VariableUnit> find_units(VariableRange range)
                     {
                         foreach (var alias in range.Aliases)
-                            if (Units.TryGetValue(alias, out var unit))
-                                yield return unit;
+                        {
+                            var unit = Units.Keys.FirstOrOptional(u => u.Alias == alias);
+                            if(unit.HasValue)
+                                yield return unit.Value;
+                        }
                     }
 
                     var variable_units = variables_range.Length == 0 ? Units : variables_range
@@ -284,18 +277,18 @@ namespace Flux.ViewModels
                 {
                     var variable_setter = VariableStore.GetCachedSetterDelegate(variable_expression);
                     var variable_name = string.Join('/', variable_expression.GetMembersName());
-                    Optional<RRF_VariableObjectModel<TModel, TRData, TWData>> get_variable(VariableAlias alias)
+                    Optional<RRF_VariableObjectModel<TModel, TRData, TWData>> get_variable(VariableUnit unit)
                     {
-                        var unit = Units.Lookup(alias);
-                        if (!unit.HasValue)
-                            return default;
-
-                        Optional<TList> get_value(List<TList> list) => list.ElementAtOrDefault(unit.Value.Address);
+                        Optional<TList> get_value(List<TList> list) => list.ElementAtOrDefault(unit.Address);
                         Optional<TRData> get_variable(RRF_ConnectionProvider c, TModel m) => GetVariables(m).Convert(get_value).Convert(m => get_data(c, m));
-                        return new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, $"{variable_name} {alias}", ReadModel, GetModel, get_variable, unit: unit.Value);
+                        return new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, variable_name, ReadModel, GetModel, get_variable, unit: unit);
                     }
 
-                    var variable = get_variable(alias);
+                    var unit = Units.Keys.FirstOrOptional(u => u.Alias == alias);
+                    if (!unit.HasValue)
+                        return;
+
+                    var variable = get_variable(unit.Value);
                     if (!variable.HasValue)
                         return;
 
@@ -310,19 +303,19 @@ namespace Flux.ViewModels
                 {
                     var variable_setter = VariableStore.GetCachedSetterDelegate(variable_expression);
                     var variable_name = string.Join('/', variable_expression.GetMembersName());
-                    Optional<RRF_VariableObjectModel<TModel, TRData, TWData>> get_variable(VariableAlias alias)
+                    Optional<RRF_VariableObjectModel<TModel, TRData, TWData>> get_variable(VariableUnit unit)
                     {
-                        var unit = Units.Lookup(alias);
-                        if (!unit.HasValue)
-                            return default;
-
-                        Task<bool> write_unit_data(RRF_ConnectionProvider c, TWData d) => write_data(c, d, unit.Value);
-                        Optional<TList> get_value(List<TList> list) => list.ElementAtOrDefault(unit.Value.Address);
+                        Task<bool> write_unit_data(RRF_ConnectionProvider c, TWData d) => write_data(c, d, unit);
+                        Optional<TList> get_value(List<TList> list) => list.ElementAtOrDefault(unit.Address);
                         Optional<TRData> get_variable(RRF_ConnectionProvider c, TModel m) => GetVariables(m).Convert(get_value).Convert(m => get_data(c, m));
-                        return new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, $"{variable_name} {alias}", ReadModel, GetModel, get_variable, write_unit_data, unit.Value);
+                        return new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, variable_name, ReadModel, GetModel, get_variable, write_unit_data, unit);
                     }
 
-                    var variable = get_variable(alias);
+                    var unit = Units.Keys.FirstOrOptional(u => u.Alias == alias);
+                    if (!unit.HasValue)
+                        return;
+
+                    var variable = get_variable(unit.Value);
                     if (!variable.HasValue)
                         return;
 

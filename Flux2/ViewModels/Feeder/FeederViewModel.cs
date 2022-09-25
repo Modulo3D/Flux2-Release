@@ -19,10 +19,6 @@ namespace Flux.ViewModels
         public FluxViewModel Flux { get; }
         public FeedersViewModel Feeders { get; }
 
-        public ObservableAsPropertyHelper<Optional<FLUX_Humidity>> _Humidity;
-        [RemoteOutput(true, typeof(HumidityConverter))]
-        public Optional<FLUX_Humidity> Humidity => _Humidity.Value;
-
         // FEEDER
         private ObservableAsPropertyHelper<EFeederState> _FeederState;
         public EFeederState FeederState => _FeederState.Value;
@@ -31,12 +27,9 @@ namespace Flux.ViewModels
         public ToolNozzleViewModel ToolNozzle { get; }
         private ObservableAsPropertyHelper<Optional<IFluxMaterialViewModel>> _SelectedMaterial;
         public Optional<IFluxMaterialViewModel> SelectedMaterial => _SelectedMaterial.Value;
-        private ObservableAsPropertyHelper<Optional<IFluxToolMaterialViewModel>> _SelectedToolMaterial;
-        public Optional<IFluxToolMaterialViewModel> SelectedToolMaterial => _SelectedToolMaterial.Value;
 
         [RemoteContent(true)]
         public IObservableCache<IFluxMaterialViewModel, ushort> Materials { get; }
-        public IObservableCache<IFluxToolMaterialViewModel, ushort> ToolMaterials { get; }
 
         IFluxToolNozzleViewModel IFluxFeederViewModel.ToolNozzle => ToolNozzle;
 
@@ -82,23 +75,10 @@ namespace Flux.ViewModels
                 .AsObservableCache()
                 .DisposeWith(Disposables);
 
-            ToolMaterials = Materials.Connect()
-                .Transform(m => (MaterialViewModel)m)
-                .Transform(m => new ToolMaterialViewModel(ToolNozzle, m))
-                .Transform(tm => (IFluxToolMaterialViewModel)tm)
-                .AsObservableCache();
-
             var selected_positions = Flux.ConnectionProvider
                 .ObserveVariable(c => c.FILAMENT_AFTER_GEAR)
                 .Convert(c => c.QueryWhenChanged())
                 .ToOptionalObservable();
-
-            var tool_materials = ToolMaterials.Connect()
-                .QueryWhenChanged();
-
-            _SelectedToolMaterial = Observable.CombineLatest(
-               tool_materials, extruders, selected_positions, FindSelectedViewModel)
-                .ToProperty(this, v => v.SelectedToolMaterial);
 
             var materials = Materials.Connect()
                 .QueryWhenChanged();
@@ -106,10 +86,6 @@ namespace Flux.ViewModels
             _SelectedMaterial = Observable.CombineLatest(
                materials, extruders, selected_positions, FindSelectedViewModel)
                 .ToProperty(this, v => v.SelectedMaterial);
-
-
-            foreach (ToolMaterialViewModel tm in ToolMaterials.Items)
-                tm.Initialize();
 
             foreach (MaterialViewModel m in Materials.Items)
                 m.Initialize();
@@ -168,25 +144,6 @@ namespace Flux.ViewModels
                 })
                 .ToProperty(this, v => v.ToolNozzleBrush)
                 .DisposeWith(Disposables);
-
-            var humidity_units = Flux.ConnectionProvider.GetArrayUnits(c => c.FILAMENT_HUMIDITY);
-            _Humidity = Flux.SettingsProvider.WhenAnyValue(s => s.ExtrudersCount)
-                .SelectMany(e =>
-                {
-                    if (!e.HasValue)
-                        return Observable.Return(Optional<FLUX_Humidity>.None);
-                    var spool_count = e.Value.machine_extruders * e.Value.mixing_extruders;
-                    if (spool_count != humidity_units.Count())
-                        return Observable.Return(Optional<FLUX_Humidity>.None);
-                    var humidity_unit = Flux.ConnectionProvider.GetArrayUnit(c => c.FILAMENT_HUMIDITY, Position);
-                    if(humidity_unit.HasValue)
-                        return Observable.Return(Optional<FLUX_Humidity>.None);
-                    var humidity = Flux.ConnectionProvider.ObserveVariable(c => c.FILAMENT_HUMIDITY, humidity_unit.Value.Alias);
-                    if (!humidity.HasObservable)
-                        return Observable.Return(Optional<FLUX_Humidity>.None);
-                    return humidity.Observable;
-                })
-                .ToProperty(this, v => v.Humidity);
         }
 
         private IEnumerable<IFluxMaterialViewModel> CreateMaterials(Optional<(ushort machine_extruders, ushort mixing_extruders)> extruders)

@@ -48,9 +48,13 @@ namespace Flux.ViewModels
                     yield return new TemperatureViewModel(this, chamber_temp.Value);
             }
 
-            var temp_plate = Flux.ConnectionProvider.GetVariable(c => c.TEMP_PLATE);
-            if (temp_plate.HasValue)
-                yield return new TemperatureViewModel(this, temp_plate.Value);
+            var plate_units = Flux.ConnectionProvider.GetArrayUnits(c => c.TEMP_CHAMBER);
+            foreach (var plate_unit in plate_units)
+            {
+                var plate_temp = Flux.ConnectionProvider.GetVariable(m => m.TEMP_PLATE, plate_unit.Alias);
+                if (plate_temp.HasValue)
+                    yield return new TemperatureViewModel(this, plate_temp.Value);
+            }
         }
     }
 }

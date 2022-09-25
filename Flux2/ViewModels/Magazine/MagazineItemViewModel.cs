@@ -13,8 +13,6 @@ namespace Flux.ViewModels
         public FluxViewModel Flux { get; }
         public IFluxFeederViewModel Feeder { get; }
 
-        public ReactiveCommand<Unit, Unit> RaiseMagazineCommand { get; }
-
         private ObservableAsPropertyHelper<string> _ToolNozzeBrush;
         [RemoteOutput(true)]
         public string ToolNozzeBrush => _ToolNozzeBrush.Value;
@@ -47,34 +45,6 @@ namespace Flux.ViewModels
             _Nozzle = Feeder.ToolNozzle.WhenAnyValue(f => f.Document)
                 .Select(d => d.nozzle.ToString())
                 .ToProperty(this, v => v.Nozzle);
-
-            var can_raise = Flux.ConnectionProvider.ObserveVariable(m => m.OPEN_HEAD_CLAMP)
-                .ObservableOr(() => false);
-
-            RaiseMagazineCommand = ReactiveCommand.CreateFromTask(RaiseMagazineAsync, can_raise);
-
-            // TODO
-            /*if (Flux.ConnectionProvider.HasVariable(m => m.RAISE_PNEUMATIC_PISTON))
-                AddCommand("raiseMagazine", RaiseMagazineCommand);*/
-        }
-
-        private Task RaiseMagazineAsync()
-        {
-            // TODO
-            /*var lower_key = Flux.ConnectionProvider.GetArrayUnit(m => m.LOWER_PNEUMATIC_PISTON, Feeder.Position);
-            if (!lower_key.HasValue)
-                return;
-
-            var raise_key = Flux.ConnectionProvider.GetArrayUnit(m => m.RAISE_PNEUMATIC_PISTON, Feeder.Position);
-            if (!raise_key.HasValue)
-                return;
-
-            await Flux.ConnectionProvider.WriteVariableAsync(m => m.LOWER_PNEUMATIC_PISTON, lower_key.Value.Alias, false);
-            await Flux.ConnectionProvider.WriteVariableAsync(m => m.RAISE_PNEUMATIC_PISTON, lower_key.Value.Alias, true);
-
-            await Task.Delay(TimeSpan.FromSeconds(1));
-            await Flux.ConnectionProvider.WriteVariableAsync(m => m.RAISE_PNEUMATIC_PISTON, raise_key.Value.Alias, false);*/
-            return Task.CompletedTask;
         }
     }
 }

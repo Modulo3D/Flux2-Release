@@ -14,6 +14,11 @@ using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
+    public class ManualCalibrationConditionAttribute : FilterConditionAttribute
+    {
+        public ManualCalibrationConditionAttribute(string name = default, bool filter_on_cycle = true, string[] include_alias = default, string[] exclude_alias = default)
+            : base(name, filter_on_cycle, include_alias, exclude_alias) { }
+    }
     public interface IManualCalibrationPhaseViewModel : IRemoteControl
     {
         FluxViewModel Flux { get; }
@@ -122,18 +127,8 @@ namespace Flux.ViewModels
 
         public override void Initialize()
         {
-            if (Flux.StatusProvider.VacuumPresence.HasValue)
-                Conditions.AddOrUpdate(Flux.StatusProvider.VacuumPresence.Value);
-
-            // TODO
-            if (Flux.StatusProvider.TopLockClosed.HasValue)
-                Conditions.AddOrUpdate(Flux.StatusProvider.TopLockClosed.Value);
-            if (Flux.StatusProvider.ChamberLockClosed.HasValue)
-                Conditions.AddOrUpdate(Flux.StatusProvider.ChamberLockClosed.Value);
-
-            if (Flux.StatusProvider.HasZBedHeight.HasValue)
-                Conditions.AddOrUpdate(Flux.StatusProvider.HasZBedHeight.Value);
-
+            var conditions = Flux.StatusProvider.GetConditions<ManualCalibrationConditionAttribute>();
+            Conditions.AddOrUpdate(conditions.SelectMany(c => c.Value.Select(c => c.condition)));
             InitializeRemoteView();
         }
     }
@@ -157,9 +152,9 @@ namespace Flux.ViewModels
 
             var print_temp = ManualCalibration.Flux.Feeders.Feeders.Connect()
                 .WatchOptional(Position)
-                .ConvertMany(f => f.WhenAnyValue(f => f.SelectedToolMaterial))
-                .ConvertMany(tm => tm.WhenAnyValue(tm => tm.Document))
-                .Convert(tm => tm[tm => tm.PrintTemperature, 0.0]);
+                .ConvertMany(f => f.WhenAnyValue(f => f.SelectedMaterial))
+                .Convert(m => m.ToolMaterial)
+                .ConvertMany(tm => tm.WhenAnyValue(tm => tm.ExtrusionTemp));
 
             var tool_offset = ManualCalibration.Calibration.Offsets.Connect()
                 .WatchOptional(Position)
@@ -185,9 +180,8 @@ namespace Flux.ViewModels
         {
             var print_temperature = ManualCalibration.Flux.Feeders.Feeders
                 .Lookup(Position)
-                .Convert(f => f.SelectedToolMaterial)
-                .Convert(tm => tm.Document)
-                .Convert(tm => tm[tm => tm.PrintTemperature, 0.0]);
+                .Convert(f => f.SelectedMaterial)
+                .Convert(tm => tm.ToolMaterial.ExtrusionTemp);
             if (!print_temperature.HasValue)
                 return;
 

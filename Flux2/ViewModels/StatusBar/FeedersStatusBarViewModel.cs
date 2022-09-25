@@ -8,7 +8,7 @@ using System.Reactive.Linq;
 
 namespace Flux.ViewModels
 {
-    public class FeedersStatusBarViewModel : StatusBarItemViewModel<FeedersStatusBarViewModel>
+    /*public class FeedersStatusBarViewModel : StatusBarItemViewModel<FeedersStatusBarViewModel>
     {
         public FeedersStatusBarViewModel(FluxViewModel flux) : base(flux)
         {
@@ -51,11 +51,11 @@ namespace Flux.ViewModels
                 .DistinctUntilChanged()
                 .StartWith(false);
 
-            var open = Flux.StatusProvider.ChamberLockClosed
-                .ConvertToObservable(c => c.ValueChanged)
-                .ConvertToObservable(t => !t.@in)
-                .ObservableOr(() => false)
-                .DistinctUntilChanged()
+            var open = Flux.StatusProvider.LockClosedConditions
+                .WatchOptional("main")
+                .ConvertMany(c => c.StateChanged)
+                .Convert(t => !t.Valid)
+                .ValueOr(() => false)
                 .StartWith(false);
 
             var tool = Observable.CombineLatest(connecting, in_mateinance, error, not_found, hot, on, open,
@@ -88,5 +88,5 @@ namespace Flux.ViewModels
                     return StatusBarState.Disabled;
                 });
         }
-    }
+    }*/
 }

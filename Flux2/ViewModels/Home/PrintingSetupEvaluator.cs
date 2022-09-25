@@ -355,7 +355,8 @@ namespace Flux.ViewModels
                 InvalidProbe)
                 .ToProperty(this, e => e.IsInvalidProbe);
 
-            var tool_material = Feeder.WhenAnyValue(f => f.SelectedToolMaterial);
+            var material = Feeder.WhenAnyValue(f => f.SelectedMaterial);
+            var tool_material = material.Convert(m => m.ToolMaterial);
 
             _HasColdNozzle = Observable.CombineLatest(
                 Status.WhenAnyValue(s => s.PrintingEvaluation),

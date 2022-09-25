@@ -12,6 +12,14 @@ using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
+    public class FeederOperationConditionAttribute : FilterConditionAttribute
+    {
+        public FeederOperationConditionAttribute(string name = default, bool filter_on_cycle = true, string[] include_alias = default, string[] exclude_alias = default)
+            : base(name, filter_on_cycle, include_alias, exclude_alias)
+        {
+        }
+    }
+
     public interface IOperationViewModel
     {
         string OperationText { get; }
@@ -19,8 +27,9 @@ namespace Flux.ViewModels
         string TitleText { get; }
     }
 
-    public abstract class FeederOperationViewModel<TViewModel> : FluxRoutableViewModel<TViewModel>, IOperationViewModel
-        where TViewModel : FeederOperationViewModel<TViewModel>
+    public abstract class FeederOperationViewModel<TViewModel, TConditionAttribute> : FluxRoutableViewModel<TViewModel>, IOperationViewModel
+        where TViewModel : FeederOperationViewModel<TViewModel, TConditionAttribute>
+        where TConditionAttribute : FeederOperationConditionAttribute
     {
         public FeederViewModel Feeder { get; }
 
@@ -68,11 +77,11 @@ namespace Flux.ViewModels
 
             var conditions = FindConditions();
             FilteredConditions = conditions
-                .AsObservableChangeSet(t => t.condition.Name)
+                .AsObservableChangeSet(t => t.condition.ConditionName)
                 .Filter(is_idle.Select(idle =>
                 {
-                    return (Func<(IConditionViewModel condition, bool filter_on_cycle), bool>)filter_condition;
-                    bool filter_condition((IConditionViewModel condition, bool filter_on_cycle) t) => !t.filter_on_cycle || idle;
+                    return (Func<(IConditionViewModel condition, TConditionAttribute condition_attribute), bool>)filter_condition;
+                    bool filter_condition((IConditionViewModel condition, TConditionAttribute condition_attribute) t) => !t.condition_attribute.FilterOnCycle || idle;
                 }))
                 .Transform(t => t.condition)
                 .AutoRefresh(c => c.State)
@@ -112,22 +121,32 @@ namespace Flux.ViewModels
                 .ConvertOr(t => t.Percentage, () => 0)
                 .ToProperty(this, v => v.TemperaturePercentage);
 
-            CancelOperationCommand = ReactiveCommand.CreateFromTask(async () => { await CancelOperationAsync(); }, can_cancel);
-            ExecuteOperationCommand = ReactiveCommand.CreateFromTask(async () => { await ExecuteOperationAsync(); }, can_execute);
+            CancelOperationCommand = ReactiveCommand.CreateFromTask(CancelOperationAsync, can_cancel);
+            ExecuteOperationCommand = ReactiveCommand.CreateFromTask(SafeExecuteOperationAsync, can_execute);
         }
 
         public abstract Task UpdateNFCAsync();
 
-        protected abstract Task<bool> CancelOperationAsync();
+        protected abstract Task CancelOperationAsync();
         protected abstract IObservable<bool> CanCancelOperation();
 
         protected abstract Task<bool> ExecuteOperationAsync();
-        protected abstract IObservable<bool> FindCanUpdateNFC();
         protected abstract IObservable<bool> CanExecuteOperation();
+        private async Task SafeExecuteOperationAsync()
+        {
+            var navigate_back = await ExecuteOperationAsync();
+            await Flux.ConnectionProvider.ParkToolAsync();
+            await Flux.ConnectionProvider.TurnOffExtrudersAsync();
+            if(navigate_back)
+                Flux.Navigator.NavigateBack();
+        }
 
         protected abstract string FindTitleText(bool idle);
         protected abstract string FindOperationText(bool idle);
 
-        protected abstract IEnumerable<(IConditionViewModel condition, bool filter_on_cycle)> FindConditions();
+        protected virtual IEnumerable<(IConditionViewModel condition, TConditionAttribute condition_attribute)> FindConditions()
+        {
+            return Flux.StatusProvider.GetConditions<TConditionAttribute>().SelectMany(kvp => kvp.Value);
+        }
     }
 }

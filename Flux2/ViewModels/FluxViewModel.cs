@@ -184,11 +184,16 @@ namespace Flux.ViewModels
                     var printer_id      = SettingsProvider.CoreSettings.Local.PrinterID;
                     var printer_result  = db.FindById<Printer>(printer_id.ValueOr(() => 0));
                     var printer         = printer_result.Documents.FirstOrDefault().ToOptional();
-                    var gcode_flavor    = printer.ConvertOr(p => p[p => p.MachineGCodeFlavor, ""], () => "");
-                    ConnectionProvider  = gcode_flavor switch
+                    ConnectionProvider  = printer.ConvertOr(p => p.Id, () => -1) switch
                     {
-                        "Modulo3D (Duet)" => new RRF_ConnectionProvider(this),
-                        "Modulo3D (Osai)" => new OSAI_ConnectionProvider(this),
+                        5 => new OSAI_ConnectionProvider(this),
+                        6 => new OSAI_ConnectionProvider(this),
+                        7 => new OSAI_ConnectionProvider(this),
+                        8 => new RRF_ConnectionProvider(this, c => new RRF_VariableStoreS300(c)),
+                        9 => new RRF_ConnectionProvider(this, c => new RRF_VariableStoreS300(c)),
+                        10 => new RRF_ConnectionProvider(this, c => new RRF_VariableStoreS300(c)),
+                        11 => new RRF_ConnectionProvider(this, c => new RRF_VariableStoreS300(c)),
+                        12 => new RRF_ConnectionProvider(this, c => new RRF_VariableStoreMP500(c)),
                         _ => new Dummy_ConnectionProvider(this)
                     };
 
@@ -208,7 +213,7 @@ namespace Flux.ViewModels
                     LoggingProvider = new LoggingProvider(this);
                     Startup         = new StartupViewModel(this);
 
-                    _LeftIconForeground = ConnectionProvider.ObserveVariable(m => m.OPEN_LOCK, "chamber")
+                    _LeftIconForeground = ConnectionProvider.ObserveVariable(m => m.OPEN_LOCK, "main")
                         .ObservableOrDefault()
                         .Convert(l => l ? FluxColors.Active : FluxColors.Inactive)
                         .ValueOr(() => FluxColors.Empty)
@@ -228,8 +233,8 @@ namespace Flux.ViewModels
                     if (ConnectionProvider.HasVariable(s => s.CHAMBER_LIGHT))
                         RightButtonCommand = ReactiveCommand.CreateFromTask(async () => { await ConnectionProvider.ToggleVariableAsync(m => m.CHAMBER_LIGHT); });
 
-                    if (ConnectionProvider.HasVariable(s => s.OPEN_LOCK, "chamber"))
-                        LeftButtonCommand = ReactiveCommand.CreateFromTask(async () => { await ConnectionProvider.ToggleVariableAsync(m => m.OPEN_LOCK, "chamber"); }, is_idle);
+                    if (ConnectionProvider.HasVariable(s => s.OPEN_LOCK, "main"))
+                        LeftButtonCommand = ReactiveCommand.CreateFromTask(async () => { await ConnectionProvider.ToggleVariableAsync(m => m.OPEN_LOCK, "main"); }, is_idle);
 
                     var status_bar_nav = new NavModalViewModel(this, StatusBar);
                     OpenStatusBarCommand = ReactiveCommand.Create(() => { Navigator.Navigate(status_bar_nav); });
@@ -409,6 +414,18 @@ namespace Flux.ViewModels
                 dialog.AddContent(new TextBlock("content", content));
                 return dialog;
             });
+        }
+        public async Task<bool> IterateConfirmDialogAsync(string title, string content, ushort max_iterations, Func<Task> task)
+        {
+            ushort iterations = 0;
+            var result = ContentDialogResult.None;
+            while (result != ContentDialogResult.Primary && iterations < max_iterations)
+            {
+                iterations++;
+                await task();
+                result = await ShowConfirmDialogAsync(title, content);
+            }
+            return result == ContentDialogResult.Primary;
         }
         public async Task<ContentDialogResult> ShowProgressDialogAsync(string title, Func<IContentDialog, IDialogOption<double>, Task> operation)
         {

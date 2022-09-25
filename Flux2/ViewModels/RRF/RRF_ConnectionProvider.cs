@@ -31,9 +31,9 @@ namespace Flux.ViewModels
     {
         public FluxViewModel Flux { get; }
 
-        public RRF_ConnectionProvider(FluxViewModel flux) : base(flux,
+        public RRF_ConnectionProvider(FluxViewModel flux, Func<RRF_ConnectionProvider, RRF_VariableStoreBase> get_variable_store) : base(flux,
             RRF_ConnectionPhase.START_PHASE, RRF_ConnectionPhase.END_PHASE, p => (int)p,
-            c => new RRF_MemoryBuffer(c), c => new RRF_VariableStoreS300(c))
+            c => new RRF_MemoryBuffer(c), get_variable_store)
         {
             Flux = flux;
         }

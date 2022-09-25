@@ -1163,5 +1163,15 @@ namespace Flux.ViewModels
         {
             return new[] { "(REL)" };
         }
+
+        public override Optional<IEnumerable<string>> GetManualFilamentInsertGCode(ushort position, double iteration_distance, double feedrate)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override Optional<IEnumerable<string>> GetManualFilamentExtractGCode(ushort position, ushort iterations, double iteration_distance, double feedrate)
+        {
+            throw new NotImplementedException();
+        }
     }
 }

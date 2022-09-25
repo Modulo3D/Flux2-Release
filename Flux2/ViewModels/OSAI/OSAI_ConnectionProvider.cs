@@ -182,54 +182,6 @@ namespace Flux.ViewModels
                 return false;
             return true;
         }
-
-        // TODO
-        /*public override Optional<IEnumerable<string>> GenerateStartMCodeLines(MCode mcode)
-        {
-            return generate_start_mcode().ToOptional();
-            IEnumerable<string> generate_start_mcode()
-            {
-                // Write preprocess gcode
-                yield return "(GTO, end_preprocess)";
-
-                var def_recovery = new OSAI_MCodeRecovery(mcode.MCodeGuid, false, 0, 0,
-                    new Dictionary<VariableUnit, double>()
-                    {
-                        { "0", 0 },
-                        { "1", 0 },
-                        { "2", 0 },
-                        { "3", 0 },
-                    },
-                    new Dictionary<VariableUnit, double>() 
-                    {
-                        { "X", 0 },
-                        { "Y", 0 },
-                        { "Z", 0 },
-                        { "E", 0 },
-                    });
-
-                var recovery_mcode = Connection.Convert(c => c.GenerateRecoveryLines(def_recovery));
-                if (recovery_mcode.HasValue)
-                {
-                    foreach (var recovery_move in recovery_mcode.Value)
-                    {
-                        var gcode_move = new GCodeMove(mcode, Optional<GCodeMove>.None, recovery_move);
-                        var move = gcode_move.GetMove();
-                        if (!move.HasValue)
-                            continue;
-
-                        if (!mcode.GCodeMoves.ContainsKey(move.Value))
-                            mcode.GCodeMoves.Add(move.Value, gcode_move);
-                    }
-                }
-
-                foreach (var gcode_move in mcode.GCodeMoves.Values)
-                    yield return gcode_move.Line;
-
-                yield return "\"end_preprocess\"";
-                yield return "(PAS)";
-            }
-        }*/
         public override Optional<IEnumerable<string>> GenerateEndMCodeLines(MCode mcode, Optional<ushort> queue_size)
         {
             return default;

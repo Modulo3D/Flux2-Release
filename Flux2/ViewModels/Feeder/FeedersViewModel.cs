@@ -16,10 +16,6 @@ namespace Flux.ViewModels
         [RemoteContent(true)]
         public IObservableCache<IFluxFeederViewModel, ushort> Feeders { get; private set; }
 
-        public ObservableAsPropertyHelper<Optional<FLUX_Humidity>> _Humidity;
-        [RemoteOutput(true, typeof(HumidityConverter))]
-        public Optional<FLUX_Humidity> Humidity => _Humidity.Value;
-
         public ObservableAsPropertyHelper<short> _SelectedExtruder;
         public short SelectedExtruder => _SelectedExtruder.Value;
 
@@ -86,25 +82,6 @@ namespace Flux.ViewModels
                 .ObservableOrDefault()
                 .ToProperty(this, v => v.SelectedFeeder)
                 .DisposeWith(Disposables);
-
-            var humidity_units = Flux.ConnectionProvider.GetArrayUnits(c => c.FILAMENT_HUMIDITY);
-            _Humidity = Flux.SettingsProvider.WhenAnyValue(s => s.ExtrudersCount)
-                .SelectMany(e =>
-                {
-                    if (!e.HasValue)
-                        return Observable.Return(Optional<FLUX_Humidity>.None);
-                    var spool_count = e.Value.machine_extruders * e.Value.mixing_extruders;
-                    if (humidity_units.Count() != 1 && spool_count == 1)
-                        return Observable.Return(Optional<FLUX_Humidity>.None);
-                    var humidity_unit = Flux.ConnectionProvider.GetArrayUnit(c => c.FILAMENT_HUMIDITY, 0);
-                    if (!humidity_unit.HasValue)
-                        return Observable.Return(Optional<FLUX_Humidity>.None);
-                    var humidity = Flux.ConnectionProvider.ObserveVariable(c => c.FILAMENT_HUMIDITY, humidity_unit.Value.Alias);
-                    if (!humidity.HasObservable)
-                        return Observable.Return(Optional<FLUX_Humidity>.None);
-                    return humidity.Observable;
-                })
-                .ToProperty(this, v => v.Humidity);
         }
 
         private IObservable<Optional<IFluxFeederViewModel>> FindSelectedFeeder(short selected_extruder)

@@ -266,7 +266,7 @@ namespace Flux.ViewModels
                 .ValueOr(() => false)
                 .ToOptional();
 
-            var can_naviagate_back = Flux.StatusProvider.ClampClosed
+            var can_naviagate_back = Flux.StatusProvider.ClampClosedCondition
                 .ConvertToObservable(c => c.StateChanged)
                 .ConvertToObservable(s => s.Valid)
                 .ObservableOr(() => true)

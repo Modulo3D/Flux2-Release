@@ -32,10 +32,7 @@ namespace Flux.ViewModels
             Material = material;
             Flux = material.Flux;
             ToolNozzle = tool_nozzle;
-        }
 
-        public void Initialize()
-        {
             _Document = Observable.CombineLatest(
                 Material.WhenAnyValue(v => v.Document),
                 ToolNozzle.WhenAnyValue(v => v.Document),

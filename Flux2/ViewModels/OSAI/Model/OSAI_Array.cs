@@ -31,7 +31,7 @@ namespace Flux.ViewModels
             {
                 var v_unit = custom_unit
                     .Convert(u => u.ElementAtOrDefault(i))
-                    .Convert(u => u.Value)
+                    .Convert(u => u.Key)
                     .ValueOr(() => new VariableUnit((ushort)(i + 1)));
 
                 var i_name = $"{name} {v_unit}";

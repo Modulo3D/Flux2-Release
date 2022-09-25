@@ -62,7 +62,7 @@ namespace Flux.ViewModels
 
         private void MagazineAsync()
         {
-            var navigate_back = Flux.StatusProvider.ClampClosed
+            var navigate_back = Flux.StatusProvider.ClampClosedCondition
                 .ConvertToObservable(c => c.StateChanged)
                 .ConvertToObservable(s => s.Valid);
 

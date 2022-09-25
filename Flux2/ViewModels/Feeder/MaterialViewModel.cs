@@ -23,36 +23,6 @@ namespace Flux.ViewModels
         public ReactiveCommand<Unit, Unit> UnloadMaterialCommand { get; private set; }
         public ReactiveCommand<Unit, Unit> LoadPurgeMaterialCommand { get; private set; }
 
-        private LoadMaterialViewModel _LoadMaterialViewModel;
-        public LoadMaterialViewModel LoadMaterialViewModel
-        {
-            get
-            {
-                if (_LoadMaterialViewModel == null)
-                {
-                    _LoadMaterialViewModel = new LoadMaterialViewModel(this);
-                    _LoadMaterialViewModel.Initialize();
-                    _LoadMaterialViewModel.InitializeRemoteView();
-                }
-                return _LoadMaterialViewModel;
-            }
-        }
-
-        private UnloadMaterialViewModel _UnloadMaterialViewModel;
-        public UnloadMaterialViewModel UnloadMaterialViewModel
-        {
-            get
-            {
-                if (_UnloadMaterialViewModel == null)
-                {
-                    _UnloadMaterialViewModel = new UnloadMaterialViewModel(this);
-                    _UnloadMaterialViewModel.Initialize();
-                    _UnloadMaterialViewModel.InitializeRemoteView();
-                }
-                return _UnloadMaterialViewModel;
-            }
-        }
-
         private ObservableAsPropertyHelper<string> _MaterialBrush;
         [RemoteOutput(true)]
         public string MaterialBrush => _MaterialBrush.Value;
@@ -76,6 +46,52 @@ namespace Flux.ViewModels
         private ObservableAsPropertyHelper<bool> _MaterialLoaded;
         [RemoteOutput(true)]
         public bool MaterialLoaded => _MaterialLoaded.Value;
+
+        private LoadFilamentOperationViewModel _LoadFilamentOperation;
+        public LoadFilamentOperationViewModel LoadFilamentOperation
+        {
+            get
+            {
+                if (_LoadFilamentOperation == null)
+                {
+                    _LoadFilamentOperation = new LoadFilamentOperationViewModel(this);
+                    _LoadFilamentOperation.Initialize();
+                    _LoadFilamentOperation.InitializeRemoteView();
+                }
+                return _LoadFilamentOperation;
+            }
+        }
+
+        private UnloadFilamentOperationViewModel _UnloadFilamentOperation;
+        public UnloadFilamentOperationViewModel UnloadFilamentOperation
+        {
+            get
+            {
+                if (_UnloadFilamentOperation == null)
+                {
+                    _UnloadFilamentOperation = new UnloadFilamentOperationViewModel(this);
+                    _UnloadFilamentOperation.Initialize();
+                    _UnloadFilamentOperation.InitializeRemoteView();
+                }
+                return _UnloadFilamentOperation;
+            }
+        }
+
+        IFluxToolMaterialViewModel IFluxMaterialViewModel.ToolMaterial => ToolMaterial;
+        private ToolMaterialViewModel _ToolMaterial;
+        public ToolMaterialViewModel ToolMaterial 
+        {
+            get
+            {
+                if (_ToolMaterial == default)
+                    _ToolMaterial = new ToolMaterialViewModel(Feeder.ToolNozzle, this);
+                return _ToolMaterial;
+            }
+        }
+
+        public ObservableAsPropertyHelper<Optional<FLUX_Humidity>> _Humidity;
+        [RemoteOutput(true, typeof(HumidityConverter))]
+        public Optional<FLUX_Humidity> Humidity => _Humidity.Value;
 
         public MaterialViewModel(FeederViewModel feeder, ushort position) : base(feeder, position, s => s.Materials, (db, m) =>
         {
@@ -137,16 +153,22 @@ namespace Flux.ViewModels
                 .ValueOr(() => false)
                 .ToProperty(this, v => v.MaterialLoaded)
                 .DisposeWith(Disposables);
+
+            var humidity_unit = Flux.ConnectionProvider.GetArrayUnit(c => c.FILAMENT_HUMIDITY, Position);
+            var humidity_alias = humidity_unit.ConvertOr(c => c.Alias, () => new VariableAlias());
+            _Humidity = Flux.ConnectionProvider.ObserveVariable(c => c.FILAMENT_HUMIDITY, humidity_alias)
+                .ObservableOrDefault()
+                .ToProperty(this, v => v.Humidity);
         }
 
-        private void SetMaterialLoaded(Optional<bool> wire_presence_on_head)
+        public void SetMaterialLoaded(Optional<bool> material_loaded)
         {
-            if (!wire_presence_on_head.HasValue)
+            if (!material_loaded.HasValue)
                 return;
             if (!Nfc.Tag.HasValue)
                 return;
 
-            if(wire_presence_on_head.Value)
+            if(material_loaded.Value)
                 StoreTag(t => t.SetLoaded(Feeder.Position));
             else
                 StoreTag(t => t.SetLoaded(default));
@@ -163,9 +185,6 @@ namespace Flux.ViewModels
             var tool_nozzle = Feeder.ToolNozzle
                 .WhenAnyValue(t => t.State);
 
-            var tool_material = Feeder.ToolMaterials.Connect()
-                .WatchOptional(Position);
-
             var is_selected = Feeder.WhenAnyValue(f => f.SelectedMaterial)
                 .Convert(m => m == this)
                 .ValueOr(() => false);
@@ -174,7 +193,7 @@ namespace Flux.ViewModels
                 is_selected,
                 tool_nozzle,
                 this.WhenAnyValue(v => v.State),
-                tool_material.ConvertMany(tm => tm.WhenAnyValue(v => v.State)),
+                ToolMaterial.WhenAnyValue(v => v.State),
                 (s, tn, m, tm) =>
                 {
                     if (!tn.IsLoaded())
@@ -183,9 +202,7 @@ namespace Flux.ViewModels
                         return FluxColors.Empty;
                     if (!m.Known)
                         return FluxColors.Error;
-                    if (!tm.HasValue)
-                        return FluxColors.Error;
-                    if (tm.Value.Compatible.HasValue && !tm.Value.Compatible.Value)
+                    if (tm.Compatible.HasValue && !tm.Compatible.Value)
                         return FluxColors.Error;
                     if (!m.Inserted)
                         return FluxColors.Empty;
@@ -203,7 +220,7 @@ namespace Flux.ViewModels
             var material = Observable.CombineLatest(
                 tool_nozzle,
                 this.WhenAnyValue(v => v.State),
-                tool_material.ConvertMany(tm => tm.WhenAnyValue(v => v.State)),
+                ToolMaterial.WhenAnyValue(v => v.State),
                 Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation).Select(s => s.CanSafeCycle),
                 (tool_nozzle, material, tool_material, can_cycle) => new
                 {
@@ -248,11 +265,6 @@ namespace Flux.ViewModels
             var selected = Feeder.SelectedMaterial
                 .ConvertOr(m => m.Position == Position, () => false);
 
-            var compatible = Feeder.ToolMaterials.Connect()
-                .WatchOptional(Position)
-                .ConvertMany(tm => tm.WhenAnyValue(tm => tm.Document))
-                .Select(d => d.HasValue);
-
             return Observable.CombineLatest(inserted, known, locked, loaded,
                  (inserted, known, locked, loaded) => new MaterialState(inserted, known, selected, locked, loaded));
         }
@@ -287,27 +299,15 @@ namespace Flux.ViewModels
 
         public Task UnloadAsync()
         {
-            Flux.Navigator.Navigate(UnloadMaterialViewModel);
+            Flux.Navigator.Navigate(UnloadFilamentOperation);
             return Task.CompletedTask;
         }
         public async Task LoadPurgeAsync()
         {
             if (State.Loaded && State.Locked)
             {
-                var tool_material = Feeder.ToolMaterials.Lookup(Position);
-                if (!tool_material.HasValue)
-                    return;
-
-                var extrusion_temp = tool_material.Value.ExtrusionTemp;
-                if (!extrusion_temp.HasValue)
-                    return;
-
-                var break_temp = tool_material.Value.BreakTemp;
-                if (!break_temp.HasValue)
-                    return;
-
                 var recovery = Flux.StatusProvider.PrintingEvaluation.Recovery;
-                var filament_settings = GCodeFilamentOperation.Create(Flux, Feeder, this, false, !recovery.HasValue, recovery.HasValue);
+                var filament_settings = GCodeFilamentOperation.Create(Flux, Feeder, this, !recovery.HasValue, recovery.HasValue);
                 if (!filament_settings.HasValue)
                     return;
 
@@ -315,7 +315,7 @@ namespace Flux.ViewModels
             }
             else
             {
-                Flux.Navigator.Navigate(LoadMaterialViewModel);
+                Flux.Navigator.Navigate(LoadFilamentOperation);
             }
         }
         public override async Task<Optional<NFCMaterial>> CreateTagAsync(Optional<NFCReading<NFCMaterial>> reading)
@@ -331,7 +331,7 @@ namespace Flux.ViewModels
             var documents = CompositeQuery.Create(database.Value,
                     db => _ => db.Find(printer.Value, Tool.SchemaInstance), db => db.GetTarget,
                     db => t => db.Find(t, Nozzle.SchemaInstance), db => db.GetTarget,
-                    db => n => db.Find(n, ToolMaterial.SchemaInstance), db => db.GetTarget,
+                    db => n => db.Find(n, Modulo3DStandard.ToolMaterial.SchemaInstance), db => db.GetTarget,
                     db => tm => db.Find(Material.SchemaInstance, tm), db => db.GetSource)
                     .Execute()
                     .Convert<Material>();

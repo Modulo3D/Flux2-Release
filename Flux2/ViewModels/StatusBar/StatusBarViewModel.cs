@@ -2,10 +2,16 @@
 using DynamicData.Kernel;
 using Modulo3DStandard;
 using ReactiveUI;
+using System.Linq;
 using System.Reactive;
 
 namespace Flux.ViewModels
 {
+    public class StatusBarConditionAttribute : FilterConditionAttribute
+    {
+        public StatusBarConditionAttribute(string name = default, bool filter_on_cycle = true, string[] include_alias = default, string[] exclude_alias = default)
+            : base(name, filter_on_cycle, include_alias, exclude_alias) { }
+    }
     public class StatusBarViewModel : FluxRoutableViewModel<StatusBarViewModel>
     {
         public SourceCache<IStatusBarItemViewModel, string> StatusBarItemsSource { get; }
@@ -40,16 +46,9 @@ namespace Flux.ViewModels
             ShowWebcamCommand = ReactiveCommand.Create(() => { Content = Flux.Webcam; });
             Content = Flux.Messages;
 
-            StatusBarItemsSource.AddOrUpdate(new PlateStatusBarViewModel(Flux));
-            StatusBarItemsSource.AddOrUpdate(new ChamberStatusBarViewModel(Flux));
-            StatusBarItemsSource.AddOrUpdate(new FeedersStatusBarViewModel(Flux));
-            StatusBarItemsSource.AddOrUpdate(new LocksStatusBarViewModel(Flux));
-            StatusBarItemsSource.AddOrUpdate(new NetworkStatusBarViewModel(Flux));
-            StatusBarItemsSource.AddOrUpdate(new PressureStatusBarViewModel(Flux));
-            StatusBarItemsSource.AddOrUpdate(new VacuumStatusBarViewModel(Flux));
-            StatusBarItemsSource.AddOrUpdate(new DriverStatusBarViewModel(Flux));
-            StatusBarItemsSource.AddOrUpdate(new MessagesStatusBarViewModel(Flux));
-            StatusBarItemsSource.AddOrUpdate(new DebugStatusBarViewModel(Flux));
+            var conditions = Flux.StatusProvider.GetConditions<StatusBarConditionAttribute>();
+            foreach (var kvp in conditions)
+                StatusBarItemsSource.AddOrUpdate(new StatusBarItemViewModel(flux, kvp.Key, kvp.Value.Select(v => v.condition)));
         }
     }
 }

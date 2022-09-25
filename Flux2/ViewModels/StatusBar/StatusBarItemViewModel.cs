@@ -1,7 +1,10 @@
-﻿using Modulo3DStandard;
+﻿using DynamicData;
+using Modulo3DStandard;
 using ReactiveUI;
 using System;
+using System.Collections.Generic;
 using System.Reactive.Linq;
+using System.Linq;
 
 namespace Flux.ViewModels
 {
@@ -12,8 +15,7 @@ namespace Flux.ViewModels
         StatusBarState State { get; }
     }
 
-    public abstract class StatusBarItemViewModel<TViewModel> : RemoteControl<StatusBarItemViewModel<TViewModel>>, IStatusBarItemViewModel
-        where TViewModel : StatusBarItemViewModel<TViewModel>
+    public class StatusBarItemViewModel : RemoteControl<StatusBarItemViewModel>, IStatusBarItemViewModel
     {
         public FluxViewModel Flux { get; }
 
@@ -27,14 +29,30 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public string StateBrush => _StateBrush.Value;
 
-        public StatusBarItemViewModel(FluxViewModel flux) : base($"{typeof(StatusBarItemViewModel<>).GetRemoteControlName()}??{typeof(TViewModel).GetRemoteControlName().Replace("StatusBar", "")}")
+        public StatusBarItemViewModel(FluxViewModel flux, string condition, IEnumerable<IConditionViewModel> conditions) : base($"{typeof(StatusBarItemViewModel).GetRemoteControlName()}??{condition}")
         {
             Flux = flux;
             _Notifies = GetItemNotifies()
                 .StartWith(0)
                 .ToProperty(this, v => v.Notifies);
 
-            _State = GetItemState()
+            _State = conditions
+                .AsObservableChangeSet(t => t.ConditionName)
+                .AutoTransform(c => c.State)
+                .QueryWhenChanged(s => 
+                {
+                    if (s.Items.Any(s => s.State == EConditionState.Error))
+                        return StatusBarState.Error;
+                    if (s.Items.Any(s => s.State == EConditionState.Warning))
+                        return StatusBarState.Warning;
+                    if (s.Items.All(s => s.State == EConditionState.Stable))
+                        return StatusBarState.Stable;
+                    if (s.Items.All(s => s.State == EConditionState.Disabled))
+                        return StatusBarState.Disabled;
+                    if (s.Items.All(s => s.State == EConditionState.Hidden))
+                        return StatusBarState.Hidden;
+                    return StatusBarState.Hidden;
+                })
                 .StartWith(StatusBarState.Disabled)
                 .ToProperty(this, v => v.State);
 
@@ -49,8 +67,6 @@ namespace Flux.ViewModels
                 })
                 .ToProperty(this, v => v.StateBrush);
         }
-
-        protected abstract IObservable<StatusBarState> GetItemState();
         protected IObservable<int> GetItemNotifies() => Observable.Return(0);
     }
 }

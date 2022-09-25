@@ -311,7 +311,6 @@ namespace Flux.ViewModels
         }
         public override async Task<bool> CancelPrintAsync()
         {
-            // TODO
             using var put_cancel_print_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             using var wait_cancel_print_cts = new CancellationTokenSource(TimeSpan.FromMinutes(1));
             return await PostGCodeAsync(new []
@@ -851,6 +850,46 @@ namespace Flux.ViewModels
         public override Optional<IEnumerable<string>> GetCancelOperationGCode()
         {
             return new[] { "M98 P\"0:/macros/cancel_print\"", "M99" };
+        }
+
+        public override Optional<IEnumerable<string>> GetManualFilamentInsertGCode(ushort position, double iteration_distance, double feedrate)
+        {
+            var gcode = new List<string>();
+
+            var select_tool_gcode = GetSelectToolGCode(position);
+            if (!select_tool_gcode.HasValue)
+                return default;
+            gcode.Add(select_tool_gcode.Value);
+
+            var movement_gcode = GetRelativeEMovementGCode(iteration_distance, feedrate);
+            if (!movement_gcode.HasValue)
+                return default;
+            gcode.Add(movement_gcode.Value);
+
+            return gcode;
+        }
+
+        public override Optional<IEnumerable<string>> GetManualFilamentExtractGCode(ushort position, ushort iterations, double iteration_distance, double feedrate)
+        {
+            var gcode = new List<string>();
+
+            var select_tool_gcode = GetSelectToolGCode(position);
+            if (!select_tool_gcode.HasValue)
+                return default;
+            gcode.Add(select_tool_gcode.Value);
+
+            var extract_distance = (iteration_distance * iterations) + 50;
+            var movement_gcode = GetRelativeEMovementGCode(-extract_distance, 500);
+            if (!movement_gcode.HasValue)
+                return default;
+            gcode.Add(movement_gcode.Value);
+
+            var park_tool_gcode = GetParkToolGCode();
+            if (!park_tool_gcode.HasValue)
+                return default;
+            gcode.Add(park_tool_gcode.Value);
+
+            return gcode;
         }
     }
 }
