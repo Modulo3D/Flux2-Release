@@ -157,7 +157,7 @@ namespace Flux.ViewModels
         private Optional<TViewModel> FindSelectedViewModel<TViewModel>(
             IQuery<TViewModel, ushort> viewmodels, 
             Optional<(ushort machine_extruders, ushort mixing_extruders)> extruders,
-            OptionalChange<IQuery<Optional<bool>, VariableAlias>> wire_presence)
+            OptionalChange<IQuery<Optional<bool>, VariableUnit>> wire_presence)
         {
             if (!extruders.HasValue)
                 return default;

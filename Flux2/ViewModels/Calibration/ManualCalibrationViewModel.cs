@@ -263,7 +263,7 @@ namespace Flux.ViewModels
                    if (!tool_key.HasValue)
                        return Observable.Return(Optional<FLUX_Temp>.None);
 
-                   return Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_TOOL, tool_key.Value.Alias)
+                   return Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_TOOL, tool_key)
                        .ObservableOrDefault();
                })
                .Switch()
@@ -329,7 +329,8 @@ namespace Flux.ViewModels
                             bed_height = z_bed_height.Value;
                         }
 
-                        var z = await Flux.ConnectionProvider.ReadVariableAsync(m => m.AXIS_POSITION, "Z");
+                        var z_unit = Flux.ConnectionProvider.GetArrayUnit(m => m.AXIS_POSITION, "Z");
+                        var z = await Flux.ConnectionProvider.ReadVariableAsync(m => m.AXIS_POSITION, z_unit);
                         if (!z.HasValue)
                             return;
 

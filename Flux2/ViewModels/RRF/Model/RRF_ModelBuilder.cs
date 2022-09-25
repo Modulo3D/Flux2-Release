@@ -479,7 +479,7 @@ namespace Flux.ViewModels
                 TData default_value,
                 params VariableRange[] variables_range)
             {
-                var variable_units = new VariableUnits(0, variables_range);
+                var variable_units = new VariableUnits(variables_range);
                 var array_setter = VariableStore.GetCachedSetterDelegate(array_expression);
                 var array_name = string.Join('/', array_expression.GetMembersName());
                 var array = new RRF_ArrayGlobalModel<TData>(ConnectionProvider, array_name, stored, default_value, variable_units);
@@ -492,7 +492,7 @@ namespace Flux.ViewModels
                 TData default_value,
                 params VariableRange[] variables_range)
             {
-                var variable_units = new VariableUnits(0, variables_range);
+                var variable_units = new VariableUnits(variables_range);
                 var array_setter = VariableStore.GetCachedSetterDelegate(array_expression);
                 var array_name = string.Join('/', array_expression.GetMembersName());
                 var array = new RRF_ArrayGlobalModel<TData>(ConnectionProvider, array_name, stored, default_value, variable_units);
@@ -506,7 +506,7 @@ namespace Flux.ViewModels
                 Func<object, TData> convert_value, 
                 params VariableRange[] variables_range)
             {
-                var variable_units = new VariableUnits(0, variables_range);
+                var variable_units = new VariableUnits(variables_range);
                 var array_setter = VariableStore.GetCachedSetterDelegate(array_expression);
                 var array_name = string.Join('/', array_expression.GetMembersName());
                 var array = new RRF_ArrayGlobalModel<TData>(ConnectionProvider, array_name, stored, default_value, variable_units, convert_value);
@@ -520,7 +520,7 @@ namespace Flux.ViewModels
                 Func<object, TData> convert_value = default,
                 params VariableRange[] variables_range)
             {
-                var variable_units = new VariableUnits(0, variables_range);
+                var variable_units = new VariableUnits(variables_range);
                 var array_setter = VariableStore.GetCachedSetterDelegate(array_expression);
                 var array_name = string.Join('/', array_expression.GetMembersName());
                 var array = new RRF_ArrayGlobalModel<TData>(ConnectionProvider, array_name, stored, default_value, variable_units, convert_value);

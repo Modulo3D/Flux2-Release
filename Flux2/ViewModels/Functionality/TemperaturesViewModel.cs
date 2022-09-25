@@ -27,12 +27,8 @@ namespace Flux.ViewModels
             {
                 for (ushort i = 0; i < extruders.Value.machine_extruders; i++)
                 {
-                    var extruder = i;
                     var extr_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TEMP_TOOL, i);
-                    if (!extr_key.HasValue)
-                        continue;
-
-                    var extr_temp = Flux.ConnectionProvider.GetVariable(m => m.TEMP_TOOL, extr_key.Value.Alias);
+                    var extr_temp = Flux.ConnectionProvider.GetVariable(m => m.TEMP_TOOL, extr_key);
                     if (!extr_temp.HasValue)
                         continue;
 
@@ -43,15 +39,15 @@ namespace Flux.ViewModels
             var chamber_units = Flux.ConnectionProvider.GetArrayUnits(c => c.TEMP_CHAMBER);
             foreach (var chamber_unit in chamber_units)
             {
-                var chamber_temp = Flux.ConnectionProvider.GetVariable(m => m.TEMP_CHAMBER, chamber_unit.Alias);
+                var chamber_temp = Flux.ConnectionProvider.GetVariable(m => m.TEMP_CHAMBER, chamber_unit);
                 if (chamber_temp.HasValue)
                     yield return new TemperatureViewModel(this, chamber_temp.Value);
             }
 
-            var plate_units = Flux.ConnectionProvider.GetArrayUnits(c => c.TEMP_CHAMBER);
+            var plate_units = Flux.ConnectionProvider.GetArrayUnits(c => c.TEMP_PLATE);
             foreach (var plate_unit in plate_units)
             {
-                var plate_temp = Flux.ConnectionProvider.GetVariable(m => m.TEMP_PLATE, plate_unit.Alias);
+                var plate_temp = Flux.ConnectionProvider.GetVariable(m => m.TEMP_PLATE, plate_unit);
                 if (plate_temp.HasValue)
                     yield return new TemperatureViewModel(this, plate_temp.Value);
             }

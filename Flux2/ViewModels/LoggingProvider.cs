@@ -21,9 +21,6 @@ namespace Flux.ViewModels
         {
             Flux = flux;
 
-            // log variables
-            Flux.ConnectionProvider.LogVariable(Flux.Logger, c => c.TEMP_CHAMBER, "spools", t => t.Target);
-
             // log program history
             var queue_pos = Flux.ConnectionProvider.ObserveVariable(c => c.QUEUE_POS);
             var progress = Flux.StatusProvider.WhenAnyValue(c => c.PrintProgress);
@@ -170,10 +167,10 @@ namespace Flux.ViewModels
             this IFLUX_ConnectionProvider connection_provider,
             ILogger logger,
             Func<IFLUX_VariableStore, IFLUX_Array<TRData, TWData>> get_variable,
-            VariableAlias alias,
+            VariableUnit unit,
             Func<TRData, TLData> get_log)
         {
-            var variable = connection_provider.GetVariable(get_variable, alias);
+            var variable = connection_provider.GetVariable(get_variable, unit);
             if (!variable.HasValue)
                 return;
 
@@ -187,11 +184,11 @@ namespace Flux.ViewModels
         public static void LogVariable<TRData, TWData, TLData>(
             this IFLUX_ConnectionProvider connection_provider,
             ILogger logger,
-            Func<IFLUX_VariableStore, Optional<IFLUX_Array<TRData, TWData>>> get_variable, 
-            VariableAlias alias,
+            Func<IFLUX_VariableStore, Optional<IFLUX_Array<TRData, TWData>>> get_variable,
+            VariableUnit unit,
             Func<TRData, TLData> get_log)
         {
-            var variable = connection_provider.GetVariable(get_variable, alias);
+            var variable = connection_provider.GetVariable(get_variable, unit);
             if (!variable.HasValue)
                 return;
 

@@ -53,7 +53,7 @@ namespace Flux.ViewModels
             var multiplier = Observable.Return(1.0);
             Odometer = new OdometerViewModel<NFCToolNozzle>(Flux, this, multiplier);
 
-            var tool_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TEMP_TOOL, Position).Convert(u => u.Alias).ValueOrDefault();
+            var tool_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TEMP_TOOL, Position);
             _NozzleTemperature = Flux.ConnectionProvider
                 .ObserveVariable(m => m.TEMP_TOOL, tool_key)
                 .ObservableOrDefault()
@@ -153,22 +153,22 @@ namespace Flux.ViewModels
                 .ConvertOr(t => t.Current > -100 && t.Current < 1000, () => false)
                 .DistinctUntilChanged();
 
-            var mem_magazine_key = Flux.ConnectionProvider.GetArrayUnit(m => m.MEM_TOOL_IN_MAGAZINE, Position).Convert(u => u.Alias).ValueOrDefault();
+            var mem_magazine_key = Flux.ConnectionProvider.GetArrayUnit(m => m.MEM_TOOL_IN_MAGAZINE, Position);
             var mem_magazine = Flux.ConnectionProvider
                 .ObserveVariable(m => m.MEM_TOOL_IN_MAGAZINE, mem_magazine_key)
                 .DistinctUntilChanged();
 
-            var mem_trailer_key = Flux.ConnectionProvider.GetArrayUnit(m => m.MEM_TOOL_ON_TRAILER, Position).Convert(u => u.Alias).ValueOrDefault();
+            var mem_trailer_key = Flux.ConnectionProvider.GetArrayUnit(m => m.MEM_TOOL_ON_TRAILER, Position);
             var mem_trailer = Flux.ConnectionProvider
                 .ObserveVariable(m => m.MEM_TOOL_ON_TRAILER, mem_trailer_key)
                 .DistinctUntilChanged();
 
-            var input_magazine_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TOOL_IN_MAGAZINE, Position).Convert(u => u.Alias).ValueOrDefault();
+            var input_magazine_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TOOL_IN_MAGAZINE, Position);
             var input_magazine = Flux.ConnectionProvider
                 .ObserveVariable(m => m.TOOL_IN_MAGAZINE, input_magazine_key)
                 .DistinctUntilChanged();
 
-            var input_trailer_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TOOL_ON_TRAILER, Position).Convert(u => u.Alias).ValueOrDefault();
+            var input_trailer_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TOOL_ON_TRAILER, Position);
             var input_trailer = Flux.ConnectionProvider
                 .ObserveVariable(m => m.TOOL_ON_TRAILER, input_trailer_key)
                 .DistinctUntilChanged();

@@ -26,7 +26,7 @@ namespace Flux.ViewModels
             Group = $"{address.VarCode}";
             TAddress cur_address = address;
 
-            var source_cache = (SourceCache<IFLUX_Variable<TRData, TWData>, VariableAlias>)Variables;
+            var source_cache = (SourceCache<IFLUX_Variable<TRData, TWData>, VariableUnit>)Variables;
             for (ushort i = 0; i < count; i++)
             {
                 var v_unit = custom_unit
@@ -41,14 +41,6 @@ namespace Flux.ViewModels
 
                 source_cache.AddOrUpdate(i_var);
             }
-        }
-
-        public override Optional<VariableUnit> GetArrayUnit(ushort position)
-        {
-            return Variables.Items
-                .ElementAtOrDefault(position)
-                .ToOptional(v => v != null)
-                .Convert(v => v.Unit);
         }
     }
 

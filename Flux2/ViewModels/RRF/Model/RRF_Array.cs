@@ -20,7 +20,7 @@ namespace Flux.ViewModels
             Func<VariableUnit, Optional<RRF_VariableObjectModel<TModel, TRData, TWData>>> get_variable)
             : base(name)
         {
-            var source_cache = (SourceCache<IFLUX_Variable<TRData, TWData>, VariableAlias>)Variables;
+            var source_cache = (SourceCache<IFLUX_Variable<TRData, TWData>, VariableUnit>)Variables;
             foreach (var unit in variable_units)
             {
                 var variable = get_variable(unit.Key);
@@ -28,14 +28,6 @@ namespace Flux.ViewModels
                     continue;
                 source_cache.AddOrUpdate(variable.Value);
             }
-        }
-
-        public override Optional<VariableUnit> GetArrayUnit(ushort position)
-        {
-            return Variables.Items
-                .ElementAtOrDefault(position)
-                .ToOptional(v => v != null)
-                .Convert(v => v.Unit);
         }
     }
 
@@ -156,19 +148,11 @@ namespace Flux.ViewModels
             Func<object, TData> convert_data = default)
             : base(variable)
         {
-            var source_cache = (SourceCache<IFLUX_Variable<TData, TData>, VariableAlias>)Variables;
+            var source_cache = (SourceCache<IFLUX_Variable<TData, TData>, VariableUnit>)Variables;
             foreach (var unit in variable_units)
                 source_cache.AddOrUpdate(get_variable(unit.Key));
 
             RRF_ArrayVariableGlobalModel<TData> get_variable(VariableUnit unit) => new RRF_ArrayVariableGlobalModel<TData>(connection_provider, variable, unit, stored, default_value, convert_data);
-        }
-
-        public override Optional<VariableUnit> GetArrayUnit(ushort position)
-        {
-            return Variables.Items
-                .ElementAtOrDefault(position)
-                .ToOptional(v => v != null)
-                .Convert(v => v.Unit);
         }
     }
 }

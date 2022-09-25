@@ -213,7 +213,8 @@ namespace Flux.ViewModels
                     LoggingProvider = new LoggingProvider(this);
                     Startup         = new StartupViewModel(this);
 
-                    _LeftIconForeground = ConnectionProvider.ObserveVariable(m => m.OPEN_LOCK, "main")
+                    var main_lock_unit = ConnectionProvider.GetArrayUnit(m => m.OPEN_LOCK, "main.lock");
+                    _LeftIconForeground = ConnectionProvider.ObserveVariable(m => m.OPEN_LOCK, main_lock_unit)
                         .ObservableOrDefault()
                         .Convert(l => l ? FluxColors.Active : FluxColors.Inactive)
                         .ValueOr(() => FluxColors.Empty)
@@ -233,8 +234,8 @@ namespace Flux.ViewModels
                     if (ConnectionProvider.HasVariable(s => s.CHAMBER_LIGHT))
                         RightButtonCommand = ReactiveCommand.CreateFromTask(async () => { await ConnectionProvider.ToggleVariableAsync(m => m.CHAMBER_LIGHT); });
 
-                    if (ConnectionProvider.HasVariable(s => s.OPEN_LOCK, "main"))
-                        LeftButtonCommand = ReactiveCommand.CreateFromTask(async () => { await ConnectionProvider.ToggleVariableAsync(m => m.OPEN_LOCK, "main"); }, is_idle);
+                    if (ConnectionProvider.HasVariable(s => s.OPEN_LOCK, main_lock_unit))
+                        LeftButtonCommand = ReactiveCommand.CreateFromTask(async () => { await ConnectionProvider.ToggleVariableAsync(m => m.OPEN_LOCK, main_lock_unit); }, is_idle);
 
                     var status_bar_nav = new NavModalViewModel(this, StatusBar);
                     OpenStatusBarCommand = ReactiveCommand.Create(() => { Navigator.Navigate(status_bar_nav); });

@@ -110,10 +110,7 @@ namespace Flux.ViewModels
                 (is_idle, execute, conditions) => is_idle && execute && conditions);
 
             var tool_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TEMP_TOOL, Feeder.Position);
-            if (!tool_key.HasValue)
-                return;
-
-            _CurrentTemperature = Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_TOOL, tool_key.Value.Alias)
+            _CurrentTemperature = Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_TOOL, tool_key)
                 .ObservableOrDefault()
                 .ToProperty(this, v => v.CurrentTemperature);
 

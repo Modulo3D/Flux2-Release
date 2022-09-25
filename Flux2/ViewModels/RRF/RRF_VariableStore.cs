@@ -176,8 +176,8 @@ namespace Flux.ViewModels
     {
         public override VariableUnits ExtrudersUnits    => new(("T", 4));
 
-        public override VariableUnits HeaterUnits       => new("main", ("T", 4));
-        public override VariableUnits AnalogUnits       => new("main", ("T", 4));
+        public override VariableUnits HeaterUnits       => new("main.plate", ("T", 4));
+        public override VariableUnits AnalogUnits       => new("main.plate", ("T", 4));
 
         public override VariableUnits EndstopsUnits     => new("X", "Y", "Z" /*"U"*/);
         public override VariableUnits AxesUnits         => new("X", "Y", "Z", /*"U",*/ "C");
@@ -204,9 +204,9 @@ namespace Flux.ViewModels
                         tool_list.Add((i, current_tool.Value, tool_presence.Value));
                     
                     return tool_list.ToOptional();
-                }, (0, 4));
+                }, new("T", 4));
 
-                Heaters.CreateArray(c =>    c.TEMP_PLATE,           (c, m) => m.GetTemperature(), SetPlateTemperatureAsync, "main");
+                Heaters.CreateArray(c =>    c.TEMP_PLATE,           (c, m) => m.GetTemperature(), SetPlateTemperatureAsync, "main.plate");
                 Heaters.CreateArray(c =>    c.TEMP_TOOL,            (c, m) => m.GetTemperature(), SetToolTemperatureAsync,  ("T", 4));
 
                 tool_array.CreateArray(c => c.MEM_TOOL_ON_TRAILER,  (c, m) => m.selected_tool > -1 && (m.selected_tool == m.position && m.tool_presence));
@@ -231,27 +231,27 @@ namespace Flux.ViewModels
         public override VariableUnits EndstopsUnits     => new("X", "Y", "Z", "U", "V");
         
         public override VariableUnits FilamentUnits     => new(2, ("M", 4));
-        public override VariableUnits GpInUnits         => new("main", "spools", ("M", 4), ("T", 2));
-        public override VariableUnits GpOutUnits        => new("main", "spools", "light", "vacuum", "shutdown");
+        public override VariableUnits GpInUnits         => new("main.lock", "spools.lock", ("M", 4), ("T", 2));
+        public override VariableUnits GpOutUnits        => new("main.lock", "spools.lock", "main.light", "main.vacuum", "shutdown");
 
-        public override VariableUnits HeaterUnits       => new("main", "main", ("T", 2));
-        public override VariableUnits AnalogUnits       => new("main", "main", ("T", 2), "vacuum", "filament", ("H", 1));
+        public override VariableUnits HeaterUnits       => new("main.plate", "main.chamber", ("T", 2));
+        public override VariableUnits AnalogUnits       => new("main.plate", "main.chamber", ("T", 2), "main.vacuum", "filament", ("H", 1));
 
         public RRF_VariableStoreMP500(RRF_ConnectionProvider connection_provider) : base(connection_provider, 2)
         {
             try
             {
-                Heaters.CreateArray(c =>    c.TEMP_CHAMBER,         (c, m) => m.GetTemperature(),   SetChamberTemperatureAsync, "main");
+                Heaters.CreateArray(c =>    c.TEMP_CHAMBER,         (c, m) => m.GetTemperature(),   SetChamberTemperatureAsync, "main.chamber");
                 Heaters.CreateArray(c =>    c.TEMP_TOOL,            (c, m) => m.GetTemperature(),   SetToolTemperatureAsync,    ("T", 2));
-                Heaters.CreateArray(c =>    c.TEMP_PLATE,           (c, m) => m.GetTemperature(),   SetPlateTemperatureAsync,   "main");
+                Heaters.CreateArray(c =>    c.TEMP_PLATE,           (c, m) => m.GetTemperature(),   SetPlateTemperatureAsync,   "main.plate");
 
-                GpOut.CreateArray(c =>      c.OPEN_LOCK,            (c, m) => m.Pwm == 1,           WriteGpOutAsync,            "main", "spools");
-                GpOut.CreateVariable(c =>   c.CHAMBER_LIGHT,        (c, m) => m.Pwm == 1,           WriteGpOutAsync,            "light");
-                GpOut.CreateVariable(c =>   c.ENABLE_VACUUM,        (c, m) => m.Pwm == 1,           WriteGpOutAsync,            "vacuum");
+                GpOut.CreateArray(c =>      c.OPEN_LOCK,            (c, m) => m.Pwm == 1,           WriteGpOutAsync,            "main.lock", "spools.lock");
+                GpOut.CreateVariable(c =>   c.CHAMBER_LIGHT,        (c, m) => m.Pwm == 1,           WriteGpOutAsync,            "main.light");
+                GpOut.CreateVariable(c =>   c.ENABLE_VACUUM,        (c, m) => m.Pwm == 1,           WriteGpOutAsync,            "main.vacuum");
                 GpOut.CreateVariable(c =>   c.DISABLE_24V,          (c, m) => m.Pwm == 1,           WriteGpOutAsync,            "shutdown");
 
-                Analog.CreateVariable(c =>  c.VACUUM_PRESENCE,      (c, v) => read_pressure(v),     "vacuum");
-                GpIn.CreateArray(c =>       c.LOCK_CLOSED,          (c, m) => m.Value == 1,         "main", "spools");
+                Analog.CreateVariable(c =>  c.VACUUM_PRESENCE,      (c, v) => read_pressure(v),     "main.vacuum");
+                GpIn.CreateArray(c =>       c.LOCK_CLOSED,          (c, m) => m.Value == 1,         "main.lock", "spools.lock");
                 GpIn.CreateArray(c =>       c.FILAMENT_AFTER_GEAR,  (c, m) => m.Value == 1,         ("M", 4));
                 GpIn.CreateArray(c =>       c.FILAMENT_ON_HEAD,     (c, m) => m.Value == 1,         ("T", 2));
                 Analog.CreateArray(c =>     c.FILAMENT_HUMIDITY,    (c, h) => read_humidity(h),     "H");

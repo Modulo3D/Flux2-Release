@@ -163,10 +163,10 @@ namespace Flux.ViewModels
 
         [PrintCondition]
         [StatusBarCondition]
-        [CycleCondition(exclude_alias: new[] { "spools" })]
-        [PreparePrintCondition(exclude_alias: new[] { "spools" })]
-        [ManualCalibrationCondition(exclude_alias: new[] { "spools" })]
-        [FilamentOperationCondition(exclude_alias: new[] { "spools" })]
+        [CycleCondition(exclude_alias: new[] { "spools.lock" })]
+        [PreparePrintCondition(exclude_alias: new[] { "spools.lock" })]
+        [ManualCalibrationCondition(exclude_alias: new[] { "spools.lock" })]
+        [FilamentOperationCondition(exclude_alias: new[] { "spools.lock" })]
         public SourceCache<IConditionViewModel, string> LockClosedConditions
         {
             get
@@ -184,15 +184,15 @@ namespace Flux.ViewModels
                     foreach (var lock_unit in lock_units)
                     {
                         var current_lock = OptionalObservable.CombineLatestOptionalOr(
-                            Flux.ConnectionProvider.ObserveVariable(m => m.LOCK_CLOSED, lock_unit.Alias),
-                            Flux.ConnectionProvider.ObserveVariable(m => m.OPEN_LOCK, lock_unit.Alias),
+                            Flux.ConnectionProvider.ObserveVariable(m => m.LOCK_CLOSED, lock_unit),
+                            Flux.ConnectionProvider.ObserveVariable(m => m.OPEN_LOCK, lock_unit),
                             is_idle.Select(i => i.ToOptional()).ToOptional(),
                             (closed, open, is_idle) => (closed, open, is_idle), () => default);
 
                         var lock_closed = ConditionViewModel.Create(this, lock_unit.Alias, current_lock,
                             (state, value) =>
                             {
-                                var toggle_lock = state.Create("lock", c => c.OPEN_LOCK, lock_unit.Alias, is_idle);
+                                var toggle_lock = state.Create("lock", c => c.OPEN_LOCK, lock_unit, is_idle);
 
                                 if (!value.closed || value.open)
                                 { 
@@ -225,10 +225,21 @@ namespace Flux.ViewModels
                     var chamber_units = Flux.ConnectionProvider.GetArrayUnits(c => c.TEMP_CHAMBER);
                     foreach (var chamber_unit in chamber_units)
                     {
+                        var parent = chamber_unit.Alias.Alias.Split(new[] { "." },
+                            StringSplitOptions.RemoveEmptyEntries)
+                            .FirstOrOptional(s => !string.IsNullOrEmpty(s));
+
+                        if (!parent.HasValue)
+                            return _ChamberConditions;
+
+                        var temp_unit = Flux.ConnectionProvider.GetArrayUnit(m => m.TEMP_CHAMBER, $"{parent}.chamber");
+                        var closed_unit = Flux.ConnectionProvider.GetArrayUnit(m => m.LOCK_CLOSED, $"{parent}.lock");
+                        var open_unit = Flux.ConnectionProvider.GetArrayUnit(m => m.OPEN_LOCK, $"{parent}.lock");
+
                         var current_chamber = OptionalObservable.CombineLatestOptionalOr(
-                            Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_CHAMBER, chamber_unit.Alias),
-                            Flux.ConnectionProvider.ObserveVariable(m => m.LOCK_CLOSED, chamber_unit.Alias),
-                            Flux.ConnectionProvider.ObserveVariable(m => m.OPEN_LOCK, chamber_unit.Alias),
+                            Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_CHAMBER, temp_unit),
+                            Flux.ConnectionProvider.ObserveVariable(m => m.LOCK_CLOSED, closed_unit),
+                            Flux.ConnectionProvider.ObserveVariable(m => m.OPEN_LOCK, open_unit),
                             (temperature, closed, open) => (temperature, closed, open), () => (default, true, false));
 
                         var chamber = ConditionViewModel.Create(this, chamber_unit.Alias, current_chamber,
@@ -237,14 +248,17 @@ namespace Flux.ViewModels
                                 if (value.temperature.IsDisconnected)
                                     return state.Create(EConditionState.Error, "SENSORE DELLA TEMPERATURA NON TROVATO");
 
-                                if (!value.temperature.IsHot)
-                                    return state.Create(EConditionState.Disabled, $"{chamber_unit} FREDDA");
+                                if (value.temperature.IsHot || value.temperature.IsOn.ValueOr(() => false))
+                                {
+                                    if (value.open || !value.closed)
+                                        return state.Create(EConditionState.Warning, $"{chamber_unit} ACCESA, FARE ATTENZIONE");
+                                    else
+                                        return state.Create(EConditionState.Stable, $"{chamber_unit} ACCESA");
+                                }
 
-                                if (value.open || !value.closed)
-                                    return state.Create(EConditionState.Warning, $"{chamber_unit} CALDO, FARE ATTENZIONE");
-                                else
-                                    return state.Create(EConditionState.Stable, $"{chamber_unit} ACCESA");
-                            }, TimeSpan.FromSeconds(5));
+                                return state.Create(EConditionState.Disabled, $"{chamber_unit} SPENTA");
+
+                            }, TimeSpan.FromSeconds(1));
 
                         if (chamber.HasValue)
                             _ChamberConditions.AddOrUpdate(chamber.Value);
@@ -266,10 +280,21 @@ namespace Flux.ViewModels
                     var plate_units = Flux.ConnectionProvider.GetArrayUnits(c => c.TEMP_PLATE);
                     foreach (var plate_unit in plate_units)
                     {
+                        var parent = plate_unit.Alias.Alias.Split(new[] { "." },
+                           StringSplitOptions.RemoveEmptyEntries)
+                           .FirstOrOptional(s => !string.IsNullOrEmpty(s));
+
+                        if (!parent.HasValue)
+                            return _ChamberConditions;
+
+                        var temp_unit = Flux.ConnectionProvider.GetArrayUnit(m => m.TEMP_PLATE, $"{parent}.plate");
+                        var closed_unit = Flux.ConnectionProvider.GetArrayUnit(m => m.LOCK_CLOSED, $"{parent}.lock");
+                        var open_unit = Flux.ConnectionProvider.GetArrayUnit(m => m.OPEN_LOCK, $"{parent}.lock");
+
                         var current_plate = OptionalObservable.CombineLatestOptionalOr(
-                            Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_CHAMBER, plate_unit.Alias),
-                            Flux.ConnectionProvider.ObserveVariable(m => m.LOCK_CLOSED, plate_unit.Alias),
-                            Flux.ConnectionProvider.ObserveVariable(m => m.OPEN_LOCK, plate_unit.Alias),
+                            Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_PLATE, temp_unit),
+                            Flux.ConnectionProvider.ObserveVariable(m => m.LOCK_CLOSED, closed_unit),
+                            Flux.ConnectionProvider.ObserveVariable(m => m.OPEN_LOCK, open_unit),
                             (temperature, closed, open) => (temperature, closed, open), () => (default, true, false));
 
                         var plate = ConditionViewModel.Create(this, plate_unit.Alias, current_plate,
@@ -278,14 +303,17 @@ namespace Flux.ViewModels
                                 if (value.temperature.IsDisconnected)
                                     return state.Create(EConditionState.Error, "SENSORE DELLA TEMPERATURA NON TROVATO");
 
-                                if (!value.temperature.IsHot)
-                                    return state.Create(EConditionState.Disabled, $"{plate_unit} FREDDA");
+                                if (value.temperature.IsHot || value.temperature.IsOn.ValueOr(() => false))
+                                { 
+                                    if (value.open || !value.closed)
+                                        return state.Create(EConditionState.Warning, $"{plate_unit} ACCESA, FARE ATTENZIONE");
+                                    else
+                                        return state.Create(EConditionState.Stable, $"{plate_unit} ACCESA");
+                                }
+          
+                                return state.Create(EConditionState.Disabled, $"{plate_unit} SPENTA");
 
-                                if (value.open || !value.closed)
-                                    return state.Create(EConditionState.Warning, $"{plate_unit} CALDO, FARE ATTENZIONE");
-                                else
-                                    return state.Create(EConditionState.Stable, $"{plate_unit} ACCESA");
-                            }, TimeSpan.FromSeconds(5));
+                            }, TimeSpan.FromSeconds(1));
 
                         if (plate.HasValue)
                             _PlateConditions.AddOrUpdate(plate.Value);
@@ -460,14 +488,14 @@ namespace Flux.ViewModels
                     foreach (var lock_unit in lock_units)
                     {
                         var current_lock = OptionalObservable.CombineLatestOptionalOr(
-                            Flux.ConnectionProvider.ObserveVariable(m => m.LOCK_CLOSED, lock_unit.Alias),
-                            Flux.ConnectionProvider.ObserveVariable(m => m.OPEN_LOCK, lock_unit.Alias),
+                            Flux.ConnectionProvider.ObserveVariable(m => m.LOCK_CLOSED, lock_unit),
+                            Flux.ConnectionProvider.ObserveVariable(m => m.OPEN_LOCK, lock_unit),
                             (closed, open) => (closed, open), () => (closed: false, open: false));
 
                         var lock_open = ConditionViewModel.Create(this, lock_unit.Alias, current_lock,
                             (state, value) =>
                             {
-                                var toggle_lock = state.Create("lock", c => c.OPEN_LOCK, lock_unit.Alias, is_idle);
+                                var toggle_lock = state.Create("lock", c => c.OPEN_LOCK, lock_unit, is_idle);
                                 if (value.closed)
                                     return state.Create(EConditionState.Error, $"APRIRE {lock_unit}", toggle_lock);
                                 return state.Create(EConditionState.Stable, $"{lock_unit} APERTO", toggle_lock);
@@ -557,7 +585,7 @@ namespace Flux.ViewModels
         }
         private IConditionViewModel _NetworkCondition;
 
-        [FilamentOperationCondition(filter_on_cycle: false, include_alias: new[] { "spools" })]
+        [FilamentOperationCondition(filter_on_cycle: false, include_alias: new[] { "spools.lock" })]
         public SourceCache<IConditionViewModel, string> LockToggleConditions
         {
             get
@@ -575,17 +603,17 @@ namespace Flux.ViewModels
                     foreach (var lock_unit in lock_units)
                     {
                         var current_lock = OptionalObservable.CombineLatestOptionalOr(
-                            Flux.ConnectionProvider.ObserveVariable(m => m.LOCK_CLOSED, lock_unit.Alias),
-                            Flux.ConnectionProvider.ObserveVariable(m => m.OPEN_LOCK, lock_unit.Alias),
+                            Flux.ConnectionProvider.ObserveVariable(m => m.LOCK_CLOSED, lock_unit),
+                            Flux.ConnectionProvider.ObserveVariable(m => m.OPEN_LOCK, lock_unit),
                             (closed, open) => (closed, open), () => (closed: false, open: false));
 
                         var lock_toggle = ConditionViewModel.Create(this, lock_unit.Alias, current_lock,
                             (state, value) =>
                             {
-                                var toggle_lock = state.Create("lock", c => c.OPEN_LOCK, lock_unit.Alias, is_idle);
+                                var toggle_lock = state.Create("lock", c => c.OPEN_LOCK, lock_unit, is_idle);
                                 if (!value.closed || value.open)
-                                    return state.Create(EConditionState.Stable, $"APRIRE {lock_unit}", toggle_lock);
-                                return state.Create(EConditionState.Stable, $"CHIUDERE {lock_unit}", toggle_lock);
+                                    return state.Create(EConditionState.Stable, $"CHIUDI {lock_unit}", toggle_lock);
+                                return state.Create(EConditionState.Stable, $"APRI {lock_unit}", toggle_lock);
                             });
 
                         if (lock_toggle.HasValue)
@@ -601,39 +629,6 @@ namespace Flux.ViewModels
         {
             Flux = flux;
             StateCreator = new ConditionStateCreator(flux);
-
-            // Status
-            var is_idle = Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS)
-                .Convert(data => data == FLUX_ProcessStatus.IDLE)
-                .DistinctUntilChanged()
-                .ValueOr(() => false);
-
-            var has_safe_state = Observable.CombineLatest(
-                Flux.ConnectionProvider.WhenAnyValue(v => v.IsConnecting),
-                Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS),
-                Flux.Feeders.WhenAnyValue(f => f.HasInvalidStates),
-                HasSafeState)
-                .StartWith(false)
-                .DistinctUntilChanged();
-
-            var is_cycle = Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS)
-                .Convert(data => data == FLUX_ProcessStatus.CYCLE)
-                .DistinctUntilChanged()
-                .ValueOr(() => false);
-
-            var is_homed = Flux.ConnectionProvider.ObserveVariable(m => m.IS_HOMED)
-                .DistinctUntilChanged()
-                .ValueOr(() => false);
-
-            var is_enabled_axis = Flux.ConnectionProvider.ObserveVariable(m => m.ENABLE_DRIVERS)
-                .QueryWhenChanged(e =>
-                {
-                    if (e.Items.Any(e => !e.HasValue))
-                        return Optional<bool>.None;
-                    return e.Items.All(e => e.Value);
-                })
-                .DistinctUntilChanged()
-                .ValueOr(() => false);
 
             FeederEvaluators = Flux.Feeders.Feeders.Connect()
                 .QueryWhenChanged(CreateFeederEvaluator)
@@ -659,6 +654,34 @@ namespace Flux.ViewModels
                 .AsObservableList();
 
             var core_settings = Flux.SettingsProvider.CoreSettings.Local;
+
+            var selected_part_program = Flux.ConnectionProvider
+                .ObserveVariable(m => m.PART_PROGRAM)
+                .DistinctUntilChanged()
+                .StartWithDefault();
+
+            var selected_guid = selected_part_program
+                .Convert(pp => pp.MCodeGuid)
+                .DistinctUntilChanged()
+                .StartWithDefault();
+
+            var selected_mcode =  Flux.MCodes.AvaiableMCodes.Connect()
+                .AutoRefresh(m => m.Analyzer)
+                .WatchOptional(selected_guid)
+                .Convert(m => m.Analyzer)
+                .Convert(a => a.MCode)
+                .StartWithDefault()
+                .DistinctUntilChanged();
+
+            var is_idle = Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS)
+                .Convert(data => data == FLUX_ProcessStatus.IDLE)
+                .DistinctUntilChanged()
+                .ValueOr(() => false);
+
+            var is_cycle = Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS)
+                .Convert(data => data == FLUX_ProcessStatus.CYCLE)
+                .DistinctUntilChanged()
+                .ValueOr(() => false);
 
             var start_with_low_materials = this.WhenAnyValue(s => s.StartWithLowMaterials);
 
@@ -691,31 +714,68 @@ namespace Flux.ViewModels
                 .TrueForAny(line => line.WhenAnyValue(l => l.HasColdNozzle), cold => cold)
                 .StartWith(false)
                 .DistinctUntilChanged();
-
-            var selected_part_program = Flux.ConnectionProvider
-                .ObserveVariable(m => m.PART_PROGRAM)
-                .DistinctUntilChanged()
-                .StartWithDefault();
-
-            selected_part_program.LogObservable(new EventId(0, "selected_part_program"), flux.Logger);
-
-            var selected_guid = selected_part_program
-                .Convert(pp => pp.MCodeGuid)
-                .DistinctUntilChanged()
-                .StartWithDefault();
-
-            var selected_mcode =  Flux.MCodes.AvaiableMCodes.Connect()
-                .AutoRefresh(m => m.Analyzer)
-                .WatchOptional(selected_guid)
-                .Convert(m => m.Analyzer)
-                .Convert(a => a.MCode)
-                .StartWithDefault()
-                .DistinctUntilChanged();
-
+            
             var has_invalid_printer = Observable.CombineLatest(
                 core_settings.WhenAnyValue(v => v.PrinterID),
                 selected_mcode,
                 (printer_id, selected_mcode) => !selected_mcode.HasValue || selected_mcode.Value.PrinterId != printer_id);
+            
+            _StartEvaluation = Observable.CombineLatest(
+                has_low_nozzles,
+                has_cold_nozzles,
+                has_low_materials,
+                has_invalid_tools,
+                has_invalid_probes,
+                has_invalid_printer,
+                has_invalid_materials,
+                start_with_low_materials,
+                StartEvaluation.Create)
+                .DistinctUntilChanged()
+                .ToProperty(this, v => v.StartEvaluation);
+
+            var recovery = Flux.ConnectionProvider
+                .ObserveVariable(c => c.MCODE_RECOVERY)
+                .StartWithDefault()
+                .DistinctUntilChanged();
+
+            var queue_pos = Flux.ConnectionProvider
+             .ObserveVariable(c => c.QUEUE_POS)
+             .DistinctUntilChanged();
+
+            bool distinct_queue(Dictionary<QueuePosition, FluxJob> d1, Dictionary<QueuePosition, FluxJob> d2)
+            {
+                if (d1.Count != d2.Count)
+                    return false;
+                foreach (var j1 in d1)
+                {
+                    if (!d2.TryGetValue(j1.Key, out var j2))
+                        return false;
+                    if (!j1.Value.Equals(j2))
+                        return false;
+                }
+                return true;
+            }
+
+            _PrintingEvaluation = Observable.CombineLatest(
+                queue_pos,
+                selected_mcode,
+                recovery,
+                selected_part_program,
+                PrintingEvaluation.Create)
+                .DistinctUntilChanged()
+                .ToProperty(this, v => v.PrintingEvaluation);
+
+            var is_homed = Flux.ConnectionProvider.ObserveVariable(m => m.IS_HOMED)
+                .DistinctUntilChanged()
+                .ValueOr(() => false);
+
+            var has_safe_state = Observable.CombineLatest(
+                Flux.ConnectionProvider.WhenAnyValue(v => v.IsConnecting),
+                Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS),
+                Flux.Feeders.WhenAnyValue(f => f.HasInvalidStates),
+                HasSafeState)
+                .StartWith(false)
+                .DistinctUntilChanged();
 
             var can_safe_cycle = Observable.CombineLatest(
                 is_idle,
@@ -746,75 +806,15 @@ namespace Flux.ViewModels
                 .StartWith(false)
                 .DistinctUntilChanged();
 
-            var queue_pos = Flux.ConnectionProvider
-                .ObserveVariable(c => c.QUEUE_POS)
-                .DistinctUntilChanged();
-
-            bool distinct_queue(Dictionary<QueuePosition, FluxJob> d1, Dictionary<QueuePosition, FluxJob> d2)
-            {
-                if (d1.Count != d2.Count)
-                    return false;
-                foreach (var j1 in d1)
+            var is_enabled_axis = Flux.ConnectionProvider.ObserveVariable(m => m.ENABLE_DRIVERS)
+                .QueryWhenChanged(e =>
                 {
-                    if (!d2.TryGetValue(j1.Key, out var j2))
-                        return false;
-                    if (!j1.Value.Equals(j2))
-                        return false;
-                }
-                return true;
-            }
-
-            var mcode_queue = Flux.ConnectionProvider
-                .ObserveVariable(c => c.QUEUE)
-                .ValueOr(() => new Dictionary<QueuePosition, FluxJob>())
-                .StartWith(new Dictionary<QueuePosition, FluxJob>())
-                .DistinctUntilChanged(distinct_queue);
-
-            var mcode_analyzers = Flux.MCodes.AvaiableMCodes.Connect()
-                .AutoRefresh(m => m.Analyzer)
-                .QueryWhenChanged(m => m.KeyValues.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.Analyzer))
-                .StartWith(new Dictionary<Guid, Optional<MCodeAnalyzer>>())
-                .DistinctUntilChanged();
-
-            var sample_print_progress = Observable.CombineLatest(
-                is_cycle,
-                selected_mcode,
-                Observable.Interval(TimeSpan.FromSeconds(5)).StartWith(0),
-                (_, _, _) => Unit.Default);
-
-            var database = Flux.DatabaseProvider
-                .WhenAnyValue(v => v.Database);
-
-            var print_progress = this.WhenAnyValue(c => c.PrintProgress)
-                .Sample(sample_print_progress)
-                .DistinctUntilChanged();
-
-            _StartEvaluation = Observable.CombineLatest(
-                has_low_nozzles,
-                has_cold_nozzles,
-                has_low_materials,
-                has_invalid_tools,
-                has_invalid_probes,
-                has_invalid_printer,
-                has_invalid_materials,
-                start_with_low_materials,
-                StartEvaluation.Create)
+                    if (e.Items.Any(e => !e.HasValue))
+                        return Optional<bool>.None;
+                    return e.Items.All(e => e.Value);
+                })
                 .DistinctUntilChanged()
-                .ToProperty(this, v => v.StartEvaluation);
-
-            var recovery = Flux.ConnectionProvider
-                .ObserveVariable(c => c.MCODE_RECOVERY)
-                .StartWithDefault()
-                .DistinctUntilChanged();
-
-            _PrintingEvaluation = Observable.CombineLatest(
-                queue_pos,
-                selected_mcode,
-                recovery,
-                selected_part_program,
-                PrintingEvaluation.Create)
-                .DistinctUntilChanged()
-                .ToProperty(this, v => v.PrintingEvaluation);
+                .ValueOr(() => false);
 
             _StatusEvaluation = Observable.CombineLatest(
                 is_idle,
@@ -840,6 +840,19 @@ namespace Flux.ViewModels
                 .DistinctUntilChanged()
                 .ToProperty(this, v => v.PrintProgress);
 
+            var database = Flux.DatabaseProvider
+                .WhenAnyValue(v => v.Database);
+
+            var sample_print_progress = Observable.CombineLatest(
+                is_cycle,
+                selected_mcode,
+                Observable.Interval(TimeSpan.FromSeconds(5)).StartWith(0),
+                (_, _, _) => Unit.Default);
+
+            var print_progress = this.WhenAnyValue(c => c.PrintProgress)
+                .Sample(sample_print_progress)
+                .DistinctUntilChanged();
+
             _OdometerExtrusions = Observable.CombineLatest(
                 database,
                 print_progress,
@@ -860,10 +873,7 @@ namespace Flux.ViewModels
                         foreach (var feeder_report in selected_mcode.Value.FeederReports)
                         {
                             var extrusion_unit = Flux.ConnectionProvider.GetArrayUnit(c => c.EXTRUSIONS, feeder_report.Key);
-                            if (!extrusion_unit.HasValue)
-                                continue;
-
-                            var extrusion = await Flux.ConnectionProvider.ReadVariableAsync(c => c.EXTRUSIONS, extrusion_unit.Value.Alias);
+                            var extrusion = await Flux.ConnectionProvider.ReadVariableAsync(c => c.EXTRUSIONS, extrusion_unit);
                             if (!extrusion.HasValue)
                                 continue;
 
@@ -889,7 +899,6 @@ namespace Flux.ViewModels
                 .ToProperty(this, v => v.OdometerExtrusions);
 
             var extrusion_set = this.WhenAnyValue(v => v.OdometerExtrusions);
-
             extrusion_set.PairWithPreviousValue()
                 .Subscribe(async extrusions =>
                 {
@@ -958,6 +967,18 @@ namespace Flux.ViewModels
                         }
                     }
                 });
+
+            var mcode_queue = Flux.ConnectionProvider
+                .ObserveVariable(c => c.QUEUE)
+                .ValueOr(() => new Dictionary<QueuePosition, FluxJob>())
+                .StartWith(new Dictionary<QueuePosition, FluxJob>())
+                .DistinctUntilChanged(distinct_queue);
+
+            var mcode_analyzers = Flux.MCodes.AvaiableMCodes.Connect()
+                .AutoRefresh(m => m.Analyzer)
+                .QueryWhenChanged(m => m.KeyValues.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.Analyzer))
+                .StartWith(new Dictionary<Guid, Optional<MCodeAnalyzer>>())
+                .DistinctUntilChanged();
 
             _ExtrusionSetQueue = Observable.CombineLatest(
                 mcode_queue,

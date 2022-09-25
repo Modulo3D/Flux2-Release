@@ -129,34 +129,34 @@ namespace Flux.ViewModels
         {
             return new ConditionCommand(action_icon, () => Flux.ConnectionProvider.ToggleVariableAsync(get_variable), can_execute);
         }
-        public ConditionCommand Create(string action_icon, Func<IFLUX_VariableStore, IFLUX_Array<bool, bool>> get_variable, VariableAlias alias, IObservable<bool> can_execute = null)
+        public ConditionCommand Create(string action_icon, Func<IFLUX_VariableStore, IFLUX_Array<bool, bool>> get_variable, VariableUnit unit, IObservable<bool> can_execute = null)
         {
-            return new ConditionCommand(action_icon, () => Flux.ConnectionProvider.ToggleVariableAsync(get_variable, alias), can_execute);
+            return new ConditionCommand(action_icon, () => Flux.ConnectionProvider.ToggleVariableAsync(get_variable, unit), can_execute);
         }
         public ConditionCommand Create<TRData, TWData>(string action_icon, Func<IFLUX_VariableStore, IFLUX_Variable<TRData, TWData>> get_variable, TWData value, IObservable<bool> can_execute = null)
         {
             return new ConditionCommand(action_icon, () => Flux.ConnectionProvider.WriteVariableAsync(get_variable, value), can_execute);
         }
-        public ConditionCommand Create<TRData, TWData>(string action_icon, Func<IFLUX_VariableStore, IFLUX_Array<TRData, TWData>> get_variable, VariableAlias alias, TWData value, IObservable<bool> can_execute = null)
+        public ConditionCommand Create<TRData, TWData>(string action_icon, Func<IFLUX_VariableStore, IFLUX_Array<TRData, TWData>> get_variable, VariableUnit unit, TWData value, IObservable<bool> can_execute = null)
         {
-            return new ConditionCommand(action_icon, () => Flux.ConnectionProvider.WriteVariableAsync(get_variable, alias, value), can_execute);
+            return new ConditionCommand(action_icon, () => Flux.ConnectionProvider.WriteVariableAsync(get_variable, unit, value), can_execute);
         }
 
         public ConditionCommand Create(string action_icon, Func<IFLUX_VariableStore, Optional<IFLUX_Variable<bool, bool>>> get_variable, IObservable<bool> can_execute = null)
         {
             return new ConditionCommand(action_icon, () => Flux.ConnectionProvider.ToggleVariableAsync(get_variable), can_execute);
         }
-        public ConditionCommand Create(string action_icon, Func<IFLUX_VariableStore, Optional<IFLUX_Array<bool, bool>>> get_variable, VariableAlias alias, IObservable<bool> can_execute = null)
+        public ConditionCommand Create(string action_icon, Func<IFLUX_VariableStore, Optional<IFLUX_Array<bool, bool>>> get_variable, VariableUnit unit, IObservable<bool> can_execute = null)
         {
-            return new ConditionCommand(action_icon, () => Flux.ConnectionProvider.ToggleVariableAsync(get_variable, alias), can_execute);
+            return new ConditionCommand(action_icon, () => Flux.ConnectionProvider.ToggleVariableAsync(get_variable, unit), can_execute);
         }
         public ConditionCommand Create<TRData, TWData>(string action_icon, Func<IFLUX_VariableStore, Optional<IFLUX_Variable<TRData, TWData>>> get_variable, TWData value, IObservable<bool> can_execute = null)
         {
             return new ConditionCommand(action_icon, () => Flux.ConnectionProvider.WriteVariableAsync(get_variable, value), can_execute);
         }
-        public ConditionCommand Create<TRData, TWData>(string action_icon, Func<IFLUX_VariableStore, Optional<IFLUX_Array<TRData, TWData>>> get_variable, VariableAlias alias, TWData value, IObservable<bool> can_execute = null)
+        public ConditionCommand Create<TRData, TWData>(string action_icon, Func<IFLUX_VariableStore, Optional<IFLUX_Array<TRData, TWData>>> get_variable, VariableUnit unit, TWData value, IObservable<bool> can_execute = null)
         {
-            return new ConditionCommand(action_icon, () => Flux.ConnectionProvider.WriteVariableAsync(get_variable, alias, value), can_execute);
+            return new ConditionCommand(action_icon, () => Flux.ConnectionProvider.WriteVariableAsync(get_variable, unit, value), can_execute);
         }
     }
 

@@ -140,7 +140,8 @@ namespace Flux.ViewModels
 
             ProbeOffsetsCommand = ReactiveCommand.CreateFromTask(async () =>
             {
-                var has_tool_z_probe = Flux.ConnectionProvider.HasVariable(m => m.AXIS_PROBE, "tool_z");
+                var tool_z_probe_unit = Flux.ConnectionProvider.GetArrayUnit(m => m.AXIS_PROBE, "tool_z");
+                var has_tool_z_probe = Flux.ConnectionProvider.HasVariable(m => m.AXIS_PROBE, tool_z_probe_unit);
                 if (has_tool_z_probe)
                 {
                     await ProbeOffsetsAsync(false);

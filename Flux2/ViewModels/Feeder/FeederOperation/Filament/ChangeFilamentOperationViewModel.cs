@@ -42,11 +42,7 @@ namespace Flux.ViewModels
         {
             Material = material;
 
-            var before_gear_key = Flux.ConnectionProvider
-                .GetArrayUnit(m => m.FILAMENT_BEFORE_GEAR, material.Position)
-                .Convert(u => u.Alias)
-                .ValueOrDefault();
-
+            var before_gear_key = Flux.ConnectionProvider.GetArrayUnit(m => m.FILAMENT_BEFORE_GEAR, material.Position);
             _WirePresenceBeforeGear = Flux.ConnectionProvider.ObserveVariable(
                 m => m.FILAMENT_BEFORE_GEAR,
                 before_gear_key)
@@ -54,11 +50,7 @@ namespace Flux.ViewModels
                 .ToProperty(this, v => v.WirePresenceBeforeGear)
                 .DisposeWith(Disposables);
 
-            var after_gear_key = Flux.ConnectionProvider
-                .GetArrayUnit(m => m.FILAMENT_AFTER_GEAR, material.Position)
-                .Convert(u => u.Alias)
-                .ValueOrDefault();
-
+            var after_gear_key = Flux.ConnectionProvider.GetArrayUnit(m => m.FILAMENT_AFTER_GEAR, material.Position);
             _WirePresenceAfterGear = Flux.ConnectionProvider.ObserveVariable(
                 m => m.FILAMENT_AFTER_GEAR,
                 after_gear_key)
@@ -66,11 +58,7 @@ namespace Flux.ViewModels
                 .ToProperty(this, v => v.WirePresenceAfterGear)
                 .DisposeWith(Disposables);
 
-            var on_head_key = Flux.ConnectionProvider
-                .GetArrayUnit(m => m.FILAMENT_ON_HEAD, Feeder.Position)
-                .Convert(u => u.Alias)
-                .ValueOrDefault();
-
+            var on_head_key = Flux.ConnectionProvider.GetArrayUnit(m => m.FILAMENT_ON_HEAD, Feeder.Position);
             _WirePresenceOnHead = Flux.ConnectionProvider.ObserveVariable(
                 m => m.FILAMENT_ON_HEAD,
                 on_head_key)

@@ -32,11 +32,11 @@ namespace Flux.ViewModels
         {
             try
             {
-                var chamber_unit    = new VariableUnits("main");
-                var plate_unit      = new VariableUnits("main");
+                var chamber_unit    = new VariableUnits("main.chamber");
+                var plate_unit      = new VariableUnits("main.plate");
                 var bump_unit       = new VariableUnits("x", "y");
                 var drivers_unit    = new VariableUnits("xyz", "e");
-                var lock_unit       = new VariableUnits("main", "top");
+                var lock_unit       = new VariableUnits("main.lock", "top.lock");
                 var pid_unit        = new VariableUnits("kp", "ki", "kd");
                 var axis_unit       = new VariableUnits("x", "y", "z", "e");
                 var probe_unit      = new VariableUnits("plate_z", "tool_z", "tool_xy");

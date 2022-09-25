@@ -40,7 +40,6 @@ namespace Flux.ViewModels
     public class Dummy_Array<TRData, TWData> : FLUX_Array<TRData, TWData>
     {
         public override string Group => "";
-        public override Optional<VariableUnit> GetArrayUnit(ushort position) => default;
         public Dummy_Array() : base("")
         {
         }
