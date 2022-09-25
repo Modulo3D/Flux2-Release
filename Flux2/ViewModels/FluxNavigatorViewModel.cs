@@ -5,6 +5,7 @@ using Modulo3DStandard;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
+using System.Reactive;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
 
@@ -28,6 +29,17 @@ namespace Flux.ViewModels
         }
 
         private Stack<IFluxRoutableViewModel> PreviousViewModels { get; }
+
+        [RemoteCommand]
+        public ReactiveCommand<Unit, Unit> HomeCommand { get; }
+        [RemoteCommand]
+        public ReactiveCommand<Unit, Unit> MCodesCommand { get; }
+        [RemoteCommand]
+        public ReactiveCommand<Unit, Unit> FeedersCommand { get; }
+        [RemoteCommand]
+        public ReactiveCommand<Unit, Unit> CalibrationCommand { get; }
+        [RemoteCommand]
+        public ReactiveCommand<Unit, Unit> FunctionalityCommand { get; }
 
         public FluxNavigatorViewModel(FluxViewModel flux) : base("navigator")
         {
@@ -53,11 +65,11 @@ namespace Flux.ViewModels
             Routes.AddOrUpdate(calibration);
             Routes.AddOrUpdate(functionality);
 
-            AddCommand("home", home.Command);
-            AddCommand("mCodes", storage.Command);
-            AddCommand("feeders", feeders.Command);
-            AddCommand("calibration", calibration.Command);
-            AddCommand("functionality", functionality.Command);
+            HomeCommand = home.Command;
+            MCodesCommand = storage.Command;
+            FeedersCommand = feeders.Command;
+            CalibrationCommand = calibration.Command;
+            FunctionalityCommand = functionality.Command;
         }
 
         public void Navigate(IFluxRoutableViewModel route, bool reset = false)

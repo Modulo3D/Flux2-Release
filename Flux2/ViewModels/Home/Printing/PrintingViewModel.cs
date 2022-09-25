@@ -103,8 +103,6 @@ namespace Flux.ViewModels
                 .Select(i => i.Select(i => i.Values.FirstOrOptional(i => !string.IsNullOrEmpty(i.Name))))
                 .Select(i => i.Select(i => i.ConvertOr(i => i.Name, () => "---")))
                 .ToProperty(this, v => v.ExpectedNozzles);
-
-            InitializeRemoteView();
         }
 
         public async Task ResetAsync()

@@ -230,9 +230,7 @@ namespace Flux.ViewModels
                                 mcode.Value.Delete();
                         }
 
-                        var mcode_storage = Flux.MCodes.CreateMCodeStorage(mcode.Key);
-                        if (mcode_storage.HasValue)
-                            AvaiableMCodes.AddOrUpdate(mcode_storage.Value);
+                        AvaiableMCodes.AddOrUpdate(new MCodeStorageViewModel(this, mcode.Key));
 
                         void report_load(double percentage)
                         {
@@ -386,12 +384,6 @@ namespace Flux.ViewModels
                 Flux.Messages.LogMessage(FileResponse.FILE_DELETE_ERROR, file, ex);
                 return false;
             }
-        }
-        private Optional<IFluxMCodeStorageViewModel> CreateMCodeStorage(Guid mcode_guid)
-        {
-            var mcode_storage = new MCodeStorageViewModel(this, mcode_guid);
-            mcode_storage.InitializeRemoteView();
-            return mcode_storage;
         }
 
         // QUEUE
@@ -622,11 +614,7 @@ namespace Flux.ViewModels
         private IEnumerable<IFluxMCodeQueueViewModel> CreateMCodeQueue(Dictionary<QueuePosition, FluxJob> job_queue)
         {
             foreach (var job in job_queue.Values)
-            {
-                var mcode_queue = new MCodeQueueViewModel(this, job);
-                mcode_queue.InitializeRemoteView();
-                yield return mcode_queue;
-            }
+                yield return new MCodeQueueViewModel(this, job);
         }
     }
 }

@@ -169,9 +169,6 @@ namespace Flux.ViewModels
                     textbox_value.Value.IsEnabled = enabled;
                 });
 
-            textbox.InitializeRemoteView();
-            combo.InitializeRemoteView();
-
             var can_confirm = combo.Items.SelectedValueChanged
                 .Select(f => f.HasValue && f.Value == FLUX_FileAccess.ReadWrite);
 

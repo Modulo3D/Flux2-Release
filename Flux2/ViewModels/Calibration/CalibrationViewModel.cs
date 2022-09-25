@@ -166,8 +166,6 @@ namespace Flux.ViewModels
                 .DisposeWith(Disposables);
 
             ManualCalibration = new ManualCalibrationViewModel(this);
-            ManualCalibration.InitializeRemoteView();
-            ManualCalibration.DisposeWith(Disposables);
         }
 
         void ModifyOffset(Func<double, double> edit_func)

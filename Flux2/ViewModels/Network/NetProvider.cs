@@ -43,11 +43,6 @@ namespace Flux.ViewModels
         {
             Flux = flux;
             Disposables = new CompositeDisposable();
-
-            flux.WhenAnyValue(f => f.RemoteControlData)
-                .DistinctUntilChanged()
-                .ThrottleMax(TimeSpan.FromMilliseconds(50), TimeSpan.FromMilliseconds(200))
-                .Subscribe(async d => await SendRemoteControlDataAsync(d));
         }
         private async Task SendRemoteControlDataAsync(Optional<RemoteControlData> rc)
         {
@@ -92,9 +87,23 @@ namespace Flux.ViewModels
                     other_context.WebSocket.Dispose();
                 }
             }
+
+            InitializeRemoteView();
             var data = JsonUtils.Serialize(Flux.RemoteControlData);
             await SendRemoteControlDataAsync(context, data);
         }
+
+        private void InitializeRemoteView()
+        {
+            if (Flux.IsRemoteViewInitialized)
+                return;
+            Flux.InitializeRemoteView();
+            Flux.WhenAnyValue(f => f.RemoteControlData)
+                .DistinctUntilChanged()
+                .ThrottleMax(TimeSpan.FromMilliseconds(50), TimeSpan.FromMilliseconds(200))
+                .Subscribe(async d => await SendRemoteControlDataAsync(d));
+        }
+
         protected override async Task OnMessageReceivedAsync(IWebSocketContext context, byte[] buffer, IWebSocketReceiveResult result)
         {
             try

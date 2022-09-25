@@ -273,11 +273,10 @@ namespace Flux.ViewModels
                             };
                         })
                         .ToProperty(this, v => v.StatusBrush);
-
-                    InitializeRemoteView();
                 }
                 catch (Exception ex)
-                { 
+                {
+                    Console.WriteLine(ex);
                 }
             });
 

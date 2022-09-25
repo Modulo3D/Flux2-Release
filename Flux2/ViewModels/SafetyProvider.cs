@@ -108,9 +108,7 @@ namespace Flux.ViewModels
 
         public ConditionState Create(EConditionState value, string message, Optional<ConditionCommand> command = default)
         {
-            var condition_state = new ConditionState(value, message, command);
-            condition_state.InitializeRemoteView();
-            return condition_state;
+            return new ConditionState(value, message, command);
         }
         public ConditionCommand Create(string action_icon, Action action, IObservable<bool> can_execute = null)
         {

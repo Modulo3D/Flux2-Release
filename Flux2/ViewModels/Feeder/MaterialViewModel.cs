@@ -20,7 +20,10 @@ namespace Flux.ViewModels
 
         public override OdometerViewModel<NFCMaterial> Odometer { get; }
 
+        [RemoteCommand]
         public ReactiveCommand<Unit, Unit> UnloadMaterialCommand { get; private set; }
+
+        [RemoteCommand]
         public ReactiveCommand<Unit, Unit> LoadPurgeMaterialCommand { get; private set; }
 
         private ObservableAsPropertyHelper<string> _MaterialBrush;
@@ -53,11 +56,7 @@ namespace Flux.ViewModels
             get
             {
                 if (_LoadFilamentOperation == null)
-                {
                     _LoadFilamentOperation = new LoadFilamentOperationViewModel(this);
-                    _LoadFilamentOperation.Initialize();
-                    _LoadFilamentOperation.InitializeRemoteView();
-                }
                 return _LoadFilamentOperation;
             }
         }
@@ -68,11 +67,7 @@ namespace Flux.ViewModels
             get
             {
                 if (_UnloadFilamentOperation == null)
-                {
                     _UnloadFilamentOperation = new UnloadFilamentOperationViewModel(this);
-                    _UnloadFilamentOperation.Initialize();
-                    _UnloadFilamentOperation.InitializeRemoteView();
-                }
                 return _UnloadFilamentOperation;
             }
         }
@@ -220,9 +215,6 @@ namespace Flux.ViewModels
                 .DisposeWith(Disposables);
             LoadPurgeMaterialCommand = ReactiveCommand.CreateFromTask(LoadPurgeAsync, material.Select(m => m.can_load || m.can_purge))
                 .DisposeWith(Disposables);
-
-            AddCommand("unloadMaterial", UnloadMaterialCommand);
-            AddCommand("loadPurgeMaterial", LoadPurgeMaterialCommand);
         }
         private IObservable<MaterialState> FindMaterialState()
         {

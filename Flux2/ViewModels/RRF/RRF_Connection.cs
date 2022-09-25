@@ -116,8 +116,10 @@ namespace Flux.ViewModels
             await Requests.EnqueuedItemsAsync();
             while (Requests.TryDequeu(out var rrf_request))
             {
-                var response = await Client.ExecuteAsync(rrf_request.Request, rrf_request.CancellationToken);
-                rrf_request.Response.TrySetResult(new RRF_Response(response));
+                var ct = rrf_request.CancellationToken;
+                var response = await Client.ExecuteAsync(rrf_request.Request, ct);
+                var rrf_response = new RRF_Response(response);
+                rrf_request.Response.TrySetResult(rrf_response);
             }
         }
 

@@ -4,6 +4,7 @@ using Modulo3DDatabase;
 using Modulo3DStandard;
 using System;
 using System.Linq;
+using System.Reactive.Disposables;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
@@ -19,6 +20,11 @@ namespace Flux.ViewModels
         public NavPanelViewModel(FluxViewModel flux, string name = default) : base(flux, $"navPanel??{typeof(TViewModel).GetRemoteControlName()}{(string.IsNullOrEmpty(name) ? "" : $"??{name}")}")
         {
             Buttons = new SourceList<CmdButton>();
+            Buttons.Connect()
+                .DisposeMany()
+                .Subscribe()
+                .DisposeWith(Disposables);
+
             VisibleButtons = Buttons.Connect()
                 .AutoRefresh(v => v.Visible)
                 .Filter(v => v.Visible)
@@ -113,7 +119,6 @@ namespace Flux.ViewModels
         public void Clear()
         {
             Buttons.Clear();
-            RemoteCommands.Clear();
         }
     }
 }

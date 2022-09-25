@@ -25,7 +25,6 @@ namespace Flux.ViewModels
         {
             var conditions = Flux.StatusProvider.GetConditions<PreparePrintConditionAttribute>().SelectMany(kvp => kvp.Value);
             Conditions.AddOrUpdate(conditions.Select(c => c.condition));
-            InitializeRemoteView();
         }
     }
 }

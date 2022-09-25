@@ -213,11 +213,11 @@ namespace Flux.ViewModels
             ConnectionProvider = connection_provider;
             RRFObjectModel = new RRF_ObjectModel();
 
-            var ultra_fast = TimeSpan.FromMilliseconds(150);
-            var fast = TimeSpan.FromMilliseconds(250);
-            var medium = TimeSpan.FromMilliseconds(450);
-            var slow = TimeSpan.FromMilliseconds(750);
-            var timeout = TimeSpan.FromMilliseconds(5000);
+            var ultra_fast = TimeSpan.FromMilliseconds(200);
+            var fast = TimeSpan.FromMilliseconds(500);
+            var medium = TimeSpan.FromMilliseconds(750);
+            var slow = TimeSpan.FromMilliseconds(1000);
+            var timeout = TimeSpan.FromMilliseconds(500);
 
             ModelKeys = new Dictionary<Type, string>()
             {

@@ -56,7 +56,6 @@ namespace Flux.ViewModels
 
         public virtual void Initialize()
         {
-            InitializeRemoteView();
         }
 
         protected async Task ExitAsync()
@@ -129,7 +128,6 @@ namespace Flux.ViewModels
         {
             var conditions = Flux.StatusProvider.GetConditions<ManualCalibrationConditionAttribute>();
             Conditions.AddOrUpdate(conditions.SelectMany(c => c.Value.Select(c => c.condition)));
-            InitializeRemoteView();
         }
     }
 
@@ -383,10 +381,7 @@ namespace Flux.ViewModels
                 })
                 .ToOptional();
 
-            var button = new CmdButton($"Z??{(distance > 0 ? $"+{distance:0.00mm}" : $"{distance:0.00mm}")}", () => move_tool(distance), can_execute);
-            button.InitializeRemoteView();
-            button.DisposeWith(Disposables);
-            return button;
+            return new CmdButton($"Z??{(distance > 0 ? $"+{distance:0.00mm}" : $"{distance:0.00mm}")}", () => move_tool(distance), can_execute);
 
             async Task move_tool(double d)
             {
@@ -400,11 +395,7 @@ namespace Flux.ViewModels
                 yield break;
 
             for (ushort extruder = 0; extruder < extruders.Value.machine_extruders; extruder++)
-            {
-                var manual_calibration = new ManualCalibrationItemViewModel(this, extruder, not_executing);
-                manual_calibration.InitializeRemoteView();
-                yield return manual_calibration;
-            }
+                yield return new ManualCalibrationItemViewModel(this, extruder, not_executing);    
         }
     }
 

@@ -4,6 +4,7 @@ using Modulo3DStandard;
 using ReactiveUI;
 using System;
 using System.Reactive;
+using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
 
@@ -16,19 +17,28 @@ namespace Flux.ViewModels
         private ObservableAsPropertyHelper<bool> _Visible;
         public bool Visible => _Visible.Value;
 
-        public CmdButton(
+        private CmdButton(
             string name,
-            Action command,
-            OptionalObservable<bool> can_execute = default,
             OptionalObservable<bool> visible = default,
             OptionalObservable<Optional<bool>> active = default)
             : base(name)
         {
             _Visible = visible
                 .ObservableOr(() => true)
-                .ToProperty(this, v => v.Visible);
+                .ToProperty(this, v => v.Visible)
+                .DisposeWith(Disposables);
+        }
 
-            Command = ReactiveCommand.Create(command, can_execute.ObservableOr(() => true));
+        public CmdButton(
+            string name,
+            Action command,
+            OptionalObservable<bool> can_execute = default,
+            OptionalObservable<bool> visible = default,
+            OptionalObservable<Optional<bool>> active = default)
+            : this(name, visible, active)
+        {
+            Command = ReactiveCommand.Create(command, can_execute.ObservableOr(() => true))
+                .DisposeWith(Disposables);
             AddCommand("command", Command, active.ObservableOrDefault());
         }
 
@@ -38,13 +48,10 @@ namespace Flux.ViewModels
             OptionalObservable<bool> can_execute = default,
             OptionalObservable<bool> visible = default,
             OptionalObservable<Optional<bool>> active = default)
-            : base(name)
+            : this(name, visible, active)
         {
-            _Visible = visible
-               .ObservableOr(() => true)
-               .ToProperty(this, v => v.Visible);
-
-            Command = ReactiveCommand.CreateFromTask(command, can_execute.ObservableOr(() => true));
+            Command = ReactiveCommand.CreateFromTask(command, can_execute.ObservableOr(() => true))
+                .DisposeWith(Disposables);
             AddCommand("command", Command, active.ObservableOrDefault());
         }
     }

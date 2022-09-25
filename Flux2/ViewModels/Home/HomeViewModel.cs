@@ -27,7 +27,6 @@ namespace Flux.ViewModels
         }
         public virtual void Initialize()
         {
-            InitializeRemoteView();
         }
     }
 
