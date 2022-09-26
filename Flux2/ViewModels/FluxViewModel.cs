@@ -106,7 +106,6 @@ namespace Flux.ViewModels
         public LoggingProvider LoggingProvider { get; private set; }
         public StartupViewModel Startup { get; private set; }
         public FeedersViewModel Feeders { get; private set; }
-        public MagazineViewModel Magazine { get; private set; }
         public MessagesViewModel Messages { get; private set; }
         [RemoteContent(false)]
         public StatusBarViewModel StatusBar { get; private set; }
@@ -205,7 +204,6 @@ namespace Flux.ViewModels
                     Calibration     = new CalibrationViewModel(this);
                     Webcam          = new WebcamViewModel(this);
                     StatsProvider   = new StatsProvider(this);
-                    Magazine        = new MagazineViewModel(this);
                     Home            = new HomeViewModel(this);
                     StatusBar       = new StatusBarViewModel(this);
                     Functionality   = new FunctionalityViewModel(this);
@@ -237,7 +235,7 @@ namespace Flux.ViewModels
                     if (ConnectionProvider.HasVariable(s => s.OPEN_LOCK, main_lock_unit))
                         LeftButtonCommand = ReactiveCommand.CreateFromTask(async () => { await ConnectionProvider.ToggleVariableAsync(m => m.OPEN_LOCK, main_lock_unit); }, is_idle);
 
-                    var status_bar_nav = new NavModalViewModel(this, StatusBar);
+                    var status_bar_nav = new NavModalViewModel<StatusBarViewModel>(this, StatusBar);
                     OpenStatusBarCommand = ReactiveCommand.Create(() => { Navigator.Navigate(status_bar_nav); });
 
                     ConnectionProvider.Initialize();

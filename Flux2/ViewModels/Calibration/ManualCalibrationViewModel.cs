@@ -164,12 +164,17 @@ namespace Flux.ViewModels
                 .ValueOr(() => FluxColors.Empty)
                 .ToProperty(this, v => v.ProbeStateBrush);
 
+            var status_provider = ManualCalibration.Flux.StatusProvider;
+            var can_safe_cycle = status_provider
+                .WhenAnyValue(s => s.StatusEvaluation)
+                .Select(s => s.CanSafeCycle);
+
             var can_execute = Observable.CombineLatest(
                 print_temp,
                 tool_offset,
                 not_executing,
                 ManualCalibration.WhenAnyValue(v => v.SelectedTool),
-                ManualCalibration.Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation).Select(s => s.IsIdle),
+                can_safe_cycle,
                 (temp, offset, ne, tool, idle) => temp.HasValue && offset.HasValue && ne && idle && tool != Position);
 
             SelectToolCommand = ReactiveCommand.CreateFromTask(SelectToolAsync, can_execute);

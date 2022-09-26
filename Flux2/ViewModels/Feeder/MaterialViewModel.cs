@@ -50,27 +50,9 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public bool MaterialLoaded => _MaterialLoaded.Value;
 
-        private LoadFilamentOperationViewModel _LoadFilamentOperation;
-        public LoadFilamentOperationViewModel LoadFilamentOperation
-        {
-            get
-            {
-                if (_LoadFilamentOperation == null)
-                    _LoadFilamentOperation = new LoadFilamentOperationViewModel(this);
-                return _LoadFilamentOperation;
-            }
-        }
+        public Lazy<LoadFilamentOperationViewModel> LoadFilamentOperation { get; }
 
-        private UnloadFilamentOperationViewModel _UnloadFilamentOperation;
-        public UnloadFilamentOperationViewModel UnloadFilamentOperation
-        {
-            get
-            {
-                if (_UnloadFilamentOperation == null)
-                    _UnloadFilamentOperation = new UnloadFilamentOperationViewModel(this);
-                return _UnloadFilamentOperation;
-            }
-        }
+        private Lazy<UnloadFilamentOperationViewModel> UnloadFilamentOperation { get; }
 
         IFluxToolMaterialViewModel IFluxMaterialViewModel.ToolMaterial => ToolMaterial;
         private ToolMaterialViewModel _ToolMaterial;
@@ -141,6 +123,19 @@ namespace Flux.ViewModels
             _Humidity = Flux.ConnectionProvider.ObserveVariable(c => c.FILAMENT_HUMIDITY, humidity_unit)
                 .ObservableOrDefault()
                 .ToProperty(this, v => v.Humidity);
+
+            LoadFilamentOperation = new Lazy<LoadFilamentOperationViewModel>(() =>
+            {
+                var load = new LoadFilamentOperationViewModel(this);
+                load.Initialize();
+                return load;
+            });
+            UnloadFilamentOperation = new Lazy<UnloadFilamentOperationViewModel>(() =>
+            {
+                var unload = new UnloadFilamentOperationViewModel(this);
+                unload.Initialize();
+                return unload;
+            });
         }
 
         public void SetMaterialLoaded(Optional<bool> material_loaded)
@@ -278,7 +273,7 @@ namespace Flux.ViewModels
 
         public Task UnloadAsync()
         {
-            Flux.Navigator.Navigate(UnloadFilamentOperation);
+            Flux.Navigator.Navigate(UnloadFilamentOperation.Value);
             return Task.CompletedTask;
         }
         public async Task LoadPurgeAsync()
@@ -294,7 +289,7 @@ namespace Flux.ViewModels
             }
             else
             {
-                Flux.Navigator.Navigate(LoadFilamentOperation);
+                Flux.Navigator.Navigate(LoadFilamentOperation.Value);
             }
         }
         public override async Task<Optional<NFCMaterial>> CreateTagAsync(Optional<NFCReading<NFCMaterial>> reading)

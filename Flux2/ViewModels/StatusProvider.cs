@@ -165,7 +165,6 @@ namespace Flux.ViewModels
         [StatusBarCondition]
         [CycleCondition(exclude_alias: new[] { "spools.lock" })]
         [PreparePrintCondition(exclude_alias: new[] { "spools.lock" })]
-        [ManualCalibrationCondition(exclude_alias: new[] { "spools.lock" })]
         [FilamentOperationCondition(exclude_alias: new[] { "spools.lock" })]
         public SourceCache<IConditionViewModel, string> LockClosedConditions
         {

@@ -18,7 +18,7 @@ namespace Flux.ViewModels
         public bool ShowNavBar => _ShowNavBar.Value;
 
         public FluxViewModel Flux { get; }
-        public SourceCache<INavButton, IFluxRoutableViewModel> Routes { get; }
+        public SourceList<INavButton> Routes { get; }
 
         private Optional<IFluxRoutableViewModel> _CurrentViewModel;
         [RemoteContent(true)]
@@ -44,14 +44,14 @@ namespace Flux.ViewModels
         public FluxNavigatorViewModel(FluxViewModel flux) : base("navigator")
         {
             Flux = flux;
+            Routes = new SourceList<INavButton>();
             PreviousViewModels = new Stack<IFluxRoutableViewModel>();
-            Routes = new SourceCache<INavButton, IFluxRoutableViewModel>(n => n.Route);
 
-            var home = new NavButton(Flux, Flux.Home, true);
-            var storage = new NavButton(Flux, Flux.MCodes, true);
-            var feeders = new NavButton(Flux, Flux.Feeders, true);
-            var calibration = new NavButton(Flux, Flux.Calibration, true);
-            var functionality = new NavButton(Flux, Flux.Functionality, true);
+            var home = new NavButton<HomeViewModel>(Flux, Flux.Home, reset:true);
+            var storage = new NavButton<MCodesViewModel>(Flux, Flux.MCodes, reset: true);
+            var feeders = new NavButton<FeedersViewModel>(Flux, Flux.Feeders, reset: true);
+            var calibration = new NavButton<CalibrationViewModel>(Flux, Flux.Calibration, reset: true);
+            var functionality = new NavButton<FunctionalityViewModel>(Flux, Flux.Functionality, reset: true);
 
 
             _ShowNavBar = this.WhenAnyValue(v => v.CurrentViewModel)
@@ -59,11 +59,11 @@ namespace Flux.ViewModels
                 .ValueOr(() => false)
                 .ToProperty(this, v => v.ShowNavBar);
 
-            Routes.AddOrUpdate(home);
-            Routes.AddOrUpdate(storage);
-            Routes.AddOrUpdate(feeders);
-            Routes.AddOrUpdate(calibration);
-            Routes.AddOrUpdate(functionality);
+            Routes.Add(home);
+            Routes.Add(storage);
+            Routes.Add(feeders);
+            Routes.Add(calibration);
+            Routes.Add(functionality);
 
             HomeCommand = home.Command;
             MCodesCommand = storage.Command;
@@ -72,7 +72,8 @@ namespace Flux.ViewModels
             FunctionalityCommand = functionality.Command;
         }
 
-        public void Navigate(IFluxRoutableViewModel route, bool reset = false)
+        public void Navigate<TFluxRoutableViewModel>(TFluxRoutableViewModel route, bool reset = false)
+            where TFluxRoutableViewModel : IFluxRoutableViewModel
         {
             try
             {
@@ -82,11 +83,11 @@ namespace Flux.ViewModels
                 }
                 else
                 {
-                    if (CurrentViewModel.HasValue && (!PreviousViewModels.TryPeek(out var previous) || previous != route))
+                    if (CurrentViewModel.HasValue && (!PreviousViewModels.TryPeek(out var previous) || !ReferenceEquals(previous, route)))
                         PreviousViewModels.Push(CurrentViewModel.Value);
                 }
 
-                CurrentViewModel = route.ToOptional();
+                CurrentViewModel = ((IFluxRoutableViewModel)route).ToOptional();
             }
             catch (Exception ex)
             {
@@ -94,12 +95,13 @@ namespace Flux.ViewModels
             }
         }
 
-        public void NavigateModal(
-            IFluxRoutableViewModel route,
+        public void NavigateModal<TFluxRoutableViewModel>(
+            TFluxRoutableViewModel route,
             OptionalObservable<bool> navigate_back = default,
             OptionalObservable<bool> show_navbar = default)
+            where TFluxRoutableViewModel : IFluxRoutableViewModel
         {
-            Navigate(new NavModalViewModel(Flux, route, navigate_back, show_navbar), false);
+            Navigate(new NavModalViewModel<TFluxRoutableViewModel>(Flux, route, navigate_back, show_navbar), false);
         }
 
         public void NavigateBack()

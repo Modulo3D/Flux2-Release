@@ -21,13 +21,13 @@ namespace Flux.ViewModels
                 .ConfigureLogging((_, logging) =>
                 {
                     logging.ClearProviders();
-                    logging.AddFile("../Flux/Log/flux.log", o =>
+                    /*logging.AddFile("../Flux/Log/flux.log", o =>
                     {
                         o.Append = true;
                         o.MaxRollingFiles = 10;
                         o.UseUtcTimestamp = true;
                         o.FileSizeLimitBytes = 5242880;
-                    });
+                    });*/
 
                     if(Debugger.IsAttached)
                         logging.AddConsole();

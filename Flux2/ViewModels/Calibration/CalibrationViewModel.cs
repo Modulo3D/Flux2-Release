@@ -37,7 +37,7 @@ namespace Flux.ViewModels
             set => this.RaiseAndSetIfChanged(ref _GlobalZOffset, value);
         }
 
-        private ManualCalibrationViewModel ManualCalibration { get; set; }
+        private Lazy<ManualCalibrationViewModel> ManualCalibration { get; set; }
 
         public CalibrationViewModel(FluxViewModel flux) : base(flux)
         {
@@ -154,7 +154,7 @@ namespace Flux.ViewModels
                     if (Flux.ConnectionProvider.HasVariable(c => c.ENABLE_VACUUM))
                         await Flux.ConnectionProvider.WriteVariableAsync(c => c.ENABLE_VACUUM, true);
 
-                    Flux.Navigator.Navigate(ManualCalibration);
+                    Flux.Navigator.Navigate(ManualCalibration.Value);
                 }
             }, can_probe)
                 .DisposeWith(Disposables);
@@ -165,7 +165,7 @@ namespace Flux.ViewModels
                 .AsObservableCache()
                 .DisposeWith(Disposables);
 
-            ManualCalibration = new ManualCalibrationViewModel(this);
+            ManualCalibration = new Lazy<ManualCalibrationViewModel>(() => new ManualCalibrationViewModel(this));
         }
 
         void ModifyOffset(Func<double, double> edit_func)

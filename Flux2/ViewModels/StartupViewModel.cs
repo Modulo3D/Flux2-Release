@@ -47,26 +47,23 @@ namespace Flux.ViewModels
                 .ToProperty(this, v => v.ConnectionProgress);
 
             StartupCommand = ReactiveCommand.CreateFromTask(StartupAsync, can_home);
+            SettingsCommand = ReactiveCommand.Create(NavigateToSettingsAsync);
             ResetPrinterCommand = ReactiveCommand.Create(ResetPrinter);
-            SettingsCommand = ReactiveCommand.Create(SettingsAsync);
 
             if (Flux.ConnectionProvider.HasToolChange)
-                MagazineCommand = ReactiveCommand.Create(MagazineAsync);
+                MagazineCommand = ReactiveCommand.Create(NavigateToMagazineAsync);
         }
 
-        private void SettingsAsync()
+        private void NavigateToSettingsAsync()
         {
             var functionality = Flux.Functionality;
             Flux.Navigator.NavigateModal(functionality);
         }
 
-        private void MagazineAsync()
+        private void NavigateToMagazineAsync()
         {
-            var navigate_back = Flux.StatusProvider.ClampClosedCondition
-                .ConvertToObservable(c => c.StateChanged)
-                .ConvertToObservable(s => s.Valid);
-
-            Flux.Navigator.NavigateModal(Flux.Magazine, navigate_back: navigate_back);
+            var magazine = Flux.Functionality.Magazine.Value;
+            Flux.Navigator.NavigateModal(magazine);
         }
 
         public void ResetPrinter()

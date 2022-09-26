@@ -27,9 +27,6 @@ namespace Flux.ViewModels
 
             ResetMagazineCommand = ReactiveCommand.CreateFromTask(async () => { await Flux.ConnectionProvider.ResetMagazineAsync(); }, is_idle);
 
-            if (Flux.ConnectionProvider.HasVariable(m => m.OPEN_HEAD_CLAMP))
-                AddCommand("toggleClamp", ReactiveCommand.CreateFromTask(async () => { await Flux.ConnectionProvider.ToggleVariableAsync(c => c.OPEN_HEAD_CLAMP); }));
-
             var top_lock_unit = Flux.ConnectionProvider.GetArrayUnit(m => m.LOCK_CLOSED, "top");
             if (Flux.ConnectionProvider.HasVariable(m => m.LOCK_CLOSED, top_lock_unit))
                 AddCommand("toggleTopLock", ReactiveCommand.CreateFromTask(async () => { await Flux.ConnectionProvider.ToggleVariableAsync(c => c.OPEN_LOCK, top_lock_unit); }));

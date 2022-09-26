@@ -8,17 +8,18 @@ using System.Reactive.Linq;
 
 namespace Flux.ViewModels
 {
-    public class NavModalViewModel : FluxRoutableViewModel<NavModalViewModel>
+    public class NavModalViewModel<TFluxRoutableViewModel> : FluxRoutableViewModel<NavModalViewModel<TFluxRoutableViewModel>>
+        where TFluxRoutableViewModel : IFluxRoutableViewModel
     {
         [RemoteCommand]
         public ReactiveCommand<Unit, Unit> NavigateBackCommand { get; }
 
         [RemoteContent(false)]
-        public IFluxRoutableViewModel Content { get; }
+        public TFluxRoutableViewModel Content { get; }
 
         public NavModalViewModel(
             FluxViewModel flux,
-            IFluxRoutableViewModel route,
+            TFluxRoutableViewModel route,
             OptionalObservable<bool> can_navigate_back = default,
             OptionalObservable<bool> show_navbar = default)
             : base(flux, show_navbar, $"navModal??{route.Name}")

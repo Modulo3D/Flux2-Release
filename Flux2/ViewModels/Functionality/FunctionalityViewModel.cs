@@ -208,18 +208,8 @@ namespace Flux.ViewModels
 
     public class ManageViewModel : NavPanelViewModel<ManageViewModel>
     {
-        public MoveViewModel Move { get; }
-        public FilesViewModel Files { get; }
-        public MemoryViewModel Memory { get; }
-        public TemperaturesViewModel Temperatures { get; }
-
         public ManageViewModel(FluxViewModel flux) : base(flux)
         {
-            Move = new MoveViewModel(Flux);
-            Files = new FilesViewModel(Flux);
-            Memory = new MemoryViewModel(Flux);
-            Temperatures = new TemperaturesViewModel(Flux);
-
             var status = Flux.StatusProvider
                 .WhenAnyValue(s => s.StatusEvaluation);
             var IS_HOME = status
@@ -273,12 +263,7 @@ namespace Flux.ViewModels
                 .ToOptional();
 
             if (Flux.ConnectionProvider.HasToolChange)
-            { 
-                AddModal(
-                    Flux.Magazine,
-                    can_navigate: IS_IDLE,
-                    navigate_back: can_naviagate_back);
-            }
+                AddModal(Flux.Functionality.Magazine);
 
             if (Flux.ConnectionProvider.HasVariable(c => c.DISABLE_24V))
                 AddCommand("power", ShutdownAsync, can_execute: IS_IDLE);
@@ -334,15 +319,15 @@ namespace Flux.ViewModels
                     },
                     advanced_mode_source));
 
-            AddModal(Temperatures);
+            AddModal(() => new TemperaturesViewModel(Flux));
             AddCommand("resetPrinter", Flux.ConnectionProvider.StartConnection, visible: advanced_mode);
             AddCommand("vacuumPump", m => m.ENABLE_VACUUM, can_execute: IS_IDLE, visible: advanced_mode);
             AddCommand("openClamp", m => m.OPEN_HEAD_CLAMP, can_execute: IS_IDLE, visible: advanced_mode);
             AddCommand("reloadDatabase", () => Flux.DatabaseProvider.Initialize(), visible: advanced_mode);
 
-            AddModal(Memory, visible: advanced_mode);
-            AddModal(Files, visible: advanced_mode);
-            AddModal(Move, visible: advanced_mode);
+            AddModal(() => new MemoryViewModel(Flux), visible: advanced_mode);
+            AddModal(() => new FilesViewModel(Flux), visible: advanced_mode);
+            AddModal(() => new MoveViewModel(Flux), visible: advanced_mode);
         }
 
         //private byte[] array { get; set; }
@@ -468,27 +453,20 @@ namespace Flux.ViewModels
 
     public class FunctionalityViewModel : NavPanelViewModel<FunctionalityViewModel>
     {
-        public NFCViewModel NFC { get; private set; }
-        public ManageViewModel Manage { get; private set; }
-        public RoutinesViewModel Routines { get; private set; }
-        public SettingsViewModel Settings { get; private set; }
-
+        public Lazy<MagazineViewModel> Magazine { get; private set; }
         public FunctionalityViewModel(FluxViewModel flux) : base(flux)
         {
-            NFC = new NFCViewModel(Flux);
-            Manage = new ManageViewModel(Flux);
-            Routines = new RoutinesViewModel(Flux);
-            Settings = new SettingsViewModel(Flux);
+            Magazine = new Lazy<MagazineViewModel>(() => new MagazineViewModel(flux));
 
             var advanced_mode = Flux.MCodes
                 .WhenAnyValue(s => s.OperatorUSB)
                 .Select(o => o.ConvertOr(o => o.AdvancedSettings, () => false))
                 .ToOptional();
 
-            AddModal(Manage);
-            AddModal(Settings);
-            AddModal(Routines);
-            AddModal(NFC, advanced_mode, advanced_mode);
+            AddModal(() => new SettingsViewModel(Flux));
+            AddModal(() => new RoutinesViewModel(Flux));
+            AddModal(() => new ManageViewModel(Flux));
+            AddModal(() => new NFCViewModel(Flux), advanced_mode, advanced_mode);
         }
     }
 }
