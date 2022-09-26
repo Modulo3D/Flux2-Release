@@ -123,6 +123,28 @@ namespace Flux.ViewModels
         }
     }
 
+    public class OSAI_VariableArrayIndex : OSAI_ObservableVariable<ArrayIndex, ArrayIndex>
+    {
+        public OSAI_VariableArrayIndex(
+            OSAI_ConnectionProvider connection_provider,
+            string name,
+            OSAI_IndexAddress address,
+            VariableUnit unit = default)
+            : base(connection_provider, name, address,
+                observe_func: m => m.ObserveWordVar(address)
+                    .Convert(s => ShortConverter.Convert(s))
+                    .Convert(s => (ArrayIndex)(s, connection_provider)),
+                read_func: c => c.Connection
+                    .ConvertAsync(c => c.ReadShortAsync(address))
+                    .ConvertAsync(s => s.Convert(s => (ArrayIndex)(s, connection_provider)))
+                    .ValueOrDefaultAsync(),
+                write_func: (c, v) => c.Connection
+                        .ConvertOrAsync(c => c.WriteVariableAsync(address, v.GetArrayBaseIndex(connection_provider)), () => false),
+                unit)
+        {
+        }
+    }
+
     public class OSAI_VariableDouble : OSAI_ObservableVariable<double, double>
     {
         public OSAI_VariableDouble(

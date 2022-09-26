@@ -85,7 +85,7 @@ namespace Flux.ViewModels
                             var pos = value.loaded.Value.Position;
 
                             if(value.loaded.Value.Position == Material.Position)
-                                return state.Create(EConditionState.Stable, $"MATERIALE CARICATO ({mat} POS. {pos + 1})");
+                                return state.Create(EConditionState.Disabled, $"MATERIALE CARICATO ({mat} POS. {pos + 1})");
                             return state.Create(EConditionState.Warning, $"MATERIALE GIA' CARICATO ({mat} POS. {pos + 1})");
                         }
 

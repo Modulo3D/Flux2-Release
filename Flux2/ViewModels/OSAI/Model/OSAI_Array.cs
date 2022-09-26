@@ -16,12 +16,13 @@ namespace Flux.ViewModels
         public override string Group { get; }
 
         public OSAI_Array(
+            OSAI_ConnectionProvider connection_provider,
             string name,
             ushort count,
             TAddress address,
             Func<string, TAddress, VariableUnit, ushort, TVariable> create_var,
             Optional<VariableUnits> custom_unit = default)
-            : base(name)
+            : base(connection_provider, name)
         {
             Group = $"{address.VarCode}";
             TAddress cur_address = address;
@@ -52,7 +53,7 @@ namespace Flux.ViewModels
             ushort count,
             OSAI_BitIndexAddress address,
             Optional<VariableUnits> custom_unit = default)
-            : base(name, count, address, (name, addr, unit, i) => new OSAI_VariableBool(connection_provider, name, addr, unit), custom_unit)
+            : base(connection_provider, name, count, address, (name, addr, unit, i) => new OSAI_VariableBool(connection_provider, name, addr, unit), custom_unit)
         {
         }
     }
@@ -65,7 +66,7 @@ namespace Flux.ViewModels
             ushort count,
             OSAI_IndexAddress address,
             Optional<VariableUnits> custom_unit = default)
-            : base(name, count, address, (name, addr, unit, i) => new OSAI_VariableUShort(connection_provider, name, addr, unit), custom_unit)
+            : base(connection_provider, name, count, address, (name, addr, unit, i) => new OSAI_VariableUShort(connection_provider, name, addr, unit), custom_unit)
         {
         }
     }
@@ -78,7 +79,7 @@ namespace Flux.ViewModels
             ushort count,
             OSAI_IndexAddress address,
             Optional<VariableUnits> custom_unit = default)
-            : base(name, count, address, (name, addr, unit, i) => new OSAI_VariableDouble(connection_provider, name, addr, unit), custom_unit)
+            : base(connection_provider, name, count, address, (name, addr, unit, i) => new OSAI_VariableDouble(connection_provider, name, addr, unit), custom_unit)
         {
         }
     }
@@ -93,7 +94,7 @@ namespace Flux.ViewModels
             OSAI_IndexAddress address,
             OSAI_ReadPriority priority,
             Optional<VariableUnits> custom_unit = default)
-            : base(name, count, address, (name, addr, unit, i) => new OSAI_VariableText(connection_provider, name, addr, priority, unit), custom_unit)
+            : base(connection_provider, name, count, address, (name, addr, unit, i) => new OSAI_VariableText(connection_provider, name, addr, priority, unit), custom_unit)
         {
             Priority = priority;
         }
@@ -110,7 +111,7 @@ namespace Flux.ViewModels
             OSAI_ReadPriority priority,
             Func<ushort, double, string> write_temp,
             Optional<VariableUnits> custom_unit = default)
-            : base(name, count, address, (name, addr, unit, i) => new OSAI_VariableTemp(connection_provider, name, addr, priority, t => write_temp(i, t), unit), custom_unit)
+            : base(connection_provider, name, count, address, (name, addr, unit, i) => new OSAI_VariableTemp(connection_provider, name, addr, priority, t => write_temp(i, t), unit), custom_unit)
         {
             Priority = priority;
         }
@@ -121,13 +122,14 @@ namespace Flux.ViewModels
     {
         public OSAI_ReadPriority Priority { get; }
         public OSAI_ArrayNamed(
+            OSAI_ConnectionProvider connection_provider,
             string name,
             ushort count,
             OSAI_NamedAddress address,
             OSAI_ReadPriority priority,
             Func<string, OSAI_NamedAddress, OSAI_ReadPriority, VariableUnit, TVariable> create_var,
             Optional<VariableUnits> custom_unit = default)
-            : base(name, count, address, (name, addr, unit, i) => create_var(name, addr, priority, unit), custom_unit)
+            : base(connection_provider, name, count, address, (name, addr, unit, i) => create_var(name, addr, priority, unit), custom_unit)
         {
             Priority = priority;
         }
@@ -142,7 +144,7 @@ namespace Flux.ViewModels
             OSAI_NamedAddress address,
             OSAI_ReadPriority priority,
             Optional<VariableUnits> custom_unit = default)
-            : base(name, count, address, priority, (name, addr, p, unit) => new OSAI_VariableNamedDouble(connection_provider, name, addr, p, unit), custom_unit)
+            : base(connection_provider, name, count, address, priority, (name, addr, p, unit) => new OSAI_VariableNamedDouble(connection_provider, name, addr, p, unit), custom_unit)
         {
         }
     }

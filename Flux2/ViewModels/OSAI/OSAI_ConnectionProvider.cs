@@ -26,7 +26,6 @@ namespace Flux.ViewModels
     public class OSAI_ConnectionProvider : FLUX_ConnectionProvider<OSAI_ConnectionProvider, OSAI_Connection, OSAI_MemoryBuffer, OSAI_VariableStore, OSAI_ConnectionPhase>
     {
         public FluxViewModel Flux { get; }
-
         public OSAI_ConnectionProvider(FluxViewModel flux) : base(flux,
             OSAI_ConnectionPhase.START_PHASE, OSAI_ConnectionPhase.END_PHASE, p => (int)p,
             c => new OSAI_MemoryBuffer(c), c => new OSAI_VariableStore(c))
@@ -161,24 +160,11 @@ namespace Flux.ViewModels
             }
         }
 
-        public override async Task<bool> ParkToolAsync()
-        {
-            var position = await ReadVariableAsync(m => m.TOOL_CUR);
-            if (!position.HasValue)
-                return false;
-
-            if (position.Value == 0)
-                return false;
-
-            using var put_park_tool_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            using var wait_park_tool_cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            return await ExecuteParamacroAsync(c => c.GetParkToolGCode(), put_park_tool_cts.Token, true, wait_park_tool_cts.Token);
-        }
         public override async Task<bool> ResetClampAsync()
         {
             if (!await WriteVariableAsync(c => c.OPEN_HEAD_CLAMP, true))
-                return false;
-            if (!await WriteVariableAsync(c => c.TOOL_CUR, (short)0))
+                return false; 
+            if (!await WriteVariableAsync(c => c.TOOL_CUR, new ArrayIndex(-1)))
                 return false;
             return true;
         }

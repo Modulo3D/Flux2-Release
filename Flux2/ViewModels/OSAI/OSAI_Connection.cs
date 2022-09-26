@@ -19,6 +19,7 @@ namespace Flux.ViewModels
     {
         public const ushort AxisNum = 4;
         public const ushort ProcessNumber = 1;
+        public override bool ParkToolAfterOperation => false;
 
         public override ushort ArrayBase => 1;
         public override string RootPath => "DEVICE";
@@ -983,21 +984,21 @@ namespace Flux.ViewModels
         {
             return new[] { "(CLS, MACRO\\raise_plate)" };
         }
-        public override Optional<IEnumerable<string>> GetSelectToolGCode(ushort position)
+        public override Optional<IEnumerable<string>> GetSelectToolGCode(ArrayIndex position)
         {
-            return new[] { $"(CLS, MACRO\\change_tool, {position + 1})" };
+            return new[] { $"(CLS, MACRO\\change_tool, {position.GetArrayBaseIndex(this)})" };
         }
         public override Optional<IEnumerable<string>> GetStartPartProgramGCode(string folder, string file_name)
         {
             return new[] { $"(CLS, {folder}\\{file_name})" };
         }
-        public override Optional<IEnumerable<string>> GetSetToolTemperatureGCode(ushort position, double temperature)
+        public override Optional<IEnumerable<string>> GetSetToolTemperatureGCode(ArrayIndex position, double temperature)
         {
-            return new[] { $"M4104 [{position + 1}, {temperature}, 0]" };
+            return new[] { $"M4104 [{position.GetArrayBaseIndex(this)}, {temperature}, 0]" };
         }
-        public override Optional<IEnumerable<string>> GetProbeToolGCode(ushort position, double temperature)
+        public override Optional<IEnumerable<string>> GetProbeToolGCode(ArrayIndex position, double temperature)
         {
-            return new[] { $"(CLS, MACRO\\probe_tool, {position + 1}, {temperature})" };
+            return new[] { $"(CLS, MACRO\\probe_tool, {position.GetArrayBaseIndex(this)}, {temperature})" };
         }
         public override Optional<IEnumerable<string>> GetRelativeXMovementGCode(double distance, double feedrate)
         {
@@ -1044,7 +1045,7 @@ namespace Flux.ViewModels
             return true;
         }
 
-        public override Optional<IEnumerable<string>> GetSetToolOffsetGCode(ushort position, double x, double y, double z)
+        public override Optional<IEnumerable<string>> GetSetToolOffsetGCode(ArrayIndex position, double x, double y, double z)
         {
             var x_offset = (x + y) / 2;
             var y_offset = (x - y) / 2;
@@ -1086,14 +1087,14 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override Optional<IEnumerable<string>> GetCancelLoadFilamentGCode(ushort position)
+        public override Optional<IEnumerable<string>> GetCancelLoadFilamentGCode(ArrayIndex position)
         {
-            return new[] { $"M4104 [{position + 1}, 0, 0]" };
+            return new[] { $"M4104 [{position.GetArrayBaseIndex(this)}, 0, 0]" };
         }
 
-        public override Optional<IEnumerable<string>> GetCancelUnloadFilamentGCode(ushort position)
+        public override Optional<IEnumerable<string>> GetCancelUnloadFilamentGCode(ArrayIndex position)
         {
-            return new[] { $"M4104 [{position + 1}, 0, 0]" };
+            return new[] { $"M4104 [{position.GetArrayBaseIndex(this)}, 0, 0]" };
         }
 
         public override Optional<IEnumerable<string>> GetCenterPositionGCode()
@@ -1144,7 +1145,7 @@ namespace Flux.ViewModels
             }
         }
 
-        public override Optional<IEnumerable<string>> GetSetExtruderMixingGCode(ushort machine_extruder, ushort mixing_extruder)
+        public override Optional<IEnumerable<string>> GetSetExtruderMixingGCode(ArrayIndex machine_extruder, ArrayIndex mixing_extruder)
         {
             throw new NotImplementedException();
         }
@@ -1164,12 +1165,12 @@ namespace Flux.ViewModels
             return new[] { "(REL)" };
         }
 
-        public override Optional<IEnumerable<string>> GetManualFilamentInsertGCode(ushort position, double iteration_distance, double feedrate)
+        public override Optional<IEnumerable<string>> GetManualFilamentInsertGCode(ArrayIndex position, double iteration_distance, double feedrate)
         {
             throw new NotImplementedException();
         }
 
-        public override Optional<IEnumerable<string>> GetManualFilamentExtractGCode(ushort position, ushort iterations, double iteration_distance, double feedrate)
+        public override Optional<IEnumerable<string>> GetManualFilamentExtractGCode(ArrayIndex position, ushort iterations, double iteration_distance, double feedrate)
         {
             throw new NotImplementedException();
         }

@@ -15,10 +15,11 @@ namespace Flux.ViewModels
     {
         public override string Group => "ObjectModel";
         public RRF_ArrayObjectModel(
+            RRF_ConnectionProvider connection_provider,
             string name,
             VariableUnits variable_units,
             Func<VariableUnit, Optional<RRF_VariableObjectModel<TModel, TRData, TWData>>> get_variable)
-            : base(name)
+            : base(connection_provider, name)
         {
             var source_cache = (SourceCache<IFLUX_Variable<TRData, TWData>, VariableUnit>)Variables;
             foreach (var unit in variable_units)
@@ -146,7 +147,7 @@ namespace Flux.ViewModels
             TData default_value,
             VariableUnits variable_units,
             Func<object, TData> convert_data = default)
-            : base(variable)
+            : base(connection_provider, variable)
         {
             var source_cache = (SourceCache<IFLUX_Variable<TData, TData>, VariableUnit>)Variables;
             foreach (var unit in variable_units)

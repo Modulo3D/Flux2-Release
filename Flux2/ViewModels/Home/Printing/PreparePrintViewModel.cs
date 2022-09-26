@@ -16,15 +16,15 @@ namespace Flux.ViewModels
     public class PreparePrintViewModel : HomePhaseViewModel<PreparePrintViewModel>
     {
         [RemoteContent(true)]
-        public ISourceCache<IConditionViewModel, string> Conditions { get; private set; }
+        public ISourceList<IConditionViewModel> Conditions { get; private set; }
         public PreparePrintViewModel(FluxViewModel flux) : base(flux)
         {
-            Conditions = new SourceCache<IConditionViewModel, string>(c => c.Name);
+            Conditions = new SourceList<IConditionViewModel>();
         }
         public override void Initialize()
         {
             var conditions = Flux.StatusProvider.GetConditions<PreparePrintConditionAttribute>().SelectMany(kvp => kvp.Value);
-            Conditions.AddOrUpdate(conditions.Select(c => c.condition));
+            Conditions.AddRange(conditions.Select(c => c.condition));
         }
     }
 }

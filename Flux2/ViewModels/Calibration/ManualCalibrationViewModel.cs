@@ -44,8 +44,11 @@ namespace Flux.ViewModels
             Flux = calibration.Flux;
             Calibration = calibration;
 
-            _SelectedTool = Flux.ConnectionProvider.ObserveVariable(m => m.TOOL_CUR)
-                .Convert(o => o.ToOptional(o => o > -1).Convert(o => (ushort)o))
+            _SelectedTool = Flux.ConnectionProvider
+                .ObserveVariable(m => m.TOOL_CUR)
+                .Convert(o => o.GetZeroBaseIndex())
+                .Convert(o => o.ToOptional(o => o >= 0))
+                .Convert(o => (ushort)o)
                 .ToProperty(this, v => v.SelectedTool)
                 .DisposeWith(Disposables);
 
@@ -60,37 +63,7 @@ namespace Flux.ViewModels
 
         protected async Task ExitAsync()
         {
-            using var put_exit_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            using var wait_exit_cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            await Flux.ConnectionProvider.ExecuteParamacroAsync(c =>
-            {
-                var gcode = new List<string>();
-
-                if (SelectedTool.HasValue)
-                {
-                    var set_tool_temp_gcode = c.GetSetToolTemperatureGCode(SelectedTool.Value, 0);
-                    if (!set_tool_temp_gcode.HasValue)
-                        return default;
-                    gcode.AddRange(set_tool_temp_gcode.Value);
-                }
-
-                var lower_plate_gcode = c.GetLowerPlateGCode();
-                if (!lower_plate_gcode.HasValue)
-                    return default;
-                gcode.AddRange(lower_plate_gcode.Value);
-
-                var park_tool_gcode = c.GetParkToolGCode();
-                if (!park_tool_gcode.HasValue)
-                    return default;
-                gcode.AddRange(park_tool_gcode.Value);
-
-                return gcode;
-
-            }, put_exit_cts.Token, true, wait_exit_cts.Token, false);
-
-            if (Flux.ConnectionProvider.HasVariable(c => c.ENABLE_VACUUM))
-                await Flux.ConnectionProvider.WriteVariableAsync(c => c.ENABLE_VACUUM, false);
-
+            await Flux.ConnectionProvider.CancelPrintAsync(true);
             Flux.Navigator.NavigateBack();
         }
     }
@@ -98,7 +71,7 @@ namespace Flux.ViewModels
     public class PrepareManualCalibrationViewModel : ManualCalibrationPhaseViewModel<PrepareManualCalibrationViewModel>
     {
         [RemoteContent(true)]
-        public ISourceCache<IConditionViewModel, string> Conditions { get; private set; }
+        public ISourceList<IConditionViewModel> Conditions { get; private set; }
 
         private ObservableAsPropertyHelper<bool> _HasSafeStart;
         [RemoteOutput(true)]
@@ -109,10 +82,11 @@ namespace Flux.ViewModels
 
         public PrepareManualCalibrationViewModel(CalibrationViewModel calibration) : base(calibration)
         {
-            Conditions = new SourceCache<IConditionViewModel, string>(c => c.Name);
+            Conditions = new SourceList<IConditionViewModel>();
 
             _HasSafeStart = Conditions.Connect()
                 .AutoRefresh(c => c.State)
+                .AddKey(c => c.ConditionName)
                 .TrueForAll(line => line.StateChanged, state => state.Valid)
                 .StartWith(true)
                 .ToProperty(this, e => e.HasSafeStart);
@@ -127,7 +101,7 @@ namespace Flux.ViewModels
         public override void Initialize()
         {
             var conditions = Flux.StatusProvider.GetConditions<ManualCalibrationConditionAttribute>();
-            Conditions.AddOrUpdate(conditions.SelectMany(c => c.Value.Select(c => c.condition)));
+            Conditions.AddRange(conditions.SelectMany(c => c.Value.Select(c => c.condition)));
         }
     }
 

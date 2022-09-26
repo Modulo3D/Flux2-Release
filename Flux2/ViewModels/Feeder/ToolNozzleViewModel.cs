@@ -187,8 +187,6 @@ namespace Flux.ViewModels
 
             var in_mateinance = this.WhenAnyValue(v => v.InMaintenance);
 
-            var array_base = Flux.ConnectionProvider.ArrayBase;
-
             return Observable.CombineLatest(
                 in_change, in_change_error, tool_cur, inserted, mem_trailer, input_trailer, mem_magazine, input_magazine, known, locked, loaded, in_mateinance,
                 (in_change, in_change_error, tool_cur, inserted, mem_trailer, input_trailer, mem_magazine, input_magazine, known, locked, loaded, in_mateinance) =>
@@ -222,7 +220,7 @@ namespace Flux.ViewModels
                     if (has_tool_change && on_trailer == in_magazine)
                         in_change_error = true;
 
-                    var selected = tool_cur.Convert(t => t.ToOptional(t => t > -1)).Convert(t => Position == (ushort)(t - array_base)).ValueOr(() => false);
+                    var selected = tool_cur.Convert(t => t.GetZeroBaseIndex()).Convert(t => Position == t).ValueOr(() => false);
                     return new ToolNozzleState(has_tool_change, in_change, selected, inserted, known, locked, loaded, on_trailer, in_magazine, in_mateinance, in_change_error);
                 });
         }

@@ -42,7 +42,7 @@ namespace Flux.ViewModels
         public string OperationText => _OperationText.Value;
 
         [RemoteContent(true)]
-        public IObservableCache<IConditionViewModel, string> FilteredConditions { get; private set; }
+        public IObservableList<IConditionViewModel> FilteredConditions { get; private set; }
 
         [RemoteCommand]
         public ReactiveCommand<Unit, Unit> CancelOperationCommand { get; private set; }
@@ -77,7 +77,7 @@ namespace Flux.ViewModels
 
             var conditions = FindConditions();
             FilteredConditions = conditions
-                .AsObservableChangeSet(t => t.condition.ConditionName)
+                .AsObservableChangeSet()
                 .Filter(is_idle.Select(idle =>
                 {
                     return (Func<(IConditionViewModel condition, TConditionAttribute condition_attribute), bool>)filter_condition;
@@ -85,13 +85,15 @@ namespace Flux.ViewModels
                 }))
                 .Transform(t => t.condition)
                 .AutoRefresh(c => c.State)
-                .AsObservableCache();
+                .AsObservableList();
 
             _AllConditionsTrue = FilteredConditions.Connect()
+                .AddKey(c => c.ConditionName)
                 .TrueForAll(c => c.StateChanged, state => state.Valid)
                 .ToProperty(this, v => v.AllConditionsTrue);
 
             _AllConditionsFalse = FilteredConditions.Connect()
+                .AddKey(c => c.ConditionName)
                 .TrueForAll(c => c.StateChanged, state => !state.Valid)
                 .ToProperty(this, v => v.AllConditionsFalse);
 
@@ -132,8 +134,7 @@ namespace Flux.ViewModels
         private async Task SafeExecuteOperationAsync()
         {
             var navigate_back = await ExecuteOperationAsync();
-            await Flux.ConnectionProvider.ParkToolAsync();
-            await Flux.ConnectionProvider.TurnOffExtrudersAsync();
+            await Flux.ConnectionProvider.CancelPrintAsync(true);
             if(navigate_back)
                 Flux.Navigator.NavigateBack();
         }

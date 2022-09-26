@@ -95,9 +95,9 @@ namespace Flux.ViewModels
                 Storage.CreateVariable(c => c.STORAGE,          (c, m) => m.GetPartProgramDictionaryFromStorage());
                 Storage.CreateVariable(c => c.MCODE_RECOVERY,   (c, f) => f.GetMCodeRecoveryAsync(c));
                 
+                State.CreateVariable(c => c.TOOL_CUR,           (c, s) => s.CurrentTool.Convert(t => (ArrayIndex)(t, connection_provider)));
                 State.CreateVariable(c => c.PROCESS_STATUS,     (c, m) => m.GetProcessStatus());
                 State.CreateVariable(c => c.IN_CHANGE,          (c, m) => m.IsInChange());
-                State.CreateVariable(c => c.TOOL_CUR,           (c, s) => s.CurrentTool);
                 
                 Move.CreateVariable(c => c.IS_HOMED,            (c, m) => m.IsHomed());
 

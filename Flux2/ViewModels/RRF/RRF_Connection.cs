@@ -131,6 +131,7 @@ namespace Flux.ViewModels
 
     public class RRF_Connection : FLUX_Connection<RRF_ConnectionProvider, RRF_VariableStoreBase, RRF_Client>
     {
+        public override bool ParkToolAfterOperation => false;
         public override string InnerQueuePath => "gcodes/queue/inner";
         public override string StoragePath => "gcodes/storage";
         public override string QueuePath => "gcodes/queue";
@@ -786,9 +787,9 @@ namespace Flux.ViewModels
         {
             return new[] { $"G28 {string.Join(" ", axis.Select(a => $"{a}0"))}" };
         }
-        public override Optional<IEnumerable<string>> GetSelectToolGCode(ushort position)
+        public override Optional<IEnumerable<string>> GetSelectToolGCode(ArrayIndex position)
         {
-            return new[] { $"T{position}" };
+            return new[] { $"T{position.GetArrayBaseIndex(this)}" };
         }
         public override Optional<IEnumerable<string>> GetManualCalibrationPositionGCode()
         {
@@ -798,19 +799,19 @@ namespace Flux.ViewModels
         {
             return new[] { $"M98 P\"0:/{folder}/{filename}\"" };
         }
-        public override Optional<IEnumerable<string>> GetCancelLoadFilamentGCode(ushort position)
+        public override Optional<IEnumerable<string>> GetCancelLoadFilamentGCode(ArrayIndex position)
         {
             return new[] 
             {
-                $"G10 P{position} S0 R0",
+                $"G10 P{position.GetArrayBaseIndex(this)} S0 R0",
                 "T-1"
             };
         }
-        public override Optional<IEnumerable<string>> GetCancelUnloadFilamentGCode(ushort position)
+        public override Optional<IEnumerable<string>> GetCancelUnloadFilamentGCode(ArrayIndex position)
         {
             return new[]
              {
-                $"G10 P{position} S0 R0",
+                $"G10 P{position.GetArrayBaseIndex(this)} S0 R0",
                 "T-1"
             };
         }
@@ -818,30 +819,36 @@ namespace Flux.ViewModels
         {
             return new[] { $"M32 {folder}/{file_name}" };
         }
-        public override Optional<IEnumerable<string>> GetSetToolTemperatureGCode(ushort position, double temperature)
+        public override Optional<IEnumerable<string>> GetSetToolTemperatureGCode(ArrayIndex position, double temperature)
         {
-            return new[] { $"M104 T{position} S{temperature}" };
+            return new[] { $"M104 T{position.GetArrayBaseIndex(this)} S{temperature}" };
         }
-        public override Optional<IEnumerable<string>> GetSetToolOffsetGCode(ushort position, double x, double y, double z)
+        public override Optional<IEnumerable<string>> GetSetToolOffsetGCode(ArrayIndex position, double x, double y, double z)
         {
             return new[]
             {
-                $"G10 P{position} X{{{x * -1}}}",
-                $"G10 P{position} Y{{{y * -1}}}",
-                $"G10 P{position} Z{{{z * -1}}}",
+                $"G10 P{position.GetArrayBaseIndex(this)} X{{{x * -1}}}",
+                $"G10 P{position.GetArrayBaseIndex(this)} Y{{{y * -1}}}",
+                $"G10 P{position.GetArrayBaseIndex(this)} Z{{{z * -1}}}",
             };
         }
-        public override Optional<IEnumerable<string>> GetProbeToolGCode(ushort position, double temperature)
+        public override Optional<IEnumerable<string>> GetProbeToolGCode(ArrayIndex position, double temperature)
         {
             throw new NotImplementedException();
         }
-        public override Optional<IEnumerable<string>> GetSetExtruderMixingGCode(ushort machine_extruder, ushort mixing_extruder)
+        public override Optional<IEnumerable<string>> GetSetExtruderMixingGCode(ArrayIndex machine_extruder, ArrayIndex mixing_extruder)
         {
             var extruder_count = Flux.SettingsProvider.ExtrudersCount;
             if (!extruder_count.HasValue)
                 return default;
-            var mixing = Enumerable.Range(0, extruder_count.Value.mixing_extruders)
-                .Select(i => i == mixing_extruder ? "1" : "0");
+            
+            var mixing_start = new ArrayIndex(0).GetArrayBaseIndex(this);
+            var selected_extruder = mixing_extruder.GetArrayBaseIndex(this);
+
+            var mixing_count = extruder_count.Value.mixing_extruders;
+            var mixing = Enumerable.Range(mixing_start, mixing_count)
+                .Select(i => i == selected_extruder ? "1" : "0");
+
             return new[] { $"M567 P{machine_extruder} E1:{string.Join(":", mixing)}" };
         }
         public override Optional<IEnumerable<string>> GetRelativeXMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 X{distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
@@ -854,7 +861,7 @@ namespace Flux.ViewModels
             return new[] { "M98 P\"0:/macros/cancel_print\"", "M99" };
         }
 
-        public override Optional<IEnumerable<string>> GetManualFilamentInsertGCode(ushort position, double iteration_distance, double feedrate)
+        public override Optional<IEnumerable<string>> GetManualFilamentInsertGCode(ArrayIndex position, double iteration_distance, double feedrate)
         {
             var gcode = new List<string>();
 
@@ -871,7 +878,7 @@ namespace Flux.ViewModels
             return gcode;
         }
 
-        public override Optional<IEnumerable<string>> GetManualFilamentExtractGCode(ushort position, ushort iterations, double iteration_distance, double feedrate)
+        public override Optional<IEnumerable<string>> GetManualFilamentExtractGCode(ArrayIndex position, ushort iterations, double iteration_distance, double feedrate)
         {
             var gcode = new List<string>();
 

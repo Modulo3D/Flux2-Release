@@ -131,35 +131,36 @@ namespace Flux.ViewModels
 
         [PrintCondition]
         [CycleCondition]
-        public Optional<IConditionViewModel> ClampClosedCondition
+        public Optional<IConditionViewModel> ClampCondition
         {
             get 
             {
-                if (!_ClampClosedCondition.HasValue)
+                if (!_ClampCondition.HasValue)
                 {
                     var clamp_open = OptionalObservable.CombineLatestOptionalOr(
                         Flux.ConnectionProvider.ObserveVariable(m => m.TOOL_CUR).ToOptional(),
                         Flux.ConnectionProvider.ObserveVariable(m => m.OPEN_HEAD_CLAMP),
-                        (tool_cur, open) => (tool_cur, open), () => (tool_cur: -1, open: false));
+                        (tool_cur, open) => (tool_cur, open), () => (tool_cur:(ArrayIndex)(-1), open:false));
 
                     var is_idle = Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS)
                         .Convert(data => data == FLUX_ProcessStatus.IDLE)
                         .DistinctUntilChanged()
                         .ValueOr(() => false);
 
-                    _ClampClosedCondition = ConditionViewModel.Create(this, "clampClosed", clamp_open,
+                    _ClampCondition = ConditionViewModel.Create(this, "clamp", clamp_open,
                         (state, value) =>
                         {
+                            var tool_cur = value.tool_cur.GetZeroBaseIndex();
                             var toggle_clamp = state.Create("clamp", c => c.OPEN_HEAD_CLAMP, is_idle);
-                            if (value.open)
-                                return state.Create(EConditionState.Error, "CHIUDERE LA PINZA", toggle_clamp);
-                            return state.Create(EConditionState.Stable, "PINZA CHIUSA", toggle_clamp);
+                            if (!value.open || tool_cur < 0)
+                                return state.Create(EConditionState.Stable, "PINZA OK", toggle_clamp); 
+                            return state.Create(EConditionState.Error, "CHIUDERE LA PINZA", toggle_clamp);
                         });
                 }
-                return _ClampClosedCondition;
+                return _ClampCondition;
             }
         }
-        private Optional<IConditionViewModel> _ClampClosedCondition;
+        private Optional<IConditionViewModel> _ClampCondition;
 
         [PrintCondition]
         [StatusBarCondition]
@@ -229,38 +230,42 @@ namespace Flux.ViewModels
                             .FirstOrOptional(s => !string.IsNullOrEmpty(s));
 
                         if (!parent.HasValue)
-                            return _ChamberConditions;
+                            continue;
 
                         var temp_unit = Flux.ConnectionProvider.GetArrayUnit(m => m.TEMP_CHAMBER, $"{parent}.chamber");
+                        if (!temp_unit.HasValue)
+                            continue;
+
                         var closed_unit = Flux.ConnectionProvider.GetArrayUnit(m => m.LOCK_CLOSED, $"{parent}.lock");
                         var open_unit = Flux.ConnectionProvider.GetArrayUnit(m => m.OPEN_LOCK, $"{parent}.lock");
 
-                        var current_chamber = OptionalObservable.CombineLatestOptionalOr(
+                        var current_chamber = Observable.CombineLatest(
                             Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_CHAMBER, temp_unit),
                             Flux.ConnectionProvider.ObserveVariable(m => m.LOCK_CLOSED, closed_unit),
                             Flux.ConnectionProvider.ObserveVariable(m => m.OPEN_LOCK, open_unit),
-                            (temperature, closed, open) => (temperature, closed, open), () => (default, true, false));
+                            (temperature, closed, open) => (temperature, closed, open));
 
                         var chamber = ConditionViewModel.Create(this, chamber_unit.Alias, current_chamber,
                             (state, value) =>
                             {
-                                if (value.temperature.IsDisconnected)
+                                var temperature = value.temperature.ValueOrDefault();
+                                var closed = value.closed.ValueOr(() => false);
+                                var open = value.open.ValueOr(() => true);
+
+                                if (temperature.IsDisconnected)
                                     return state.Create(EConditionState.Error, "SENSORE DELLA TEMPERATURA NON TROVATO");
 
-                                if (value.temperature.IsHot || value.temperature.IsOn.ValueOr(() => false))
-                                {
-                                    if (value.open || !value.closed)
-                                        return state.Create(EConditionState.Warning, $"{chamber_unit} ACCESA, FARE ATTENZIONE");
-                                    else
-                                        return state.Create(EConditionState.Stable, $"{chamber_unit} ACCESA");
-                                }
+                                if (temperature.IsHot && (open || !closed))
+                                    return state.Create(EConditionState.Warning, $"{chamber_unit} ACCESA, FARE ATTENZIONE");
+
+                                if (temperature.IsOn.ValueOr(() => false))
+                                    return state.Create(EConditionState.Stable, $"{chamber_unit} ACCESA");
 
                                 return state.Create(EConditionState.Disabled, $"{chamber_unit} SPENTA");
 
                             }, TimeSpan.FromSeconds(1));
 
-                        if (chamber.HasValue)
-                            _ChamberConditions.AddOrUpdate(chamber.Value);
+                        _ChamberConditions.AddOrUpdate(chamber);
                     }
                 }
                 return _ChamberConditions;
@@ -284,38 +289,42 @@ namespace Flux.ViewModels
                            .FirstOrOptional(s => !string.IsNullOrEmpty(s));
 
                         if (!parent.HasValue)
-                            return _ChamberConditions;
+                            continue;
 
                         var temp_unit = Flux.ConnectionProvider.GetArrayUnit(m => m.TEMP_PLATE, $"{parent}.plate");
+                        if (!temp_unit.HasValue)
+                            continue;
+
                         var closed_unit = Flux.ConnectionProvider.GetArrayUnit(m => m.LOCK_CLOSED, $"{parent}.lock");
                         var open_unit = Flux.ConnectionProvider.GetArrayUnit(m => m.OPEN_LOCK, $"{parent}.lock");
 
-                        var current_plate = OptionalObservable.CombineLatestOptionalOr(
+                        var current_plate = Observable.CombineLatest(
                             Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_PLATE, temp_unit),
                             Flux.ConnectionProvider.ObserveVariable(m => m.LOCK_CLOSED, closed_unit),
                             Flux.ConnectionProvider.ObserveVariable(m => m.OPEN_LOCK, open_unit),
-                            (temperature, closed, open) => (temperature, closed, open), () => (default, true, false));
+                            (temperature, closed, open) => (temperature, closed, open));
 
                         var plate = ConditionViewModel.Create(this, plate_unit.Alias, current_plate,
                             (state, value) =>
                             {
-                                if (value.temperature.IsDisconnected)
+                                var temperature = value.temperature.ValueOrDefault();
+                                var closed = value.closed.ValueOr(() => false);
+                                var open = value.open.ValueOr(() => true);
+
+                                if (temperature.IsDisconnected)
                                     return state.Create(EConditionState.Error, "SENSORE DELLA TEMPERATURA NON TROVATO");
 
-                                if (value.temperature.IsHot || value.temperature.IsOn.ValueOr(() => false))
-                                { 
-                                    if (value.open || !value.closed)
-                                        return state.Create(EConditionState.Warning, $"{plate_unit} ACCESA, FARE ATTENZIONE");
-                                    else
-                                        return state.Create(EConditionState.Stable, $"{plate_unit} ACCESA");
-                                }
+                                if (temperature.IsHot && (open || !closed))
+                                    return state.Create(EConditionState.Warning, $"{plate_unit} ACCESA, FARE ATTENZIONE");
+                                
+                                if (temperature.IsOn.ValueOr(() => false))
+                                    return state.Create(EConditionState.Stable, $"{plate_unit} ACCESA");    
           
                                 return state.Create(EConditionState.Disabled, $"{plate_unit} SPENTA");
 
                             }, TimeSpan.FromSeconds(1));
 
-                        if (plate.HasValue)
-                            _PlateConditions.AddOrUpdate(plate.Value);
+                        _PlateConditions.AddOrUpdate(plate);
                     }
                 }
                 return _PlateConditions;
@@ -411,36 +420,6 @@ namespace Flux.ViewModels
             }
         }
         private Optional<IConditionViewModel> _NotInChange;
-
-        public Optional<IConditionViewModel> ClampOpen
-        {
-            get
-            {
-                if (!_ClampOpen.HasValue)
-                {
-                    var clamp_open = OptionalObservable.CombineLatestOptionalOr(
-                         Flux.ConnectionProvider.ObserveVariable(m => m.TOOL_CUR).ToOptional(),
-                         Flux.ConnectionProvider.ObserveVariable(m => m.OPEN_HEAD_CLAMP),
-                         (tool_cur, open) => (tool_cur, open), () => (tool_cur: -1, open: false));
-
-                    var is_idle = Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS)
-                        .Convert(data => data == FLUX_ProcessStatus.IDLE)
-                        .DistinctUntilChanged()
-                        .ValueOr(() => false);
-
-                    _ClampOpen = ConditionViewModel.Create(this, "clampOpen", clamp_open,
-                        (state, value) =>
-                        {
-                            var toggle_clamp = state.Create("clamp", c => c.OPEN_HEAD_CLAMP, is_idle);
-                            if (!value.open)
-                                return state.Create(EConditionState.Error, "APRIRE LA PINZA", toggle_clamp);
-                            return state.Create(EConditionState.Stable, "PINZA APERTA", toggle_clamp);
-                        });
-                }
-                return _ClampOpen;
-            }
-        }
-        private Optional<IConditionViewModel> _ClampOpen;
 
         [ManualCalibrationCondition]
         public Optional<IConditionViewModel> HasZBedHeight

@@ -169,7 +169,7 @@ namespace Flux.ViewModels
                         .SelectMany(find_units)
                         .ToArray();
 
-                    var array = new RRF_ArrayObjectModel<TModel, TRData, TWData>(array_name, variable_units, get_variable);
+                    var array = new RRF_ArrayObjectModel<TModel, TRData, TWData>(ConnectionProvider, array_name, variable_units, get_variable);
                     array_setter.Invoke(VariableStore.RegisterArray(array));
                 }
                 public void CreateArray<TRData, TWData>(
@@ -200,7 +200,7 @@ namespace Flux.ViewModels
                         .SelectMany(find_units)
                         .ToArray();
 
-                    var array = new RRF_ArrayObjectModel<TModel, TRData, TWData>(array_name, variable_units, get_variable);
+                    var array = new RRF_ArrayObjectModel<TModel, TRData, TWData>(ConnectionProvider, array_name, variable_units, get_variable);
                     array_setter.Invoke(VariableStore.RegisterArray(array));
                 }
                 public void CreateArray<TRData, TWData>(
@@ -233,7 +233,7 @@ namespace Flux.ViewModels
                         .SelectMany(find_units)
                         .ToArray();
 
-                    var array = new RRF_ArrayObjectModel<TModel, TRData, TWData>(array_name, variable_units, get_variable);
+                    var array = new RRF_ArrayObjectModel<TModel, TRData, TWData>(ConnectionProvider, array_name, variable_units, get_variable);
                     array_setter.Invoke(VariableStore.RegisterArray(array));
                 }
                 public void CreateArray<TRData, TWData>(
@@ -266,7 +266,7 @@ namespace Flux.ViewModels
                         .SelectMany(find_units)
                         .ToArray();
 
-                    var array = new RRF_ArrayObjectModel<TModel, TRData, TWData>(array_name, variable_units, get_variable);
+                    var array = new RRF_ArrayObjectModel<TModel, TRData, TWData>(ConnectionProvider, array_name, variable_units, get_variable);
                     array_setter.Invoke(VariableStore.RegisterArray(array));
                 }
 

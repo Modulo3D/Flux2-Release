@@ -256,7 +256,7 @@ namespace Flux.ViewModels
                 .ValueOr(() => false)
                 .ToOptional();
 
-            var can_naviagate_back = Flux.StatusProvider.ClampClosedCondition
+            var can_naviagate_back = Flux.StatusProvider.ClampCondition
                 .ConvertToObservable(c => c.StateChanged)
                 .ConvertToObservable(s => s.Valid)
                 .ObservableOr(() => true)
@@ -463,9 +463,9 @@ namespace Flux.ViewModels
                 .Select(o => o.ConvertOr(o => o.AdvancedSettings, () => false))
                 .ToOptional();
 
+            AddModal(() => new ManageViewModel(Flux));
             AddModal(() => new SettingsViewModel(Flux));
             AddModal(() => new RoutinesViewModel(Flux));
-            AddModal(() => new ManageViewModel(Flux));
             AddModal(() => new NFCViewModel(Flux), advanced_mode, advanced_mode);
         }
     }

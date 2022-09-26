@@ -165,20 +165,6 @@ namespace Flux.ViewModels
             return new[] { "M98 P\"/macros/unload_print\"" };
         }
 
-        public override async Task<bool> ParkToolAsync()
-        {
-            var position = await ReadVariableAsync(m => m.TOOL_CUR);
-            if (!position.HasValue)
-                return false;
-
-            if (position.Value == -1)
-                return false;
-
-            using var put_park_tool_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            using var wait_park_tool_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            return await ExecuteParamacroAsync(c => c.GetParkToolGCode(), put_park_tool_ctk.Token, true, wait_park_tool_ctk.Token);
-        }
-
         public override Optional<IEnumerable<string>> GenerateStartMCodeLines(MCode mcode)
         {
             return default;

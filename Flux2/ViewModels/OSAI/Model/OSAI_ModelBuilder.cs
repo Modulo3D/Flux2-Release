@@ -203,6 +203,25 @@ namespace Flux.ViewModels
         }
 
         public void CreateVariable(
+            Expression<Func<OSAI_VariableStore, IFLUX_Variable<ArrayIndex, ArrayIndex>>> variable_expression,
+            OSAI_IndexAddress address)
+        {
+            var variable_setter = VariableStore.GetCachedSetterDelegate(variable_expression);
+            var variable_name = string.Join('/', variable_expression.GetMembersName());
+            var variable = new OSAI_VariableArrayIndex(ConnectionProvider, variable_name, address);
+            variable_setter.Invoke(VariableStore.RegisterVariable(variable));
+        }
+        public void CreateVariable(
+           Expression<Func<OSAI_VariableStore, Optional<IFLUX_Variable<ArrayIndex, ArrayIndex>>>> variable_expression,
+           OSAI_IndexAddress address)
+        {
+            var variable_setter = VariableStore.GetCachedSetterDelegate(variable_expression);
+            var variable_name = string.Join('/', variable_expression.GetMembersName());
+            var variable = new OSAI_VariableArrayIndex(ConnectionProvider, variable_name, address);
+            variable_setter.Invoke(VariableStore.RegisterVariable(variable));
+        }
+
+        public void CreateVariable(
             Expression<Func<OSAI_VariableStore, IFLUX_Variable<bool, bool>>> variable_expression,
             OSAI_BitIndexAddress address)
         {

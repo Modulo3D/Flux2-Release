@@ -18,7 +18,6 @@ namespace Flux.ViewModels
     public class Dummy_ConnectionProvider : FLUX_ConnectionProvider<Dummy_ConnectionProvider, Dummy_Connection, Dummy_MemoryBuffer, Dummy_VariableStore, Dummy_ConnectionPhase>
     {
         public FluxViewModel Flux { get; }
-
         public Dummy_ConnectionProvider(FluxViewModel flux) : base(flux,
             Dummy_ConnectionPhase.Start, Dummy_ConnectionPhase.End, p => (int)p,
             c => new Dummy_MemoryBuffer(c),
@@ -27,7 +26,6 @@ namespace Flux.ViewModels
             Flux = flux;
         }
         protected override Task RollConnectionAsync() => Task.CompletedTask;
-        public override Task<bool> ParkToolAsync() => Task.FromResult(false);
         public override Task<bool> ResetClampAsync() => Task.FromResult(false);
         public override Optional<IEnumerable<string>> GenerateEndMCodeLines(MCode mcode, Optional<ushort> queue_size) => default;
 
@@ -40,7 +38,7 @@ namespace Flux.ViewModels
     public class Dummy_Array<TRData, TWData> : FLUX_Array<TRData, TWData>
     {
         public override string Group => "";
-        public Dummy_Array() : base("")
+        public Dummy_Array(IFLUX_VariableAccess variable_access) : base(variable_access, "")
         {
         }
     }
@@ -93,7 +91,7 @@ namespace Flux.ViewModels
         private void CreateDummy<TRData, TWData>(Expression<Func<Dummy_VariableStore, IFLUX_Array<TRData, TWData>>> array_expression)
         {
             var array_setter = this.GetCachedSetterDelegate(array_expression);
-            array_setter.Invoke(new Dummy_Array<TRData, TWData>());
+            array_setter.Invoke(new Dummy_Array<TRData, TWData>(ConnectionProvider));
         }
         private void CreateDummy<TRData, TWData>(Expression<Func<Dummy_VariableStore, IFLUX_Variable<TRData, TWData>>> variable_expression)
         {
@@ -110,6 +108,7 @@ namespace Flux.ViewModels
         public override string StoragePath => throw new NotImplementedException();
         public override string PathSeparator => throw new NotImplementedException();
         public override string InnerQueuePath => throw new NotImplementedException();
+        public override bool ParkToolAfterOperation => throw new NotImplementedException();
 
         public Dummy_Connection(Dummy_ConnectionProvider connection_provider) : base(connection_provider, default)
         {
@@ -155,7 +154,7 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override Optional<IEnumerable<string>> GetProbeToolGCode(ushort position, double temperature)
+        public override Optional<IEnumerable<string>> GetProbeToolGCode(ArrayIndex position, double temperature)
         {
             throw new NotImplementedException();
         }
@@ -184,12 +183,12 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override Optional<IEnumerable<string>> GetSelectToolGCode(ushort position)
+        public override Optional<IEnumerable<string>> GetSelectToolGCode(ArrayIndex position)
         {
             throw new NotImplementedException();
         }
 
-        public override Optional<IEnumerable<string>> GetSetToolTemperatureGCode(ushort position, double temperature)
+        public override Optional<IEnumerable<string>> GetSetToolTemperatureGCode(ArrayIndex position, double temperature)
         {
             throw new NotImplementedException();
         }
@@ -228,7 +227,7 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override Optional<IEnumerable<string>> GetSetToolOffsetGCode(ushort position, double x, double y, double z)
+        public override Optional<IEnumerable<string>> GetSetToolOffsetGCode(ArrayIndex position, double x, double y, double z)
         {
             throw new NotImplementedException();
         }
@@ -267,12 +266,12 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override Optional<IEnumerable<string>> GetCancelLoadFilamentGCode(ushort position)
+        public override Optional<IEnumerable<string>> GetCancelLoadFilamentGCode(ArrayIndex position)
         {
             throw new NotImplementedException();
         }
 
-        public override Optional<IEnumerable<string>> GetCancelUnloadFilamentGCode(ushort position)
+        public override Optional<IEnumerable<string>> GetCancelUnloadFilamentGCode(ArrayIndex position)
         {
             throw new NotImplementedException();
         }
@@ -287,7 +286,7 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override Optional<IEnumerable<string>> GetSetExtruderMixingGCode(ushort machine_extruder, ushort mixing_extruder)
+        public override Optional<IEnumerable<string>> GetSetExtruderMixingGCode(ArrayIndex machine_extruder, ArrayIndex mixing_extruder)
         {
             throw new NotImplementedException();
         }
@@ -307,12 +306,12 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override Optional<IEnumerable<string>> GetManualFilamentInsertGCode(ushort position, double iteration_distance, double feedrate)
+        public override Optional<IEnumerable<string>> GetManualFilamentInsertGCode(ArrayIndex position, double iteration_distance, double feedrate)
         {
             throw new NotImplementedException();
         }
 
-        public override Optional<IEnumerable<string>> GetManualFilamentExtractGCode(ushort position, ushort iterations, double iteration_distance, double feedrate)
+        public override Optional<IEnumerable<string>> GetManualFilamentExtractGCode(ArrayIndex position, ushort iterations, double iteration_distance, double feedrate)
         {
             throw new NotImplementedException();
         }
