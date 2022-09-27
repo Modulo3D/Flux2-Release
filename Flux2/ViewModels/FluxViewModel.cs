@@ -469,10 +469,10 @@ namespace Flux.ViewModels
                 return dialog;
             });
         }
-        public async Task<(bool success, Optional<TResult> result)> ShowNFCDialog<TResult>(Optional<INFCHandle> handle, Func<Optional<INFCHandle>, Task<Optional<TResult>>> func, Func<Optional<TResult>, bool> success_func)
+        public async Task<ValueResult<TResult>> ShowNFCDialog<TResult>(Optional<INFCHandle> handle, Func<Optional<INFCHandle>, Task<Optional<TResult>>> func)
         {
             bool reading = true;
-            Optional<TResult> result = default;
+            Optional<TResult> value = default;
 
             using var dialog = new ContentDialog(this, "Lettura tag in corso...", can_cancel: Observable.Return(true));
 
@@ -488,8 +488,8 @@ namespace Flux.ViewModels
                 bool success = false;
                 do
                 {
-                    result = await func(handle);
-                    success = result.HasValue && success_func(result.Value);
+                    value = await func(handle);
+                    success = value.HasValue;
                     if (!success)
                         await Task.Delay(1000);
                 }
@@ -500,21 +500,21 @@ namespace Flux.ViewModels
             });
 
             var success = await Task.WhenAll(dialog_result, reading_result);
+            if (success[1])
+                return new ValueResult<TResult>(value);
 
-            return (success[1], result);
+            return default;
         }
 
-
-
-        public Task<Optional<TResult>> UseReader<TResult>(Func<Optional<INFCHandle>, TResult> func, Func<TResult, bool> success_func)
+        public Task<ValueResult<TResult>> UseReader<TResult>(Func<Optional<INFCHandle>, TResult> func)
         {
-            return UseReader(h => func(h).ToOptional(), r => r.HasValue && success_func(r.Value));
+            return UseReader(h => func(h).ToOptional());
         }
-        public Task<Optional<TResult>> UseReader<TResult>(Func<Optional<INFCHandle>, Task<TResult>> func, Func<TResult, bool> success_func)
+        public Task<ValueResult<TResult>> UseReader<TResult>(Func<Optional<INFCHandle>, Task<TResult>> func)
         {
-            return UseReader(async h => (await func(h)).ToOptional(), r => r.HasValue && success_func(r.Value));
+            return UseReader(async h => (await func(h)).ToOptional());
         }
-        public async Task<Optional<TResult>> UseReader<TResult>(Func<Optional<INFCHandle>, Optional<TResult>> func, Func<Optional<TResult>, bool> success_func)
+        public async Task<ValueResult<TResult>> UseReader<TResult>(Func<Optional<INFCHandle>, Optional<TResult>> func)
         {
             var task = await NFCReader.OpenAsync(log_result);
             if (task.HasValue)
@@ -524,16 +524,16 @@ namespace Flux.ViewModels
 
             async Task<Optional<TResult>> log_result(INFCHandle handle)
             {
-                var reading = await ShowNFCDialog(handle.ToOptional(), h => Task.FromResult(func(h)), success_func);
+                var reading = await ShowNFCDialog(handle.ToOptional(), h => Task.FromResult(func(h)));
 
-                var light = reading.success ? LightSignalMode.LongGreen : LightSignalMode.LongRed;
-                var beep = reading.success ? BeepSignalMode.TripleShort : BeepSignalMode.DoubleShort;
+                var light = reading.Result ? LightSignalMode.LongGreen : LightSignalMode.LongRed;
+                var beep = reading.Result ? BeepSignalMode.TripleShort : BeepSignalMode.DoubleShort;
                 handle.ReaderUISignal(light, beep);
 
-                return reading.result;
+                return reading;
             }
         }
-        public async Task<Optional<TResult>> UseReader<TResult>(Func<Optional<INFCHandle>, Task<Optional<TResult>>> func, Func<Optional<TResult>, bool> success_func)
+        public async Task<ValueResult<TResult>> UseReader<TResult>(Func<Optional<INFCHandle>, Task<Optional<TResult>>> func)
         {
             var task = await NFCReader.OpenAsync(log_result);
             if (task.HasValue)
@@ -543,13 +543,13 @@ namespace Flux.ViewModels
 
             async Task<Optional<TResult>> log_result(INFCHandle handle)
             {
-                var reading = await ShowNFCDialog(handle.ToOptional(), func, success_func);
+                var reading = await ShowNFCDialog(handle.ToOptional(), func);
 
-                var light = reading.success ? LightSignalMode.LongGreen : LightSignalMode.LongRed;
-                var beep = reading.success ? BeepSignalMode.TripleShort : BeepSignalMode.DoubleShort;
+                var light = reading.Result ? LightSignalMode.LongGreen : LightSignalMode.LongRed;
+                var beep = reading.Result ? BeepSignalMode.TripleShort : BeepSignalMode.DoubleShort;
                 handle.ReaderUISignal(light, beep);
 
-                return reading.result;
+                return reading;
             }
         }
     }

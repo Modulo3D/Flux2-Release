@@ -48,11 +48,11 @@ namespace Flux.ViewModels
             }
             async Task lock_tag_async()
             {
-                await tag_vm.LockTagAsync(default);
+                await Flux.UseReader(h => tag_vm.LockTag(h));
             }
             async Task unlock_tag_async()
             {
-                await tag_vm.UnlockTagAsync(default);
+                await Flux.UseReader(h => tag_vm.UnlockTag(h));
             }
             IObservable<bool> is_locked_tag()
             {
@@ -130,13 +130,13 @@ namespace Flux.ViewModels
             {
                 if (!tag_vm.HasValue)
                     return;
-                await tag_vm.Value.LockTagAsync(default);
+                await Flux.UseReader(h => tag_vm.Value.LockTag(h));
             }
             async Task unlock_tag_async()
             {
                 if (!tag_vm.HasValue)
                     return;
-                await tag_vm.Value.UnlockTagAsync(default);
+                await Flux.UseReader(h => tag_vm.Value.UnlockTag(h));
             }
             IObservable<bool> is_loaded_tag()
             {

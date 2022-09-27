@@ -87,11 +87,10 @@ namespace Flux.ViewModels
                 .DisposeWith(Disposables);
         }
 
-        public void SetLastBreakTemp(GCodeFilamentOperation filament_settings)
+        public NFCReading<NFCToolNozzle> SetLastBreakTemp(GCodeFilamentOperation filament_settings)
         {
-            StoreTag(c => c.SetLastBreakTemp(filament_settings.BreakTemperature));
+            return StoreTag(c => c.SetLastBreakTemp(filament_settings.BreakTemperature));
         }
-
         public override void Initialize()
         {
             base.Initialize();

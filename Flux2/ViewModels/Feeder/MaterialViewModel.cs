@@ -102,8 +102,19 @@ namespace Flux.ViewModels
                 .ToProperty(this, v => v.WirePresenceOnHead)
                 .DisposeWith(Disposables);
 
-            this.WhenAnyValue(v => v.WirePresenceOnHead)
-                .Subscribe(SetMaterialLoaded)
+            Observable.CombineLatest(
+                this.WhenAnyValue(m => m.Nfc),
+                this.WhenAnyValue(v => v.WirePresenceOnHead),
+                (nfc, material_loaded) => (nfc, material_loaded))
+                .Subscribe(t =>
+                {
+                    /*if (!t.material_loaded.HasValue)
+                        return;
+                    if (t.material_loaded.Value)
+                        StoreTag(t => t.SetLoaded(Feeder.Position));
+                    else
+                        StoreTag(t => t.SetLoaded(default));*/
+                })
                 .DisposeWith(Disposables);
 
             _DocumentLabel = this.WhenAnyValue(v => v.Document)
@@ -137,20 +148,19 @@ namespace Flux.ViewModels
                 return unload;
             });
         }
-
-        public void SetMaterialLoaded(Optional<bool> material_loaded)
+        
+        public NFCReading<NFCMaterial> SetMaterialLoaded(Optional<bool> material_loaded)
         {
             if (!material_loaded.HasValue)
-                return;
+                return default;
             if (!Nfc.Tag.HasValue)
-                return;
+                return default;
 
-            if(material_loaded.Value)
-                StoreTag(t => t.SetLoaded(Feeder.Position));
+            if (material_loaded.Value)
+                return StoreTag(t => t.SetLoaded(Feeder.Position));
             else
-                StoreTag(t => t.SetLoaded(default));
+                return StoreTag(t => t.SetLoaded(default));
         }
-
         public override void Initialize()
         {
             base.Initialize();
@@ -281,7 +291,7 @@ namespace Flux.ViewModels
             if (State.Loaded && State.Locked)
             {
                 var recovery = Flux.StatusProvider.PrintingEvaluation.Recovery;
-                var filament_settings = GCodeFilamentOperation.Create(Flux, Feeder, this, !recovery.HasValue, recovery.HasValue);
+                var filament_settings = GCodeFilamentOperation.Create(this, !recovery.HasValue, recovery.HasValue);
                 if (!filament_settings.HasValue)
                     return;
 

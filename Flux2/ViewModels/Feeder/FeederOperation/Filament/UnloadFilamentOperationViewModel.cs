@@ -26,7 +26,7 @@ namespace Flux.ViewModels
         }
         protected override async Task<bool> ExecuteOperationAsync()
         {
-            var filament_settings = GCodeFilamentOperation.Create(Flux, Feeder, Material, true, false);
+            var filament_settings = GCodeFilamentOperation.Create(Material, true, false);
             if (!await ExecuteFilamentOperation(filament_settings, c => c.GetUnloadFilamentGCode))
                 return false;
 
@@ -70,26 +70,11 @@ namespace Flux.ViewModels
         }
         public override async Task<bool> UpdateNFCAsync()
         {
-            if (!Material.Nfc.Tag.HasValue)
-            {
-                var operator_usb = Flux.MCodes.OperatorUSB;
-                var reading = await Flux.UseReader(h => Material.ReadTag(h, true), r => r.HasValue);
-
-                if (operator_usb.ConvertOr(o => o.RewriteNFC, () => false))
-                {
-                    var tag = await Material.CreateTagAsync(reading);
-                    reading = new NFCReading<NFCMaterial>(tag, Material.VirtualCardId);
-                }
-
-                if (!reading.HasValue)
-                    return false;
-
-                await Material.StoreTagAsync(reading.Value);
-            }
+            await Material.UpdateTagAsync();
 
             var result = Material.Nfc.IsVirtualTag ?
-                await Material.UnlockTagAsync(default) :
-                await Flux.UseReader(h => Material.UnlockTagAsync(h), u => u);
+                Material.UnlockTag(default) :
+                await Flux.UseReader(h => Material.UnlockTag(h));
 
             if (!result.HasValue || !result.Value)
                 return false;

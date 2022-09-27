@@ -19,13 +19,17 @@ namespace Flux.ViewModels
 
         private CmdButton(
             string name,
-            OptionalObservable<bool> visible = default)
+            ReactiveCommand<Unit, Unit> command,
+            OptionalObservable<bool> visible = default,
+            OptionalObservable<Optional<bool>> active = default)
             : base(name)
         {
+            Command = command.DisposeWith(Disposables);
             _Visible = visible
                 .ObservableOr(() => true)
                 .ToProperty(this, v => v.Visible)
                 .DisposeWith(Disposables);
+            AddCommand("command", Command, active.ObservableOrDefault());
         }
 
         public CmdButton(
@@ -34,11 +38,8 @@ namespace Flux.ViewModels
             OptionalObservable<bool> can_execute = default,
             OptionalObservable<bool> visible = default,
             OptionalObservable<Optional<bool>> active = default)
-            : this(name, visible)
+            : this(name, ReactiveCommand.Create(command, can_execute.ObservableOr(() => true)), visible, active)
         {
-            Command = ReactiveCommand.Create(command, can_execute.ObservableOr(() => true))
-                .DisposeWith(Disposables);
-            AddCommand("command", Command, active.ObservableOrDefault());
         }
 
         public CmdButton(
@@ -47,11 +48,8 @@ namespace Flux.ViewModels
             OptionalObservable<bool> can_execute = default,
             OptionalObservable<bool> visible = default,
             OptionalObservable<Optional<bool>> active = default)
-            : this(name, visible)
+            : this(name, ReactiveCommand.CreateFromTask(command, can_execute.ObservableOr(() => true)), visible, active)
         {
-            Command = ReactiveCommand.CreateFromTask(command, can_execute.ObservableOr(() => true))
-                .DisposeWith(Disposables);
-            AddCommand("command", Command, active.ObservableOrDefault());
         }
     }
 

@@ -55,6 +55,7 @@ namespace Flux.ViewModels
         [RemoteCommand]
         public Optional<ReactiveCommand<Unit, Unit>> ActionCommand { get; }
 
+        [RemoteOutput(false)]
         public bool Valid
         {
             get
