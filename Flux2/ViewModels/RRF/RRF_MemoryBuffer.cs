@@ -155,7 +155,7 @@ namespace Flux.ViewModels
                 using var cts = new CancellationTokenSource(timeout);
                 var first = file_list.ConvertOr(f => f.Next, () => 0);
                 var request = new RRF_Request($"rr_filelist?dir={Resource}&first={first}", Method.Get, RRF_RequestPriority.Immediate, cts.Token);
-                
+
                 var rrf_response = await connection.Value.Client.ExecuteAsync(request);
                 if (!rrf_response.Ok)
                 {
@@ -238,11 +238,11 @@ namespace Flux.ViewModels
             AddModelReader<List<RRF_ObjectModelTool>>(fast, timeout, s => RRFObjectModel.Tools = s);
             AddModelReader<RRF_ObjectModelSensors>(fast, timeout, s => RRFObjectModel.Sensors = s);
             AddModelReader<RRF_ObjectModelGlobal>(fast, timeout, g => RRFObjectModel.Global = g);
+            AddModelReader<RRF_ObjectModelJob>(fast, timeout, j => RRFObjectModel.Job = j);
             
             AddModelReader<List<RRF_ObjectModelInput>>(medium, timeout, i => RRFObjectModel.Inputs = i);
             AddModelReader<RRF_ObjectModelMove>(medium, timeout, m => RRFObjectModel.Move = m);
             AddModelReader<RRF_ObjectModelHeat>(medium, timeout, h => RRFObjectModel.Heat = h);
-            AddModelReader<RRF_ObjectModelJob>(medium, timeout, j => RRFObjectModel.Job = j);
             
             AddFileSytemReader("gcodes/storage", slow, timeout, f => RRFObjectModel.Storage = f);
             AddFileSytemReader("gcodes/queue", slow, timeout, f => RRFObjectModel.Queue = f);

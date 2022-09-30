@@ -36,15 +36,15 @@ namespace Flux.ViewModels
 
         private ObservableAsPropertyHelper<Optional<bool>> _WirePresenceBeforeGear;
         [RemoteOutput(true)]
-        public Optional<bool> WirePresenceBeforeGear => _WirePresenceBeforeGear.Value;
+        public Optional<bool> FilamentPresenceBeforeGear => _WirePresenceBeforeGear.Value;
 
         private ObservableAsPropertyHelper<Optional<bool>> _WirePresenceAfterGear;
         [RemoteOutput(true)]
-        public Optional<bool> WirePresenceAfterGear => _WirePresenceAfterGear.Value;
+        public Optional<bool> FilamentPresenceAfterGear => _WirePresenceAfterGear.Value;
 
         private ObservableAsPropertyHelper<Optional<bool>> _WirePresenceOnHead;
         [RemoteOutput(true)]
-        public Optional<bool> WirePresenceOnHead => _WirePresenceOnHead.Value;
+        public Optional<bool> FilamentPresenceOnHead => _WirePresenceOnHead.Value;
 
         private ObservableAsPropertyHelper<bool> _MaterialLoaded;
         [RemoteOutput(true)]
@@ -83,7 +83,7 @@ namespace Flux.ViewModels
                 m => m.FILAMENT_BEFORE_GEAR,
                 before_gear_key)
                 .ObservableOrDefault()
-                .ToProperty(this, v => v.WirePresenceBeforeGear)
+                .ToProperty(this, v => v.FilamentPresenceBeforeGear)
                 .DisposeWith(Disposables);
 
             var after_gear_key = Flux.ConnectionProvider.GetArrayUnit(m => m.FILAMENT_AFTER_GEAR, Position);
@@ -91,7 +91,7 @@ namespace Flux.ViewModels
                 m => m.FILAMENT_AFTER_GEAR,
                 after_gear_key)
                 .ObservableOrDefault()
-                .ToProperty(this, v => v.WirePresenceAfterGear)
+                .ToProperty(this, v => v.FilamentPresenceAfterGear)
                 .DisposeWith(Disposables);
 
             var on_head_key = Flux.ConnectionProvider.GetArrayUnit(m => m.FILAMENT_ON_HEAD, Feeder.Position);
@@ -99,22 +99,7 @@ namespace Flux.ViewModels
                 m => m.FILAMENT_ON_HEAD,
                 on_head_key)
                 .ObservableOrDefault()
-                .ToProperty(this, v => v.WirePresenceOnHead)
-                .DisposeWith(Disposables);
-
-            Observable.CombineLatest(
-                this.WhenAnyValue(m => m.Nfc),
-                this.WhenAnyValue(v => v.WirePresenceOnHead),
-                (nfc, material_loaded) => (nfc, material_loaded))
-                .Subscribe(t =>
-                {
-                    /*if (!t.material_loaded.HasValue)
-                        return;
-                    if (t.material_loaded.Value)
-                        StoreTag(t => t.SetLoaded(Feeder.Position));
-                    else
-                        StoreTag(t => t.SetLoaded(default));*/
-                })
+                .ToProperty(this, v => v.FilamentPresenceOnHead)
                 .DisposeWith(Disposables);
 
             _DocumentLabel = this.WhenAnyValue(v => v.Document)
@@ -183,18 +168,18 @@ namespace Flux.ViewModels
                 ToolMaterial.WhenAnyValue(v => v.State),
                 (s, tn, m, tm) =>
                 {
-                    if (!tn.IsLoaded())
-                        return FluxColors.Empty;
                     if (m.IsNotLoaded())
                         return FluxColors.Empty;
+                    if(!tn.Inserted)
+                        return FluxColors.Empty;
+                    if (!tn.IsLoaded())
+                        return FluxColors.Inactive;
                     if (!m.Known)
                         return FluxColors.Error;
                     if (tm.Compatible.HasValue && !tm.Compatible.Value)
                         return FluxColors.Error;
                     if (!m.Inserted)
                         return FluxColors.Empty;
-                    if (!m.Loaded)
-                        return FluxColors.Inactive;
                     if (!m.Locked)
                         return FluxColors.Warning;
                     if (!s)
@@ -220,11 +205,72 @@ namespace Flux.ViewModels
                 .DisposeWith(Disposables);
             LoadPurgeMaterialCommand = ReactiveCommand.CreateFromTask(LoadPurgeAsync, material.Select(m => m.can_load || m.can_purge))
                 .DisposeWith(Disposables);
+
+            Observable.CombineLatest(
+                this.WhenAnyValue(m => m.Nfc),
+                this.WhenAnyValue(v => v.FilamentPresenceBeforeGear),
+                (nfc, material_inserted) => (nfc, material_inserted))
+                .SubscribeOn(RxApp.MainThreadScheduler)
+                .Subscribe(t =>
+                {
+                    if (!t.material_inserted.HasValue)
+                        return;
+                    if (t.material_inserted.Value)
+                        return;
+                    
+                    StoreTag(t => t.SetInserted(default));
+                    StoreTag(t => t.SetLoaded(default));
+                });
+
+            Observable.CombineLatest(
+                this.WhenAnyValue(m => m.Nfc),
+                this.WhenAnyValue(v => v.FilamentPresenceAfterGear),
+                (nfc, material_preloaded) => (nfc, material_preloaded))
+                .SubscribeOn(RxApp.MainThreadScheduler)
+                .Subscribe(t =>
+                {
+                    if (!t.material_preloaded.HasValue)
+                        return;
+                    if (!t.material_preloaded.Value)
+                        return;
+                    StoreTag(t => t.SetInserted(Feeder.Position));
+                });
+
+
+            var other_filament_after_gear = Feeder.Materials.Connect()
+                .Filter(m => m.Position != Position)
+                .TrueForAny(m => m.WhenAnyValue(m => m.FilamentPresenceAfterGear), f => f.ValueOr(() => false))
+                .StartWith(false);
+
+            Observable.CombineLatest(
+                other_filament_after_gear,
+                this.WhenAnyValue(m => m.Nfc),
+                this.WhenAnyValue(v => v.FilamentPresenceAfterGear),
+                this.WhenAnyValue(v => v.FilamentPresenceOnHead),
+                (other_loaded, nfc, material_preloaded, material_loaded) => (other_loaded, nfc, material_preloaded, material_loaded))
+                .SubscribeOn(RxApp.MainThreadScheduler)
+                .Subscribe(t =>
+                {
+                    if (t.other_loaded)
+                        return;
+                    if (!t.material_preloaded.HasValue)
+                        return;
+                    if (!t.material_loaded.HasValue)
+                        return;
+                    if (!t.material_preloaded.Value)
+                        return;
+                    if (!t.material_loaded.Value)
+                        return;
+                    StoreTag(t => t.SetLoaded(Feeder.Position));
+                })
+                .DisposeWith(Disposables);
         }
         private IObservable<MaterialState> FindMaterialState()
         {
             var inserted = this.WhenAnyValue(m => m.Nfc)
-                .Select(nfc => nfc.CardId.HasValue && nfc.Tag.HasValue);
+                .Select(nfc => nfc.Tag.Convert(t => t.Inserted))
+                .Convert(i => i == Feeder.Position)
+                .ValueOr(() => false);
 
             var known = this.WhenAnyValue(m => m.Document)
                 .Select(document => document.HasValue)
@@ -246,11 +292,8 @@ namespace Flux.ViewModels
                 tag_printer_guid,
                 (p_guid, t_guid) => t_guid.ConvertOr(t => t == p_guid, () => false));
 
-            var selected = Feeder.SelectedMaterial
-                .ConvertOr(m => m.Position == Position, () => false);
-
             return Observable.CombineLatest(inserted, known, locked, loaded,
-                 (inserted, known, locked, loaded) => new MaterialState(inserted, known, selected, locked, loaded));
+                 (inserted, known, locked, loaded) => new MaterialState(inserted, known, locked, loaded));
         }
         private bool CanLoadMaterial(bool can_cycle, ToolNozzleState tool_nozzle, MaterialState material,  Optional<ToolMaterialState> tool_material)
         {
@@ -302,7 +345,7 @@ namespace Flux.ViewModels
                 Flux.Navigator.Navigate(LoadFilamentOperation.Value);
             }
         }
-        public override async Task<Optional<NFCMaterial>> CreateTagAsync(Optional<NFCReading<NFCMaterial>> reading)
+        public override async Task<ValueResult<NFCMaterial>> CreateTagAsync(Optional<NFCReading<NFCMaterial>> reading)
         {
             var database = Flux.DatabaseProvider.Database;
             if (!database.HasValue)

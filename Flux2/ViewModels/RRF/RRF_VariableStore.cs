@@ -18,7 +18,6 @@ namespace Flux.ViewModels
     public abstract class RRF_VariableStoreBase : FLUX_VariableStore<RRF_VariableStoreBase, RRF_ConnectionProvider>
     {
         public IFLUX_Variable<bool, bool> ITERATOR { get; set; }
-        public IFLUX_Variable<bool, bool> RUN_DAEMON { get; set; }
 
         public RRF_GlobalModelBuilder.RRF_InnerGlobalModelBuilder Global{ get; }
         public RRF_ModelBuilder.RRF_InnerModelBuilder<FLUX_FileList> Queue { get; }
@@ -256,7 +255,7 @@ namespace Flux.ViewModels
                 GpIn.CreateArray(c =>       c.FILAMENT_ON_HEAD,     (c, m) => m.Value == 1,         ("T", 2));
                 Analog.CreateArray(c =>     c.FILAMENT_HUMIDITY,    (c, h) => read_humidity(h),     "H");
 
-                Filaments.CreateArray(c => c.FILAMENT_BEFORE_GEAR,  (c, m) => m.Status == "ok");
+                Filaments.CreateArray(c => c.FILAMENT_BEFORE_GEAR,  (c, m) => m.Status == "ok", ("M", 4));
                 
                 Global.CreateVariable(c => c.Z_BED_HEIGHT,          false,  FluxViewModel.MaxZBedHeight);  
                 Global.CreateVariable(c => c.Z_PROBE_CORRECTION,    true,   0.0);

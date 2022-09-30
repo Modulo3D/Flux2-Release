@@ -153,7 +153,7 @@ namespace Flux.ViewModels
         public async Task<bool> InitializeVariablesAsync(CancellationToken ct)
         {
             var written_file = await DownloadFileAsync(GlobalPath, "initialize_variables.g", ct);
-            
+
             var variables = VariableStore.Variables.Values
                .SelectMany(v => v switch
                {
@@ -172,11 +172,11 @@ namespace Flux.ViewModels
             using var sha256 = SHA256.Create();
             var written_hash = written_file.ConvertOr(w =>
             {
-                var written = w.Split(Environment.NewLine.ToCharArray(), 
+                var written = w.Split(Environment.NewLine.ToCharArray(),
                     StringSplitOptions.RemoveEmptyEntries);
                 return sha256.ComputeHash(Encoding.UTF8.GetBytes(string.Join("", written))).ToHex();
             }, () => "");
-            
+
             var source_hash = source_variables.ConvertOr(s =>
             {
                 return sha256.ComputeHash(Encoding.UTF8.GetBytes(string.Join("", s))).ToHex();
@@ -238,7 +238,7 @@ namespace Flux.ViewModels
                 .ConvertOr(usb => usb.AdvancedSettings, () => false);
             if (!advanced_mode)
                 return false;
-                
+
             var files_str = string.Join(Environment.NewLine, missing_variables.variables.Select(v => v.LoadVariableMacro));
             var create_variables_result = await Flux.ShowConfirmDialogAsync("Creare file di variabile?", files_str);
 
@@ -316,9 +316,9 @@ namespace Flux.ViewModels
         {
             using var put_cancel_print_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             using var wait_cancel_print_cts = new CancellationTokenSource(TimeSpan.FromMinutes(1));
-            return await PostGCodeAsync(new []
+            return await PostGCodeAsync(new[]
             {
-                "M108", "M25", 
+                "M108", "M25",
                 "set global.iterator = false", "M0",
                 "M98 P\"/macros/cancel_print\"",
             }, put_cancel_print_cts.Token, true, wait_cancel_print_cts.Token);
@@ -370,7 +370,7 @@ namespace Flux.ViewModels
 
                 var selected_pp = ConnectionProvider.MemoryBuffer.RRFObjectModel
                     .WhenAnyValue(o => o.Job)
-                    .Convert(j => 
+                    .Convert(j =>
                     {
                         return j.File
                             .Convert(f => f.FileName)
@@ -386,7 +386,7 @@ namespace Flux.ViewModels
 
                 return true;
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 Flux.Messages.LogException(this, ex);
                 return false;
@@ -396,7 +396,7 @@ namespace Flux.ViewModels
         public override async Task<bool> ExecuteParamacroAsync(IEnumerable<string> paramacro, CancellationToken put_ct, bool wait = false, CancellationToken wait_ct = default, bool can_cancel = false)
         {
             try
-            { 
+            {
                 var lenght = GetGCodeLenght(paramacro);
                 if (!can_cancel && lenght < 160)
                 {
@@ -539,7 +539,7 @@ namespace Flux.ViewModels
             }
             catch (Exception ex)
             {
-                if(ex is not OperationCanceledException)
+                if (ex is not OperationCanceledException)
                     Flux.Messages.LogException(this, ex);
                 return false;
             }
@@ -572,7 +572,7 @@ namespace Flux.ViewModels
                     var first = file_list.ConvertOr(f => f.Next, () => 0);
                     var request = new RRF_Request($"rr_filelist?dir={folder}&first={first}", Method.Get, RRF_RequestPriority.Immediate, ct);
                     var response = await Client.ExecuteAsync(request);
-                    
+
                     file_list = response.GetContent<FLUX_FileList>();
                     if (file_list.HasValue)
                         full_file_list.Files.AddRange(file_list.Value.Files);
@@ -592,7 +592,7 @@ namespace Flux.ViewModels
             {
                 return await clear_f_async(folder);
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 Flux.Messages.LogException(this, ex);
                 return false;
@@ -849,7 +849,7 @@ namespace Flux.ViewModels
             var mixing = Enumerable.Range(mixing_start, mixing_count)
                 .Select(i => i == selected_extruder ? "1" : "0");
 
-            return new[] { $"M567 P{machine_extruder} E1:{string.Join(":", mixing)}" };
+            return new[] { $"M567 P{machine_extruder.GetArrayBaseIndex(this)} E1:{string.Join(":", mixing)}" };
         }
         public override Optional<IEnumerable<string>> GetRelativeXMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 X{distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
         public override Optional<IEnumerable<string>> GetRelativeYMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 Y{distance} F{feedrate}".Replace(",", "."), "G90", "M121" };

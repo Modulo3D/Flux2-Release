@@ -146,18 +146,15 @@ namespace Flux.ViewModels
             if (!Nfc.CardId.HasValue && !Nfc.Tag.HasValue)
             {
                 var reading = await Flux.UseReader(h => ReadTag(h, true));
-                if (!reading.HasValue)
-                    return default;
-                return ConnectTag(reading.Value);
+                if (reading.HasValue)
+                    return ConnectTag(reading.Value);     
             }
-            else
-            { 
-                if (Nfc.IsVirtualTag && operator_usb.ConvertOr(o => o.RewriteNFC, () => false))
-                {
-                    var tag = await CreateTagAsync(ReadTag(default, true));
-                    var reading = new NFCReading<TNFCTag>(tag, VirtualCardId);
-                    return ConnectTag(reading);
-                }
+
+            if (Nfc.IsVirtualTag && operator_usb.ConvertOr(o => o.RewriteNFC, () => false))
+            {
+                var tag = await CreateTagAsync(ReadTag(default, true));
+                if(tag.HasValue)
+                    return ConnectTag(new NFCReading<TNFCTag>(tag, VirtualCardId));
             }
             
             return Nfc;
@@ -227,7 +224,7 @@ namespace Flux.ViewModels
             return true;
         }
         
-        public abstract Task<Optional<TNFCTag>> CreateTagAsync(Optional<NFCReading<TNFCTag>> reading);
+        public abstract Task<ValueResult<TNFCTag>> CreateTagAsync(Optional<NFCReading<TNFCTag>> reading);
 
 
         // Backup nfc

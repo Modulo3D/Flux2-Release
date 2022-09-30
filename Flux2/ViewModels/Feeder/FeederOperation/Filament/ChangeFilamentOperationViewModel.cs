@@ -71,13 +71,6 @@ namespace Flux.ViewModels
         {
             return Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation).Select(s => s.CanSafeStop);
         }
-        protected override IObservable<bool> CanExecuteOperation()
-        {
-            return Observable.CombineLatest(
-                this.WhenAnyValue(f => f.AllConditionsTrue),
-                Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation).Select(s => s.CanSafeCycle),
-                (c, s) => c && s);
-        }
         protected async Task<bool> CancelFilamentOperationAsync(Func<IFLUX_Connection, Func<ArrayIndex, Optional<IEnumerable<string>>>> cancel_filament_operation)
         {
             try

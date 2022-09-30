@@ -469,7 +469,7 @@ namespace Flux.ViewModels
                 return dialog;
             });
         }
-        public async Task<ValueResult<TResult>> ShowNFCDialog<TResult>(Optional<INFCHandle> handle, Func<Optional<INFCHandle>, Task<Optional<TResult>>> func)
+        public async Task<ValueResult<TResult>> ShowNFCDialog<TResult>(Optional<INFCHandle> handle, Func<Optional<INFCHandle>, Task<ValueResult<TResult>>> func)
         {
             bool reading = true;
             Optional<TResult> value = default;
@@ -508,13 +508,37 @@ namespace Flux.ViewModels
 
         public Task<ValueResult<TResult>> UseReader<TResult>(Func<Optional<INFCHandle>, TResult> func)
         {
-            return UseReader(h => func(h).ToOptional());
+            return UseReader(h =>
+            {
+                var value = func(h);
+                return new ValueResult<TResult>(value);
+            });
         }
         public Task<ValueResult<TResult>> UseReader<TResult>(Func<Optional<INFCHandle>, Task<TResult>> func)
         {
-            return UseReader(async h => (await func(h)).ToOptional());
+            return UseReader(async h =>
+            {
+                var value = await func(h);
+                return new ValueResult<TResult>(value);
+            });
         }
-        public async Task<ValueResult<TResult>> UseReader<TResult>(Func<Optional<INFCHandle>, Optional<TResult>> func)
+        public Task<ValueResult<TResult>> UseReader<TResult>(Func<Optional<INFCHandle>, Optional<TResult>> func)
+        {
+            return UseReader(h =>
+            {
+                var value = func(h);
+                return new ValueResult<TResult>(value);
+            });
+        }
+        public Task<ValueResult<TResult>> UseReader<TResult>(Func<Optional<INFCHandle>, Task<Optional<TResult>>> func)
+        {
+            return UseReader(async h => 
+            {
+                var value = await func(h);
+                return new ValueResult<TResult>(value);
+            });
+        }
+        public async Task<ValueResult<TResult>> UseReader<TResult>(Func<Optional<INFCHandle>, ValueResult<TResult>> func)
         {
             var task = await NFCReader.OpenAsync(log_result);
             if (task.HasValue)
@@ -522,7 +546,7 @@ namespace Flux.ViewModels
 
             return func(default);
 
-            async Task<Optional<TResult>> log_result(INFCHandle handle)
+            async Task<ValueResult<TResult>> log_result(INFCHandle handle)
             {
                 var reading = await ShowNFCDialog(handle.ToOptional(), h => Task.FromResult(func(h)));
 
@@ -533,7 +557,7 @@ namespace Flux.ViewModels
                 return reading;
             }
         }
-        public async Task<ValueResult<TResult>> UseReader<TResult>(Func<Optional<INFCHandle>, Task<Optional<TResult>>> func)
+        public async Task<ValueResult<TResult>> UseReader<TResult>(Func<Optional<INFCHandle>, Task<ValueResult<TResult>>> func)
         {
             var task = await NFCReader.OpenAsync(log_result);
             if (task.HasValue)
@@ -541,7 +565,7 @@ namespace Flux.ViewModels
 
             return await func(default);
 
-            async Task<Optional<TResult>> log_result(INFCHandle handle)
+            async Task<ValueResult<TResult>> log_result(INFCHandle handle)
             {
                 var reading = await ShowNFCDialog(handle.ToOptional(), func);
 

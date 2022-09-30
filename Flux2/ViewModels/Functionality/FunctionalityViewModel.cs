@@ -271,6 +271,7 @@ namespace Flux.ViewModels
             AddCommand("cleanPlate", CleanPlate);
             AddCommand("keepChamber", m => m.KEEP_CHAMBER);
             AddCommand("keepExtruders", m => m.KEEP_TOOL, visible: advanced_mode);
+            AddCommand("runDaemon", m => m.RUN_DAEMON, visible: advanced_mode);
 
             var user_settings = Flux.SettingsProvider.UserSettings;
             AddCommand(
@@ -325,9 +326,48 @@ namespace Flux.ViewModels
             AddCommand("openClamp", m => m.OPEN_HEAD_CLAMP, can_execute: IS_IDLE, visible: advanced_mode);
             AddCommand("reloadDatabase", () => Flux.DatabaseProvider.Initialize(), visible: advanced_mode);
 
+            AddCommand("testRoutines", async () => 
+            {
+                foreach (var feeder in Flux.Feeders.Feeders.Items)
+                {
+                    foreach (var material in feeder.Materials.Items)
+                    {
+                        var filament_operation = GCodeFilamentOperation.Create(material, false, false);
+                        if (!filament_operation.HasValue)
+                            continue;
+                
+                        using var load_filament_cts = new CancellationTokenSource(TimeSpan.FromMinutes(1));
+                        await Flux.ConnectionProvider.PutFileAsync(
+                            f => f.StoragePath,
+                            $"f{feeder.Position} m{material.Position} load_filament.gcode",
+                            false,
+                            load_filament_cts.Token,
+                            filament_operation.Value.GetLoadFilamentGCode());
+            
+                        using var purge_filament_cts = new CancellationTokenSource(TimeSpan.FromMinutes(1));
+                        await Flux.ConnectionProvider.PutFileAsync(
+                            f => f.StoragePath,
+                            $"f{feeder.Position} m{material.Position} purge_filament.gcode",
+                            false,
+                            purge_filament_cts.Token,
+                            filament_operation.Value.GetPurgeFilamentGCode());
+
+                        using var unload_filament_cts = new CancellationTokenSource(TimeSpan.FromMinutes(1));
+                        await Flux.ConnectionProvider.PutFileAsync(
+                            f => f.StoragePath,
+                            $"f{feeder.Position} m{material.Position} unload_filament.gcode",
+                            false,
+                            unload_filament_cts.Token,
+                            filament_operation.Value.GetUnloadFilamentGCode());
+                    }
+                }
+            }, visible: advanced_mode);
+
             AddModal(() => new MemoryViewModel(Flux), visible: advanced_mode);
             AddModal(() => new FilesViewModel(Flux), visible: advanced_mode);
             AddModal(() => new MoveViewModel(Flux), visible: advanced_mode);
+
+            AddModal(() => new NFCViewModel(Flux), visible: advanced_mode);
         }
 
         //private byte[] array { get; set; }
@@ -466,7 +506,6 @@ namespace Flux.ViewModels
             AddModal(() => new ManageViewModel(Flux));
             AddModal(() => new SettingsViewModel(Flux));
             AddModal(() => new RoutinesViewModel(Flux));
-            AddModal(() => new NFCViewModel(Flux), advanced_mode, advanced_mode);
         }
     }
 }

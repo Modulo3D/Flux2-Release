@@ -1,5 +1,6 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
+using GreenSuperGreen.Queues;
 using Modulo3DStandard;
 using ReactiveUI;
 using RestSharp;
@@ -36,7 +37,7 @@ namespace Flux.ViewModels
             c => new RRF_MemoryBuffer(c), get_variable_store)
         {
             Flux = flux;
-        }
+            }
         protected override async Task RollConnectionAsync()
         {
             try

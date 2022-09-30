@@ -23,7 +23,6 @@ namespace Flux.ViewModels
     public interface IOperationViewModel
     {
         string OperationText { get; }
-        bool AllConditionsTrue { get; }
         string TitleText { get; }
     }
 
@@ -48,13 +47,6 @@ namespace Flux.ViewModels
         public ReactiveCommand<Unit, Unit> CancelOperationCommand { get; private set; }
         [RemoteCommand]
         public ReactiveCommand<Unit, Unit> ExecuteOperationCommand { get; private set; }
-
-
-        private ObservableAsPropertyHelper<bool> _AllConditionsTrue;
-        public bool AllConditionsTrue => _AllConditionsTrue.Value;
-
-        private ObservableAsPropertyHelper<bool> _AllConditionsFalse;
-        public bool AllConditionsFalse => _AllConditionsFalse.Value;
 
         private ObservableAsPropertyHelper<Optional<FLUX_Temp>> _CurrentTemperature;
         [RemoteOutput(true, typeof(FluxTemperatureConverter))]
@@ -84,18 +76,7 @@ namespace Flux.ViewModels
                     bool filter_condition((IConditionViewModel condition, TConditionAttribute condition_attribute) t) => !t.condition_attribute.FilterOnCycle || idle;
                 }))
                 .Transform(t => t.condition)
-                .AutoRefresh(c => c.State)
                 .AsObservableList();
-
-            _AllConditionsTrue = FilteredConditions.Connect()
-                .AddKey(c => c.ConditionName)
-                .TrueForAll(c => c.StateChanged, state => state.Valid)
-                .ToProperty(this, v => v.AllConditionsTrue);
-
-            _AllConditionsFalse = FilteredConditions.Connect()
-                .AddKey(c => c.ConditionName)
-                .TrueForAll(c => c.StateChanged, state => !state.Valid)
-                .ToProperty(this, v => v.AllConditionsFalse);
 
             _TitleText = is_idle.Select(i => FindTitleText(i))
                 .ToProperty(this, v => v.TitleText);
@@ -105,11 +86,14 @@ namespace Flux.ViewModels
 
             var can_cancel = CanCancelOperation();
 
+            var all_conditions_true = FilteredConditions.Connect()
+                .AddKey(c => c.ConditionName)
+                .TrueForAll(c => c.WhenAnyValue(c => c.State), state => state.Valid);
+
             var can_execute = Observable.CombineLatest(
-                is_idle,
-                CanExecuteOperation(),
-                this.WhenAnyValue(v => v.AllConditionsTrue),
-                (is_idle, execute, conditions) => is_idle && execute && conditions);
+                all_conditions_true,
+                Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation).Select(s => s.CanSafeCycle),
+                (can_cycle, conditions) => can_cycle && conditions);
 
             var tool_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TEMP_TOOL, Feeder.Position);
             _CurrentTemperature = Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_TOOL, tool_key)
@@ -130,7 +114,6 @@ namespace Flux.ViewModels
         protected abstract IObservable<bool> CanCancelOperation();
 
         protected abstract Task<bool> ExecuteOperationAsync();
-        protected abstract IObservable<bool> CanExecuteOperation();
         private async Task SafeExecuteOperationAsync()
         {
             var navigate_back = await ExecuteOperationAsync();

@@ -50,7 +50,6 @@ namespace Flux.ViewModels
 
         private async Task SetValueAsync()
         {
-            var cb_virtual_memory = ComboOption.Create("cbVirtual", "MEMORIA VIRTUALE?", Enum.GetValues<BoolSelection>(), b => (uint)b);
             switch (Variable)
             {
                 case IFLUX_Variable<bool, bool> @bool:
@@ -60,18 +59,11 @@ namespace Flux.ViewModels
                     var bool_result = await Flux.ShowSelectionAsync(
                         VariableName,
                         Observable.Return(true),
-                        cb_virtual_memory,
                         cb_bool_value);
 
-                    if (bool_result == ContentDialogResult.Primary &&
-                        cb_virtual_memory.HasValue)
-                    {
-                        var value = cb_bool_value.Value.ValueOr(() => BoolSelection.False) == BoolSelection.True;
-                        if (cb_virtual_memory.Value == BoolSelection.True)
-                            @bool.SetMemoryValue(value);
-                        else
-                            await @bool.WriteAsync(value);
-                    }
+                    if (bool_result == ContentDialogResult.Primary && 
+                        cb_bool_value.Value.HasValue)
+                        await @bool.WriteAsync(cb_bool_value.Value.Value == BoolSelection.True);
                     break;
 
                 case IFLUX_Variable<double, double> @double:
@@ -80,22 +72,15 @@ namespace Flux.ViewModels
                     var double_result = await Flux.ShowSelectionAsync(
                         VariableName,
                         Observable.Return(true),
-                        cb_virtual_memory,
                         tb_double_value);
 
                     if (double_result == ContentDialogResult.Primary &&
-                        cb_virtual_memory.HasValue &&
                         double.TryParse(
                             tb_double_value.Value,
                             NumberStyles.Float, 
                             CultureInfo.InvariantCulture,
                             out var double_value))
-                    {
-                        if (cb_virtual_memory.Value == BoolSelection.True)
-                            @double.SetMemoryValue(double_value);
-                        else
-                            await @double.WriteAsync(double_value);
-                    }
+                        await @double.WriteAsync(double_value);
                     break;
 
                 case IFLUX_Variable<short, short> @short:
@@ -104,18 +89,11 @@ namespace Flux.ViewModels
                     var short_result = await Flux.ShowSelectionAsync(
                         VariableName,
                         Observable.Return(true),
-                        cb_virtual_memory,
                         tb_short_value);
 
                     if (short_result == ContentDialogResult.Primary &&
-                        cb_virtual_memory.HasValue &&
                         short.TryParse(tb_short_value.Value, out var short_value))
-                    {
-                        if (cb_virtual_memory.Value == BoolSelection.True)
-                            @short.SetMemoryValue(short_value);
-                        else
-                            await @short.WriteAsync(short_value);
-                    }
+                        await @short.WriteAsync(short_value);
                     break;
 
                 case IFLUX_Variable<ushort, ushort> word:
@@ -124,18 +102,11 @@ namespace Flux.ViewModels
                     var word_result = await Flux.ShowSelectionAsync(
                         VariableName,
                         Observable.Return(true),
-                        cb_virtual_memory,
                         tb_word_value);
 
-                    if (word_result == ContentDialogResult.Primary &&
-                        cb_virtual_memory.HasValue && 
+                    if (word_result == ContentDialogResult.Primary && 
                         ushort.TryParse(tb_word_value.Value, out var word_value))
-                    {
-                        if (cb_virtual_memory.Value == BoolSelection.True)
-                            word.SetMemoryValue(word_value);
-                        else
-                            await word.WriteAsync(word_value);
-                    }
+                        await word.WriteAsync(word_value);
                     break;
 
 
@@ -145,17 +116,10 @@ namespace Flux.ViewModels
                     var string_result = await Flux.ShowSelectionAsync(
                         VariableName,
                         Observable.Return(true),
-                        cb_virtual_memory,
                         tb_string_value);
 
-                    if (string_result == ContentDialogResult.Primary &&
-                        cb_virtual_memory.HasValue)
-                    {
-                        if (cb_virtual_memory.Value == BoolSelection.True)
-                            @string.SetMemoryValue(tb_string_value.Value);
-                        else
+                    if (string_result == ContentDialogResult.Primary)
                             await @string.WriteAsync(tb_string_value.Value);
-                    }
                     break;
             }
         }

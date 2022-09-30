@@ -89,7 +89,7 @@ namespace Flux.ViewModels
 
         public NFCReading<NFCToolNozzle> SetLastBreakTemp(GCodeFilamentOperation filament_settings)
         {
-            return StoreTag(c => c.SetLastBreakTemp(filament_settings.BreakTemperature));
+            return StoreTag(c => c.SetLastBreakTemp(filament_settings.CurBreakTemp));
         }
         public override void Initialize()
         {
@@ -224,7 +224,7 @@ namespace Flux.ViewModels
                 });
         }
 
-        public async Task<(bool result, Optional<Tool> tool)> FindNewToolAsync(Optional<NFCReading<NFCToolNozzle>> last_reading)
+        public async Task<ValueResult<Tool>> FindNewToolAsync(Optional<NFCReading<NFCToolNozzle>> last_reading)
         {
             var database = Flux.DatabaseProvider.Database;
             if (!database.HasValue)
@@ -232,7 +232,7 @@ namespace Flux.ViewModels
 
             var printer = Flux.SettingsProvider.Printer;
             if (!printer.HasValue)
-                return (false, default);
+                return default;
 
             var tool_documents = CompositeQuery.Create(database.Value,
                db => _ => db.Find(printer.Value, Tool.SchemaInstance), db => db.GetTarget)
@@ -258,11 +258,11 @@ namespace Flux.ViewModels
 
             var tool = tool_option.Value;
             if (!tool.HasValue)
-                return (true, default);
+                return new ValueResult<Tool>(default);
 
-            return (true, tool.Value);
+            return tool.Value;
         }
-        public async Task<(bool result, Optional<Nozzle> nozzle, double max_weight, double cur_weight)> FindNewNozzleAsync(Tool tool, Optional<NFCReading<NFCToolNozzle>> last_reading)
+        public async Task<(ValueResult<Nozzle> nozzle, double max_weight, double cur_weight)> FindNewNozzleAsync(Tool tool, Optional<NFCReading<NFCToolNozzle>> last_reading)
         {
             var database = Flux.DatabaseProvider.Database;
             if (!database.HasValue)
@@ -306,38 +306,37 @@ namespace Flux.ViewModels
                 nozzle_option, max_weight_option, cur_weight_option);
 
             if (nozzle_result != ContentDialogResult.Primary)
-                return (false, default, default, default);
+                return (default, default, default);
 
             var nozzle = nozzle_option.Value;
             if (!nozzle.HasValue)
-                return (true, default, default, default);
+                return (new ValueResult<Nozzle>(default), default, default);
 
             var max_weight = max_weight_option.Value;
             var cur_weight = cur_weight_option.Value;
 
-            return (true, nozzle.Value, max_weight, cur_weight);
+            return (nozzle.Value, max_weight, cur_weight);
         }
 
-        public override async Task<Optional<NFCToolNozzle>> CreateTagAsync(Optional<NFCReading<NFCToolNozzle>> last_reading)
+        public override async Task<ValueResult<NFCToolNozzle>> CreateTagAsync(Optional<NFCReading<NFCToolNozzle>> last_reading)
         {
             var tool = await FindNewToolAsync(last_reading);
-            if (!tool.result)
+            if (!tool.Result)
                 return default;
 
-            if (!tool.tool.HasValue)
+            if (!tool.HasValue)
                 return default;
 
-            var nozzle = await FindNewNozzleAsync(tool.tool.Value, last_reading);
-            if (!nozzle.result)
+            var nozzle = await FindNewNozzleAsync(tool.Value, last_reading);
+            if (!nozzle.nozzle.Result)
                 return default;
-
 
             var last_tag = last_reading.Convert(r => r.Tag);
             var last_loaded = last_tag.Convert(t => t.Loaded);
             var last_break_temp = last_tag.Convert(t => t.LastBreakTemperature);
             var last_printer_guid = last_tag.ConvertOr(t => t.PrinterGuid, () => Guid.Empty);
 
-            return new NFCToolNozzle(tool.tool.Value, nozzle.nozzle, nozzle.max_weight, nozzle.cur_weight, last_printer_guid, last_loaded, last_break_temp);
+            return new NFCToolNozzle(tool.Value, nozzle.nozzle, nozzle.max_weight, nozzle.cur_weight, last_printer_guid, last_loaded, last_break_temp);
         }
     }
 }

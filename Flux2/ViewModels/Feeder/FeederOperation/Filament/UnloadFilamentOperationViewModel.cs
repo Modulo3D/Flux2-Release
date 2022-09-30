@@ -33,7 +33,7 @@ namespace Flux.ViewModels
             if(!Flux.ConnectionProvider.HasVariable(c => c.FILAMENT_ON_HEAD))
                 Material.SetMaterialLoaded(false);
 
-            return true;
+            return false;
         }
         protected override IEnumerable<(IConditionViewModel condition, FilamentOperationConditionAttribute condition_attribute)> FindConditions()
         {
@@ -44,28 +44,27 @@ namespace Flux.ViewModels
                 Flux.StatusProvider,
                 "material",
                 Observable.CombineLatest(
-                    Feeder.ToolNozzle.WhenAnyValue(f => f.MaterialLoaded),
-                    Material.WhenAnyValue(m => m.Document),
                     Material.WhenAnyValue(f => f.State),
+                    Material.WhenAnyValue(m => m.Document),
                     Material.ToolMaterial.WhenAnyValue(m => m.State),
-                    (loaded, document, material, tool_material) => (loaded, document, material, tool_material)),
+                    (state, material, tool_material) => (state, material, tool_material)),
                     (state, value) =>
                     {
-                        if (!value.loaded.HasValue)
-                            return state.Create(EConditionState.Warning, $"MATERIALE NON CARICATO");
+                        if (!value.state.Inserted && !value.state.Locked)
+                            return state.Create(EConditionState.Disabled, $"MATERIALE NON INSERITO");
 
                         var update_nfc = state.Create("nFC", UpdateNFCAsync);
 
-                        if (value.document.ConvertOr(d => d.Id == 0, () => true))
+                        if (!value.material.HasValue)
                             return state.Create(EConditionState.Warning, "LEGGI UN MATERIALE", update_nfc);
 
-                        if (!value.tool_material.Compatible.ValueOrDefault())
-                            return state.Create(EConditionState.Error, $"{value.document} NON COMPATIBILE", update_nfc);
+                        if (!value.tool_material.Compatible.ValueOr(() => false))
+                            return state.Create(EConditionState.Error, $"{value.material} NON COMPATIBILE", update_nfc);
 
-                        if (!value.material.Locked)
+                        if (!value.state.Locked)
                             return state.Create(EConditionState.Warning, "SBLOCCA IL MATERIALE", update_nfc);
 
-                        return new ConditionState(EConditionState.Stable, $"{value.document} PRONTO ALLO SCARICAMENTO");
+                        return new ConditionState(EConditionState.Stable, $"{value.material} PRONTO ALLO SCARICAMENTO");
                     }), new FilamentOperationConditionAttribute());
         }
         public override async Task<bool> UpdateNFCAsync()

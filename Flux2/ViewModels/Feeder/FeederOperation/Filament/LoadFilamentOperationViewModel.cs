@@ -44,11 +44,13 @@ namespace Flux.ViewModels
             if (!await ExecuteFilamentOperation(filament_settings, c => c.GetLoadFilamentGCode))
                 return false;
 
-            Feeder.ToolNozzle.SetLastBreakTemp(filament_settings.Value);
-
-            if (!await Flux.IterateConfirmDialogAsync("CARICO FILO", "FILO SPURGATO CORRETTAMENTE?", 3,
-                () => Flux.ConnectionProvider.PurgeAsync(filament_settings.Value)))
-                return false;
+            if (Material.State.IsLoaded())
+            { 
+                Feeder.ToolNozzle.SetLastBreakTemp(filament_settings.Value);
+                if (!await Flux.IterateConfirmDialogAsync("CARICO FILO", "FILO SPURGATO CORRETTAMENTE?", 3,
+                    () => Flux.ConnectionProvider.PurgeAsync(filament_settings.Value)))
+                    return false;
+            }
 
             return true;
         }
@@ -72,35 +74,27 @@ namespace Flux.ViewModels
                 Flux.StatusProvider,
                 "material",
                 Observable.CombineLatest(
-                    Material.WhenAnyValue(m => m.Document),
                     Material.WhenAnyValue(f => f.State),
+                    Material.WhenAnyValue(m => m.Document),
                     Material.ToolMaterial.WhenAnyValue(m => m.State),
-                    Feeder.ToolNozzle.WhenAnyValue(f => f.MaterialLoaded),
-                    (document, material, tool_material, loaded) => (document, material, tool_material, loaded)),
+                    (state, material, tool_material) => (state, material, tool_material)),
                     (state, value) =>
                     {
-                        if (value.loaded.HasValue)
-                        {
-                            var mat = value.loaded.Value.Document;
-                            var pos = value.loaded.Value.Position;
-
-                            if(value.loaded.Value.Position == Material.Position)
-                                return state.Create(EConditionState.Disabled, $"MATERIALE CARICATO ({mat} POS. {pos + 1})");
-                            return state.Create(EConditionState.Warning, $"MATERIALE GIA' CARICATO ({mat} POS. {pos + 1})");
-                        }
+                        if (value.state.Loaded)
+                            return state.Create(EConditionState.Disabled, $"{value.material} CARICATO");
 
                         var update_nfc = state.Create("nFC", UpdateNFCAsync, can_update_nfc);
 
-                        if (value.document.ConvertOr(d => d.Id == 0, () => true))
+                        if (!value.material.HasValue)
                             return state.Create(EConditionState.Warning, "LEGGI UN MATERIALE", update_nfc);
 
-                        if (!value.tool_material.Compatible.ValueOrDefault())
-                            return state.Create(EConditionState.Error, $"{value.document} NON COMPATIBILE");
+                        if (!value.tool_material.Compatible.ValueOr(() => false))
+                            return state.Create(EConditionState.Error, $"{value.material} NON COMPATIBILE");
 
-                        if (!value.material.Locked)
+                        if (!value.state.Locked)
                             return state.Create(EConditionState.Warning, "BLOCCA IL MATERIALE", update_nfc);
 
-                        return new ConditionState(EConditionState.Stable, $"{value.document} PRONTO AL CARICAMENTO");
+                        return new ConditionState(EConditionState.Stable, $"{value.material} PRONTO AL CARICAMENTO");
                     }), new FilamentOperationConditionAttribute());
         }
 

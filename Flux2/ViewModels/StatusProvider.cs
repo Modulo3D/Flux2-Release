@@ -572,11 +572,6 @@ namespace Flux.ViewModels
                 {
                     _LockToggleConditions = new SourceCache<IConditionViewModel, string>(c => c.ConditionName);
 
-                    var is_idle = Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS)
-                       .Convert(data => data == FLUX_ProcessStatus.IDLE)
-                       .DistinctUntilChanged()
-                       .ValueOr(() => false);
-
                     var lock_units = Flux.ConnectionProvider.GetArrayUnits(c => c.LOCK_CLOSED);
                     foreach (var lock_unit in lock_units)
                     {
@@ -588,7 +583,8 @@ namespace Flux.ViewModels
                         var lock_toggle = ConditionViewModel.Create(this, lock_unit.Alias, current_lock,
                             (state, value) =>
                             {
-                                var toggle_lock = state.Create("lock", c => c.OPEN_LOCK, lock_unit, is_idle);
+                                // TODO
+                                var toggle_lock = state.Create("lock", c => c.OPEN_LOCK, lock_unit);
                                 if (!value.closed || value.open)
                                     return state.Create(EConditionState.Stable, $"CHIUDI {lock_unit}", toggle_lock);
                                 return state.Create(EConditionState.Stable, $"APRI {lock_unit}", toggle_lock);

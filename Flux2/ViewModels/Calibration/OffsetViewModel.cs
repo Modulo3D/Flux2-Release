@@ -247,9 +247,7 @@ namespace Flux.ViewModels
                         return FluxProbeState.ERROR_PROBE;
                     if (probe_offset.HasValue && Math.Abs(probe_offset.Value.Y - tool_offset.Value.Y) > 5)
                         return FluxProbeState.ERROR_PROBE;
-                    if (probe_offset.HasValue && Math.Abs(probe_offset.Value.Z - tool_offset.Value.Z) > 5)
-                        return FluxProbeState.ERROR_PROBE;
-                    if (probe_offset.HasValue && probe_offset.Value.Z > tool_offset.Value.Z)
+                    if (probe_offset.HasValue && tool_offset.Value.Z - probe_offset.Value.Z > 5)
                         return FluxProbeState.ERROR_PROBE;
 
                     if (!tool_state.IsLoaded() || 
@@ -258,7 +256,7 @@ namespace Flux.ViewModels
                         return FluxProbeState.NO_PROBE;
 
                     if (!probe_offset.HasValue || 
-                        probe_offset.Value.Z == tool_offset.Value.Z)
+                        probe_offset.Value.Z >= tool_offset.Value.Z)
                         return FluxProbeState.INVALID_PROBE;
 
                     return FluxProbeState.VALID_PROBE;
