@@ -88,15 +88,26 @@ namespace Flux.ViewModels
         }
     }
 
-    public class RRF_Client : IDisposable
+    public class RRF_Connection : FLUX_Connection<RRF_ConnectionProvider, RRF_VariableStoreBase, RestClient>
     {
-        private RestClient Client { get; }
-        private CompositeDisposable Disposables { get; }
+        public override bool ParkToolAfterOperation => false;
+        public override string InnerQueuePath => "gcodes/queue/inner";
+        public override string StoragePath => "gcodes/storage";
+        public override string QueuePath => "gcodes/queue";
+        public override string PathSeparator => "/";
+        public override string MacroPath => "macros";
+        public string GlobalPath => "sys/global";
+        public override string RootPath => "";
+        public override ushort ArrayBase => 0;
+
+        public FluxViewModel Flux { get; }
+        public RRF_ConnectionProvider ConnectionProvider { get; }
         private PriorityQueueNotifierUC<RRF_RequestPriority, RRF_Request> Requests { get; }
-        public RRF_Client(string address)
+
+        public RRF_Connection(FluxViewModel flux, RRF_ConnectionProvider connection_provider) : base(connection_provider)
         {
-            Client = new RestClient(address);
-            Disposables = new CompositeDisposable();
+            Flux = flux;
+            ConnectionProvider = connection_provider;
 
             var values = ((RRF_RequestPriority[])Enum.GetValues(typeof(RRF_RequestPriority)))
                 .OrderByDescending(e => (ushort)e);
@@ -113,41 +124,55 @@ namespace Flux.ViewModels
         }
         private async Task TryDequeueAsync()
         {
+            if (!Client.HasValue)
+                return;
             await Requests.EnqueuedItemsAsync();
             while (Requests.TryDequeu(out var rrf_request))
             {
                 var ct = rrf_request.CancellationToken;
-                var response = await Client.ExecuteAsync(rrf_request.Request, ct);
+                var response = await Client.Value.ExecuteAsync(rrf_request.Request, ct);
                 var rrf_response = new RRF_Response(response);
                 rrf_request.Response.TrySetResult(rrf_response);
             }
         }
 
-        public void Dispose()
+        public override async Task<bool> ConnectAsync()
         {
-            Disposables.Dispose();
+            try
+            {
+                if (!await CloseAsync())
+                    return false;
+
+                if (!Flux.NetProvider.PLCNetworkConnectivity)
+                    return false;
+
+                var core_settings = Flux.SettingsProvider.CoreSettings.Local;
+                var plc_address = core_settings.PLCAddress;
+                if (!plc_address.HasValue)
+                    return false;
+
+                Client = new RestClient(plc_address.Value);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
         }
-    }
-
-    public class RRF_Connection : FLUX_Connection<RRF_ConnectionProvider, RRF_VariableStoreBase, RRF_Client>
-    {
-        public override bool ParkToolAfterOperation => false;
-        public override string InnerQueuePath => "gcodes/queue/inner";
-        public override string StoragePath => "gcodes/storage";
-        public override string QueuePath => "gcodes/queue";
-        public override string PathSeparator => "/";
-        public override string MacroPath => "macros";
-        public string GlobalPath => "sys/global";
-        public override string RootPath => "";
-        public override ushort ArrayBase => 0;
-
-        public FluxViewModel Flux { get; }
-        public RRF_ConnectionProvider ConnectionProvider { get; }
-
-        public RRF_Connection(RRF_ConnectionProvider connection_provider, string address) : base(connection_provider, new RRF_Client(address))
+        public override Task<bool> CloseAsync()
         {
-            ConnectionProvider = connection_provider;
-            Flux = ConnectionProvider.Flux;
+            try
+            {
+                if (!Client.HasValue)
+                    return Task.FromResult(true);
+                Client.Value.Dispose();
+                Client = null;
+                return Task.FromResult(true);
+            }
+            catch
+            {
+                return Task.FromResult(false);
+            }
         }
 
         public async Task<bool> InitializeVariablesAsync(CancellationToken ct)
@@ -267,7 +292,7 @@ namespace Flux.ViewModels
                 }
 
                 var rrf_request = new RRF_Request(resource, Method.Get, RRF_RequestPriority.Immediate, ct);
-                var rrf_response = await Client.ExecuteAsync(rrf_request);
+                var rrf_response = await ExecuteAsync(rrf_request);
                 if (!rrf_response.Ok)
                 {
                     Flux.Messages.LogMessage($"{rrf_request}", $"{rrf_response}", MessageLevel.ERROR, 0);
@@ -553,7 +578,7 @@ namespace Flux.ViewModels
 
                 var path = $"{folder}/{name}".TrimStart('/');
                 var request = new RRF_Request($"rr_mkdir?dir=0:/{path}", Method.Get, RRF_RequestPriority.Immediate, ct);
-                var response = await Client.ExecuteAsync(request);
+                var response = await ExecuteAsync(request);
                 return response.Ok;
             }
             catch
@@ -571,7 +596,7 @@ namespace Flux.ViewModels
                 {
                     var first = file_list.ConvertOr(f => f.Next, () => 0);
                     var request = new RRF_Request($"rr_filelist?dir={folder}&first={first}", Method.Get, RRF_RequestPriority.Immediate, ct);
-                    var response = await Client.ExecuteAsync(request);
+                    var response = await ExecuteAsync(request);
 
                     file_list = response.GetContent<FLUX_FileList>();
                     if (file_list.HasValue)
@@ -609,7 +634,7 @@ namespace Flux.ViewModels
                     }
 
                     var list_req = new RRF_Request($"/rr_filelist?dir=0:/{folder}", Method.Get, RRF_RequestPriority.Immediate, ct);
-                    var list_res = await Client.ExecuteAsync(list_req);
+                    var list_res = await ExecuteAsync(list_req);
                     var file_list = list_res.GetContent<FLUX_FileList>();
                     if (!file_list.HasValue)
                     {
@@ -630,7 +655,7 @@ namespace Flux.ViewModels
                                 if (Path.GetFileName(filename) == "deselected.gcode")
                                     continue;
                                 var del_f_req = new RRF_Request($"rr_delete?name={filename}", Method.Get, RRF_RequestPriority.Immediate, ct);
-                                var del_f_res = await Client.ExecuteAsync(del_f_req);
+                                var del_f_res = await ExecuteAsync(del_f_req);
                                 if (!del_f_res.Ok)
                                 {
                                     Flux.Messages.LogMessage("Errore durante la pulizia della cartella", $"Impossibile cancellare il file: {del_f_res.Response}", MessageLevel.ERROR, 0);
@@ -657,7 +682,7 @@ namespace Flux.ViewModels
 
                     await clear_f_async(directory);
                     var del_d_req = new RRF_Request($"rr_delete?name={directory}", Method.Get, RRF_RequestPriority.Immediate, ct);
-                    var del_d_res = await Client.ExecuteAsync(del_d_req);
+                    var del_d_res = await ExecuteAsync(del_d_req);
                     if (!del_d_res.Ok)
                     {
                         Flux.Messages.LogMessage("Errore durante la pulizia della cartella", $"Impossibile cancellare la cartella: {del_d_res.Response}", MessageLevel.ERROR, 0);
@@ -680,7 +705,7 @@ namespace Flux.ViewModels
                     return default;
 
                 var request = new RRF_Request($"rr_download?name=0:/{folder}/{filename}", Method.Get, RRF_RequestPriority.Immediate, ct);
-                var response = await Client.ExecuteAsync(request);
+                var response = await ExecuteAsync(request);
                 return response.Response.Convert(r => r.Content);
             }
             catch
@@ -701,7 +726,7 @@ namespace Flux.ViewModels
                     return false;
 
                 var request = new RRF_Request($"rr_delete?name=0:/{path}", Method.Get, RRF_RequestPriority.Immediate, ct);
-                var response = await Client.ExecuteAsync(request);
+                var response = await ExecuteAsync(request);
 
                 if (wait)
                 {
@@ -733,7 +758,7 @@ namespace Flux.ViewModels
                 var new_path = $"{folder}/{new_filename}".TrimStart('/');
 
                 var request = new RRF_Request($"rr_move?old=0:/{old_path}&new=0:/{new_path}", Method.Get, RRF_RequestPriority.Immediate, ct);
-                var response = await Client.ExecuteAsync(request);
+                var response = await ExecuteAsync(request);
 
                 if (wait)
                 {

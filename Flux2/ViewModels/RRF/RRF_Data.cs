@@ -1328,14 +1328,11 @@ namespace Flux.ViewModels
             try
             {
                 var connection = connection_provider.Connection;
-                if (!connection.HasValue)
-                    return default;
-
                 if (!files.Files.Any(f => f.Name == "resurrect.g"))
                     return default;
 
                 using var get_resurrect_cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-                var resurrect_source = await connection.Value.DownloadFileAsync(f => f.StoragePath, "resurrect.g", get_resurrect_cts.Token);
+                var resurrect_source = await connection.DownloadFileAsync(f => f.StoragePath, "resurrect.g", get_resurrect_cts.Token);
                 if (!resurrect_source.HasValue)
                     return default;
 
@@ -1349,7 +1346,7 @@ namespace Flux.ViewModels
                 if (!hold_mcode_partprogram.HasValue)
                     return default;
 
-                var hold_mcode_vm = connection.Value.Flux.MCodes.AvaiableMCodes.Lookup(hold_mcode_partprogram.Value.MCodeGuid);
+                var hold_mcode_vm = connection.Flux.MCodes.AvaiableMCodes.Lookup(hold_mcode_partprogram.Value.MCodeGuid);
                 if (!hold_mcode_vm.HasValue)
                     return default;
 
@@ -1415,7 +1412,7 @@ namespace Flux.ViewModels
                         return default;
 
                     using var put_resurrect_cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-                    if (!await connection.Value.PutFileAsync(
+                    if (!await connection.PutFileAsync(
                         f => f.StoragePath,
                         mcode_recovery.FileName,
                         true,

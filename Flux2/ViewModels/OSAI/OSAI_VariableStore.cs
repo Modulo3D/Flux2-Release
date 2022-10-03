@@ -256,11 +256,8 @@ namespace Flux.ViewModels
         private static async Task<ValueResult<Dictionary<Guid, Dictionary<BlockNumber, MCodePartProgram>>>> GetStorageAsync(OSAI_ConnectionProvider connection_provider)
         {
             var connection = connection_provider.Connection;
-            if (!connection.HasValue)
-                return default;
-
             using var qctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            var storage = await connection.Value.ListFilesAsync(
+            var storage = await connection.ListFilesAsync(
                 c => c.StoragePath,
                 qctk.Token);
             if (!storage.HasValue)
@@ -271,11 +268,8 @@ namespace Flux.ViewModels
         private static async Task<ValueResult<Dictionary<QueuePosition, FluxJob>>> GetQueueAsync(OSAI_ConnectionProvider connection_provider)
         {
             var connection = connection_provider.Connection;
-            if (!connection.HasValue)
-                return default;
-
             using var qctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            var queue = await connection.Value.ListFilesAsync(
+            var queue = await connection.ListFilesAsync(
                 c => c.QueuePath,
                 qctk.Token);
             if (!queue.HasValue)
@@ -287,11 +281,11 @@ namespace Flux.ViewModels
         {
             try
             {
-                var connection = connection_provider.Connection;
-                if (!connection.HasValue)
+                var client = connection_provider.Connection.Client;
+                if (client.HasValue)
                     return default;
 
-                var get_blk_num_response = await connection.Value.Client.GetBlkNumAsync(OSAI_Connection.ProcessNumber);
+                var get_blk_num_response = await client.Value.GetBlkNumAsync(OSAI_Connection.ProcessNumber);
 
                 if (!OSAI_Connection.ProcessResponse(
                     get_blk_num_response.Body.retval,
@@ -307,12 +301,12 @@ namespace Flux.ViewModels
         {
             try
             {
-                var connection = connection_provider.Connection;
-                if (!connection.HasValue)
+                var client = connection_provider.Connection.Client;
+                if (client.HasValue)
                     return default;
 
                 var boot_phase_request = new BootPhaseEnquiryRequest();
-                var boot_phase_response = await connection.Value.Client.BootPhaseEnquiryAsync(boot_phase_request);
+                var boot_phase_response = await client.Value.BootPhaseEnquiryAsync(boot_phase_request);
 
                 if (!OSAI_Connection.ProcessResponse(
                     boot_phase_response.retval,
@@ -328,12 +322,12 @@ namespace Flux.ViewModels
         {
             try
             {
-                var connection = connection_provider.Connection;
-                if (!connection.HasValue)
+                var client = connection_provider.Connection.Client;
+                if (client.HasValue)
                     return default;
 
                 var boot_mode_request = new BootModeRequest((ushort)boot_mode);
-                var boot_mode_response = await connection.Value.Client.BootModeAsync(boot_mode_request);
+                var boot_mode_response = await client.Value.BootModeAsync(boot_mode_request);
 
                 if (!OSAI_Connection.ProcessResponse(
                     boot_mode_response.retval,
@@ -350,10 +344,11 @@ namespace Flux.ViewModels
             try
             {
                 var connection = connection_provider.Connection;
-                if (!connection.HasValue)
+                var client = connection_provider.Connection.Client;
+                if (client.HasValue)
                     return default;
 
-                var queue_pos = await connection.Value.ReadVariableAsync(c => c.QUEUE_POS);
+                var queue_pos = await connection.ReadVariableAsync(c => c.QUEUE_POS);
                 if (!queue_pos.Result)
                     return default;
 
@@ -363,7 +358,7 @@ namespace Flux.ViewModels
                 if (queue_pos.Value < 0)
                     return new ValueResult<MCodePartProgram>(default);
 
-                var job_queue = await connection.Value.ReadVariableAsync(c => c.QUEUE);
+                var job_queue = await connection.ReadVariableAsync(c => c.QUEUE);
                 if (!job_queue.Result)
                     return default;
 
@@ -373,7 +368,7 @@ namespace Flux.ViewModels
                 if (!job_queue.Value.TryGetValue(queue_pos.Value, out var current_job))
                     return new ValueResult<MCodePartProgram>(default);
 
-                var storage_dict = await connection.Value.ReadVariableAsync(c => c.STORAGE);
+                var storage_dict = await connection.ReadVariableAsync(c => c.STORAGE);
                 if (!storage_dict.Result)
                     return default;
 
@@ -385,7 +380,7 @@ namespace Flux.ViewModels
 
                 // Full part program from filename
                 var get_active_pp_request = new GetActivePartProgramRequest(OSAI_Connection.ProcessNumber);
-                var get_active_pp_response = await connection.Value.Client.GetActivePartProgramAsync(get_active_pp_request);
+                var get_active_pp_response = await client.Value.GetActivePartProgramAsync(get_active_pp_request);
 
                 if (!OSAI_Connection.ProcessResponse(
                     get_active_pp_response.retval,
@@ -415,11 +410,11 @@ namespace Flux.ViewModels
         {
             try
             {
-                var connection = connection_provider.Connection;
-                if (!connection.HasValue)
+                var client = connection_provider.Connection.Client;
+                if (client.HasValue)
                     return default;
 
-                var process_status_response = await connection.Value.Client.GetProcessStatusAsync(OSAI_Connection.ProcessNumber);
+                var process_status_response = await client.Value.GetProcessStatusAsync(OSAI_Connection.ProcessNumber);
 
                 if (!OSAI_Connection.ProcessResponse(
                     process_status_response.Body.retval,
@@ -435,11 +430,11 @@ namespace Flux.ViewModels
         {
             try
             {
-                var connection = connection_provider.Connection;
-                if (!connection.HasValue)
+                var client = connection_provider.Connection.Client;
+                if (client.HasValue)
                     return default;
 
-                var process_status_response = await connection.Value.Client.GetProcessStatusAsync(OSAI_Connection.ProcessNumber);
+                var process_status_response = await client.Value.GetProcessStatusAsync(OSAI_Connection.ProcessNumber);
 
                 if (!OSAI_Connection.ProcessResponse(
                     process_status_response.Body.retval,
@@ -481,12 +476,12 @@ namespace Flux.ViewModels
         {
             try
             {
-                var connection = connection_provider.Connection;
-                if (!connection.HasValue)
+                var client = connection_provider.Connection.Client;
+                if (client.HasValue)
                     return default;
 
                 var set_process_mode_request = new SetProcessModeRequest(OSAI_Connection.ProcessNumber, (ushort)process_mode);
-                var set_process_mode_response = await connection.Value.Client.SetProcessModeAsync(set_process_mode_request);
+                var set_process_mode_response = await client.Value.SetProcessModeAsync(set_process_mode_request);
 
                 if (!OSAI_Connection.ProcessResponse(
                     set_process_mode_response.retval,
@@ -494,7 +489,7 @@ namespace Flux.ViewModels
                     set_process_mode_response.ErrNum))
                     return false;
 
-                return await connection.Value.WaitProcessModeAsync(
+                return await connection_provider.Connection.WaitProcessModeAsync(
                     m => m == process_mode,
                     TimeSpan.FromSeconds(0),
                     TimeSpan.FromSeconds(0.1),

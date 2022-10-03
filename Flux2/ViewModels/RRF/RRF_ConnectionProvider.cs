@@ -34,10 +34,10 @@ namespace Flux.ViewModels
 
         public RRF_ConnectionProvider(FluxViewModel flux, Func<RRF_ConnectionProvider, RRF_VariableStoreBase> get_variable_store) : base(flux,
             RRF_ConnectionPhase.START_PHASE, RRF_ConnectionPhase.END_PHASE, p => (int)p,
-            c => new RRF_MemoryBuffer(c), get_variable_store)
+            get_variable_store, c => new RRF_Connection(flux, c), c => new RRF_MemoryBuffer(c))
         {
             Flux = flux;
-            }
+        }
         protected override async Task RollConnectionAsync()
         {
             try
@@ -45,27 +45,10 @@ namespace Flux.ViewModels
                 switch (ConnectionPhase)
                 {
                     case RRF_ConnectionPhase.START_PHASE:
-                        await CreateTimeoutAsync(TimeSpan.FromSeconds(5), ct =>
+                        await CreateTimeoutAsync(TimeSpan.FromSeconds(5), async ct =>
                         {
-                            if (Connection.HasValue)
-                            {
-                                Connection.Value.Dispose();
-                                Connection = default;
-                            }
-
-                            if (!Flux.NetProvider.PLCNetworkConnectivity)
-                                return Task.CompletedTask;
-
-                            var plc_address = Flux.SettingsProvider.CoreSettings.Local.PLCAddress;
-                            if (!plc_address.HasValue || string.IsNullOrEmpty(plc_address.Value))
-                            {
-                                Flux.Messages.LogMessage(OSAI_ConnectResponse.CONNECT_INVALID_ADDRESS);
-                                return Task.CompletedTask;
-                            }
-
-                            Connection = new RRF_Connection(this, plc_address.Value);
-                            ConnectionPhase = RRF_ConnectionPhase.DISCONNECTING_CLIENT;
-                            return Task.CompletedTask;
+                            if(await Connection.ConnectAsync())
+                                ConnectionPhase = RRF_ConnectionPhase.DISCONNECTING_CLIENT;
                         });
                         break;
 
@@ -73,7 +56,7 @@ namespace Flux.ViewModels
                         await CreateTimeoutAsync(TimeSpan.FromSeconds(1), async ct =>
                         {
                             var request = new RRF_Request("rr_disconnect", Method.Get, RRF_RequestPriority.Immediate, ct);
-                            var disconnected = await Connection.Value.Client.ExecuteAsync(request);
+                            var disconnected = await Connection.ExecuteAsync(request);
                             ConnectionPhase = disconnected.Ok ? RRF_ConnectionPhase.CONNECTING_CLIENT : RRF_ConnectionPhase.START_PHASE;
                         });
                         break;
@@ -82,7 +65,7 @@ namespace Flux.ViewModels
                         await CreateTimeoutAsync(TimeSpan.FromSeconds(1), async ct =>
                         {
                             var request = new RRF_Request($"rr_connect?password=\"\"&time={DateTime.UtcNow:O}", Method.Get, RRF_RequestPriority.Immediate, ct);
-                            var connected = await Connection.Value.Client.ExecuteAsync(request);
+                            var connected = await Connection.ExecuteAsync(request);
                             ConnectionPhase = connected.Ok ? RRF_ConnectionPhase.READING_STATUS : RRF_ConnectionPhase.START_PHASE;
                         });
                         break;
@@ -107,7 +90,7 @@ namespace Flux.ViewModels
                     case RRF_ConnectionPhase.CREATING_VARIABLES:
                         await CreateTimeoutAsync(TimeSpan.FromSeconds(5), async ct =>
                         {
-                            var result = await Connection.Value.CreateVariablesAsync(ct);
+                            var result = await Connection.CreateVariablesAsync(ct);
                             if (result)
                                 ConnectionPhase = RRF_ConnectionPhase.INITIALIZING_VARIABLES;
                         });
@@ -116,7 +99,7 @@ namespace Flux.ViewModels
                     case RRF_ConnectionPhase.INITIALIZING_VARIABLES:
                         await CreateTimeoutAsync(TimeSpan.FromSeconds(5), async ct =>
                         {
-                            var result = await Connection.Value.InitializeVariablesAsync(ct);
+                            var result = await Connection.InitializeVariablesAsync(ct);
                             if (result)
                                 ConnectionPhase = RRF_ConnectionPhase.READING_MEMORY;
                         });

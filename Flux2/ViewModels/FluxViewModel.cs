@@ -180,6 +180,9 @@ namespace Flux.ViewModels
             {
                 try
                 {
+                    Messages        = new MessagesViewModel(this);
+                    NetProvider     = new NetProvider(this);
+
                     var printer_id      = SettingsProvider.CoreSettings.Local.PrinterID;
                     var printer_result  = db.FindById<Printer>(printer_id.ValueOr(() => 0));
                     var printer         = printer_result.Documents.FirstOrDefault().ToOptional();
@@ -196,8 +199,6 @@ namespace Flux.ViewModels
                         _ => new Dummy_ConnectionProvider(this)
                     };
 
-                    Messages        = new MessagesViewModel(this);
-                    NetProvider     = new NetProvider(this);
                     Feeders         = new FeedersViewModel(this);
                     MCodes          = new MCodesViewModel(this);
                     StatusProvider  = new StatusProvider(this);

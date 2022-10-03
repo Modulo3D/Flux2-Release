@@ -274,11 +274,11 @@ namespace Flux.ViewModels
         {
             try
             {
-                var connection = ConnectionProvider.Connection;
-                if (!connection.HasValue)
+                var client = ConnectionProvider.Connection.Client;
+                if (!client.HasValue)
                     return default;
                 
-                var response = await connection.Value.Client.ReadVarDoubleAsync(request);
+                var response = await client.Value.ReadVarDoubleAsync(request);
                 if (OSAI_Connection.ProcessResponse(
                     response.retval,
                     response.ErrClass,
@@ -295,11 +295,11 @@ namespace Flux.ViewModels
         {
             try
             {
-                var connection = ConnectionProvider.Connection;
-                if (!connection.HasValue)
+                var client = ConnectionProvider.Connection.Client;
+                if (!client.HasValue)
                     return default;
 
-                var response = await connection.Value.Client.ReadVarWordAsync(request);
+                var response = await client.Value.ReadVarWordAsync(request);
                 if (OSAI_Connection.ProcessResponse(
                     response.retval,
                     response.ErrClass,

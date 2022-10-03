@@ -85,7 +85,6 @@ namespace Flux.ViewModels
             Conditions = new SourceList<IConditionViewModel>();
 
             _HasSafeStart = Conditions.Connect()
-                .AutoRefresh(c => c.State)
                 .AddKey(c => c.ConditionName)
                 .TrueForAll(line => line.StateChanged, state => state.Valid)
                 .StartWith(true)

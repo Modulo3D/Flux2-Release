@@ -150,12 +150,9 @@ namespace Flux.ViewModels
         static async Task<bool> write_variable(RRF_ConnectionProvider connection_provider, string variable, TData v, bool stored)
         {
             var connection = connection_provider.Connection;
-            if (!connection.HasValue)
-                return false;
-
             var s_value = sanitize_value(v);
             using var write_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            if (!await connection.Value.PostGCodeAsync(new[] { $"set global.{variable} = {s_value}" }, write_cts.Token))
+            if (!await connection.PostGCodeAsync(new[] { $"set global.{variable} = {s_value}" }, write_cts.Token))
             {
                 connection_provider.Flux.Messages.LogMessage($"Impossibile scrivere la variabile {variable}", "Errore durante l'esecuzione del gcode", MessageLevel.ERROR, 0);
                 return false;
@@ -166,7 +163,7 @@ namespace Flux.ViewModels
                 var load_var_macro = $"load_{variable}.g";
                 var gcode = WriteVariableString(variable, v).ToOptional();
                 using var put_file_cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-                if (!await connection.Value.PutFileAsync(c => ((RRF_Connection)c).GlobalPath, load_var_macro, true, put_file_cts.Token, gcode))
+                if (!await connection.PutFileAsync(c => ((RRF_Connection)c).GlobalPath, load_var_macro, true, put_file_cts.Token, gcode))
                 {
                     connection_provider.Flux.Messages.LogMessage($"Impossibile salvare la variabile {variable}", "Errore durante la scrittura del file", MessageLevel.ERROR, 0);
                     return false;

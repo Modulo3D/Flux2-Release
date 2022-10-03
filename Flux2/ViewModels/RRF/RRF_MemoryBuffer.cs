@@ -80,9 +80,6 @@ namespace Flux.ViewModels
             ConnectionProvider = connection_provider;
             Disposables = new CompositeDisposable();
 
-            Thread = DisposableThread.Start(TryScheduleAsync, period)
-                .DisposeWith(Disposables);
-
             Console.WriteLine($"Starting memory reader {period}");
             MemoryReaders = new SourceCache<IFLUX_MemoryReader<TFLUX_ConnectionProvider>, string>(r => r.Resource)
                 .DisposeWith(Disposables);
@@ -91,12 +88,14 @@ namespace Flux.ViewModels
                 .TrueForAll(r => r.WhenAnyValue(r => r.HasMemoryRead), r => r)
                 .ToProperty(this, v => v.HasMemoryRead)
                 .DisposeWith(Disposables);
+          
+            Thread = DisposableThread.Start(TryScheduleAsync, period)
+                .DisposeWith(Disposables);
         }
         public async Task TryScheduleAsync()
         {
-            if(ConnectionProvider.Connection.HasValue)
-                foreach (var memory_reader in MemoryReaders.Items)
-                    await memory_reader.TryScheduleAsync(Timeout);
+            foreach (var memory_reader in MemoryReaders.Items)
+                await memory_reader.TryScheduleAsync(Timeout);
         }
         public void Dispose()
         {
@@ -115,12 +114,9 @@ namespace Flux.ViewModels
         public override async Task TryScheduleAsync(TimeSpan timeout)
         {
             var connection = ConnectionProvider.Connection;
-            if (!connection.HasValue)
-                return;
-
             using var cts = new CancellationTokenSource(timeout);
             var request = new RRF_Request($"rr_model?key={Resource}&flags=d99v", Method.Get, RRF_RequestPriority.Medium, cts.Token);
-            var rrf_response = await connection.Value.Client.ExecuteAsync(request);
+            var rrf_response = await connection.ExecuteAsync(request);
             if (!rrf_response.Ok)
             {
                 HasMemoryRead = false;
@@ -145,9 +141,6 @@ namespace Flux.ViewModels
         public override async Task TryScheduleAsync(TimeSpan timeout)
         {
             var connection = ConnectionProvider.Connection;
-            if (!connection.HasValue)
-                return;
-
             Optional<FLUX_FileList> file_list = default;
             var full_file_list = new FLUX_FileList(Resource);
             do
@@ -156,7 +149,7 @@ namespace Flux.ViewModels
                 var first = file_list.ConvertOr(f => f.Next, () => 0);
                 var request = new RRF_Request($"rr_filelist?dir={Resource}&first={first}", Method.Get, RRF_RequestPriority.Immediate, cts.Token);
 
-                var rrf_response = await connection.Value.Client.ExecuteAsync(request);
+                var rrf_response = await connection.ExecuteAsync(request);
                 if (!rrf_response.Ok)
                 {
                     HasMemoryRead = false;
@@ -282,15 +275,12 @@ namespace Flux.ViewModels
         public async Task<Optional<T>> GetModelDataAsync<T>(CancellationToken ct)
         {
             var connection = ConnectionProvider.Connection;
-            if (!connection.HasValue)
-                return default;
-
             var key = ModelKeys.Lookup(typeof(T));
             if (!key.HasValue)
                 return default;
 
             var request = new RRF_Request($"rr_model?key={key.Value}&flags=d99v", Method.Get, RRF_RequestPriority.Immediate, ct);
-            var response = await connection.Value.Client.ExecuteAsync(request);
+            var response = await connection.ExecuteAsync(request);
             return response.GetContent<RRF_ObjectModelResponse<T>>()
                 .Convert(r => r.Result);
         }
@@ -298,15 +288,12 @@ namespace Flux.ViewModels
         public async Task<Optional<T>> GetModelDataAsync<T>(Expression<Func<RRF_ObjectModel, Optional<T>>> dummy_expression, CancellationToken ct)
         {
             var connection = ConnectionProvider.Connection;
-            if (!connection.HasValue)
-                return default;
-
             var key = ModelKeys.Lookup(typeof(T));
             if (!key.HasValue)
                 return default;
 
             var request = new RRF_Request($"rr_model?key={key.Value}&flags=d99v", Method.Get, RRF_RequestPriority.Immediate, ct);
-            var response = await connection.Value.Client.ExecuteAsync(request);
+            var response = await connection.ExecuteAsync(request);
             return response.GetContent<RRF_ObjectModelResponse<T>>()
                 .Convert(r => r.Result);
         }

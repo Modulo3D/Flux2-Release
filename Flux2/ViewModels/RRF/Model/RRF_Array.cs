@@ -91,12 +91,9 @@ namespace Flux.ViewModels
         static async Task<bool> write_variable(RRF_ConnectionProvider connection_provider, string variable, VariableUnit unit, TData v, bool stored)
         {
             var connection = connection_provider.Connection;
-            if (!connection.HasValue)
-                return false;
-
             var s_value = sanitize_value(v);
             using var write_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            if (!await connection.Value.PostGCodeAsync(new[] { $"set global.{variable}_{unit.Address} = {s_value}" }, write_cts.Token))
+            if (!await connection.PostGCodeAsync(new[] { $"set global.{variable}_{unit.Address} = {s_value}" }, write_cts.Token))
             {
                 connection_provider.Flux.Messages.LogMessage($"Impossibile scrivere la variabile {variable}_{unit.Address}", "Errore durante l'esecuzione del gcode", MessageLevel.ERROR, 0);
                 return false;

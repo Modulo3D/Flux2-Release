@@ -28,7 +28,7 @@ namespace Flux.ViewModels
         public FluxViewModel Flux { get; }
         public OSAI_ConnectionProvider(FluxViewModel flux) : base(flux,
             OSAI_ConnectionPhase.START_PHASE, OSAI_ConnectionPhase.END_PHASE, p => (int)p,
-            c => new OSAI_MemoryBuffer(c), c => new OSAI_VariableStore(c))
+            c => new OSAI_VariableStore(c), c => new OSAI_Connection(flux, c), c => new OSAI_MemoryBuffer(c))
         {
             Flux = flux;
             Flux.MCodes.WhenAnyValue(c => c.OperatorUSB)
@@ -45,31 +45,8 @@ namespace Flux.ViewModels
                 {
                     // CONNECT TO PLC
                     case OSAI_ConnectionPhase.START_PHASE:
-                        var plc_connected = await connect_plc_async();
-                        if (plc_connected)
+                        if (await Connection.ConnectAsync())
                             ConnectionPhase = OSAI_ConnectionPhase.SELECT_BOOT_MODE;
-                        async Task<bool> connect_plc_async()
-                        {
-                            if (Connection.HasValue)
-                            {
-                                await Connection.Value.CloseAsync();
-                                Connection.Value.Dispose();
-                                Connection = default;
-                            }
-
-                            if (!Flux.NetProvider.PLCNetworkConnectivity)
-                                return false;
-
-                            var plc_address = Flux.SettingsProvider.CoreSettings.Local.PLCAddress;
-                            if (!plc_address.HasValue || string.IsNullOrEmpty(plc_address.Value))
-                            {
-                                Flux.Messages.LogMessage(OSAI_ConnectResponse.CONNECT_INVALID_ADDRESS);
-                                return false;
-                            }
-                            Connection = new OSAI_Connection(this, plc_address.Value);
-                            return true;
-                        }
-
                         break;
 
                     // INITIALIZE BOOT MODE
@@ -90,9 +67,7 @@ namespace Flux.ViewModels
                             StartConnection();
                         async Task<bool> wait_system_up()
                         {
-                            if (!Connection.HasValue)
-                                return false;
-                            return await Connection.Value.WaitBootPhaseAsync(
+                            return await Connection.WaitBootPhaseAsync(
                                 phase => phase == OSAI_BootPhase.SYSTEM_UP_PHASE,
                                 TimeSpan.FromSeconds(0),
                                 TimeSpan.FromSeconds(1),
@@ -137,7 +112,7 @@ namespace Flux.ViewModels
 
                     // REFERENCE ALL AXIS
                     case OSAI_ConnectionPhase.REFERENCE_AXES:
-                        var ref_axis = await Connection.ConvertOrAsync(c => c.AxesRefAsync('X', 'Y', 'Z', 'A'), () => false);
+                        var ref_axis = await Connection.AxesRefAsync('X', 'Y', 'Z', 'A');
                         if (ref_axis)
                             ConnectionPhase = OSAI_ConnectionPhase.READ_FULL_MEMORY;
                         else

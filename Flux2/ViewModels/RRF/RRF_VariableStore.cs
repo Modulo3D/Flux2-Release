@@ -126,47 +126,32 @@ namespace Flux.ViewModels
         protected async Task<bool> SetPlateTemperatureAsync(RRF_ConnectionProvider connection_provider, double temperature, VariableUnit unit)
         {
             var connection = connection_provider.Connection;
-            if (!connection.HasValue)
-                return false;
-
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-            return await connection.Value.PostGCodeAsync(new[] { $"M140 S{temperature}" }, cts.Token);
+            return await connection.PostGCodeAsync(new[] { $"M140 S{temperature}" }, cts.Token);
         }
         protected async Task<bool> SetChamberTemperatureAsync(RRF_ConnectionProvider connection_provider, double temperature, VariableUnit unit)
         {
             var connection = connection_provider.Connection;
-            if (!connection.HasValue)
-                return false;
-
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-            return await connection.Value.PostGCodeAsync(new[] { $"M141 P{unit.Index} S{temperature}" }, cts.Token);
+            return await connection.PostGCodeAsync(new[] { $"M141 P{unit.Index} S{temperature}" }, cts.Token);
         }
         protected async Task<bool> EnableDriverAsync(RRF_ConnectionProvider connection_provider, bool enable, VariableUnit unit)
         {
             var connection = connection_provider.Connection;
-            if (!connection.HasValue)
-                return false;
-
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-            return await connection.Value.PostGCodeAsync(new[] { $"{(enable ? "M17" : "M18")} {unit.Alias}" }, cts.Token);
+            return await connection.PostGCodeAsync(new[] { $"{(enable ? "M17" : "M18")} {unit.Alias}" }, cts.Token);
         }
         protected async Task<bool> SetToolTemperatureAsync(RRF_ConnectionProvider connection_provider, double temperature, VariableUnit unit)
         {
             var connection = connection_provider.Connection;
-            if (!connection.HasValue)
-                return false;
-
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-            return await connection.Value.PostGCodeAsync(new[] { $"M104 T{unit.Index} S{temperature}" }, cts.Token);
+            return await connection.PostGCodeAsync(new[] { $"M104 T{unit.Index} S{temperature}" }, cts.Token);
         }
         protected async Task<bool> WriteGpOutAsync(RRF_ConnectionProvider connection_provider, bool pwm, VariableUnit unit)
         {
             var connection = connection_provider.Connection;
-            if (!connection.HasValue)
-                return false;
-
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-            return await connection.Value.PostGCodeAsync(new[] { $"M42 P{unit.Address} S{(pwm ? 1 : 0)}" }, cts.Token);
+            return await connection.PostGCodeAsync(new[] { $"M42 P{unit.Address} S{(pwm ? 1 : 0)}" }, cts.Token);
         }
     }
 

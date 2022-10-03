@@ -20,8 +20,9 @@ namespace Flux.ViewModels
         public FluxViewModel Flux { get; }
         public Dummy_ConnectionProvider(FluxViewModel flux) : base(flux,
             Dummy_ConnectionPhase.Start, Dummy_ConnectionPhase.End, p => (int)p,
-            c => new Dummy_MemoryBuffer(c),
-            c => new Dummy_VariableStore(c))
+            c => new Dummy_VariableStore(c),
+            c => new Dummy_Connection(c),
+            c => new Dummy_MemoryBuffer(c))
         {
             Flux = flux;
         }
@@ -110,7 +111,7 @@ namespace Flux.ViewModels
         public override string InnerQueuePath => throw new NotImplementedException();
         public override bool ParkToolAfterOperation => throw new NotImplementedException();
 
-        public Dummy_Connection(Dummy_ConnectionProvider connection_provider) : base(connection_provider, default)
+        public Dummy_Connection(Dummy_ConnectionProvider connection_provider) : base(connection_provider)
         {
         }
 
@@ -312,6 +313,16 @@ namespace Flux.ViewModels
         }
 
         public override Optional<IEnumerable<string>> GetManualFilamentExtractGCode(ArrayIndex position, ushort iterations, double iteration_distance, double feedrate)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override Task<bool> ConnectAsync()
+        {
+            throw new NotImplementedException();
+        }
+
+        public override Task<bool> CloseAsync()
         {
             throw new NotImplementedException();
         }
