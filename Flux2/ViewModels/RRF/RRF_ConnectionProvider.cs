@@ -53,7 +53,7 @@ namespace Flux.ViewModels
                         break;
 
                     case RRF_ConnectionPhase.DISCONNECTING_CLIENT:
-                        await CreateTimeoutAsync(TimeSpan.FromSeconds(1), async ct =>
+                        await CreateTimeoutAsync(TimeSpan.FromSeconds(5), async ct =>
                         {
                             var request = new RRF_Request("rr_disconnect", Method.Get, RRF_RequestPriority.Immediate, ct);
                             var disconnected = await Connection.ExecuteAsync(request);
@@ -62,7 +62,7 @@ namespace Flux.ViewModels
                         break;
 
                     case RRF_ConnectionPhase.CONNECTING_CLIENT:
-                        await CreateTimeoutAsync(TimeSpan.FromSeconds(1), async ct =>
+                        await CreateTimeoutAsync(TimeSpan.FromSeconds(5), async ct =>
                         {
                             var request = new RRF_Request($"rr_connect?password=\"\"&time={DateTime.UtcNow:O}", Method.Get, RRF_RequestPriority.Immediate, ct);
                             var connected = await Connection.ExecuteAsync(request);

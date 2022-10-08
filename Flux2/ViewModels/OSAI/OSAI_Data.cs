@@ -288,20 +288,15 @@ namespace Flux.ViewModels
 
     public class OSAI_MCodeRecovery : IFLUX_MCodeRecovery
     {
-        public Guid MCodeGuid { get; }
-        public bool IsSelected { get; }
         public short ToolNumber { get; }
-        public BlockNumber StartBlock { get; }
-        public string FileName => $"{MCodeGuid}.{StartBlock}";
+        public MCodePartProgram PartProgram { get; }
         public Dictionary<ushort, double> Positions { get; }
         public Dictionary<ushort, double> Temperatures { get; }
 
-        public OSAI_MCodeRecovery(Guid mcode_guid, BlockNumber start_block, bool is_selected, short hold_tool, Dictionary<ushort, double> hold_temp, Dictionary<ushort, double> hold_pos)
+        public OSAI_MCodeRecovery(MCodePartProgram part_program, short hold_tool, Dictionary<ushort, double> hold_temp, Dictionary<ushort, double> hold_pos)
         {
+            PartProgram = part_program;
             Temperatures = hold_temp;
-            IsSelected = is_selected;
-            StartBlock = start_block;
-            MCodeGuid = mcode_guid;
             ToolNumber = hold_tool;
             Positions = hold_pos;
         }

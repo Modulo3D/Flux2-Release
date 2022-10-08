@@ -319,7 +319,7 @@ namespace Flux.ViewModels
 
                 var mcode_file = Path.GetFileName(parser.Files[0].FileName);
                 var mcode_name = Path.GetFileNameWithoutExtension(mcode_file);
-                if (!Guid.TryParse(mcode_name, out var mcode_guid))
+                if (!MCodeKey.TryParse(mcode_name, out var mcode_key))
                     return false;
 
                 var mcode_file_storage = Files.AccessFile(Directories.MCodes, mcode_file);

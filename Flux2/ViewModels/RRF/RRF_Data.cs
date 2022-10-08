@@ -1205,6 +1205,9 @@ namespace Flux.ViewModels
 
         private Optional<FLUX_FileList> _Storage;
         public Optional<FLUX_FileList> Storage { get => _Storage; set => this.RaiseAndSetIfChanged(ref _Storage, value); }
+
+        private Optional<FLUX_FileList> _Extrusions;
+        public Optional<FLUX_FileList> Extrusions { get => _Extrusions; set => this.RaiseAndSetIfChanged(ref _Extrusions, value); }
     }
 
     public class RRF_ObjectModelResponse<T>
@@ -1280,49 +1283,6 @@ namespace Flux.ViewModels
                 return default;
             }
         }
-
-        public static Optional<MCodePartProgram> GetPartProgram(this (RRF_ObjectModelJob job, RRF_ObjectModelGlobal global, FLUX_FileList storage, FLUX_FileList queue) data)
-        {
-            try
-            {
-                if (!data.global.TryGetValue("queue_pos", out var queue_pos_obj))
-                    return default;
-
-                var queue_pos = (QueuePosition)queue_pos_obj.ToObject<short>();
-                if (queue_pos.Value < 0)
-                    return default;
-
-                var job_queue = data.queue.GetJobDictionaryFromQueue();
-                if (!job_queue.TryGetValue(queue_pos.Value, out var current_job))
-                    return default;
-
-                var storage_dict = data.storage.GetPartProgramDictionaryFromStorage();
-                if (!storage_dict.ContainsKey(current_job.MCodeGuid))
-                    return default;
-
-                // Full part program from filename
-                var partprogram_filename = data.job.File
-                    .Convert(f => f.FileName)
-                    .ValueOrOptional(() => data.job.LastFileName)
-                    .ValueOr(() => "");
-
-                if (MCodePartProgram.TryParse(partprogram_filename, out var full_part_program) && 
-                    full_part_program.MCodeGuid == current_job.MCodeGuid)
-                { 
-                    if (storage_dict.TryGetValue(full_part_program.MCodeGuid, out var part_programs) &&
-                        part_programs.TryGetValue(full_part_program.StartBlock, out var part_program))
-                        return part_program;
-                }
-
-                return storage_dict.FirstOrOptional(kvp => kvp.Key == current_job.MCodeGuid)
-                    .Convert(p => p.Value.Values.FirstOrDefault());
-            }
-            catch
-            {
-                return default;
-            }
-        }
-
         public static async Task<Optional<IFLUX_MCodeRecovery>> GetMCodeRecoveryAsync(this FLUX_FileList files, RRF_ConnectionProvider connection_provider)
         {
             try
@@ -1346,7 +1306,7 @@ namespace Flux.ViewModels
                 if (!hold_mcode_partprogram.HasValue)
                     return default;
 
-                var hold_mcode_vm = connection.Flux.MCodes.AvaiableMCodes.Lookup(hold_mcode_partprogram.Value.MCodeGuid);
+                var hold_mcode_vm = connection.Flux.MCodes.AvaiableMCodes.Lookup(hold_mcode_partprogram.Value.MCodeKey);
                 if (!hold_mcode_vm.HasValue)
                     return default;
 
@@ -1372,12 +1332,12 @@ namespace Flux.ViewModels
                     return default;
 
                 var mcode_recovery = new RRF_MCodeRecovery(
-                    hold_mcode_partprogram.Value.MCodeGuid,
-                    hold_block_num.Value,
+                    new MCodePartProgram(hold_mcode_partprogram.Value.MCodeKey, hold_block_num.Value),
                     hold_tool.Value);
 
                 // upload file
-                if (!files.Files.Any(f => f.Name == mcode_recovery.FileName))
+                var recovery_uploaded = files.Files.Any(f => f.Name == $"{mcode_recovery.PartProgram}");
+                if (!recovery_uploaded)
                 {
                     // language=regex
                     var match_plates = "M140 P([+-]?[0-9]+) S([+-]?[0-9]*[.]?[0-9]+)";
@@ -1414,7 +1374,7 @@ namespace Flux.ViewModels
                     using var put_resurrect_cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
                     if (!await connection.PutFileAsync(
                         f => f.StoragePath,
-                        mcode_recovery.FileName,
+                        $"{mcode_recovery.PartProgram}",
                         true,
                         put_resurrect_cts.Token,
                         get_recovery_lines().ToOptional()))
@@ -1461,17 +1421,13 @@ namespace Flux.ViewModels
 
     public class RRF_MCodeRecovery : IFLUX_MCodeRecovery
     {
-        public bool IsSelected => true;
-        public Guid MCodeGuid { get; }
         public short ToolNumber { get; }
-        public BlockNumber StartBlock { get; }
-        public string FileName => $"{MCodeGuid}.{StartBlock.Value}";
+        public MCodePartProgram PartProgram { get; }
 
-        public RRF_MCodeRecovery(Guid mcode_guid, BlockNumber start_block, short tool_number)
+        public RRF_MCodeRecovery(MCodePartProgram part_program, short tool_number)
         {
-            MCodeGuid = mcode_guid;
-            StartBlock = start_block;
             ToolNumber = tool_number;
+            PartProgram = part_program;
         }
     }
 }

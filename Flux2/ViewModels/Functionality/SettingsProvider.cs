@@ -79,8 +79,8 @@ namespace Flux.ViewModels
             _ExtrudersCount = this.WhenAnyValue(v => v.Printer)
                 .Convert(p => 
                 {
-                    var machine_extruder_count = p[p => p.MachineExtruderCount, (ushort)0];
-                    var mixing_extruder_count = p[p => p.MixingExtruderCount, (ushort)0]; 
+                    var machine_extruder_count = p[p => p.MachineExtruderCount, 0];
+                    var mixing_extruder_count = p[p => p.MixingExtruderCount, 0]; 
                     return (machine_extruder_count, mixing_extruder_count);
                 })
                 .ToProperty(this, v => v.ExtrudersCount);

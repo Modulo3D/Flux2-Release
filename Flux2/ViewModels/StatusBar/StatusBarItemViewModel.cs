@@ -51,6 +51,8 @@ namespace Flux.ViewModels
                         return StatusBarState.Disabled;
                     if (s.Items.All(s => s.State == EConditionState.Hidden))
                         return StatusBarState.Hidden;
+                    if (s.Items.All(s => s.State == EConditionState.Idle))
+                        return StatusBarState.Idle;
                     return StatusBarState.Hidden;
                 })
                 .StartWith(StatusBarState.Disabled)
@@ -59,6 +61,7 @@ namespace Flux.ViewModels
             _StateBrush = this.WhenAnyValue(v => v.State)
                 .Select(state => state switch
                 {
+                    StatusBarState.Idle => FluxColors.Idle,
                     StatusBarState.Error => FluxColors.Error,
                     StatusBarState.Stable => FluxColors.Active,
                     StatusBarState.Warning => FluxColors.Warning,

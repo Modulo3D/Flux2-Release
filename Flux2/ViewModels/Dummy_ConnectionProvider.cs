@@ -70,7 +70,6 @@ namespace Flux.ViewModels
             CreateDummy(s => s.STORAGE);
             CreateDummy(s => s.MCODE_RECOVERY);
             CreateDummy(s => s.TOOL_NUM);
-            CreateDummy(s => s.PART_PROGRAM);
             CreateDummy(s => s.QUEUE);
             CreateDummy(s => s.TOOL_CUR);
             CreateDummy(s => s.PROCESS_STATUS);
@@ -108,6 +107,7 @@ namespace Flux.ViewModels
         public override ushort ArrayBase => throw new NotImplementedException();
         public override string StoragePath => throw new NotImplementedException();
         public override string PathSeparator => throw new NotImplementedException();
+        public override string ExtrusionPath => throw new NotImplementedException();
         public override string InnerQueuePath => throw new NotImplementedException();
         public override bool ParkToolAfterOperation => throw new NotImplementedException();
 
@@ -194,7 +194,7 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override Optional<IEnumerable<string>> GetStartPartProgramGCode(string folder, string file_name)
+        public override Optional<IEnumerable<string>> GetStartPartProgramGCode(FluxJob job)
         {
             throw new NotImplementedException();
         }

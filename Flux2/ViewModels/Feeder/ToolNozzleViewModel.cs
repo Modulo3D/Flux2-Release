@@ -131,8 +131,8 @@ namespace Flux.ViewModels
         {
             var has_tool_change = Flux.ConnectionProvider.HasToolChange;
 
-            var tool_cur = Flux.ConnectionProvider.ObserveVariable(m => m.TOOL_CUR)
-                .DistinctUntilChanged();
+            var tool_cur = Flux.ConnectionProvider
+                .ObserveVariable(m => m.TOOL_CUR);
 
             var in_idle = Flux.StatusProvider
                 .WhenAnyValue(s => s.StatusEvaluation)
@@ -140,8 +140,7 @@ namespace Flux.ViewModels
                 .DistinctUntilChanged();
 
             var in_change = Flux.ConnectionProvider.ObserveVariable(m => m.IN_CHANGE)
-                .ObservableOr(() => false)
-                .DistinctUntilChanged();
+                .ObservableOr(() => false);
 
             var in_change_error = Observable.CombineLatest(
                 in_idle,
@@ -149,32 +148,26 @@ namespace Flux.ViewModels
                 (in_idle, in_change) => in_idle && in_change);
 
             var inserted = this.WhenAnyValue(v => v.NozzleTemperature)
-                .ConvertOr(t => t.Current > -100 && t.Current < 1000, () => false)
-                .DistinctUntilChanged();
+                .ConvertOr(t => t.Current > -100 && t.Current < 1000, () => false);
 
             var mem_magazine_key = Flux.ConnectionProvider.GetArrayUnit(m => m.MEM_TOOL_IN_MAGAZINE, Position);
             var mem_magazine = Flux.ConnectionProvider
-                .ObserveVariable(m => m.MEM_TOOL_IN_MAGAZINE, mem_magazine_key)
-                .DistinctUntilChanged();
+                .ObserveVariable(m => m.MEM_TOOL_IN_MAGAZINE, mem_magazine_key);
 
             var mem_trailer_key = Flux.ConnectionProvider.GetArrayUnit(m => m.MEM_TOOL_ON_TRAILER, Position);
             var mem_trailer = Flux.ConnectionProvider
-                .ObserveVariable(m => m.MEM_TOOL_ON_TRAILER, mem_trailer_key)
-                .DistinctUntilChanged();
+                .ObserveVariable(m => m.MEM_TOOL_ON_TRAILER, mem_trailer_key);
 
             var input_magazine_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TOOL_IN_MAGAZINE, Position);
             var input_magazine = Flux.ConnectionProvider
-                .ObserveVariable(m => m.TOOL_IN_MAGAZINE, input_magazine_key)
-                .DistinctUntilChanged();
+                .ObserveVariable(m => m.TOOL_IN_MAGAZINE, input_magazine_key);
 
             var input_trailer_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TOOL_ON_TRAILER, Position);
             var input_trailer = Flux.ConnectionProvider
-                .ObserveVariable(m => m.TOOL_ON_TRAILER, input_trailer_key)
-                .DistinctUntilChanged();
+                .ObserveVariable(m => m.TOOL_ON_TRAILER, input_trailer_key);
 
             var known = this.WhenAnyValue(v => v.Document)
-                .Select(document => document.tool.HasValue && document.nozzle.HasValue)
-                .DistinctUntilChanged();
+                .Select(document => document.tool.HasValue && document.nozzle.HasValue);
 
             var printer_guid = Flux.SettingsProvider.CoreSettings.Local.PrinterGuid;
 

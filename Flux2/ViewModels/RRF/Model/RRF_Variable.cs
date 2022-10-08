@@ -122,7 +122,7 @@ namespace Flux.ViewModels
 
         static string sanitize_value(TData value)
         {
-            return typeof(TData) == typeof(string) ? $"\"{value}\"" : $"{value:0.00}"
+            return typeof(TData) == typeof(string) || typeof(TData) == typeof(CardId) ? $"\"{value}\"" : $"{value:0.00}"
                 .ToLower()
                 .Replace(',', '.');
         }

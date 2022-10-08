@@ -92,6 +92,7 @@ namespace Flux.ViewModels
     {
         public override bool ParkToolAfterOperation => false;
         public override string InnerQueuePath => "gcodes/queue/inner";
+        public override string ExtrusionPath => "gcodes/events/extr";
         public override string StoragePath => "gcodes/storage";
         public override string QueuePath => "gcodes/queue";
         public override string PathSeparator => "/";
@@ -101,13 +102,11 @@ namespace Flux.ViewModels
         public override ushort ArrayBase => 0;
 
         public FluxViewModel Flux { get; }
-        public RRF_ConnectionProvider ConnectionProvider { get; }
         private PriorityQueueNotifierUC<RRF_RequestPriority, RRF_Request> Requests { get; }
 
         public RRF_Connection(FluxViewModel flux, RRF_ConnectionProvider connection_provider) : base(connection_provider)
         {
             Flux = flux;
-            ConnectionProvider = connection_provider;
 
             var values = ((RRF_RequestPriority[])Enum.GetValues(typeof(RRF_RequestPriority)))
                 .OrderByDescending(e => (ushort)e);
@@ -119,8 +118,14 @@ namespace Flux.ViewModels
 
         public async Task<RRF_Response> ExecuteAsync(RRF_Request rrf_request)
         {
-            Requests.Enqueue(rrf_request.Priority, rrf_request);
-            return await rrf_request.Response.Task;
+            using (rrf_request.CancellationToken.Register(() =>
+                rrf_request.Response.TrySetResult(default)))
+            { 
+                if (!Client.HasValue)
+                    return default;
+                Requests.Enqueue(rrf_request.Priority, rrf_request);
+                return await rrf_request.Response.Task;
+            }
         }
         private async Task TryDequeueAsync()
         {
@@ -167,6 +172,10 @@ namespace Flux.ViewModels
                     return Task.FromResult(true);
                 Client.Value.Dispose();
                 Client = null;
+
+                while (Requests.TryDequeu(out var rrf_request))
+                    rrf_request.Response.TrySetResult(default);
+
                 return Task.FromResult(true);
             }
             catch
@@ -633,7 +642,7 @@ namespace Flux.ViewModels
                         return false;
                     }
 
-                    var list_req = new RRF_Request($"/rr_filelist?dir=0:/{folder}", Method.Get, RRF_RequestPriority.Immediate, ct);
+                    var list_req = new RRF_Request($"rr_filelist?dir=0:/{folder}", Method.Get, RRF_RequestPriority.Immediate, ct);
                     var list_res = await ExecuteAsync(list_req);
                     var file_list = list_res.GetContent<FLUX_FileList>();
                     if (!file_list.HasValue)
@@ -840,9 +849,18 @@ namespace Flux.ViewModels
                 "T-1"
             };
         }
-        public override Optional<IEnumerable<string>> GetStartPartProgramGCode(string folder, string file_name)
+        public override Optional<IEnumerable<string>> GetStartPartProgramGCode(FluxJob job)
         {
-            return new[] { $"M32 {folder}/{file_name}" };
+            var extrusion_a = Flux.Feeders.Feeders.Lookup(0).Convert(f => f.ExtrusionKey).ConvertOrDefault(e => $"{e}");
+            var extrusion_b = Flux.Feeders.Feeders.Lookup(1).Convert(f => f.ExtrusionKey).ConvertOrDefault(e => $"{e}");
+            var extrusion_c = Flux.Feeders.Feeders.Lookup(2).Convert(f => f.ExtrusionKey).ConvertOrDefault(e => $"{e}");
+            var extrusion_d = Flux.Feeders.Feeders.Lookup(3).Convert(f => f.ExtrusionKey).ConvertOrDefault(e => $"{e}");
+            return new[]
+            {
+                "M98 P\"/macros/extr/reset\"",
+                $"M98 P\"/macros/extr/start\" A\"{extrusion_a}\" B\"{extrusion_b}\" C\"{extrusion_c}\" D\"{extrusion_d}\" J\"{job.JobKey}\"",
+                $"M32 \"0:/{StoragePath}/{job.PartProgram}\""
+            };
         }
         public override Optional<IEnumerable<string>> GetSetToolTemperatureGCode(ArrayIndex position, double temperature)
         {

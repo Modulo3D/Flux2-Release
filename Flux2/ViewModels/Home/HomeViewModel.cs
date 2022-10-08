@@ -77,7 +77,7 @@ namespace Flux.ViewModels
 
         private IHomePhaseViewModel GetHomeViewModel(StatusEvaluation status_eval, StartEvaluation start_eval, PrintingEvaluation printing_eval)
         {
-            if (!printing_eval.SelectedMCode.HasValue)
+            if (!printing_eval.CurrentMCode.HasValue)
                 return WelcomePhase;
 
             if (start_eval.HasInvalidPrinter)
@@ -105,7 +105,7 @@ namespace Flux.ViewModels
                     return PreparePrintPhase;
             }
 
-            if (printing_eval.Recovery.HasValue)
+            if (printing_eval.CurrentRecovery.HasValue)
                 if (start_eval.HasColdNozzles)
                     return ColdNozzlesPhase;
 

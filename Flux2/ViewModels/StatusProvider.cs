@@ -76,33 +76,13 @@ namespace Flux.ViewModels
         }
     }
 
-    public struct OdometerExtrusions
-    {
-        public Optional<Guid> MCodeGuid { get; }
-        public Optional<PrintProgress> PrintProgress { get; }
-        public Optional<QueuePosition> QueuePosition { get; }
-        public Optional<Dictionary<ushort, Extrusion>> Extrusions { get; }
-
-        public OdometerExtrusions(Optional<Guid> mcode_guid, Optional<QueuePosition> queue_pos, Optional<PrintProgress> progress, Dictionary<ushort, Extrusion> extrusions)
-        {
-            MCodeGuid = mcode_guid;
-            Extrusions = extrusions;
-            PrintProgress = progress;
-            QueuePosition = queue_pos;
-        }
-    }
-
     public class StatusProvider : ReactiveObject, IFluxStatusProvider
     {
         public FluxViewModel Flux { get; }
         public ConditionStateCreator StateCreator { get; }
-
-        private ObservableAsPropertyHelper<OdometerExtrusions> _OdometerExtrusions;
-        public OdometerExtrusions OdometerExtrusions => _OdometerExtrusions.Value;
-
         public IObservableCache<FeederEvaluator, ushort> FeederEvaluators { get; private set; }
-        public IObservableList<Dictionary<FluxJob, Material>> ExpectedMaterialsQueue { get; private set; }
-        public IObservableList<Dictionary<FluxJob, Nozzle>> ExpectedNozzlesQueue { get; private set; }
+        public IObservableList<Optional<DocumentQueue<Material>>> ExpectedMaterialsQueue { get; private set; }
+        public IObservableList<Optional<DocumentQueue<Nozzle>>> ExpectedNozzlesQueue { get; private set; }
 
         private bool _StartWithLowMaterials;
         public bool StartWithLowMaterials
@@ -126,11 +106,9 @@ namespace Flux.ViewModels
         private ObservableAsPropertyHelper<StartEvaluation> _StartEvaluation;
         public StartEvaluation StartEvaluation => _StartEvaluation.Value;
 
-        private ObservableAsPropertyHelper<Optional<Dictionary<FluxJob, Dictionary<ushort, Extrusion>>>> _ExtrusionSetQueue;
-        public Optional<Dictionary<FluxJob, Dictionary<ushort, Extrusion>>> ExtrusionSetQueue => _ExtrusionSetQueue.Value;
-
         [PrintCondition]
         [CycleCondition]
+        [StatusBarCondition]
         public Optional<IConditionViewModel> ClampCondition
         {
             get 
@@ -138,13 +116,15 @@ namespace Flux.ViewModels
                 if (!_ClampCondition.HasValue)
                 {
                     var clamp_open = OptionalObservable.CombineLatestOptionalOr(
+                         Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS).ToOptional(),
+                        Flux.ConnectionProvider.ObserveVariable(m => m.IN_CHANGE),
                         Flux.ConnectionProvider.ObserveVariable(m => m.TOOL_CUR).ToOptional(),
                         Flux.ConnectionProvider.ObserveVariable(m => m.OPEN_HEAD_CLAMP),
-                        (tool_cur, open) => (tool_cur, open), () => (tool_cur:(ArrayIndex)(-1), open:false));
+                        (status, in_change, tool_cur, open) => (status, in_change, tool_cur, open), 
+                        () => (status: FLUX_ProcessStatus.NONE, in_change: false, tool_cur: (ArrayIndex)(-1), open:false));
 
                     var is_idle = Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS)
                         .Convert(data => data == FLUX_ProcessStatus.IDLE)
-                        .DistinctUntilChanged()
                         .ValueOr(() => false);
 
                     _ClampCondition = ConditionViewModel.Create(this, "clamp", clamp_open,
@@ -152,9 +132,22 @@ namespace Flux.ViewModels
                         {
                             var tool_cur = value.tool_cur.GetZeroBaseIndex();
                             var toggle_clamp = state.Create("clamp", c => c.OPEN_HEAD_CLAMP, is_idle);
-                            if (!value.open || tool_cur < 0)
-                                return state.Create(EConditionState.Stable, "PINZA OK", toggle_clamp); 
-                            return state.Create(EConditionState.Error, "CHIUDERE LA PINZA", toggle_clamp);
+                            
+                            if(value.in_change && value.status == FLUX_ProcessStatus.CYCLE)
+                                return state.Create(EConditionState.Idle, "");
+
+                            if (value.open)
+                            {
+                                if (tool_cur == -1)
+                                    return state.Create(EConditionState.Stable, "PINZA OK", toggle_clamp);
+                                return state.Create(EConditionState.Error, "PINZA APERTA CON UTENSILE SELEZIONATO");
+                            }
+                            else
+                            {
+                                if(tool_cur > -1)
+                                    return state.Create(EConditionState.Stable, "PINZA OK", toggle_clamp);
+                                return state.Create(EConditionState.Error, "PINZA CHIUSA SENZA UTENSILE SELEZIONATO");
+                            }
                         });
                 }
                 return _ClampCondition;
@@ -175,9 +168,9 @@ namespace Flux.ViewModels
                 {
                     _LockClosedConditions = new SourceCache<IConditionViewModel, string>(c => c.ConditionName);
 
-                    var is_idle = Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS)
+                    var is_idle = Flux.ConnectionProvider
+                        .ObserveVariable(m => m.PROCESS_STATUS)
                        .Convert(data => data == FLUX_ProcessStatus.IDLE)
-                       .DistinctUntilChanged()
                        .ValueOr(() => false);
 
                     var lock_units = Flux.ConnectionProvider.GetArrayUnits(c => c.LOCK_CLOSED);
@@ -375,9 +368,9 @@ namespace Flux.ViewModels
                         Flux.ConnectionProvider.ObserveVariable(m => m.ENABLE_VACUUM),
                         (pressure, level, enable) => (pressure, level, enable), () => (new Pressure(0), 0, false));
 
-                    var is_idle = Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS)
+                    var is_idle = Flux.ConnectionProvider
+                        .ObserveVariable(m => m.PROCESS_STATUS)
                         .Convert(data => data == FLUX_ProcessStatus.IDLE)
-                        .DistinctUntilChanged()
                         .ValueOr(() => false);
 
                     _VacuumCondition = ConditionViewModel.Create(this, "vacuum", vacuum,
@@ -428,7 +421,8 @@ namespace Flux.ViewModels
             {
                 if (!_HasZBedHeight.HasValue)
                 {
-                    var z_bed_height = Flux.ConnectionProvider.ObserveVariable(m => m.Z_BED_HEIGHT)
+                    var z_bed_height = Flux.ConnectionProvider
+                        .ObserveVariable(m => m.Z_BED_HEIGHT)
                         .ValueOr(() => FluxViewModel.MaxZBedHeight);
 
                     _HasZBedHeight = ConditionViewModel.Create(this, "hasZBedHeight", z_bed_height,
@@ -457,9 +451,9 @@ namespace Flux.ViewModels
                 {
                     _LockOpenCondition = new SourceCache<IConditionViewModel, string>(c => c.ConditionName);
 
-                    var is_idle = Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS)
+                    var is_idle = Flux.ConnectionProvider
+                        .ObserveVariable(m => m.PROCESS_STATUS)
                        .Convert(data => data == FLUX_ProcessStatus.IDLE)
-                       .DistinctUntilChanged()
                        .ValueOr(() => false);
 
                     var lock_units = Flux.ConnectionProvider.GetArrayUnits(c => c.LOCK_CLOSED);
@@ -610,51 +604,58 @@ namespace Flux.ViewModels
                 .AsObservableCache();
 
             ExpectedMaterialsQueue = FeederEvaluators.Connect()
-                .RemoveKey()
                 .Transform(f => f.Material)
-                .AutoRefresh(f => f.ExpectedDocumentQueue)
-                .Transform(f => f.ExpectedDocumentQueue, true)
-                .Filter(m => m.HasValue)
-                .Transform(m => m.Value)
+                .AutoTransform(f => f.ExpectedDocumentQueue)
+                .RemoveKey()
                 .AsObservableList();
 
             ExpectedNozzlesQueue = FeederEvaluators.Connect()
-                .RemoveKey()
                 .Transform(f => f.ToolNozzle)
-                .AutoRefresh(f => f.ExpectedDocumentQueue)
-                .Transform(f => f.ExpectedDocumentQueue, true)
-                .Filter(m => m.HasValue)
-                .Transform(m => m.Value)
+                .AutoTransform(f => f.ExpectedDocumentQueue)
+                .RemoveKey()
                 .AsObservableList();
 
             var core_settings = Flux.SettingsProvider.CoreSettings.Local;
 
-            var selected_part_program = Flux.ConnectionProvider
-                .ObserveVariable(m => m.PART_PROGRAM)
-                .DistinctUntilChanged()
+            var queue_pos = Flux.ConnectionProvider
+                .ObserveVariable(m => m.QUEUE_POS)
                 .StartWithDefault();
 
-            var selected_guid = selected_part_program
-                .Convert(pp => pp.MCodeGuid)
-                .DistinctUntilChanged()
+            var queue = Flux.ConnectionProvider
+                .ObserveVariable(m => m.QUEUE)
                 .StartWithDefault();
 
-            var selected_mcode =  Flux.MCodes.AvaiableMCodes.Connect()
+            var current_job = Observable.CombineLatest(
+                queue_pos, queue, (queue_pos, queue) =>
+                {
+                    if (!queue.HasValue)
+                        return default;
+                    if (!queue_pos.HasValue)
+                        return default;
+                    if (queue_pos.Value == -1)
+                        return queue.Value.Lookup(0);
+                    return queue.Value.Lookup(queue_pos.Value);
+                });
+
+            var current_mcode_key = current_job
+                .Convert(j => j.PartProgram.MCodeKey);
+
+            var current_mcode =  Flux.MCodes.AvaiableMCodes.Connect()
                 .AutoRefresh(m => m.Analyzer)
-                .WatchOptional(selected_guid)
+                .WatchOptional(current_mcode_key)
                 .Convert(m => m.Analyzer)
                 .Convert(a => a.MCode)
                 .StartWithDefault()
                 .DistinctUntilChanged();
 
-            var is_idle = Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS)
+            var is_idle = Flux.ConnectionProvider
+                .ObserveVariable(m => m.PROCESS_STATUS)
                 .Convert(data => data == FLUX_ProcessStatus.IDLE)
-                .DistinctUntilChanged()
                 .ValueOr(() => false);
 
-            var is_cycle = Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS)
+            var is_cycle = Flux.ConnectionProvider
+                .ObserveVariable(m => m.PROCESS_STATUS)
                 .Convert(data => data == FLUX_ProcessStatus.CYCLE)
-                .DistinctUntilChanged()
                 .ValueOr(() => false);
 
             var start_with_low_materials = this.WhenAnyValue(s => s.StartWithLowMaterials);
@@ -691,7 +692,7 @@ namespace Flux.ViewModels
             
             var has_invalid_printer = Observable.CombineLatest(
                 core_settings.WhenAnyValue(v => v.PrinterID),
-                selected_mcode,
+                current_mcode,
                 (printer_id, selected_mcode) => !selected_mcode.HasValue || selected_mcode.Value.PrinterId != printer_id);
             
             _StartEvaluation = Observable.CombineLatest(
@@ -712,35 +713,16 @@ namespace Flux.ViewModels
                 .StartWithDefault()
                 .DistinctUntilChanged();
 
-            var queue_pos = Flux.ConnectionProvider
-             .ObserveVariable(c => c.QUEUE_POS)
-             .DistinctUntilChanged();
-
-            bool distinct_queue(Dictionary<QueuePosition, FluxJob> d1, Dictionary<QueuePosition, FluxJob> d2)
-            {
-                if (d1.Count != d2.Count)
-                    return false;
-                foreach (var j1 in d1)
-                {
-                    if (!d2.TryGetValue(j1.Key, out var j2))
-                        return false;
-                    if (!j1.Value.Equals(j2))
-                        return false;
-                }
-                return true;
-            }
-
             _PrintingEvaluation = Observable.CombineLatest(
-                queue_pos,
-                selected_mcode,
+                current_job,
+                current_mcode,
                 recovery,
-                selected_part_program,
                 PrintingEvaluation.Create)
                 .DistinctUntilChanged()
                 .ToProperty(this, v => v.PrintingEvaluation);
 
-            var is_homed = Flux.ConnectionProvider.ObserveVariable(m => m.IS_HOMED)
-                .DistinctUntilChanged()
+            var is_homed = Flux.ConnectionProvider
+                .ObserveVariable(m => m.IS_HOMED)
                 .ValueOr(() => false);
 
             var has_safe_state = Observable.CombineLatest(
@@ -748,8 +730,7 @@ namespace Flux.ViewModels
                 Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS),
                 Flux.Feeders.WhenAnyValue(f => f.HasInvalidStates),
                 HasSafeState)
-                .StartWith(false)
-                .DistinctUntilChanged();
+                .StartWith(false);
 
             var can_safe_cycle = Observable.CombineLatest(
                 is_idle,
@@ -780,14 +761,14 @@ namespace Flux.ViewModels
                 .StartWith(false)
                 .DistinctUntilChanged();
 
-            var is_enabled_axis = Flux.ConnectionProvider.ObserveVariable(m => m.ENABLE_DRIVERS)
+            var is_enabled_axis = Flux.ConnectionProvider
+                .ObserveVariable(m => m.ENABLE_DRIVERS)
                 .QueryWhenChanged(e =>
                 {
                     if (e.Items.Any(e => !e.HasValue))
                         return Optional<bool>.None;
                     return e.Items.All(e => e.Value);
                 })
-                .DistinctUntilChanged()
                 .ValueOr(() => false);
 
             _StatusEvaluation = Observable.CombineLatest(
@@ -819,158 +800,20 @@ namespace Flux.ViewModels
 
             var sample_print_progress = Observable.CombineLatest(
                 is_cycle,
-                selected_mcode,
+                current_mcode,
                 Observable.Interval(TimeSpan.FromSeconds(5)).StartWith(0),
                 (_, _, _) => Unit.Default);
 
             var print_progress = this.WhenAnyValue(c => c.PrintProgress)
                 .Sample(sample_print_progress)
                 .DistinctUntilChanged();
-
-            _OdometerExtrusions = Observable.CombineLatest(
-                database,
-                print_progress,
-                queue_pos,
-                selected_mcode,
-                (database, progress, queue_pos, selected_mcode) => Observable.FromAsync(async () =>
-                {
-                    var extrusion_set = new Dictionary<ushort, Extrusion>();
-
-                    if (!database.HasValue)
-                        return new OdometerExtrusions(default, queue_pos, progress, extrusion_set);
-
-                    if (!selected_mcode.HasValue || !queue_pos.HasValue)
-                        return new OdometerExtrusions(default, queue_pos, progress, extrusion_set);
-
-                    if (progress.Percentage > 0)
-                    {
-                        foreach (var feeder_report in selected_mcode.Value.FeederReports)
-                        {
-                            var extrusion_unit = Flux.ConnectionProvider.GetArrayUnit(c => c.EXTRUSIONS, feeder_report.Key);
-                            var extrusion = await Flux.ConnectionProvider.ReadVariableAsync(c => c.EXTRUSIONS, extrusion_unit);
-                            if (!extrusion.HasValue)
-                                continue;
-
-                            var nozzle_result = database.Value.FindById<Nozzle>(feeder_report.Value.NozzleId);
-                            if (!nozzle_result.HasDocuments)
-                                continue;
-
-                            var material_result = database.Value.FindById<Material>(feeder_report.Value.MaterialId);
-                            if (!material_result.HasDocuments)
-                                continue;
-
-                            var nozzle = nozzle_result.Documents.FirstOrDefault();
-                            var material = material_result.Documents.FirstOrDefault();
-
-                            extrusion_set[extrusion_unit.Value.Index] = Extrusion.CreateExtrusion(nozzle, material, extrusion.Value);
-                        }
-                    }
-
-                    return new OdometerExtrusions(selected_mcode.Value.MCodeGuid, queue_pos, progress, extrusion_set);
-                }))
-                .Switch()
-                .StartWith(new OdometerExtrusions())
-                .ToProperty(this, v => v.OdometerExtrusions);
-
-            var extrusion_set = this.WhenAnyValue(v => v.OdometerExtrusions);
-            extrusion_set.PairWithPreviousValue()
-                .Subscribe(async extrusions =>
-                {
-                    if (!extrusions.OldValue.QueuePosition.HasValue)
-                        return;
-                    if (!extrusions.NewValue.QueuePosition.HasValue)
-                        return;
-                    if (extrusions.OldValue.QueuePosition != extrusions.NewValue.QueuePosition)
-                        return;
-
-                    if (!extrusions.OldValue.MCodeGuid.HasValue)
-                        return;
-                    if (!extrusions.NewValue.MCodeGuid.HasValue)
-                        return;
-                    if (extrusions.OldValue.MCodeGuid.Value != extrusions.NewValue.MCodeGuid.Value)
-                        return;
-
-                    if (!extrusions.OldValue.PrintProgress.HasValue)
-                        return;
-                    if (!extrusions.NewValue.PrintProgress.HasValue)
-                        return;
-                    if (extrusions.NewValue.PrintProgress.Value.Percentage <= extrusions.OldValue.PrintProgress.Value.Percentage)
-                        return;
-
-                    if (!extrusions.OldValue.Extrusions.HasValue)
-                        return;
-                    if (!extrusions.NewValue.Extrusions.HasValue)
-                        return;
-
-                    var feeders = Flux.Feeders.Feeders;
-                    foreach (var feeder in feeders.Items)
-                    {
-                        var start_extr = extrusions.OldValue.Extrusions.Value.Lookup(feeder.Position);
-                        if (!start_extr.HasValue)
-                            continue;
-
-                        var end_extr = extrusions.NewValue.Extrusions.Value.Lookup(feeder.Position);
-                        if (!end_extr.HasValue)
-                            continue;
-
-                        var extrusion_diff = end_extr.Value - start_extr.Value;
-                        if (extrusion_diff.WeightG > 0)
-                        {
-                            Flux.Logger.LogInformation(new EventId(0, $"extr_{feeder.Position}"), $"{extrusion_diff}");
-
-                            feeder.ToolNozzle.Odometer.AccumulateValue(extrusion_diff);
-                            if (feeder.SelectedMaterial.HasValue)
-                            { 
-                                feeder.SelectedMaterial.Value.Odometer.AccumulateValue(extrusion_diff);
-
-                                if (!feeder.SelectedMaterial.Value.Odometer.Value.HasValue)
-                                    continue;
-
-                                if (feeder.SelectedMaterial.Value.Odometer.Percentage > 0)
-                                    continue;
-
-                                var user_settings = flux.SettingsProvider.UserSettings.Local;
-                                if (!user_settings.SoftwareFilamentSensor.HasValue)
-                                    continue;
-
-                                if (!user_settings.SoftwareFilamentSensor.Value)
-                                    continue;
-
-                                await Flux.ConnectionProvider.HoldAsync(true);
-                            }
-                        }
-                    }
-                });
-
-            var mcode_queue = Flux.ConnectionProvider
-                .ObserveVariable(c => c.QUEUE)
-                .ValueOr(() => new Dictionary<QueuePosition, FluxJob>())
-                .StartWith(new Dictionary<QueuePosition, FluxJob>())
-                .DistinctUntilChanged(distinct_queue);
-
-            var mcode_analyzers = Flux.MCodes.AvaiableMCodes.Connect()
-                .AutoRefresh(m => m.Analyzer)
-                .QueryWhenChanged(m => m.KeyValues.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.Analyzer))
-                .StartWith(new Dictionary<Guid, Optional<MCodeAnalyzer>>())
-                .DistinctUntilChanged();
-
-            _ExtrusionSetQueue = Observable.CombineLatest(
-                mcode_queue,
-                extrusion_set,
-                mcode_analyzers,
-                GetExtrusionSetQueue)
-                .StartWith(new Dictionary<FluxJob, Dictionary<ushort, Extrusion>>())
-                .DistinctUntilChanged()
-                .ToProperty(this, v => v.ExtrusionSetQueue);
         }
 
         public void Initialize()
         {
             // Status with messages
-            var messages = Flux.Messages.Messages
-                .Connect()
-                .StartWithEmpty()
-                .QueryWhenChanged();
+            var messages = Flux.Messages
+                .WhenAnyValue(m => m.MessageCounter);
 
             _FluxStatus = Observable.CombineLatest(
                 messages,
@@ -979,7 +822,6 @@ namespace Flux.ViewModels
                 Flux.Navigator.WhenAnyValue(nav => nav.CurrentViewModel),
                 Flux.ConnectionProvider.WhenAnyValue(c => c.IsConnecting),
                 FindFluxStatus)
-                .DistinctUntilChanged()
                 .ToProperty(this, s => s.FluxStatus);
         }
 
@@ -1041,7 +883,7 @@ namespace Flux.ViewModels
         }
 
         private FLUX_ProcessStatus FindFluxStatus(
-            IReadOnlyCollection<IFluxMessage> messages,
+            MessageCounter messages,
             Optional<FLUX_ProcessStatus> status,
             PrintingEvaluation printing_eval,
             Optional<IFluxRoutableViewModel> current_vm,
@@ -1056,12 +898,10 @@ namespace Flux.ViewModels
             if (is_connecting)
                 return FLUX_ProcessStatus.NONE;
 
-            var has_emerg = messages.Any(message => message.Level == MessageLevel.EMERG);
-            if (has_emerg)
+            if (messages.EmergencyMessagesCount > 0)
                 return FLUX_ProcessStatus.EMERG;
 
-            var has_error = messages.Any(message => message.Level == MessageLevel.ERROR);
-            if (has_error)
+            if (messages.ErrorMessagesCount > 0)
                 return FLUX_ProcessStatus.ERROR;
 
             switch (status.Value)
@@ -1069,9 +909,9 @@ namespace Flux.ViewModels
                 case FLUX_ProcessStatus.IDLE:
                     if (current_vm.HasValue && current_vm.Value is IOperationViewModel)
                         return FLUX_ProcessStatus.WAIT;
-                    if (printing_eval.Recovery.HasValue)
+                    if (printing_eval.CurrentRecovery.HasValue)
                         return FLUX_ProcessStatus.WAIT;
-                    if (printing_eval.SelectedMCode.HasValue)
+                    if (printing_eval.CurrentMCode.HasValue)
                         return FLUX_ProcessStatus.WAIT;
                     return FLUX_ProcessStatus.IDLE;
 
@@ -1101,23 +941,27 @@ namespace Flux.ViewModels
         // Progress and extrusion
         private PrintProgress GetPrintProgress(PrintingEvaluation evaluation, Optional<ParamacroProgress> progress)
         {
-            var selected_mcode = evaluation.SelectedMCode;
-            if (!selected_mcode.HasValue)
+            var current_mcode = evaluation.CurrentMCode;
+            if (!current_mcode.HasValue)
                 return new PrintProgress(0, TimeSpan.Zero);
             
-            var duration = selected_mcode.Value.Duration;
+            var duration = current_mcode.Value.Duration;
             
-            var selected_partprogram = evaluation.SelectedPartProgram;
-            if (!selected_partprogram.HasValue)
+            var current_job = evaluation.CurrentJob;
+            if (!current_job.HasValue)
                 return new PrintProgress(0, duration);
 
             if (!progress.HasValue)
                 return PrintProgress;
 
-            if (!MCodePartProgram.TryParse(progress.Value.Paramacro, out var part_program))
+            var paramacro_name = progress.Value.Paramacro.Split(new[] { '\\', '/' },
+                StringSplitOptions.RemoveEmptyEntries)
+                .LastOrDefault();
+
+            if (!MCodePartProgram.TryParse(paramacro_name, out var part_program))
                 return PrintProgress;
 
-            if (part_program.MCodeGuid != selected_partprogram.Value.MCodeGuid)
+            if (!part_program.Equals(current_job.Value.PartProgram))
                 return PrintProgress;
 
             var remaining_percentage = 100 - progress.Value.Percentage;
@@ -1128,55 +972,9 @@ namespace Flux.ViewModels
         {
             foreach (var feeder in query.Items)
             {
-                var evaluator = new FeederEvaluator(this, feeder);
+                var evaluator = new FeederEvaluator(Flux, feeder);
                 evaluator.Initialize();
                 yield return evaluator;
-            }
-        }
-        private Optional<Dictionary<FluxJob, Dictionary<ushort, Extrusion>>> GetExtrusionSetQueue(Dictionary<QueuePosition, FluxJob> job_queue, OdometerExtrusions odometer_extrusion, Dictionary<Guid, Optional<MCodeAnalyzer>> mcode_analyzers)
-        {
-
-            try
-            {
-                if (!odometer_extrusion.QueuePosition.HasValue)
-                    return default;
-                if (!odometer_extrusion.MCodeGuid.HasValue)
-                    return default;
-                if (!odometer_extrusion.Extrusions.HasValue)
-                    return default;
-
-                var extrusion_set_queue = new Dictionary<FluxJob, Dictionary<ushort, Extrusion>>();
-                foreach (var job in job_queue.Values)
-                {
-                    if (job.QueuePosition < odometer_extrusion.QueuePosition.Value)
-                        continue;
-
-                    var mcode_analyzer = mcode_analyzers.LookupOptional(job.MCodeGuid);
-                    if (!mcode_analyzer.HasValue)
-                        continue;
-
-                    // copy extrusion set
-                    var extrusion_set = new Dictionary<ushort, Extrusion>();
-                    foreach (var extrusion in mcode_analyzer.Value.Extrusions)
-                        extrusion_set.Add(extrusion.Key, extrusion.Value);
-
-                    // remove odometer extrusion set from extrusion set
-                    if (odometer_extrusion.MCodeGuid.Value == job.MCodeGuid &&
-                        odometer_extrusion.QueuePosition.Value == job.QueuePosition)
-                    {
-                        foreach (var extrusion in odometer_extrusion.Extrusions.Value)
-                            if (extrusion_set.ContainsKey(extrusion.Key))
-                                extrusion_set[extrusion.Key] -= extrusion.Value;
-                    }
-
-                    extrusion_set_queue.Add(job, extrusion_set);
-                }
-                return extrusion_set_queue;
-            }
-            catch (Exception ex)
-            {
-                Flux.Messages.LogException(this, ex);
-                return default;
             }
         }
     }

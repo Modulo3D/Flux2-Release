@@ -62,9 +62,9 @@ namespace Flux.ViewModels
 
         static string sanitize_value(TData value)
         {
-            return $"{value:0.00}"
-                .ToLower()
-                .Replace(',', '.');
+            return typeof(TData) == typeof(string) || typeof(TData) == typeof(CardId) ? $"\"{value}\"" : $"{value:0.00}"
+                 .ToLower()
+                 .Replace(',', '.');
         }
 
         static IObservable<Optional<TData>> observe_func(RRF_ConnectionProvider connection, string variable, VariableUnit unit, Func<object, TData> convert_data)

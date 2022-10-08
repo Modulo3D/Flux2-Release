@@ -19,6 +19,7 @@ namespace Flux.ViewModels
         Warning,
         Stable,
         Disabled,
+        Idle,
         Hidden
     }
 
@@ -79,6 +80,7 @@ namespace Flux.ViewModels
 
             StateBrush = state switch
             {
+                EConditionState.Idle => FluxColors.Idle,
                 EConditionState.Error => FluxColors.Error,
                 EConditionState.Stable => FluxColors.Selected,
                 EConditionState.Warning => FluxColors.Warning,

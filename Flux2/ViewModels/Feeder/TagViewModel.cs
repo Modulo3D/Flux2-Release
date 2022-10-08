@@ -150,7 +150,7 @@ namespace Flux.ViewModels
                     return ConnectTag(reading.Value);     
             }
 
-            if (Nfc.IsVirtualTag && operator_usb.ConvertOr(o => o.RewriteNFC, () => false))
+            if (Nfc.IsVirtualTag.ValueOr(() => true) && operator_usb.ConvertOr(o => o.RewriteNFC, () => false))
             {
                 var tag = await CreateTagAsync(ReadTag(default, true));
                 if(tag.HasValue)
@@ -313,7 +313,7 @@ namespace Flux.ViewModels
                 return false;
             }
         }
-        private NFCReading<TNFCTag> ReadBackupTag(string card_id, Func<TNFCTag, Guid> check_backup_tag)
+        private NFCReading<TNFCTag> ReadBackupTag(CardId card_id, Func<TNFCTag, Guid> check_backup_tag)
         {
             try
             {
@@ -359,7 +359,7 @@ namespace Flux.ViewModels
         }
 
         // Nfc
-        private Optional<string> ReadCardId(Optional<INFCHandle> handle)
+        private Optional<CardId> ReadCardId(Optional<INFCHandle> handle)
         {
             var operator_usb = Flux.MCodes.OperatorUSB;
             var card_id = handle.Convert(h => h.GetCardId());
@@ -368,7 +368,7 @@ namespace Flux.ViewModels
             {
                 if (!operator_usb.ConvertOr(o => o.RewriteNFC, () => false))
                     return default;
-                return $"00-00-{VirtualTagId:00}-{Position:00}";
+                return new CardId($"00-00-{VirtualTagId:00}-{Position:00}");
             }
 
             return card_id;
@@ -378,7 +378,7 @@ namespace Flux.ViewModels
             var settings = Flux.SettingsProvider.CoreSettings.Local;
 
             // check current tag
-            var card_id = Nfc.IsVirtualTag ? Nfc.CardId : ReadCardId(handle);
+            var card_id = Nfc.IsVirtualTag.ValueOr(() => false) ? Nfc.CardId : ReadCardId(handle);
             if (!card_id.HasValue)
             {
                 Flux.Messages.LogMessage("Errore blocco tag", "Tag non trovato, controllare la distanza dal lettore nfc", MessageLevel.INFO, 33000);
@@ -405,7 +405,7 @@ namespace Flux.ViewModels
 
             // Write locked tag
             StoreTag(t => t.SetPrinterGuid(settings.PrinterGuid));
-            if (!Nfc.IsVirtualTag)
+            if (!Nfc.IsVirtualTag.ValueOr(() => false))
             {
                 if (!handle.HasValue)
                 {
@@ -423,7 +423,7 @@ namespace Flux.ViewModels
             }
 
             // check written tag
-            var written_tag = Nfc.IsVirtualTag ? Optional.Some(Nfc) : ReadTag(handle, false);
+            var written_tag = Nfc.IsVirtualTag.ValueOr(() => false) ? Optional.Some(Nfc) : ReadTag(handle, false);
             if (!written_tag.HasValue)
             {
                 Flux.Messages.LogMessage("Errore di blocco tag", "Errore durante la lettura del tag", MessageLevel.INFO, 33005);
@@ -448,7 +448,7 @@ namespace Flux.ViewModels
             var settings = Flux.SettingsProvider.CoreSettings.Local;
 
             // check current tag
-            var card_id = Nfc.IsVirtualTag ? Nfc.CardId : ReadCardId(handle);
+            var card_id = Nfc.IsVirtualTag.ValueOr(() => false) ? Nfc.CardId : ReadCardId(handle);
             if (!card_id.HasValue)
             {
                 Flux.Messages.LogMessage("Errore sblocco tag", "Tag non trovato, controllare la distanza dal lettore nfc", MessageLevel.INFO, 34000);
@@ -479,7 +479,7 @@ namespace Flux.ViewModels
 
             // Write unlocked tag
             StoreTag(t => t.SetPrinterGuid(default));
-            if (!Nfc.IsVirtualTag)
+            if (!Nfc.IsVirtualTag.ValueOr(() => false))
             {
                 if (!handle.HasValue)
                 {
@@ -497,7 +497,7 @@ namespace Flux.ViewModels
             }
 
             // check written tag
-            var written_tag = Nfc.IsVirtualTag ? Optional.Some(Nfc) : ReadTag(handle, false);
+            var written_tag = Nfc.IsVirtualTag.ValueOr(() => false) ? Optional.Some(Nfc) : ReadTag(handle, false);
             if (!written_tag.HasValue)
             {
                 Flux.Messages.LogMessage("Errore di sblocco tag", "Errore durante la lettura del tag", MessageLevel.INFO, 33005);
@@ -538,7 +538,7 @@ namespace Flux.ViewModels
                     return default;
 
                 virtual_tag = true;
-                card_id = $"00-00-{VirtualTagId:00}-{Position:00}";
+                card_id = new CardId($"00-00-{VirtualTagId:00}-{Position:00}");
             }
 
             if (virtual_tag || read_from_backup)

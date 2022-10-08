@@ -45,7 +45,18 @@ namespace Flux.ViewModels
 
             var job_finished = Observable.Merge(queue_ended, queue_incremented.Select(i => i.OldValue));
 
-            job_started.Subscribe(async queue_position =>
+            Flux.ConnectionProvider
+                .ObserveVariable(c => c.EXTRUSIONS)
+                .Subscribe(extrusions =>
+                {
+                    if (!extrusions.HasValue)
+                        return;
+                    foreach (var extrusion_queue in extrusions.Value)
+                        foreach (var extrusion in extrusion_queue.Value)
+                            flux.Logger.LogInformation($"{extrusion.Key} {extrusion.Key}: {extrusion.Value.DistanceMM}mm");
+                });
+
+            /*job_started.Subscribe(async queue_position =>
             {
                 try
                 {
@@ -57,7 +68,7 @@ namespace Flux.ViewModels
                     if (!job.HasValue)
                         return;
 
-                    var mcode_vm = Flux.MCodes.AvaiableMCodes.Lookup(job.Value.MCodeGuid);
+                    var mcode_vm = Flux.MCodes.AvaiableMCodes.Lookup(job.Value.MCodeKey);
                     if (!mcode_vm.HasValue)
                         return;
 
@@ -65,7 +76,7 @@ namespace Flux.ViewModels
                     if (!mcode.HasValue)
                         return;
 
-                    var program_history = new ProgramsHistory(job.Value.JobGuid)
+                    var program_history = new JobHistory(job.Value)
                     {
                         Name = mcode.Value.Name,
                         BeginDate = DateTime.Now.ToString(),
@@ -76,7 +87,7 @@ namespace Flux.ViewModels
                     if (!core_settings.LoggerAddress.HasValue)
                         return;
 
-                    flux.Logger.LogInformation(new EventId(0, "job_started"), $"{job.Value.JobGuid}");
+                    flux.Logger.LogInformation(new EventId(0, "job_started"), $"{job.Value.JobKey}");
 
                     // todo
                     var request = new RestRequest($"{core_settings.LoggerAddress}/api/programs");
@@ -101,7 +112,7 @@ namespace Flux.ViewModels
                     if (!job.HasValue)
                         return;
 
-                    var program_history = new ProgramsHistory(job.Value.JobGuid)
+                    var program_history = new JobHistory(job.Value)
                     {
                         EndDate = DateTime.Now.ToString(),
                     };
@@ -110,7 +121,7 @@ namespace Flux.ViewModels
                     if (!core_settings.LoggerAddress.HasValue)
                         return;
 
-                    flux.Logger.LogInformation(new EventId(0, "job_finished"), $"{job.Value.JobGuid}");
+                    flux.Logger.LogInformation(new EventId(0, "job_finished"), $"{job.Value.JobKey}");
 
                     // TODO
                     if (!core_settings.LoggerAddress.HasValue)
@@ -126,7 +137,7 @@ namespace Flux.ViewModels
                 {
                     flux.Logger.LogInformation(new EventId(0, "job_finished"), ex.Message);
                 }
-            });
+            });*/
         }
     }
 

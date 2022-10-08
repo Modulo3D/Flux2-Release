@@ -67,7 +67,6 @@ namespace Flux.ViewModels
                 model.CreateVariable(c => c.PROCESS_MODE,   OSAI_ReadPriority.ULTRAHIGH, GetProcessModeAsync, SetProcessModeAsync); 
                 model.CreateVariable(c => c.BOOT_PHASE,     OSAI_ReadPriority.ULTRAHIGH, GetBootPhaseAsync);     
                 model.CreateVariable(c => c.BOOT_MODE,      OSAI_ReadPriority.ULTRAHIGH, _ => Task.FromResult(new ValueResult<Unit>(Unit.Default)), SetBootModeAsync);    
-                model.CreateVariable(c => c.PART_PROGRAM,   OSAI_ReadPriority.HIGH,      GetPartProgramAsync);   
                 model.CreateVariable(c => c.PROGRESS,       OSAI_ReadPriority.ULTRAHIGH, _ => Task.FromResult(new ValueResult<ParamacroProgress>(new ParamacroProgress("", 70)))); 
                 model.CreateVariable(c => c.MCODE_RECOVERY, OSAI_ReadPriority.MEDIUM,    GetMCodeRecoveryAsync); 
 
@@ -216,7 +215,7 @@ namespace Flux.ViewModels
                 if (!hold_pp.HasValue)
                     return default;
 
-                var hold_mcode_lookup = connection.Flux.MCodes.AvaiableMCodes.Lookup(hold_pp.Value.MCodeGuid);
+                var hold_mcode_lookup = connection.Flux.MCodes.AvaiableMCodes.Lookup(hold_pp.Value.MCodeKey);
                 if (!hold_mcode_lookup.HasValue)
                     return default;
 
@@ -231,7 +230,7 @@ namespace Flux.ViewModels
                         return false;
                     if (!pp.IsRecovery)
                         return false;
-                    if (pp.MCodeGuid != hold_analyzer.Value.MCode.MCodeGuid)
+                    if (pp.MCodeKey != hold_analyzer.Value.MCode.MCodeKey)
                         return false;
                     if (pp.StartBlock != hold_blk_num.Value)
                         return false;
@@ -239,7 +238,7 @@ namespace Flux.ViewModels
                 }, () => false);
 
                 return new OSAI_MCodeRecovery(
-                    hold_pp.Value.MCodeGuid,
+                    hold_pp.Value.MCodeKey,
                     hold_pp.Value.StartBlock,
                     is_selected,
                     (uint)hold_blk_num.Value,
@@ -253,7 +252,7 @@ namespace Flux.ViewModels
             }*/
         }
 
-        private static async Task<ValueResult<Dictionary<Guid, Dictionary<BlockNumber, MCodePartProgram>>>> GetStorageAsync(OSAI_ConnectionProvider connection_provider)
+        private static async Task<ValueResult<MCodeStorage>> GetStorageAsync(OSAI_ConnectionProvider connection_provider)
         {
             var connection = connection_provider.Connection;
             using var qctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
@@ -265,7 +264,7 @@ namespace Flux.ViewModels
             return storage.Value.GetPartProgramDictionaryFromStorage();
         }
 
-        private static async Task<ValueResult<Dictionary<QueuePosition, FluxJob>>> GetQueueAsync(OSAI_ConnectionProvider connection_provider)
+        private static async Task<ValueResult<FluxJobQueue>> GetQueueAsync(OSAI_ConnectionProvider connection_provider)
         {
             var connection = connection_provider.Connection;
             using var qctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
@@ -338,73 +337,6 @@ namespace Flux.ViewModels
                 return true;
             }
             catch { return false; }
-        }
-        private static async Task<ValueResult<MCodePartProgram>> GetPartProgramAsync(OSAI_ConnectionProvider connection_provider)
-        {
-            try
-            {
-                var connection = connection_provider.Connection;
-                var client = connection_provider.Connection.Client;
-                if (client.HasValue)
-                    return default;
-
-                var queue_pos = await connection.ReadVariableAsync(c => c.QUEUE_POS);
-                if (!queue_pos.Result)
-                    return default;
-
-                if (!queue_pos.HasValue)
-                    return new ValueResult<MCodePartProgram>(default);
-
-                if (queue_pos.Value < 0)
-                    return new ValueResult<MCodePartProgram>(default);
-
-                var job_queue = await connection.ReadVariableAsync(c => c.QUEUE);
-                if (!job_queue.Result)
-                    return default;
-
-                if (!job_queue.HasValue)
-                    return new ValueResult<MCodePartProgram>(default);
-
-                if (!job_queue.Value.TryGetValue(queue_pos.Value, out var current_job))
-                    return new ValueResult<MCodePartProgram>(default);
-
-                var storage_dict = await connection.ReadVariableAsync(c => c.STORAGE);
-                if (!storage_dict.Result)
-                    return default;
-
-                if (!storage_dict.HasValue)
-                    return new ValueResult<MCodePartProgram>(default);
-
-                if (!storage_dict.Value.ContainsKey(current_job.MCodeGuid))
-                    return new ValueResult<MCodePartProgram>(default);
-
-                // Full part program from filename
-                var get_active_pp_request = new GetActivePartProgramRequest(OSAI_Connection.ProcessNumber);
-                var get_active_pp_response = await client.Value.GetActivePartProgramAsync(get_active_pp_request);
-
-                if (!OSAI_Connection.ProcessResponse(
-                    get_active_pp_response.retval,
-                    get_active_pp_response.ErrClass,
-                    get_active_pp_response.ErrNum))
-                    return default;
-
-                var partprogram_filename = get_active_pp_response.Main;
-
-                if (MCodePartProgram.TryParse(partprogram_filename, out var full_part_program) &&
-                    full_part_program.MCodeGuid == current_job.MCodeGuid)
-                {
-                    if (storage_dict.Value.TryGetValue(full_part_program.MCodeGuid, out var part_programs) &&
-                        part_programs.TryGetValue(full_part_program.StartBlock, out var part_program))
-                        return part_program;
-                }
-
-                return storage_dict.Value.FirstOrOptional(kvp => kvp.Key == current_job.MCodeGuid)
-                    .Convert(p => p.Value.Values.FirstOrDefault());
-            }
-            catch
-            {
-                return default;
-            }
         }
         private static async Task<ValueResult<OSAI_ProcessMode>> GetProcessModeAsync(OSAI_ConnectionProvider connection_provider)
         {

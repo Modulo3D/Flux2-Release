@@ -193,9 +193,11 @@ namespace Flux.ViewModels
                         7 => new OSAI_ConnectionProvider(this),
                         8 => new RRF_ConnectionProvider(this, c => new RRF_VariableStoreS300(c)),
                         9 => new RRF_ConnectionProvider(this, c => new RRF_VariableStoreS300(c)),
-                        10 => new RRF_ConnectionProvider(this, c => new RRF_VariableStoreS300(c)),
-                        11 => new RRF_ConnectionProvider(this, c => new RRF_VariableStoreS300(c)),
+                        10 => new RRF_ConnectionProvider(this, c => new RRF_VariableStoreS300C(c)),
+                        11 => new RRF_ConnectionProvider(this, c => new RRF_VariableStoreS300C(c)),
                         12 => new RRF_ConnectionProvider(this, c => new RRF_VariableStoreMP500(c)),
+                        13 => new RRF_ConnectionProvider(this, c => new RRF_VariableStoreS300A(c)),
+                        14 => new RRF_ConnectionProvider(this, c => new RRF_VariableStoreS300A(c)),
                         _ => new Dummy_ConnectionProvider(this)
                     };
 
@@ -392,7 +394,7 @@ namespace Flux.ViewModels
 
             string wait()
             {
-                if (printing_evaluation.Recovery.HasValue)
+                if (printing_evaluation.CurrentRecovery.HasValue)
                     return "IN PAUSA";
                 return "ATTESA OPERATORE";
             }

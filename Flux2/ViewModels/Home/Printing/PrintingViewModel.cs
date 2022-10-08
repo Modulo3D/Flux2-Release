@@ -55,21 +55,21 @@ namespace Flux.ViewModels
                 .Select(e =>
                     e.status.IsEnabledAxis &&
                     e.status.IsHomed &&
-                    e.printing.SelectedPartProgram.HasValue &&
+                    e.printing.CurrentMCode.HasValue &&
                     e.status.CanSafePrint);
 
             var canHold = eval
                 .Select(e =>
                     e.status.IsEnabledAxis &&
                     e.status.IsHomed &&
-                    e.printing.SelectedPartProgram.HasValue &&
+                    e.printing.CurrentMCode.HasValue &&
                     e.status.CanSafeHold);
 
             var canStop = eval
                 .Select(e =>
                     e.status.IsEnabledAxis &&
                     e.status.IsHomed &&
-                    e.printing.SelectedPartProgram.HasValue &&
+                    e.printing.CurrentMCode.HasValue &&
                     e.status.CanSafeStop);
 
             StartCommand = ReactiveCommand.CreateFromTask(StartAsync, canStart);
@@ -78,7 +78,7 @@ namespace Flux.ViewModels
 
             _SelectedMCodeName = Flux.StatusProvider
                 .WhenAnyValue(v => v.PrintingEvaluation)
-                .Select(e => e.SelectedMCode)
+                .Select(e => e.CurrentMCode)
                 .Convert(m => m.Name)
                 .ToProperty(this, v => v.SelectedMCodeName);
 
@@ -94,13 +94,13 @@ namespace Flux.ViewModels
 
             _ExpectedMaterials = Flux.StatusProvider.ExpectedMaterialsQueue.Connect()
                 .QueryWhenChanged()
-                .Select(i => i.Select(i => i.Values.FirstOrOptional(i => !string.IsNullOrEmpty(i.Name))))
+                .Select(i => i.Select(i => i.Convert(i => i.Values.FirstOrOptional(i => !string.IsNullOrEmpty(i.Name)))))
                 .Select(i => i.Select(i => i.ConvertOr(i => i.Name, () => "---")))
                 .ToProperty(this, v => v.ExpectedMaterials);
 
             _ExpectedNozzles = Flux.StatusProvider.ExpectedNozzlesQueue.Connect()
                 .QueryWhenChanged()
-                .Select(i => i.Select(i => i.Values.FirstOrOptional(i => !string.IsNullOrEmpty(i.Name))))
+                .Select(i => i.Select(i => i.Convert(i => i.Values.FirstOrOptional(i => !string.IsNullOrEmpty(i.Name)))))
                 .Select(i => i.Select(i => i.ConvertOr(i => i.Name, () => "---")))
                 .ToProperty(this, v => v.ExpectedNozzles);
         }

@@ -359,7 +359,7 @@ namespace Flux.ViewModels
         public FileResponse LogMessage(FileResponse file_response, IFluxMCodeStorageViewModel file, Optional<Exception> ex = default)
         {
             var title = "Gestione dei file";
-            var mcode_name = file.Analyzer.Convert(a => a.MCode.Name);
+            var mcode_name = file.Analyzer.MCode.Name;
             switch (file_response)
             {
                 case FileResponse.FILE_DELETED:

@@ -68,7 +68,7 @@ namespace Flux.ViewModels
 
             _Storage = MCodes.AvaiableMCodes
                 .Connect()
-                .WatchOptional(job.MCodeGuid)
+                .WatchOptional(job.PartProgram.MCodeKey)
                 .ToProperty(this, v => v.Storage)
                 .DisposeWith(Disposables);
 
@@ -76,9 +76,8 @@ namespace Flux.ViewModels
                  .AutoRefresh(m => m.Storage)
                  .Filter(m => m.Storage.HasValue)
                  .Transform(m => m.Storage.Value)
-                 .AutoRefresh(m => m.Analyzer)
                  .QueryWhenChanged(m => m.KeyValues.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.Analyzer))
-                 .StartWith(new Dictionary<QueuePosition, Optional<MCodeAnalyzer>>())
+                 .StartWith(new Dictionary<QueuePosition, MCodeAnalyzer>())
                  .DistinctUntilChanged();
 
             _EndTime = Observable.CombineLatest(
@@ -144,7 +143,7 @@ namespace Flux.ViewModels
             return Job.QueuePosition > queue_position && Job.QueuePosition < last_queue_pos;
         }
 
-        private DateTime FindEndTime(DateTime start_time, QueuePosition queue_pos, PrintProgress progress, Dictionary<QueuePosition, Optional<MCodeAnalyzer>> mcode_analyzers)
+        private DateTime FindEndTime(DateTime start_time, QueuePosition queue_pos, PrintProgress progress, Dictionary<QueuePosition, MCodeAnalyzer> mcode_analyzers)
         {
             try
             {
@@ -152,13 +151,11 @@ namespace Flux.ViewModels
                     .Where(kvp => kvp.Key <= Job.QueuePosition)
                     .Aggregate(TimeSpan.Zero, (acc, kvp) => acc + find_duration(kvp));
 
-                TimeSpan find_duration(KeyValuePair<QueuePosition, Optional<MCodeAnalyzer>> kvp)
+                TimeSpan find_duration(KeyValuePair<QueuePosition, MCodeAnalyzer> kvp)
                 {
-                    if (!kvp.Value.HasValue)
-                        return TimeSpan.Zero;
                     if (kvp.Key == queue_pos)
                         return progress.RemainingTime;
-                    return kvp.Value.Value.MCode.Duration;
+                    return kvp.Value.MCode.Duration;
                 }
             }
             catch(Exception ex)

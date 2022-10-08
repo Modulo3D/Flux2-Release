@@ -50,19 +50,19 @@ namespace Flux.ViewModels
                     (state, material, tool_material) => (state, material, tool_material)),
                     (state, value) =>
                     {
-                        if (!value.state.Inserted && !value.state.Locked)
-                            return state.Create(EConditionState.Disabled, $"MATERIALE NON INSERITO");
-
                         var update_nfc = state.Create("nFC", UpdateNFCAsync);
+
+                        if (!value.state.Loaded && value.state.Locked)
+                            return state.Create(EConditionState.Warning, "SBLOCCA IL MATERIALE", update_nfc);
+
+                        if (!value.state.Loaded && !value.state.Locked)
+                            return state.Create(EConditionState.Disabled, $"MATERIALE SCARICATO");
 
                         if (!value.material.HasValue)
                             return state.Create(EConditionState.Warning, "LEGGI UN MATERIALE", update_nfc);
 
                         if (!value.tool_material.Compatible.ValueOr(() => false))
                             return state.Create(EConditionState.Error, $"{value.material} NON COMPATIBILE", update_nfc);
-
-                        if (!value.state.Locked)
-                            return state.Create(EConditionState.Warning, "SBLOCCA IL MATERIALE", update_nfc);
 
                         return new ConditionState(EConditionState.Stable, $"{value.material} PRONTO ALLO SCARICAMENTO");
                     }), new FilamentOperationConditionAttribute());
@@ -71,7 +71,7 @@ namespace Flux.ViewModels
         {
             await Material.UpdateTagAsync();
 
-            var result = Material.Nfc.IsVirtualTag ?
+            var result = Material.Nfc.IsVirtualTag.ValueOr(() => false) ?
                 Material.UnlockTag(default) :
                 await Flux.UseReader(h => Material.UnlockTag(h));
 

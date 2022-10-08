@@ -6,6 +6,7 @@ using ReactiveUI;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reactive;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
@@ -13,10 +14,10 @@ using System.Threading.Tasks;
 namespace Flux.ViewModels
 {
 
-    public class OSAI_MemoryReader : FLUX_MemoryReader<OSAI_ConnectionProvider>
+    public class OSAI_MemoryReader : FLUX_MemoryReader<OSAI_ConnectionProvider, Unit>
     {
         public IEnumerable<IOSAI_AsyncVariable> Variables { get; }
-        public OSAI_MemoryReader(OSAI_ConnectionProvider connection_provider, string resource, IEnumerable<IOSAI_AsyncVariable> variables) : base(connection_provider, resource)
+        public OSAI_MemoryReader(OSAI_ConnectionProvider connection_provider, string resource, IEnumerable<IOSAI_AsyncVariable> variables, int max_retries) : base(connection_provider, resource, _ => { }, max_retries)
         {
             Variables = variables;
         }
@@ -28,7 +29,11 @@ namespace Flux.ViewModels
                 var memory_updated = await variable.UpdateAsync();
                 has_memory_read = has_memory_read && memory_updated;
             }
-            HasMemoryRead = has_memory_read;
+
+            if (has_memory_read)
+                SetMemoryRead(Unit.Default);
+            else
+                SetMemoryError();
         }
     }
 
@@ -39,7 +44,7 @@ namespace Flux.ViewModels
         }
         public void AddMemoryReader(IGrouping<OSAI_ReadPriority, IOSAI_AsyncVariable> variables)
         {
-            MemoryReaders.AddOrUpdate(new OSAI_MemoryReader(ConnectionProvider, $"{variables.Key}", variables));
+            MemoryReaders.AddOrUpdate(new OSAI_MemoryReader(ConnectionProvider, $"{variables.Key}", variables, 5));
         }
     }
 

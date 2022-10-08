@@ -233,13 +233,10 @@ namespace Flux.ViewModels
             _ProbeState = Observable.CombineLatest(
                 this.WhenAnyValue(s => s.ToolOffset),
                 this.WhenAnyValue(s => s.ProbeOffset),
-                Feeder.WhenAnyValue(f => f.FeederState),
                 Feeder.ToolNozzle.WhenAnyValue(f => f.State),
                 material.ConvertMany(m => m.WhenAnyValue(f => f.State)),
-                (tool_offset, probe_offset, feeder_state, tool_state, material_state) =>
+                (tool_offset, probe_offset, tool_state, material_state) =>
                 {
-                    if (feeder_state == EFeederState.ERROR)
-                        return FluxProbeState.ERROR_PROBE;
                     if (!tool_offset.HasValue)
                         return FluxProbeState.ERROR_PROBE;
 

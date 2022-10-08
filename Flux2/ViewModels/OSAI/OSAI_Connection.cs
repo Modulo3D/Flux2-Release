@@ -27,16 +27,15 @@ namespace Flux.ViewModels
         public override string MacroPath => "MACRO";
         public override string QueuePath => "PROGRAMS\\QUEUE";
         public override string StoragePath => "PROGRAMS\\STORAGE";
+        public override string ExtrusionPath => "PROGRAMS\\EVENTS\\EXTR";
         public override string InnerQueuePath => "PROGRAMS\\QUEUE\\INNER";
 
         public FluxViewModel Flux { get; }
-        public OSAI_ConnectionProvider ConnectionProvider { get; }
 
         // MEMORY VARIABLES
         public OSAI_Connection(FluxViewModel flux, OSAI_ConnectionProvider connection_provider) : base(connection_provider)
         {
             Flux = flux;
-            ConnectionProvider = connection_provider;
         }
 
         public override async Task<bool> ConnectAsync()
@@ -1343,9 +1342,9 @@ namespace Flux.ViewModels
         {
             return new[] { $"(CLS, MACRO\\change_tool, {position.GetArrayBaseIndex(this)})" };
         }
-        public override Optional<IEnumerable<string>> GetStartPartProgramGCode(string folder, string file_name)
+        public override Optional<IEnumerable<string>> GetStartPartProgramGCode(FluxJob job)
         {
-            return new[] { $"(CLS, {folder}\\{file_name})" };
+            return new[] { $"(CLS, {StoragePath}\\{job.PartProgram})" };
         }
         public override Optional<IEnumerable<string>> GetSetToolTemperatureGCode(ArrayIndex position, double temperature)
         {
