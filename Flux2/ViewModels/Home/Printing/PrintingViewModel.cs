@@ -92,17 +92,31 @@ namespace Flux.ViewModels
                 .Select(p => p.RemainingTime)
                 .ToProperty(this, v => v.RemainingTime);
 
-            _ExpectedMaterials = Flux.StatusProvider.ExpectedMaterialsQueue.Connect()
-                .QueryWhenChanged()
-                .Select(i => i.Select(i => i.Convert(i => i.Values.FirstOrOptional(i => !string.IsNullOrEmpty(i.Name)))))
+            var current_job = Flux.StatusProvider
+                .WhenAnyValue(s => s.PrintingEvaluation)
+                .Select(s => s.CurrentJob);
+
+            var material_queue = Flux.StatusProvider.ExpectedMaterialsQueue.Connect()
+                .QueryWhenChanged();
+
+            var materials = Observable.CombineLatest(
+                current_job, material_queue, (current_job, material_queue) =>
+                material_queue.Select(m => current_job.Convert(j => m.Convert(m => m.Lookup(j.JobKey))))); 
+
+            _ExpectedMaterials = materials
                 .Select(i => i.Select(i => i.ConvertOr(i => i.Name, () => "---")))
                 .ToProperty(this, v => v.ExpectedMaterials);
 
-            _ExpectedNozzles = Flux.StatusProvider.ExpectedNozzlesQueue.Connect()
-                .QueryWhenChanged()
-                .Select(i => i.Select(i => i.Convert(i => i.Values.FirstOrOptional(i => !string.IsNullOrEmpty(i.Name)))))
+            var nozzle_queue = Flux.StatusProvider.ExpectedNozzlesQueue.Connect()
+                .QueryWhenChanged();
+
+            var nozzles = Observable.CombineLatest(
+                current_job, nozzle_queue, (current_job, nozzle_queue) =>
+                nozzle_queue.Select(m => current_job.Convert(j => m.Convert(m => m.Lookup(j.JobKey)))));
+
+            _ExpectedNozzles = nozzles
                 .Select(i => i.Select(i => i.ConvertOr(i => i.Name, () => "---")))
-                .ToProperty(this, v => v.ExpectedNozzles);
+                .ToProperty(this, v => v.ExpectedMaterials);
         }
 
         public async Task ResetAsync()

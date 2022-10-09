@@ -86,7 +86,7 @@ namespace Flux.ViewModels
                 .ToProperty(this, v => v.ExpectedWeight);
 
             _CurrentWeight = this.WhenAnyValue(v => v.TagViewModel)
-                .ConvertMany(t => t.Odometer.WhenAnyValue(t => t.Value))
+                .ConvertMany(t => t.Odometer.WhenAnyValue(t => t.CurrentValue))
                 .ToProperty(this, v => v.CurrentWeight);
 
             _HasLowWeight = Observable.CombineLatest(
@@ -112,7 +112,12 @@ namespace Flux.ViewModels
             {
                 if (!job_queue.HasValue)
                     return default;
-                var job = job_queue.Value.LookupOptional(queue_position);
+
+                var start_queue_pos = queue_position.ValueOr(() => 0);
+                if (start_queue_pos < 0)
+                    start_queue_pos = 0;
+
+                var job = job_queue.Value.LookupOptional(start_queue_pos);
                 if (!job.HasValue)
                     return default;
 

@@ -39,7 +39,7 @@ namespace Flux.ViewModels
     public class Dummy_Array<TRData, TWData> : FLUX_Array<TRData, TWData>
     {
         public override string Group => "";
-        public Dummy_Array(IFLUX_VariableAccess variable_access) : base(variable_access, "")
+        public Dummy_Array() : base("")
         {
         }
     }
@@ -91,7 +91,7 @@ namespace Flux.ViewModels
         private void CreateDummy<TRData, TWData>(Expression<Func<Dummy_VariableStore, IFLUX_Array<TRData, TWData>>> array_expression)
         {
             var array_setter = this.GetCachedSetterDelegate(array_expression);
-            array_setter.Invoke(new Dummy_Array<TRData, TWData>(ConnectionProvider));
+            array_setter.Invoke(new Dummy_Array<TRData, TWData>());
         }
         private void CreateDummy<TRData, TWData>(Expression<Func<Dummy_VariableStore, IFLUX_Variable<TRData, TWData>>> variable_expression)
         {
@@ -106,6 +106,7 @@ namespace Flux.ViewModels
         public override string MacroPath => throw new NotImplementedException();
         public override ushort ArrayBase => throw new NotImplementedException();
         public override string StoragePath => throw new NotImplementedException();
+        public override string JobEventPath => throw new NotImplementedException();
         public override string PathSeparator => throw new NotImplementedException();
         public override string ExtrusionPath => throw new NotImplementedException();
         public override string InnerQueuePath => throw new NotImplementedException();
@@ -120,17 +121,7 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override Task<bool> CycleAsync(bool start, bool wait = false, CancellationToken ct = default)
-        {
-            throw new NotImplementedException();
-        }
-
         public override Task<bool> DeleteFileAsync(string folder, string filename, bool wait, CancellationToken ct)
-        {
-            throw new NotImplementedException();
-        }
-
-        public override Task<bool> DeselectPartProgramAsync(bool from_drive, bool wait, CancellationToken ct)
         {
             throw new NotImplementedException();
         }
@@ -204,11 +195,6 @@ namespace Flux.ViewModels
         }
 
         public override Task<bool> ResetAsync()
-        {
-            throw new NotImplementedException();
-        }
-
-        public override Task<bool> SelectPartProgramAsync(string partprogram, bool from_drive, bool wait, CancellationToken ct)
         {
             throw new NotImplementedException();
         }
@@ -323,6 +309,11 @@ namespace Flux.ViewModels
         }
 
         public override Task<bool> CloseAsync()
+        {
+            throw new NotImplementedException();
+        }
+
+        public override Task<bool> CycleAsync(string folder, string filename, bool wait, CancellationToken ct = default)
         {
             throw new NotImplementedException();
         }

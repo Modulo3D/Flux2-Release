@@ -45,16 +45,16 @@ namespace Flux.ViewModels
 
             var job_finished = Observable.Merge(queue_ended, queue_incremented.Select(i => i.OldValue));
 
-            Flux.ConnectionProvider
-                .ObserveVariable(c => c.EXTRUSIONS)
-                .Subscribe(extrusions =>
-                {
-                    if (!extrusions.HasValue)
-                        return;
-                    foreach (var extrusion_queue in extrusions.Value)
-                        foreach (var extrusion in extrusion_queue.Value)
-                            flux.Logger.LogInformation($"{extrusion.Key} {extrusion.Key}: {extrusion.Value.DistanceMM}mm");
-                });
+            //Flux.ConnectionProvider
+            //    .ObserveVariable(c => c.EXTRUSIONS)
+            //    .Subscribe(extrusions =>
+            //    {
+            //        if (!extrusions.HasValue)
+            //            return;
+            //        foreach (var extrusion_queue in extrusions.Value)
+            //            foreach (var extrusion in extrusion_queue.Value)
+            //                flux.Logger.LogInformation($"{extrusion.Key} {extrusion.Key}: {extrusion.Value.DistanceMM}mm");
+            //    });
 
             /*job_started.Subscribe(async queue_position =>
             {

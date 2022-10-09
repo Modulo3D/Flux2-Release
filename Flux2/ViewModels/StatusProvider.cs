@@ -604,13 +604,13 @@ namespace Flux.ViewModels
                 .AsObservableCache();
 
             ExpectedMaterialsQueue = FeederEvaluators.Connect()
-                .Transform(f => f.Material)
+                .Transform(f => f.Material, true)
                 .AutoTransform(f => f.ExpectedDocumentQueue)
                 .RemoveKey()
                 .AsObservableList();
 
             ExpectedNozzlesQueue = FeederEvaluators.Connect()
-                .Transform(f => f.ToolNozzle)
+                .Transform(f => f.ToolNozzle, true)
                 .AutoTransform(f => f.ExpectedDocumentQueue)
                 .RemoveKey()
                 .AsObservableList();
@@ -952,7 +952,7 @@ namespace Flux.ViewModels
                 return new PrintProgress(0, duration);
 
             if (!progress.HasValue)
-                return PrintProgress;
+                return new PrintProgress(0, duration);
 
             var paramacro_name = progress.Value.Paramacro.Split(new[] { '\\', '/' },
                 StringSplitOptions.RemoveEmptyEntries)

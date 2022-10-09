@@ -27,6 +27,7 @@ namespace Flux.ViewModels
         public override string MacroPath => "MACRO";
         public override string QueuePath => "PROGRAMS\\QUEUE";
         public override string StoragePath => "PROGRAMS\\STORAGE";
+        public override string JobEventPath => "PROGRAMS\\EVENTS\\JOB";
         public override string ExtrusionPath => "PROGRAMS\\EVENTS\\EXTR";
         public override string InnerQueuePath => "PROGRAMS\\QUEUE\\INNER";
 
@@ -855,14 +856,23 @@ namespace Flux.ViewModels
             }
             catch { return false; }
         }
-        public override async Task<bool> CycleAsync(bool start, bool wait, CancellationToken ct = default)
+        public override async Task<bool> CycleAsync(string folder, string filename, bool wait, CancellationToken ct = default)
         {
             try
             {
                 if (!Client.HasValue)
                     return false;
 
-                var cycle_request = new CycleRequest(ProcessNumber, start ? (ushort)1 : (ushort)0);
+                var select_part_program_request = new SelectPartProgramFromDriveRequest(ProcessNumber, $"{folder}\\{filename}");
+                var select_part_program_response = await Client.Value.SelectPartProgramFromDriveAsync(select_part_program_request);
+
+                if (!ProcessResponse(
+                    select_part_program_response.retval,
+                    select_part_program_response.ErrClass,
+                    select_part_program_response.ErrNum))
+                    return false;
+
+                var cycle_request = new CycleRequest(ProcessNumber, 1);
                 var cycle_response = await Client.Value.CycleAsync(cycle_request);
 
                 if (!ProcessResponse(
@@ -893,79 +903,11 @@ namespace Flux.ViewModels
             catch { return false; }
         }
 
-        public override async Task<bool> DeselectPartProgramAsync(bool from_drive, bool wait, CancellationToken ct = default)
-        {
-            try
-            {
-                if (!Client.HasValue)
-                    return false;
-
-                if (from_drive)
-                {
-                    var select_part_program_request = new SelectPartProgramFromDriveRequest(ProcessNumber, "");
-                    var select_part_program_response = await Client.Value.SelectPartProgramFromDriveAsync(select_part_program_request);
-
-                    if (!ProcessResponse(
-                        select_part_program_response.retval,
-                        select_part_program_response.ErrClass,
-                        select_part_program_response.ErrNum))
-                        return false;
-                }
-                else
-                {
-                    var select_part_program_request = new SelectPartProgramRequest(ProcessNumber, "");
-                    var select_part_program_response = await Client.Value.SelectPartProgramAsync(select_part_program_request);
-
-                    if (!ProcessResponse(
-                        select_part_program_response.retval,
-                        select_part_program_response.ErrClass,
-                        select_part_program_response.ErrNum))
-                        return false;
-                }
-
-                return true;
-            }
-            catch { return false; }
-        }
+       
         public override async Task<bool> HoldAsync()
         {
             return await WriteVariableAsync("!REQ_HOLD", true);
         }
-        public override async Task<bool> SelectPartProgramAsync(string partprogram, bool from_drive, bool wait, CancellationToken ct = default)
-        {
-            try
-            {
-                if (!Client.HasValue)
-                    return false;
-
-                if (from_drive)
-                {
-                    var select_part_program_request = new SelectPartProgramFromDriveRequest(ProcessNumber, $"{StoragePath}\\{partprogram}");
-                    var select_part_program_response = await Client.Value.SelectPartProgramFromDriveAsync(select_part_program_request);
-
-                    if (!ProcessResponse(
-                        select_part_program_response.retval,
-                        select_part_program_response.ErrClass,
-                        select_part_program_response.ErrNum))
-                        return false;
-                }
-                else
-                {
-                    var select_part_program_request = new SelectPartProgramRequest(ProcessNumber, $"{StoragePath}\\{partprogram}");
-                    var select_part_program_response = await Client.Value.SelectPartProgramAsync(select_part_program_request);
-
-                    if (!ProcessResponse(
-                        select_part_program_response.retval,
-                        select_part_program_response.ErrClass,
-                        select_part_program_response.ErrNum))
-                        return false;
-                }
-
-                return true;
-            }
-            catch { return false; }
-        }
-
         // FILES
         public override async Task<bool> DeleteFileAsync(string folder, string filename, bool wait, CancellationToken ct = default)
         {
@@ -1469,12 +1411,6 @@ namespace Flux.ViewModels
         {
             try
             {
-                // deselect part program
-                using var deselect_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                var deselect_result = await DeselectPartProgramAsync(false, true, deselect_ctk.Token);
-                if (deselect_result == false)
-                    return false;
-
                 using var delete_paramacro_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 var delete_paramacro_response = await DeleteFileAsync(StoragePath, "paramacro.mcode", true, delete_paramacro_ctk.Token);
 
@@ -1487,14 +1423,8 @@ namespace Flux.ViewModels
                 if (put_paramacro_response == false)
                     return false;
 
-                // select part program
-                using var select_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                var select_part_program_response = await SelectPartProgramAsync("paramacro.mcode", true, true, select_ctk.Token);
-                if (select_part_program_response == false)
-                    return false;
-
                 // Set PLC to Cycle
-                return await CycleAsync(true, wait, wait_ct);
+                return await CycleAsync(StoragePath, "paramacro.mcode", wait, wait_ct);
 
                 IEnumerable<string> get_paramacro_gcode()
                 {

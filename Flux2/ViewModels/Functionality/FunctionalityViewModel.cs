@@ -363,6 +363,8 @@ namespace Flux.ViewModels
                 }
             }, visible: advanced_mode);
 
+            AddCommand("testStoreMaterial", Flux.Feeders.OdometerManager.StoreCurrentWeightsAsync, visible: advanced_mode);
+
             AddModal(() => new MemoryViewModel(Flux), visible: advanced_mode);
             AddModal(() => new FilesViewModel(Flux), visible: advanced_mode);
             AddModal(() => new MoveViewModel(Flux), visible: advanced_mode);

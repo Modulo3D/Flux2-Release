@@ -203,9 +203,9 @@ namespace Flux.ViewModels
         //[JsonProperty("monitors")]
         //public Optional<List<RRF_ObjectModelMonitor>> Monitors { get; set; }
 
-        [JsonProperty("sensor")]
-        [JsonConverter(typeof(JsonConverters.OptionalConverter<short>))]
-        public Optional<short> Sensor { get; set; }
+        //[JsonProperty("sensor")]
+        //[JsonConverter(typeof(JsonConverters.OptionalConverter<short>))]
+        //public Optional<short> Sensor { get; set; }
 
         //[JsonProperty("standby")]
         //public Optional<double> Standby { get; set; }
@@ -405,7 +405,7 @@ namespace Flux.ViewModels
     }
 
     public class RRF_ObjectModelAxis
-    {
+    { 
         //[JsonProperty("acceleration")]
         //public Optional<double> Acceleration { get; set; }
 
@@ -1208,6 +1208,9 @@ namespace Flux.ViewModels
 
         private Optional<FLUX_FileList> _Extrusions;
         public Optional<FLUX_FileList> Extrusions { get => _Extrusions; set => this.RaiseAndSetIfChanged(ref _Extrusions, value); }
+
+        private Optional<FLUX_FileList> _Jobs;
+        public Optional<FLUX_FileList> JobEvents { get => _Jobs; set => this.RaiseAndSetIfChanged(ref _Jobs, value); }
     }
 
     public class RRF_ObjectModelResponse<T>
@@ -1240,7 +1243,11 @@ namespace Flux.ViewModels
                 var file_position = job.FilePosition;
                 if (!file_position.HasValue)
                     return default;
-                var percentage = Math.Max(0, Math.Min(100, (double)file_position.Value / file_size.Value * 100.0));
+                
+                var percentage = (double)file_position.Value / file_size.Value * 100.0;
+                if (percentage > 100)
+                    percentage = 0;
+
                 return new ParamacroProgress(file_name.Value, percentage);
             }
             catch

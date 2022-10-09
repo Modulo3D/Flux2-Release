@@ -54,18 +54,14 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public string ToolNozzleBrush => _ToolNozzleBrush.Value;
 
-        private ObservableAsPropertyHelper<Optional<ExtrusionKey>> _ExtrusionKey;
-        public Optional<ExtrusionKey> ExtrusionKey => _ExtrusionKey.Value;
-
         // CONSTRUCTOR
         public FeederViewModel(FeedersViewModel feeders, ushort position) : base($"{typeof(FeederViewModel).GetRemoteControlName()}??{position}")
         {
             Feeders = feeders;
             Flux = feeders.Flux;
-            Position = position;
-
+            Position = position; 
             ToolNozzle = new ToolNozzleViewModel(this);
-
+            
             var extruders = Flux.SettingsProvider
                 .WhenAnyValue(v => v.ExtrudersCount);
 
@@ -145,14 +141,6 @@ namespace Flux.ViewModels
                     return FluxColors.Error;
                 })
                 .ToProperty(this, v => v.ToolNozzleBrush)
-                .DisposeWith(Disposables);
-
-            _ExtrusionKey = Observable.CombineLatest(
-                ToolNozzle.WhenAnyValue(t => t.Nfc),
-                this.WhenAnyValue(v => v.SelectedMaterial)
-                    .ConvertMany(m => m.WhenAnyValue(m => m.Nfc)),
-                (tool_nozzle, material) => Modulo3DStandard.ExtrusionKey.Create(tool_nozzle, material))
-                .ToProperty(this, v => v.ExtrusionKey)
                 .DisposeWith(Disposables);
         }
 

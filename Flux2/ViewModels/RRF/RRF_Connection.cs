@@ -93,6 +93,7 @@ namespace Flux.ViewModels
         public override bool ParkToolAfterOperation => false;
         public override string InnerQueuePath => "gcodes/queue/inner";
         public override string ExtrusionPath => "gcodes/events/extr";
+        public override string JobEventPath => "gcodes/events/job";
         public override string StoragePath => "gcodes/storage";
         public override string QueuePath => "gcodes/queue";
         public override string PathSeparator => "/";
@@ -357,76 +358,11 @@ namespace Flux.ViewModels
                 "M98 P\"/macros/cancel_print\"",
             }, put_cancel_print_cts.Token, true, wait_cancel_print_cts.Token);
         }
-        public override async Task<bool> CycleAsync(bool start, bool wait = false, CancellationToken wait_ct = default)
+        public override async Task<bool> CycleAsync(string folder, string filename, bool wait = false, CancellationToken wait_ct = default)
         {
             using var put_start_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            return await PostGCodeAsync(new[] { "M24" }, put_start_cts.Token, wait, wait_ct);
+            return await PostGCodeAsync(new[] { $"M32 \"0:/{folder}/{filename}\"" }, put_start_cts.Token, wait, wait_ct);
         }
-        public override async Task<bool> DeselectPartProgramAsync(bool from_drive, bool wait, CancellationToken ct = default)
-        {
-            try
-            {
-                if (ct.IsCancellationRequested)
-                    return false;
-
-                using var file_list_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                var files = await ListFilesAsync(StoragePath, file_list_ctk.Token);
-                if (!files.HasValue)
-                    return false;
-
-                using var put_file_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                if (!files.Value.Files.Any(f => f.Name == "deselected.mcode"))
-                    await PutFileAsync(StoragePath, "deselected.mcode", true, put_file_ctk.Token);
-
-                if (!await SelectPartProgramAsync("deselected.mcode", true, wait, ct))
-                    return false;
-
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-        public override async Task<bool> SelectPartProgramAsync(string partprogram, bool from_drive, bool wait, CancellationToken ct = default)
-        {
-            try
-            {
-                if (ct.IsCancellationRequested)
-                    return false;
-
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-                if (!await PostGCodeAsync(new[] { $"M23 storage/{partprogram}" }, cts.Token))
-                {
-                    Flux.Messages.LogMessage("Errore selezione partprogram", "Impossibile eseguire il gcode", MessageLevel.ERROR, 0);
-                    return false;
-                }
-
-                var selected_pp = ConnectionProvider.MemoryBuffer.RRFObjectModel
-                    .WhenAnyValue(o => o.Job)
-                    .Convert(j =>
-                    {
-                        return j.File
-                            .Convert(f => f.FileName)
-                            .ValueOrOptional(() => j.LastFileName);
-                    })
-                    .ConvertOr(f => Path.GetFileName(f) == partprogram, () => false);
-
-                if (!await WaitUtils.WaitForAsync(selected_pp, ct))
-                {
-                    Flux.Messages.LogMessage("Errore selezione partprogram", "Timeout di selezione", MessageLevel.ERROR, 0);
-                    return false;
-                }
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                Flux.Messages.LogException(this, ex);
-                return false;
-            }
-        }
-
         public override async Task<bool> ExecuteParamacroAsync(IEnumerable<string> paramacro, CancellationToken put_ct, bool wait = false, CancellationToken wait_ct = default, bool can_cancel = false)
         {
             try
@@ -438,12 +374,6 @@ namespace Flux.ViewModels
                 }
                 else
                 {
-                    // deselect part program
-                    using var deselect_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                    var deselect_result = await DeselectPartProgramAsync(false, true, deselect_ctk.Token);
-                    if (deselect_result == false)
-                        return false;
-
                     using var delete_job_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                     var delete_job_response = await DeleteFileAsync(StoragePath, "job.mcode", true, delete_job_ctk.Token);
 
@@ -467,14 +397,8 @@ namespace Flux.ViewModels
                     if (put_job_response == false)
                         return false;
 
-                    // select part program
-                    using var select_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                    var select_part_program_response = await SelectPartProgramAsync("job.mcode", true, true, select_ctk.Token);
-                    if (select_part_program_response == false)
-                        return false;
-
                     // Set PLC to Cycle
-                    return await CycleAsync(true, wait, wait_ct);
+                    return await CycleAsync(StoragePath, "job.mcode", wait, wait_ct);
 
                     IEnumerable<string> get_job_gcode()
                     {
@@ -851,16 +775,20 @@ namespace Flux.ViewModels
         }
         public override Optional<IEnumerable<string>> GetStartPartProgramGCode(FluxJob job)
         {
-            var extrusion_a = Flux.Feeders.Feeders.Lookup(0).Convert(f => f.ExtrusionKey).ConvertOrDefault(e => $"{e}");
-            var extrusion_b = Flux.Feeders.Feeders.Lookup(1).Convert(f => f.ExtrusionKey).ConvertOrDefault(e => $"{e}");
-            var extrusion_c = Flux.Feeders.Feeders.Lookup(2).Convert(f => f.ExtrusionKey).ConvertOrDefault(e => $"{e}");
-            var extrusion_d = Flux.Feeders.Feeders.Lookup(3).Convert(f => f.ExtrusionKey).ConvertOrDefault(e => $"{e}");
             return new[]
             {
                 "M98 P\"/macros/extr/reset\"",
-                $"M98 P\"/macros/extr/start\" A\"{extrusion_a}\" B\"{extrusion_b}\" C\"{extrusion_c}\" D\"{extrusion_d}\" J\"{job.JobKey}\"",
+                $"M98 P\"/macros/job/start\" A\"{extrusion_key(0)}\" B\"{extrusion_key(1)}\" C\"{extrusion_key(2)}\" D\"{extrusion_key(3)}\" J\"{job.JobKey}\" K\"{job.PartProgram.MCodeKey}\" R0",
                 $"M32 \"0:/{StoragePath}/{job.PartProgram}\""
             };
+
+            string extrusion_key(ushort position)
+            {
+                return Flux.Feeders.Feeders.Lookup(position)
+                    .Convert(f => f.SelectedMaterial)
+                    .Convert(m => m.ExtrusionKey)
+                    .ConvertOrDefault(e => $"{e}");
+            }
         }
         public override Optional<IEnumerable<string>> GetSetToolTemperatureGCode(ArrayIndex position, double temperature)
         {

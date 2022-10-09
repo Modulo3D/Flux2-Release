@@ -15,8 +15,6 @@ namespace Flux.ViewModels
     {
         public override ushort VirtualTagId => 2;
 
-        public override OdometerViewModel<NFCToolNozzle> Odometer { get; }
-
         private ObservableAsPropertyHelper<Optional<FLUX_Temp>> _NozzleTemperature;
         [RemoteOutput(true, typeof(FluxTemperatureConverter))]
         public Optional<FLUX_Temp> NozzleTemperature => _NozzleTemperature.Value;
@@ -50,9 +48,6 @@ namespace Flux.ViewModels
                 tn.GetDocument<Nozzle>(db, tn => tn.NozzleGuid));
         }, t => t.ToolGuid)
         {
-            var multiplier = Observable.Return(1.0);
-            Odometer = new OdometerViewModel<NFCToolNozzle>(Flux, this, multiplier);
-
             var tool_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TEMP_TOOL, Position);
             _NozzleTemperature = Flux.ConnectionProvider
                 .ObserveVariable(m => m.TEMP_TOOL, tool_key)

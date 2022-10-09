@@ -29,8 +29,13 @@ namespace Flux.ViewModels
         public IObservableCache<Optional<Nozzle>, ushort> Nozzles { get; }
         public IObservableCache<Optional<Tool>, ushort> Tools { get; }
 
+        public OdometerManager OdometerManager { get; }
+        IOdometerManager IFluxFeedersViewModel.OdometerManager => OdometerManager;
+
         public FeedersViewModel(FluxViewModel flux) : base(flux)
         {
+            OdometerManager = new OdometerManager(flux);
+
             Feeders = Flux.SettingsProvider
                 .WhenAnyValue(v => v.ExtrudersCount)
                 .Select(CreateFeeders)

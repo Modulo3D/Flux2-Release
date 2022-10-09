@@ -256,14 +256,14 @@ namespace Flux.ViewModels
         private async Task<Optional<MCodeStorage>> ReadMCodeStorageAsync()
         {
             using var qctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            var queue = await Flux.ConnectionProvider.ListFilesAsync(
+            var storage = await Flux.ConnectionProvider.ListFilesAsync(
                 c => c.StoragePath,
                 qctk.Token);
 
-            if (!queue.HasValue)
+            if (!storage.HasValue)
                 return default;
 
-            return queue.Value.GetPartProgramDictionaryFromStorage();
+            return storage.Value.GetMCodeStorage();
         }
         public async Task<bool> ClearMCodeStorageAsync()
         {
@@ -281,7 +281,7 @@ namespace Flux.ViewModels
 
             return true;
         }
-        public async Task<bool> PrepareMCodeAsync(IFluxMCodeStorageViewModel mcode, bool select, Action<double> report_progress = default)
+        public async Task<bool> PrepareMCodeAsync(IFluxMCodeStorageViewModel mcode, Action<double> report_progress = default)
         {
             report_progress_internal(0);
             var mcode_vm = Optional<IFluxMCodeStorageViewModel>.None;
@@ -298,7 +298,7 @@ namespace Flux.ViewModels
                 var recovery = Flux.StatusProvider.PrintingEvaluation.CurrentRecovery;
 
                 using (PrepareMCodeCTS = new CancellationTokenSource())
-                    if (!await Flux.ConnectionProvider.PreparePartProgramAsync(mcode_vm.Value.Analyzer, recovery, select, PrepareMCodeCTS.Token, report_progress_internal))
+                    if (!await Flux.ConnectionProvider.PreparePartProgramAsync(mcode_vm.Value.Analyzer, recovery, PrepareMCodeCTS.Token, report_progress_internal))
                         return false;
 
                 if (Flux.ConnectionProvider.HasVariable(c => c.ENABLE_VACUUM))
@@ -438,10 +438,10 @@ namespace Flux.ViewModels
                     queue_pos = (QueuePosition)last_queue_pos;
             }
 
-            if (!await PrepareMCodeAsync(mcode, false))
+            if (!await PrepareMCodeAsync(mcode))
                 return false;
 
-            var current_job = new FluxJob(Guid.NewGuid(), new MCodePartProgram(mcode.MCodeKey, 0), last_queue_pos + 1);
+            var current_job = new FluxJob(Luid.NewLuid(), new MCodePartProgram(mcode.MCodeKey, 0), last_queue_pos + 1);
 
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             if (!await Flux.ConnectionProvider.PutFileAsync(
@@ -596,7 +596,7 @@ namespace Flux.ViewModels
             if (!queue.HasValue)
                 return default;
 
-            return queue.Value.GetJobDictionaryFromQueue();
+            return queue.Value.GetJobQueue();
         }
         private IEnumerable<IFluxMCodeQueueViewModel> CreateMCodeQueue(FluxJobQueue job_queue)
         {

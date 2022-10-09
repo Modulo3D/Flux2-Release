@@ -51,7 +51,15 @@ namespace Flux.ViewModels
                 var variable = new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, variable_name, ReadModel, GetModel, get_data);
                 variable_setter.Invoke(VariableStore.RegisterVariable(variable));
             }
-
+            public void CreateVariable<TRData, TWData>(
+                Expression<Func<RRF_VariableStoreBase, IFLUX_Variable<TRData, TWData>>> variable_expression,
+                Func<RRF_ConnectionProvider, TModel, Task<TRData>> get_data)
+            {
+                var variable_setter = VariableStore.GetCachedSetterDelegate(variable_expression);
+                var variable_name = string.Join('/', variable_expression.GetMembersName());
+                var variable = new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, variable_name, ReadModel, GetModel, async (c, m) => await get_data(c, m));
+                variable_setter.Invoke(VariableStore.RegisterVariable(variable));
+            }
             public void CreateVariable<TRData, TWData>(
                 Expression<Func<RRF_VariableStoreBase, IFLUX_Variable<TRData, TWData>>> variable_expression,
                 Func<RRF_ConnectionProvider, TModel, Optional<TRData>> get_data,
@@ -169,7 +177,7 @@ namespace Flux.ViewModels
                         .SelectMany(find_units)
                         .ToArray();
 
-                    var array = new RRF_ArrayObjectModel<TModel, TRData, TWData>(ConnectionProvider, array_name, variable_units, get_variable);
+                    var array = new RRF_ArrayObjectModel<TModel, TRData, TWData>(array_name, variable_units, get_variable);
                     array_setter.Invoke(VariableStore.RegisterArray(array));
                 }
                 public void CreateArray<TRData, TWData>(
@@ -200,7 +208,7 @@ namespace Flux.ViewModels
                         .SelectMany(find_units)
                         .ToArray();
 
-                    var array = new RRF_ArrayObjectModel<TModel, TRData, TWData>(ConnectionProvider, array_name, variable_units, get_variable);
+                    var array = new RRF_ArrayObjectModel<TModel, TRData, TWData>(array_name, variable_units, get_variable);
                     array_setter.Invoke(VariableStore.RegisterArray(array));
                 }
                 public void CreateArray<TRData, TWData>(
@@ -233,7 +241,7 @@ namespace Flux.ViewModels
                         .SelectMany(find_units)
                         .ToArray();
 
-                    var array = new RRF_ArrayObjectModel<TModel, TRData, TWData>(ConnectionProvider, array_name, variable_units, get_variable);
+                    var array = new RRF_ArrayObjectModel<TModel, TRData, TWData>(array_name, variable_units, get_variable);
                     array_setter.Invoke(VariableStore.RegisterArray(array));
                 }
                 public void CreateArray<TRData, TWData>(
@@ -266,7 +274,7 @@ namespace Flux.ViewModels
                         .SelectMany(find_units)
                         .ToArray();
 
-                    var array = new RRF_ArrayObjectModel<TModel, TRData, TWData>(ConnectionProvider, array_name, variable_units, get_variable);
+                    var array = new RRF_ArrayObjectModel<TModel, TRData, TWData>(array_name, variable_units, get_variable);
                     array_setter.Invoke(VariableStore.RegisterArray(array));
                 }
 

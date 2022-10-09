@@ -61,8 +61,8 @@ namespace Flux.ViewModels
                 model.CreateArray(c    => c.Z_PROBE_OFFSET, 4, "!Z_PRB_OF_T",  OSAI_ReadPriority.LOW);    
 
 
-                model.CreateVariable(c => c.QUEUE,          OSAI_ReadPriority.MEDIUM,    GetQueueAsync);         
-                model.CreateVariable(c => c.STORAGE,        OSAI_ReadPriority.MEDIUM,    GetStorageAsync);       
+                model.CreateVariable(c => c.QUEUE,          OSAI_ReadPriority.MEDIUM,    GetJobQueue);         
+                model.CreateVariable(c => c.STORAGE,        OSAI_ReadPriority.MEDIUM,    GetMCodeStorage);       
                 model.CreateVariable(c => c.PROCESS_STATUS, OSAI_ReadPriority.ULTRAHIGH, GetProcessStatusAsync); 
                 model.CreateVariable(c => c.PROCESS_MODE,   OSAI_ReadPriority.ULTRAHIGH, GetProcessModeAsync, SetProcessModeAsync); 
                 model.CreateVariable(c => c.BOOT_PHASE,     OSAI_ReadPriority.ULTRAHIGH, GetBootPhaseAsync);     
@@ -252,7 +252,7 @@ namespace Flux.ViewModels
             }*/
         }
 
-        private static async Task<ValueResult<MCodeStorage>> GetStorageAsync(OSAI_ConnectionProvider connection_provider)
+        private static async Task<ValueResult<MCodeStorage>> GetMCodeStorage(OSAI_ConnectionProvider connection_provider)
         {
             var connection = connection_provider.Connection;
             using var qctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
@@ -261,10 +261,10 @@ namespace Flux.ViewModels
                 qctk.Token);
             if (!storage.HasValue)
                 return default;
-            return storage.Value.GetPartProgramDictionaryFromStorage();
+            return storage.Value.GetMCodeStorage();
         }
 
-        private static async Task<ValueResult<FluxJobQueue>> GetQueueAsync(OSAI_ConnectionProvider connection_provider)
+        private static async Task<ValueResult<FluxJobQueue>> GetJobQueue(OSAI_ConnectionProvider connection_provider)
         {
             var connection = connection_provider.Connection;
             using var qctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
@@ -273,7 +273,7 @@ namespace Flux.ViewModels
                 qctk.Token);
             if (!queue.HasValue)
                 return default;
-            return queue.Value.GetJobDictionaryFromQueue();
+            return queue.Value.GetJobQueue();
         }
 
         private static async Task<ValueResult<LineNumber>> GetBlockNumAsync(OSAI_ConnectionProvider connection_provider)

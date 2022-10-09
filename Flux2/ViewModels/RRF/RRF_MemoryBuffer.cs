@@ -252,6 +252,8 @@ namespace Flux.ViewModels
             
             AddFileSytemReader(c => c.StoragePath, slow, timeout, f => RRFObjectModel.Storage = f);
             AddFileSytemReader(c => c.QueuePath, slow, timeout, f => RRFObjectModel.Queue = f);
+
+            AddFileSytemReader(c => c.JobEventPath, slow, timeout, f => RRFObjectModel.JobEvents = f);
             AddFileSytemReader(c => c.ExtrusionPath, slow, timeout, f => RRFObjectModel.Extrusions = f);
 
             _HasFullMemoryRead = MemoryReaders.Connect()

@@ -1,5 +1,6 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
+using Microsoft.Extensions.Logging;
 using Modulo3DStandard;
 using ReactiveUI;
 using System;
@@ -17,8 +18,6 @@ namespace Flux.ViewModels
 
         private ObservableAsPropertyHelper<MaterialState> _State;
         public override MaterialState State => _State.Value;
-
-        public override OdometerViewModel<NFCMaterial> Odometer { get; }
 
         [RemoteCommand]
         public ReactiveCommand<Unit, Unit> UnloadMaterialCommand { get; private set; }
@@ -70,13 +69,22 @@ namespace Flux.ViewModels
         [RemoteOutput(true, typeof(HumidityConverter))]
         public Optional<FLUX_Humidity> Humidity => _Humidity.Value;
 
+        private ObservableAsPropertyHelper<Optional<ExtrusionKey>> _ExtrusionKey;
+        public Optional<ExtrusionKey> ExtrusionKey => _ExtrusionKey.Value;
+
         public MaterialViewModel(FeederViewModel feeder, ushort position) : base(feeder, position, s => s.Materials, (db, m) =>
         {
             return m.GetDocument<Material>(db, m => m.MaterialGuid);
         }, t => t.MaterialGuid)
         {
-            var multiplier = Observable.Return(1.0);
-            Odometer = new OdometerViewModel<NFCMaterial>(Flux, this, multiplier);
+            _ExtrusionKey = Observable.CombineLatest(
+                  Feeder.ToolNozzle.WhenAnyValue(t => t.Nfc),
+                  this.WhenAnyValue(m => m.Nfc),
+                  (tool_nozzle, material) => Modulo3DStandard.ExtrusionKey.Create(tool_nozzle, material))
+                  .ToProperty(this, v => v.ExtrusionKey)
+                  .DisposeWith(Disposables);
+
+            this.WhenAnyValue(e => e.ExtrusionKey).Subscribe(e => Flux.Logger.LogInformation($"{e}"));
 
             var before_gear_key = Flux.ConnectionProvider.GetArrayUnit(m => m.FILAMENT_BEFORE_GEAR, Position);
             _WirePresenceBeforeGear = Flux.ConnectionProvider.ObserveVariable(

@@ -24,10 +24,12 @@ namespace Flux.ViewModels
         IFlux IFluxTagViewModel.Flux => Flux;
         public abstract TState State { get; }
         public FeederViewModel Feeder { get; }
+        public Func<TNFCTag, Guid> CheckTag { get; }
         public abstract ushort VirtualTagId { get; }
         public string VirtualCardId => $"00-00-{VirtualTagId:00}-{Position:00}";
         IFluxFeederViewModel IFluxTagViewModel.Feeder => Feeder;
-        public abstract OdometerViewModel<TNFCTag> Odometer { get; }
+        public OdometerViewModel<TNFCTag> Odometer { get; private set; }
+        IOdometerViewModel<TNFCTag> IFluxTagViewModel<TNFCTag>.Odometer => Odometer;
 
         INFCReading IFluxTagViewModel.Nfc => Nfc;
         private NFCReading<TNFCTag> _Nfc;
@@ -129,13 +131,14 @@ namespace Flux.ViewModels
 
         public virtual void Initialize() 
         {
+            var multiplier = Observable.Return(1.0);
+            Odometer = new OdometerViewModel<TNFCTag>(this, multiplier);
+
             _OdometerPercentage = Odometer.WhenAnyValue(v => v.Percentage)
                 .ToProperty(this, v => v.OdometerPercentage)
                 .DisposeWith(Disposables);
 
-            _RemainingWeight = this.WhenAnyValue(v => v.Nfc)
-                .Select(d => d.Tag)
-                .Convert(n => n.CurWeightG)
+            _RemainingWeight = Odometer.WhenAnyValue(v => v.CurrentValue)
                 .ToProperty(this, v => v.RemainingWeight)
                 .DisposeWith(Disposables);
         }
@@ -226,10 +229,6 @@ namespace Flux.ViewModels
         
         public abstract Task<ValueResult<TNFCTag>> CreateTagAsync(Optional<NFCReading<TNFCTag>> reading);
 
-
-        // Backup nfc
-        public Func<TNFCTag, Guid> CheckTag { get; }
-
         public void StoreTag(Func<INFCTag, INFCTag> modify_tag = default)
         {
             StoreTag(t => (TNFCTag)modify_tag(t));
@@ -313,7 +312,7 @@ namespace Flux.ViewModels
                 return false;
             }
         }
-        private NFCReading<TNFCTag> ReadBackupTag(CardId card_id, Func<TNFCTag, Guid> check_backup_tag)
+        public NFCReading<TNFCTag> ReadBackupTag(CardId card_id, Func<TNFCTag, Guid> check_backup_tag)
         {
             try
             {

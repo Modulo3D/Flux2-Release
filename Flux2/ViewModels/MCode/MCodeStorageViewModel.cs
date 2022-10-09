@@ -142,11 +142,26 @@ namespace Flux.ViewModels
                 this.WhenAnyValue(v => v.IsUploading))
                 .DisposeWith(Disposables);
 
+            var quanitites = Flux.DatabaseProvider
+                .WhenAnyValue(d => d.Database)
+                .Select(db =>
+                {
+                    return Analyzer.MCode.FeederReports
+                        .Select(f => get_material(f.Value))
+                        .Where(m => m.material.HasValue)
+                        .Select(m => ExtrusionG.CreateTotalExtrusion(default, m.feeder, m.material.Value))
+                        .Select(e => e.WeightG);
+
+                    (FeederReport feeder, Optional<Material> material) get_material(FeederReport feeder)
+                    {
+                        var result = db.Value.FindById<Material>(feeder.MaterialId);
+                        return (feeder, result.Documents.FirstOrOptional(m => m != null));
+                    }
+                });
+
             AddOutput("name", Analyzer.MCode.Name);
             AddOutput("quality", Analyzer.MCode.PrintQuality);
-            // TODO
-            //AddOutput("quantities", Analyzer.Extrusions.Select(e => e.Value.WeightG)), typeof(EnumerableConverter<WeightConverter, double>));
-
+            AddOutput("quantities", quanitites, typeof(EnumerableConverter<WeightConverter, double>));
             AddOutput("infoToggled", this.WhenAnyValue(v => v.ShowInfo));
             AddOutput("nozzles", Nozzles.Connect().QueryWhenChanged(f => f.Items.Select(i => i.Name)));
             AddOutput("materials", Materials.Connect().QueryWhenChanged(f => f.Items.Select(i => i.Name)));
