@@ -57,9 +57,7 @@ namespace Flux.ViewModels
                     var cb_bool_value = ComboOption.Create("cbValue", "VALORE?", Enum.GetValues<BoolSelection>(), b => (uint)b, start_value);
                         
                     var bool_result = await Flux.ShowSelectionAsync(
-                        VariableName,
-                        Observable.Return(true),
-                        cb_bool_value);
+                        VariableName, new[] { cb_bool_value });
 
                     if (bool_result == ContentDialogResult.Primary && 
                         cb_bool_value.Value.HasValue)
@@ -70,9 +68,7 @@ namespace Flux.ViewModels
                     var tb_double_value = new TextBox("tbValue", "VALORE?", $"{@double.Value.ValueOr(() => 0):0.###}".Replace(",", "."));
                     
                     var double_result = await Flux.ShowSelectionAsync(
-                        VariableName,
-                        Observable.Return(true),
-                        tb_double_value);
+                        VariableName, new[] { tb_double_value });
 
                     if (double_result == ContentDialogResult.Primary &&
                         double.TryParse(
@@ -87,9 +83,7 @@ namespace Flux.ViewModels
                     var tb_short_value = new TextBox("tbValue", "VALORE?", @short.Value.ValueOr(() => (short)0).ToString());
                     
                     var short_result = await Flux.ShowSelectionAsync(
-                        VariableName,
-                        Observable.Return(true),
-                        tb_short_value);
+                        VariableName, new[] { tb_short_value });
 
                     if (short_result == ContentDialogResult.Primary &&
                         short.TryParse(tb_short_value.Value, out var short_value))
@@ -100,9 +94,7 @@ namespace Flux.ViewModels
                     var tb_word_value = new TextBox("tbValue", "VALORE?", word.Value.ValueOr(() => (ushort)0).ToString());
                     
                     var word_result = await Flux.ShowSelectionAsync(
-                        VariableName,
-                        Observable.Return(true),
-                        tb_word_value);
+                        VariableName, new[] { tb_word_value });
 
                     if (word_result == ContentDialogResult.Primary && 
                         ushort.TryParse(tb_word_value.Value, out var word_value))
@@ -114,9 +106,7 @@ namespace Flux.ViewModels
                     var tb_string_value = new TextBox("tbValue", "VALORE?", @string.Value.ValueOr(() => ""));
                     
                     var string_result = await Flux.ShowSelectionAsync(
-                        VariableName,
-                        Observable.Return(true),
-                        tb_string_value);
+                        VariableName, new[] { tb_string_value });
 
                     if (string_result == ContentDialogResult.Primary)
                             await @string.WriteAsync(tb_string_value.Value);

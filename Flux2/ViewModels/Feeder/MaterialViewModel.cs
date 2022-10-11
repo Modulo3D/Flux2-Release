@@ -84,8 +84,6 @@ namespace Flux.ViewModels
                   .ToProperty(this, v => v.ExtrusionKey)
                   .DisposeWith(Disposables);
 
-            this.WhenAnyValue(e => e.ExtrusionKey).Subscribe(e => Flux.Logger.LogInformation($"{e}"));
-
             var before_gear_key = Flux.ConnectionProvider.GetArrayUnit(m => m.FILAMENT_BEFORE_GEAR, Position);
             _WirePresenceBeforeGear = Flux.ConnectionProvider.ObserveVariable(
                 m => m.FILAMENT_BEFORE_GEAR,
@@ -396,9 +394,7 @@ namespace Flux.ViewModels
             }, converter: typeof(WeightConverter));
 
             var result = await Flux.ShowSelectionAsync(
-                $"MATERIALE N.{Feeder.Position + 1}", 
-                Observable.Return(true),
-                material_option, max_weight_option, cur_weight_option);
+                $"MATERIALE N.{Feeder.Position + 1}", new IDialogOption[] { material_option, max_weight_option, cur_weight_option });
 
             if (result != ContentDialogResult.Primary)
                 return default;

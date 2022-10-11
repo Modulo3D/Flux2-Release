@@ -24,7 +24,7 @@ namespace Flux.ViewModels
         public Optional<string> MCodeName => _MCodeName.Value;
 
         [RemoteOutput(false, typeof(ToStringConverter))]
-        public FluxJob Job { get; }
+        public Job Job { get; }
 
         private ObservableAsPropertyHelper<short> _FileNumber;
         [RemoteOutput(true)]
@@ -47,7 +47,7 @@ namespace Flux.ViewModels
         [RemoteOutput(true, typeof(DateTimeConverter<RelativeDateTimeFormat>))]
         public DateTime EndTime => _EndTime.Value;
 
-        public MCodeQueueViewModel(MCodesViewModel mcodes, FluxJob job) : base($"{typeof(MCodeQueueViewModel).GetRemoteControlName()}??{job.QueuePosition}")
+        public MCodeQueueViewModel(MCodesViewModel mcodes, Job job) : base($"{typeof(MCodeQueueViewModel).GetRemoteControlName()}??{job.QueuePosition}")
         {
             Job = job;
             MCodes = mcodes;

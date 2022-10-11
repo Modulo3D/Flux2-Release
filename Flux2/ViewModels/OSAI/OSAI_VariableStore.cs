@@ -264,7 +264,7 @@ namespace Flux.ViewModels
             return storage.Value.GetMCodeStorage();
         }
 
-        private static async Task<ValueResult<FluxJobQueue>> GetJobQueue(OSAI_ConnectionProvider connection_provider)
+        private static async Task<ValueResult<JobQueue>> GetJobQueue(OSAI_ConnectionProvider connection_provider)
         {
             var connection = connection_provider.Connection;
             using var qctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));

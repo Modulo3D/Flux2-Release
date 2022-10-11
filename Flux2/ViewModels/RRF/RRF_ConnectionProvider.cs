@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Net.Http;
 using System.Reactive.Linq;
 using System.Reflection;
 using System.Text;
@@ -55,7 +56,7 @@ namespace Flux.ViewModels
                     case RRF_ConnectionPhase.DISCONNECTING_CLIENT:
                         await CreateTimeoutAsync(TimeSpan.FromSeconds(5), async ct =>
                         {
-                            var request = new RRF_Request("rr_disconnect", Method.Get, RRF_RequestPriority.Immediate, ct);
+                            var request = new RRF_Request("rr_disconnect", HttpMethod.Get, RRF_RequestPriority.Immediate, ct);
                             var disconnected = await Connection.ExecuteAsync(request);
                             ConnectionPhase = disconnected.Ok ? RRF_ConnectionPhase.CONNECTING_CLIENT : RRF_ConnectionPhase.START_PHASE;
                         });
@@ -64,7 +65,7 @@ namespace Flux.ViewModels
                     case RRF_ConnectionPhase.CONNECTING_CLIENT:
                         await CreateTimeoutAsync(TimeSpan.FromSeconds(5), async ct =>
                         {
-                            var request = new RRF_Request($"rr_connect?password=\"\"&time={DateTime.UtcNow:O}", Method.Get, RRF_RequestPriority.Immediate, ct);
+                            var request = new RRF_Request($"rr_connect?password=\"\"&time={DateTime.UtcNow:O}", HttpMethod.Get, RRF_RequestPriority.Immediate, ct);
                             var connected = await Connection.ExecuteAsync(request);
                             ConnectionPhase = connected.Ok ? RRF_ConnectionPhase.READING_STATUS : RRF_ConnectionPhase.START_PHASE;
                         });

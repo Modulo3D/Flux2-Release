@@ -1,5 +1,6 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
+using Modulo3DDatabase;
 using Modulo3DStandard;
 using ReactiveUI;
 using System;
@@ -150,45 +151,27 @@ namespace Flux.ViewModels
         public ContentDialog(
             IFlux flux,
             string title, 
-            Func<Task> close = default,
-            IObservable<bool> can_close = default,
             Func<Task> confirm = default,
-            IObservable<bool> can_confirm = default,
+            OptionalObservable<bool> can_confirm = default,
             Func<Task> cancel = default,
-            IObservable<bool> can_cancel = default) : base("dialog")
+            OptionalObservable<bool> can_cancel = default) : base("dialog")
         {
             Flux = flux;
             Title = title;
 
-            if (can_close != default)
+            ConfirmCommand = can_confirm.Convert(c => ReactiveCommand.CreateFromTask(async () =>
             {
-                CloseCommand = ReactiveCommand.CreateFromTask(async () =>
-                {
-                    if(close != default)
-                        await close.Invoke();
-                    ShowAsyncSource.SetResult(ContentDialogResult.None);
-                }, can_close).DisposeWith(Disposables);
-            }
+                if (confirm != default)
+                    await confirm.Invoke();
+                ShowAsyncSource.SetResult(ContentDialogResult.Primary);
+            }, c).DisposeWith(Disposables));
 
-            if (can_confirm != default)
+            CancelCommand = can_cancel.Convert(c => ReactiveCommand.CreateFromTask(async () =>
             {
-                ConfirmCommand = ReactiveCommand.CreateFromTask(async () =>
-                {
-                    if (confirm != default)
-                        await confirm.Invoke();
-                    ShowAsyncSource.SetResult(ContentDialogResult.Primary);
-                }, can_confirm).DisposeWith(Disposables);
-            }
-
-            if (can_cancel != default)
-            {
-                CancelCommand = ReactiveCommand.CreateFromTask(async () =>
-                {
-                    if (cancel != default)
-                        await cancel.Invoke();
-                    ShowAsyncSource.SetResult(ContentDialogResult.Secondary);
-                }, can_cancel).DisposeWith(Disposables);
-            }
+                if (cancel != default)
+                    await cancel.Invoke();
+                ShowAsyncSource.SetResult(ContentDialogResult.Secondary);
+            }, c).DisposeWith(Disposables));
 
             ShowAsyncSource = new TaskCompletionSource<ContentDialogResult>();
         }
@@ -252,7 +235,8 @@ namespace Flux.ViewModels
         }
         [RemoteOutput(false)]
         public bool Multiline { get; }
-
+        [RemoteOutput(false)]
+        public bool Relaxed { get; }
 
         private ObservableAsPropertyHelper<bool> _HasValue;
         [RemoteOutput(true)]

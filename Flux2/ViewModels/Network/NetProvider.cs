@@ -248,7 +248,8 @@ namespace Flux.ViewModels
                     e.Response.Headers.Add("Interface-Type", "Flux");
                     return Task.CompletedTask;
                 })
-                .WithWebApi("/api", (c, d) => WebServerUtils.SerializeJson(c, d), m => m.WithController(() => new FluxWebApiController(Flux)))
+                .WithWebApi("/plc", (c, d) => WebServerUtils.SerializeData(c, d), m => m.WithController(() => new PlcWebApiController(Flux)))
+                .WithWebApi("/api", (c, d) => WebServerUtils.SerializeData(c, d), m => m.WithController(() => new FluxWebApiController(Flux)))
                 .WithWebApi("/settings/user", Flux.SettingsProvider.UserSettings, user =>
                 {
                     user
@@ -397,5 +398,36 @@ namespace Flux.ViewModels
 
             await HttpContext.SendStringAsync(sb.ToString(), "text/plain", Encoding.UTF8);
         }
+    }
+    public class PlcWebApiController : WebApiController
+    {
+        public FluxViewModel Flux { get; }
+        public PlcWebApiController(FluxViewModel flux)
+        {
+            Flux = flux;
+        }
+
+        [Route(HttpVerbs.Get, "/download")]
+        public Task<Optional<string>> GetFileAsync([QueryField] string folder, [QueryField] string name) => Flux.ConnectionProvider.GetFileAsync(folder, name, HttpContext.CancellationToken);
+       
+        /*[Route(HttpVerbs.Post, "/upload")]
+        public Task<bool> PutFileAsync([QueryField] string folder, [QueryField] string name) => Flux.ConnectionProvider.PutFileAsync(folder, name, HttpContext.GetRequestBodyAsStringAsync(), HttpContext.CancellationToken);*/
+
+        [Route(HttpVerbs.Get, "/delete")]
+        public Task<bool> DeleteAsync([QueryField] string folder, [QueryField] string name) => Flux.ConnectionProvider.DeleteAsync(folder, name, false, HttpContext.CancellationToken);
+
+        [Route(HttpVerbs.Get, "/rename")]
+        public Task<bool> RenameAsync([QueryField] string folder, [QueryField] string old_name, [QueryField] string new_name) => Flux.ConnectionProvider.RenameAsync(folder, old_name, new_name, false, HttpContext.CancellationToken);
+
+
+        [Route(HttpVerbs.Get, "/list")]
+        public Task<Optional<FLUX_FileList>> ListFilesAsync([QueryField] string folder) => Flux.ConnectionProvider.ListFilesAsync(folder, HttpContext.CancellationToken);
+
+        [Route(HttpVerbs.Get, "/clear")]
+        public Task<bool> ClearFolderAsync([QueryField] string folder) => Flux.ConnectionProvider.ClearFolderAsync(folder, false, HttpContext.CancellationToken);
+
+        [Route(HttpVerbs.Get, "/create")]
+        public Task<bool> CreateFolder([QueryField] string folder, [QueryField] string name) => Flux.ConnectionProvider.CreateFolderAsync(folder, name, HttpContext.CancellationToken);
+
     }
 }

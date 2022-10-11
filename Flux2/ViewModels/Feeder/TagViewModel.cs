@@ -156,8 +156,11 @@ namespace Flux.ViewModels
             if (Nfc.IsVirtualTag.ValueOr(() => true) && operator_usb.ConvertOr(o => o.RewriteNFC, () => false))
             {
                 var tag = await CreateTagAsync(ReadTag(default, true));
-                if(tag.HasValue)
-                    return ConnectTag(new NFCReading<TNFCTag>(tag, VirtualCardId));
+                if (tag.HasValue)
+                {
+                    var card_bytes = VirtualCardId.HexToBytes();
+                    return ConnectTag(new NFCReading<TNFCTag>(tag, new CardId(card_bytes)));
+                }
             }
             
             return Nfc;
@@ -367,7 +370,8 @@ namespace Flux.ViewModels
             {
                 if (!operator_usb.ConvertOr(o => o.RewriteNFC, () => false))
                     return default;
-                return new CardId($"00-00-{VirtualTagId:00}-{Position:00}");
+                var card_bytes = $"00-00-{VirtualTagId:00}-{Position:00}".HexToBytes();
+                return new CardId(card_bytes);
             }
 
             return card_id;
@@ -537,7 +541,8 @@ namespace Flux.ViewModels
                     return default;
 
                 virtual_tag = true;
-                card_id = new CardId($"00-00-{VirtualTagId:00}-{Position:00}");
+                var card_bytes = $"00-00-{VirtualTagId:00}-{Position:00}".HexToBytes();
+                card_id = new CardId(card_bytes);
             }
 
             if (virtual_tag || read_from_backup)

@@ -4,6 +4,7 @@ using DynamicData.Kernel;
 using GreenSuperGreen.Queues;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Modulo3DDatabase;
 using Modulo3DStandard;
 using ReactiveUI;
 using RestSharp;
@@ -164,6 +165,10 @@ namespace Flux.ViewModels
 
         public FluxViewModel(ILogger<IFlux> logger) : base("flux")
         {
+            var mcode = new MCodeKey(Luid.NewLuid());
+            var mcode_str = mcode.ToString();
+            var mcode2 = MCodeKey.Parse(mcode_str);
+
             Logger = logger;
 
             ServicePointManager.UseNagleAlgorithm = false;
@@ -299,10 +304,9 @@ namespace Flux.ViewModels
                         .AsObservableCache();
 
                     var printer_option = ComboOption.Create($"printer", "Stampante:", printers);
+
                     var result = await ShowSelectionAsync(
-                        "Seleziona un modello di stampante",
-                        default,
-                        printer_option);
+                        "Seleziona un modello di stampante", new[] { printer_option });
 
                     if (result != ContentDialogResult.Primary)
                         Environment.Exit(2);
@@ -412,8 +416,8 @@ namespace Flux.ViewModels
             return await ShowContentDialogAsync(f =>
             {
                 var dialog = new ContentDialog(f, title,
-                    can_cancel: Observable.Return(true),
-                    can_confirm: Observable.Return(true));
+                    can_cancel: Observable.Return(true).ToOptional(),
+                    can_confirm: Observable.Return(true).ToOptional());
                 dialog.AddContent(new TextBlock("content", content));
                 return dialog;
             });
@@ -451,26 +455,23 @@ namespace Flux.ViewModels
                 return dialog;
             });
         }
-        public async Task<ContentDialogResult> ShowSelectionAsync(string title, IObservable<bool> can_cancel, IObservable<bool> can_confirm, params IDialogOption[] options)
+        public async Task<ContentDialogResult> ShowSelectionAsync(string title, IDialogOption[] options, OptionalObservable<bool> can_confirm = default)
         {
             return await ShowContentDialogAsync(f =>
             {
+                var confirm_list = options.Select(o => o.WhenAnyValue(o => o.HasValue))
+                    .Append(can_confirm.ObservableOr(() => true));
+
+                var _can_confirm = Observable.CombineLatest(confirm_list,
+                    l => l.All(l => l))
+                    .ToOptional();
+
                 var dialog = new ContentDialog(f, title,
-                    can_cancel: can_cancel,
-                    can_confirm: can_confirm);
+                    can_confirm: _can_confirm,
+                    can_cancel: Observable.Return(true).ToOptional());
+
                 dialog.AddContent("options", options);
-                return dialog;
-            });
-        }
-        public async Task<ContentDialogResult> ShowSelectionAsync(string title, IObservable<bool> can_cancel, params IDialogOption[] options)
-        {
-            return await ShowContentDialogAsync(f =>
-            {
-                var can_confirm = Observable.CombineLatest(options.Select(o => o.WhenAnyValue(o => o.HasValue)), l => l.All(l => l));
-                var dialog = new ContentDialog(f, title,
-                    can_cancel: can_cancel,
-                    can_confirm: can_confirm);
-                dialog.AddContent("options", options);
+                
                 return dialog;
             });
         }
@@ -479,7 +480,8 @@ namespace Flux.ViewModels
             bool reading = true;
             Optional<TResult> value = default;
 
-            using var dialog = new ContentDialog(this, "Lettura tag in corso...", can_cancel: Observable.Return(true));
+            using var dialog = new ContentDialog(this, "Lettura tag in corso...", 
+                can_cancel: Observable.Return(true).ToOptional());
 
             var dialog_result = Task.Run(async () =>
             {

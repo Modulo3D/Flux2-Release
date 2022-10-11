@@ -1,4 +1,6 @@
-﻿using DynamicData.Kernel;
+﻿using DynamicData;
+using DynamicData.Aggregation;
+using DynamicData.Kernel;
 using Microsoft.Extensions.Logging;
 using Modulo3DStandard;
 using ReactiveUI;
@@ -10,6 +12,7 @@ using System.Linq.Expressions;
 using System.Reactive;
 using System.Reactive.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
@@ -45,16 +48,69 @@ namespace Flux.ViewModels
 
             var job_finished = Observable.Merge(queue_ended, queue_incremented.Select(i => i.OldValue));
 
-            //Flux.ConnectionProvider
-            //    .ObserveVariable(c => c.EXTRUSIONS)
-            //    .Subscribe(extrusions =>
-            //    {
-            //        if (!extrusions.HasValue)
-            //            return;
-            //        foreach (var extrusion_queue in extrusions.Value)
-            //            foreach (var extrusion in extrusion_queue.Value)
-            //                flux.Logger.LogInformation($"{extrusion.Key} {extrusion.Key}: {extrusion.Value.DistanceMM}mm");
-            //    });
+            var mcode_events = Flux.ConnectionProvider
+                .ObserveVariable(c => c.MCODE_EVENT);
+
+            mcode_events.Subscribe(async events =>
+            {
+                if (!events.HasValue)
+                    return;
+
+                foreach (var mcode in events.Value)
+                {
+                    var mcode_vm = Flux.MCodes.AvaiableMCodes.Lookup(mcode.Key);
+                    if (!mcode_vm.HasValue)
+                        continue;
+
+                    foreach (var job in mcode.Value)
+                    {
+                        try
+                        {
+                            var program_history = new JobHistory()
+                            {
+                                JobKey = job.Key.ToString(),
+                                MCodeKey = mcode.Key.ToString(),
+                                Name = mcode_vm.Value.Analyzer.MCode.Name,
+                                GCodeMetadata = mcode_vm.Value.Analyzer.MCode.Serialize(),
+                            };
+
+
+                            foreach (var @event in job.Value)
+                            {
+                                flux.Logger.LogInformation(new EventId(0, $"job_started"), $"{@event}");
+                                
+                                // TODO
+                                var core_settings = Flux.SettingsProvider.CoreSettings.Local;
+                                if (!core_settings.LoggerAddress.HasValue)
+                                    continue;
+                       
+                                switch (@event.Event.Event)
+                                {
+                                    case "start":
+                                        program_history.BeginDate = @event.Event.DateTime.ToString();
+                                        var request = new RestRequest($"{core_settings.LoggerAddress}/api/programs");
+                                        request.AddJsonBody(program_history);
+                                        await Flux.NetProvider.Client.PostAsync(request);
+                                        break;
+                                    case "stop":
+                                        program_history.EndDate = @event.Event.DateTime.ToString();
+                                        request = new RestRequest($"{core_settings.LoggerAddress}/api/programs");
+                                        request.AddJsonBody(program_history);
+                                        await Flux.NetProvider.Client.PutAsync(request);
+                                        break;
+                                }
+                            }
+
+                            using var delete_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                            await Flux.ConnectionProvider.DeleteAsync(c => c.JobEventPath, $"{mcode.Key};{job.Key}", false, delete_cts.Token);
+                        }
+                        catch (Exception ex)
+                        { 
+                        }
+                    }
+                }
+            });
+
 
             /*job_started.Subscribe(async queue_position =>
             {
@@ -68,31 +124,7 @@ namespace Flux.ViewModels
                     if (!job.HasValue)
                         return;
 
-                    var mcode_vm = Flux.MCodes.AvaiableMCodes.Lookup(job.Value.MCodeKey);
-                    if (!mcode_vm.HasValue)
-                        return;
-
-                    var mcode = mcode_vm.Value.Analyzer.Convert(a => a.MCode);
-                    if (!mcode.HasValue)
-                        return;
-
-                    var program_history = new JobHistory(job.Value)
-                    {
-                        Name = mcode.Value.Name,
-                        BeginDate = DateTime.Now.ToString(),
-                        GCodeMetadata = mcode.Value.Serialize(),
-                    };
-
-                    var core_settings = Flux.SettingsProvider.CoreSettings.Local;
-                    if (!core_settings.LoggerAddress.HasValue)
-                        return;
-
-                    flux.Logger.LogInformation(new EventId(0, "job_started"), $"{job.Value.JobKey}");
-
-                    // todo
-                    var request = new RestRequest($"{core_settings.LoggerAddress}/api/programs");
-                    request.AddJsonBody(program_history);
-                    await Flux.NetProvider.Client.PostAsync(request);
+                   
                 }
                 catch (Exception ex)
                 {

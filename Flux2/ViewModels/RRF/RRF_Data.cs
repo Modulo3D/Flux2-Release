@@ -1299,7 +1299,7 @@ namespace Flux.ViewModels
                     return default;
 
                 using var get_resurrect_cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-                var resurrect_source = await connection.DownloadFileAsync(f => f.StoragePath, "resurrect.g", get_resurrect_cts.Token);
+                var resurrect_source = await connection.GetFileAsync(f => f.StoragePath, "resurrect.g", get_resurrect_cts.Token);
                 if (!resurrect_source.HasValue)
                     return default;
 

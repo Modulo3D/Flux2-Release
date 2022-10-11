@@ -237,9 +237,7 @@ namespace Flux.ViewModels
 
             var tool_option = ComboOption.Create("tool", "Utensile:", tools);
             var tool_result = await Flux.ShowSelectionAsync(
-                $"UTENSILE N.{Position + 1}",
-                Observable.Return(true),
-                tool_option);
+                $"UTENSILE N.{Position + 1}", new[] { tool_option });
 
             if (tool_result != ContentDialogResult.Primary)
                 return default;
@@ -289,9 +287,7 @@ namespace Flux.ViewModels
             }, converter: typeof(WeightConverter));
 
             var nozzle_result = await Flux.ShowSelectionAsync(
-                $"UGELLO N.{Position + 1}",
-                Observable.Return(true),
-                nozzle_option, max_weight_option, cur_weight_option);
+                $"UGELLO N.{Position + 1}", new IDialogOption[] { nozzle_option, max_weight_option, cur_weight_option });
 
             if (nozzle_result != ContentDialogResult.Primary)
                 return (default, default, default);

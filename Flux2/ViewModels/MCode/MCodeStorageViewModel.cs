@@ -128,7 +128,7 @@ namespace Flux.ViewModels
                 .DisposeWith(Disposables);
 
             DeleteMCodeStorageCommand = ReactiveCommand.CreateFromTask(
-                async () => { await mcodes.DeleteFileAsync(false, this); },
+                async () => { await mcodes.DeleteAsync(false, this); },
                 this.WhenAnyValue(v => v.CanDelete))
                 .DisposeWith(Disposables);
 

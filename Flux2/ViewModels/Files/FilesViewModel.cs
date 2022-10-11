@@ -70,10 +70,7 @@ namespace Flux.ViewModels
             var name = new TextBox("name", "Nome del documento", "", false);
 
             var result = await Flux.ShowSelectionAsync(
-                "Cosa vuoi creare?",
-                Observable.Return(true),
-                options, 
-                name);
+                "Cosa vuoi creare?", new IDialogOption[] {options, name});
 
             if (result != ContentDialogResult.Primary)
                 return;
@@ -101,9 +98,7 @@ namespace Flux.ViewModels
             var modify_option = ComboOption.Create("operations", "Operazione:", Enum.GetValues<FLUX_FileModify>(), f => (uint)f);
             
             var modify_dialog_result = await Flux.ShowSelectionAsync(
-                "Tipo di operazione",
-                Observable.Return(true),
-                modify_option);
+                "Tipo di operazione", new[] { modify_option });
             
             if (modify_dialog_result != ContentDialogResult.Primary)
                 return;
@@ -116,17 +111,16 @@ namespace Flux.ViewModels
             switch (modify_option.Value.Value)
             {
                 case FLUX_FileModify.Rename:
+
                     var rename_option = new TextBox("rename", "Nome del file", fs.FSName);
 
                     var rename_dialog_result = await Flux.ShowSelectionAsync(
-                        "Rinominare il file?",
-                        Observable.Return(true),
-                        rename_option);
+                        "Rinominare il file?", new[] { rename_option });
 
                     if (rename_dialog_result != ContentDialogResult.Primary)
                         return;
 
-                    var rename_result = await Flux.ConnectionProvider.RenameFileAsync(fs.FSPath, fs.FSName, rename_option.Value, true, fs_cts.Token);
+                    var rename_result = await Flux.ConnectionProvider.RenameAsync(fs.FSPath, fs.FSName, rename_option.Value, true, fs_cts.Token);
                     if (rename_result)
                         UpdateFolder.OnNext(Unit.Default);
                     break;
@@ -136,7 +130,7 @@ namespace Flux.ViewModels
                     if (delete_dialog_result != ContentDialogResult.Primary)
                         return;
 
-                    var delete_result = await Flux.ConnectionProvider.DeleteFileAsync(fs.FSPath, fs.FSName, true, fs_cts.Token);
+                    var delete_result = await Flux.ConnectionProvider.DeleteAsync(fs.FSPath, fs.FSName, true, fs_cts.Token);
                     if (delete_result)
                         UpdateFolder.OnNext(Unit.Default);
                     break;
@@ -152,32 +146,14 @@ namespace Flux.ViewModels
         public async Task EditFileAsync(FileViewModel file)
         {
             using var download_cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            var file_source = await Flux.ConnectionProvider.DownloadFileAsync(file.FSPath, file.FSName, download_cts.Token);
+            var file_source = await Flux.ConnectionProvider.GetFileAsync(file.FSPath, file.FSName, download_cts.Token);
             if (!file_source.HasValue)
                 return;
 
             var textbox = new TextBox("source", file.FSName, file_source.Value, multiline: true);
-            var combo = ComboOption.Create("file_access", "Accesso al file",
-                Enum.GetValues<FLUX_FileAccess>(), f => (uint)f,
-                (uint)FLUX_FileAccess.ReadOnly, f =>
-                {
-                    var textbox_value = textbox.RemoteInputs.Lookup("value");
-                    if (!textbox_value.HasValue)
-                        return;
-
-                    var enabled = f.HasValue && ((FLUX_FileAccess)f.Value) == FLUX_FileAccess.ReadWrite;
-                    textbox_value.Value.IsEnabled = enabled;
-                });
-
-            var can_confirm = combo.Items.SelectedValueChanged
-                .Select(f => f.HasValue && f.Value == FLUX_FileAccess.ReadWrite);
 
             var result = await Flux.ShowSelectionAsync(
-                "Modifica File",
-                Observable.Return(true),
-                can_confirm,
-                textbox,
-                combo); 
+                "Modifica File", new[] { textbox }); 
             
             if (result != ContentDialogResult.Primary)
                 return;

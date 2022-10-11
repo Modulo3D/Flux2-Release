@@ -26,9 +26,9 @@ namespace Flux.ViewModels
                 Func<RRF_MemoryBuffer, Task<Optional<TModel>>> read_model,
                 Func<RRF_ObjectModel, IObservable<Optional<TModel>>> get_model)
             {
-                GetModel = get_model;
                 ReadModel = read_model;
                 VariableStore = variable_store;
+                GetModel = r => get_model(r).DistinctUntilChanged();
                 ConnectionProvider = variable_store.ConnectionProvider;
             }
 

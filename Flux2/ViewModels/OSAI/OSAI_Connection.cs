@@ -909,7 +909,7 @@ namespace Flux.ViewModels
             return await WriteVariableAsync("!REQ_HOLD", true);
         }
         // FILES
-        public override async Task<bool> DeleteFileAsync(string folder, string filename, bool wait, CancellationToken ct = default)
+        public override async Task<bool> DeleteAsync(string folder, string filename, bool wait, CancellationToken ct = default)
         {
             try
             {
@@ -1032,7 +1032,7 @@ namespace Flux.ViewModels
                 if (!Client.HasValue)
                     return false;
 
-                var remove_file_response = await DeleteFileAsync(folder, "file_upload.tmp", false);
+                var remove_file_response = await DeleteAsync(folder, "file_upload.tmp", false);
                 if (!remove_file_response)
                     return false;
 
@@ -1157,11 +1157,11 @@ namespace Flux.ViewModels
                     close_file_response.ErrNum))
                     return false;
 
-                var remove_file_response = await DeleteFileAsync(folder, filename, false);
+                var remove_file_response = await DeleteAsync(folder, filename, false);
                 if (!remove_file_response)
                     return false;
 
-                var rename_response = await RenameFileAsync(folder, "file_upload.tmp", filename, false);;
+                var rename_response = await RenameAsync(folder, "file_upload.tmp", filename, false);;
                 if (!rename_response)
                     return false;
 
@@ -1258,7 +1258,7 @@ namespace Flux.ViewModels
             }
             catch { return default; }
         }
-        public override Task<bool> ClearFolderAsync(string folder, bool wait, CancellationToken ct = default) => DeleteFileAsync(folder, "*", wait, ct);
+        public override Task<bool> ClearFolderAsync(string folder, bool wait, CancellationToken ct = default) => DeleteAsync(folder, "*", wait, ct);
 
         public override Optional<IEnumerable<string>> GetHomingGCode(params char[] axis)
         {
@@ -1284,7 +1284,7 @@ namespace Flux.ViewModels
         {
             return new[] { $"(CLS, MACRO\\change_tool, {position.GetArrayBaseIndex(this)})" };
         }
-        public override Optional<IEnumerable<string>> GetStartPartProgramGCode(FluxJob job)
+        public override Optional<IEnumerable<string>> GetStartPartProgramGCode(Job job)
         {
             return new[] { $"(CLS, {StoragePath}\\{job.PartProgram})" };
         }
@@ -1313,7 +1313,7 @@ namespace Flux.ViewModels
             return new[] { $"G1 A>>{distance} F{feedrate}".Replace(",", ".") };
         }
 
-        public override async Task<Optional<string>> DownloadFileAsync(string folder, string filename, CancellationToken ct)
+        public override async Task<Optional<string>> GetFileAsync(string folder, string filename, CancellationToken ct)
         {
             if (!Client.HasValue)
                 return default;
@@ -1365,7 +1365,7 @@ namespace Flux.ViewModels
                 put_cancel_print_cts.Token, true, wait_cancel_print_cts.Token);
         }
 
-        public override async Task<bool> RenameFileAsync(string folder, string old_filename, string new_filename, bool wait, CancellationToken ct = default)
+        public override async Task<bool> RenameAsync(string folder, string old_filename, string new_filename, bool wait, CancellationToken ct = default)
         {
             if (!Client.HasValue)
                 return false;
@@ -1412,7 +1412,7 @@ namespace Flux.ViewModels
             try
             {
                 using var delete_paramacro_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                var delete_paramacro_response = await DeleteFileAsync(StoragePath, "paramacro.mcode", true, delete_paramacro_ctk.Token);
+                var delete_paramacro_response = await DeleteAsync(StoragePath, "paramacro.mcode", true, delete_paramacro_ctk.Token);
 
                 // put file
                 var put_paramacro_response = await PutFileAsync(
@@ -1453,7 +1453,7 @@ namespace Flux.ViewModels
             return new[] { $"(CLS, {folder}\\{filename})" };
         }
 
-        public override Optional<IEnumerable<string>> GetCancelOperationGCode()
+        public override Optional<IEnumerable<string>> GetCancelOperationGCode(ushort reason)
         {
             return new[] { "(REL)" };
         }
@@ -1464,6 +1464,16 @@ namespace Flux.ViewModels
         }
 
         public override Optional<IEnumerable<string>> GetManualFilamentExtractGCode(ArrayIndex position, ushort iterations, double iteration_distance, double feedrate)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override Task<Stream> GetFileStreamAsync(string folder, string name, CancellationToken ct)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override Task<bool> PutFileStreamAsync(string folder, string name, Stream data, CancellationToken ct)
         {
             throw new NotImplementedException();
         }

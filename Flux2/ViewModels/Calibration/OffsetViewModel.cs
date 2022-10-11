@@ -387,10 +387,7 @@ namespace Flux.ViewModels
             var offset_z = new NumericOption("offset_z", "OFFSET Z", ProbeOffset.ConvertOr(o => o.Z, () => 0), 0.01);
             var result = await Flux.ShowSelectionAsync(
                 "IMPOSTA OFFSET",
-                Observable.Return(true),
-                offset_x,
-                offset_y,
-                offset_z);
+                new[] { offset_x, offset_y, offset_z });
 
             if (result != ContentDialogResult.Primary)
                 return;

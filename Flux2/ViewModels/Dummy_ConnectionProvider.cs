@@ -3,6 +3,7 @@ using DynamicData.Kernel;
 using Modulo3DStandard;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq.Expressions;
 using System.Reactive;
 using System.Threading;
@@ -121,7 +122,7 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override Task<bool> DeleteFileAsync(string folder, string filename, bool wait, CancellationToken ct)
+        public override Task<bool> DeleteAsync(string folder, string filename, bool wait, CancellationToken ct)
         {
             throw new NotImplementedException();
         }
@@ -185,7 +186,7 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override Optional<IEnumerable<string>> GetStartPartProgramGCode(FluxJob job)
+        public override Optional<IEnumerable<string>> GetStartPartProgramGCode(Job job)
         {
             throw new NotImplementedException();
         }
@@ -199,7 +200,7 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override Task<Optional<string>> DownloadFileAsync(string folder, string filename, CancellationToken ct)
+        public override Task<Optional<string>> GetFileAsync(string folder, string filename, CancellationToken ct)
         {
             throw new NotImplementedException();
         }
@@ -238,7 +239,7 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override Task<bool> RenameFileAsync(string folder, string old_filename, string new_filename, bool wait, CancellationToken ct = default)
+        public override Task<bool> RenameAsync(string folder, string old_filename, string new_filename, bool wait, CancellationToken ct = default)
         {
             throw new NotImplementedException();
         }
@@ -288,7 +289,7 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override Optional<IEnumerable<string>> GetCancelOperationGCode()
+        public override Optional<IEnumerable<string>> GetCancelOperationGCode(ushort reason)
         {
             throw new NotImplementedException();
         }
@@ -314,6 +315,16 @@ namespace Flux.ViewModels
         }
 
         public override Task<bool> CycleAsync(string folder, string filename, bool wait, CancellationToken ct = default)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override Task<Stream> GetFileStreamAsync(string folder, string name, CancellationToken ct)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override Task<bool> PutFileStreamAsync(string folder, string name, Stream data, CancellationToken ct)
         {
             throw new NotImplementedException();
         }

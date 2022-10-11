@@ -85,7 +85,7 @@ namespace Flux.ViewModels
 
                 Extrusions.CreateVariable(c => c.EXTRUSIONS,    (c, m) => m.GetExtrusionSetQueue(c));
                 Job.CreateVariable(c => c.PROGRESS,             (c, m) => m.GetParamacroProgress());
-                JobEvents.CreateVariable(c => c.JOB_EVENT,      (c, m) => m.GetJobEvents(c));
+                JobEvents.CreateVariable(c => c.MCODE_EVENT,      (c, m) => m.GetMCodeEvents(c));
                 Queue.CreateVariable(c => c.QUEUE,              (c, m) => m.GetJobQueue());
                 Tools.CreateVariable(c => c.TOOL_NUM,           (c, t) => (ushort)t.Count);
                 

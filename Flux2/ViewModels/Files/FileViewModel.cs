@@ -44,12 +44,6 @@ namespace Flux.ViewModels
         public override string ToString() => $"{FSPath}{PathSeparator}{FSName}";
     }
 
-    public enum FLUX_FileAccess : uint
-    {
-        ReadOnly = 0,
-        ReadWrite = 1,
-    }
-
     public enum FLUX_FileModify : uint
     {
         Rename = 0,

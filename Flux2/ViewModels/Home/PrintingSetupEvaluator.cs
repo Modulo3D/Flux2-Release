@@ -64,7 +64,7 @@ namespace Flux.ViewModels
                 queue_pos,
                 db_changed,
                 eval_changed,
-                (q, p, db, f) => GetExpectedDocumentQueue(q, p, db, f, GetDocumentId))
+                (q, p, db, f) => GetExpectedDocumentQueue(q, p, db, f))
                 .ToProperty(this, v => v.ExpectedDocumentQueue);
 
             _CurrentDocument = this.WhenAnyValue(v => v.TagViewModel)
@@ -102,11 +102,10 @@ namespace Flux.ViewModels
         public abstract bool GetInvalid(Optional<TTagDocument> document, Optional<TState> state, Optional<FeederReportQueue> report);
 
         private Optional<DocumentQueue<TDocument>> GetExpectedDocumentQueue(
-            Optional<FluxJobQueue> job_queue,
+            Optional<JobQueue> job_queue,
             Optional<QueuePosition> queue_position, 
             Optional<ILocalDatabase> database, 
-            Optional<FeederReportQueue> feeder_queue,
-            Func<FeederReport, int> get_id)
+            Optional<FeederReportQueue> feeder_queue)
         {
             try
             {
@@ -132,7 +131,7 @@ namespace Flux.ViewModels
                     if (!feeder_report.Key.Equals(job.Value.JobKey))
                         continue;
 
-                    var document_id = get_id(feeder_report.Value);
+                    var document_id = GetDocumentId(feeder_report.Value);
                     var result = database.Value.FindById<TDocument>(document_id);
                     if (!result.HasDocuments)
                         continue;
@@ -412,7 +411,7 @@ namespace Flux.ViewModels
             return !is_probed.Value;
         }
 
-        private Optional<FeederReportQueue> GetFeederReportQueue(Optional<QueuePosition> queue_pos, Optional<FluxJobQueue> job_queue, Dictionary<MCodeKey, MCodeAnalyzer> mcode_analyzers)
+        private Optional<FeederReportQueue> GetFeederReportQueue(Optional<QueuePosition> queue_pos, Optional<JobQueue> job_queue, Dictionary<MCodeKey, MCodeAnalyzer> mcode_analyzers)
         {
             try
             {

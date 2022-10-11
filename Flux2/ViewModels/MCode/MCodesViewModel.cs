@@ -73,7 +73,7 @@ namespace Flux.ViewModels
 
             AvaiableMCodes = new SourceCache<IFluxMCodeStorageViewModel, MCodeKey>(f => f.MCodeKey);
             QueuedMCodes = Flux.ConnectionProvider.ObserveVariable(c => c.QUEUE)
-                .ValueOr(() => new FluxJobQueue())
+                .ValueOr(() => new JobQueue())
                 .Select(CreateMCodeQueue)
                 .ToObservableChangeSet(kvp => kvp.Job.QueuePosition)
                 .Filter(filter_queue)
@@ -327,7 +327,7 @@ namespace Flux.ViewModels
             }
         }
 
-        public async Task<bool> DeleteFileAsync(bool hard_delete, IFluxMCodeStorageViewModel file)
+        public async Task<bool> DeleteAsync(bool hard_delete, IFluxMCodeStorageViewModel file)
         {
             try
             {
@@ -356,7 +356,7 @@ namespace Flux.ViewModels
                     foreach (var mcode in mcodes)
                     {
                         using var delete_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                        if (!await Flux.ConnectionProvider.DeleteFileAsync(c => c.StoragePath, $"{mcode}", true, delete_cts.Token))
+                        if (!await Flux.ConnectionProvider.DeleteAsync(c => c.StoragePath, $"{mcode}", true, delete_cts.Token))
                             return false;
                     }
                 }
@@ -441,7 +441,7 @@ namespace Flux.ViewModels
             if (!await PrepareMCodeAsync(mcode))
                 return false;
 
-            var current_job = new FluxJob(Luid.NewLuid(), new MCodePartProgram(mcode.MCodeKey, 0), last_queue_pos + 1);
+            var current_job = new Job(new JobKey(Luid.NewLuid()), new MCodePartProgram(mcode.MCodeKey, 0), last_queue_pos + 1);
 
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             if (!await Flux.ConnectionProvider.PutFileAsync(
@@ -494,7 +494,7 @@ namespace Flux.ViewModels
                     continue;
 
                 using var delete_queue_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                if (!await Flux.ConnectionProvider.DeleteFileAsync(
+                if (!await Flux.ConnectionProvider.DeleteAsync(
                     c => c.QueuePath,
                     $"{current_job}",
                     true,
@@ -556,14 +556,14 @@ namespace Flux.ViewModels
                 return false;
 
             using var delete_current_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            if (!await Flux.ConnectionProvider.DeleteFileAsync(
+            if (!await Flux.ConnectionProvider.DeleteAsync(
                 c => c.QueuePath,
                 $"{current_job}",
                 true, delete_current_cts.Token))
                 return false;
 
             using var delete_other_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            if (!await Flux.ConnectionProvider.DeleteFileAsync(
+            if (!await Flux.ConnectionProvider.DeleteAsync(
                 c => c.QueuePath,
                 $"{other_job}",
                 true, delete_other_cts.Token))
@@ -586,7 +586,7 @@ namespace Flux.ViewModels
             return await Flux.ConnectionProvider.GenerateInnerQueueAsync();
         }
 
-        private async Task<Optional<FluxJobQueue>> ReadMCodeQueueAsync()
+        private async Task<Optional<JobQueue>> ReadMCodeQueueAsync()
         {
             using var qctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             var queue = await Flux.ConnectionProvider.ListFilesAsync(
@@ -598,7 +598,7 @@ namespace Flux.ViewModels
 
             return queue.Value.GetJobQueue();
         }
-        private IEnumerable<IFluxMCodeQueueViewModel> CreateMCodeQueue(FluxJobQueue job_queue)
+        private IEnumerable<IFluxMCodeQueueViewModel> CreateMCodeQueue(JobQueue job_queue)
         {
             foreach (var job in job_queue.Values)
                 yield return new MCodeQueueViewModel(this, job);
