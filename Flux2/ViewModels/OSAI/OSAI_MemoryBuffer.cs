@@ -14,14 +14,14 @@ using System.Threading.Tasks;
 namespace Flux.ViewModels
 {
 
-    public class OSAI_MemoryReader : FLUX_MemoryReader<OSAI_ConnectionProvider, Unit>
+    public class OSAI_MemoryReader : FLUX_MemoryReader<OSAI_MemoryBuffer, Unit>
     {
         public IEnumerable<IOSAI_AsyncVariable> Variables { get; }
-        public OSAI_MemoryReader(OSAI_ConnectionProvider connection_provider, string resource, IEnumerable<IOSAI_AsyncVariable> variables, int max_retries) : base(connection_provider, resource, _ => { }, max_retries)
+        public OSAI_MemoryReader(OSAI_MemoryBuffer memory_buffer, string resource, IEnumerable<IOSAI_AsyncVariable> variables) : base(memory_buffer, resource)
         {
             Variables = variables;
         }
-        public override async Task TryScheduleAsync(TimeSpan timeout)
+        public override async Task TryScheduleAsync()
         {
             var has_memory_read = true;
             foreach (var variable in Variables)
@@ -29,22 +29,18 @@ namespace Flux.ViewModels
                 var memory_updated = await variable.UpdateAsync();
                 has_memory_read = has_memory_read && memory_updated;
             }
-
-            if (has_memory_read)
-                SetMemoryRead(Unit.Default);
-            else
-                SetMemoryError();
+            HasMemoryRead = has_memory_read;
         }
     }
 
-    public class OSAI_MemoryReaderGroup : FLUX_MemoryReaderGroup<OSAI_ConnectionProvider, OSAI_Connection, OSAI_VariableStore>
+    public class OSAI_MemoryReaderGroup : FLUX_MemoryReaderGroup<OSAI_MemoryBuffer, OSAI_ConnectionProvider, OSAI_VariableStore>
     {
-        public OSAI_MemoryReaderGroup(OSAI_ConnectionProvider connection_provider, TimeSpan period, TimeSpan timeout) : base(connection_provider, period, timeout)
+        public OSAI_MemoryReaderGroup(OSAI_MemoryBuffer memory_buffer, TimeSpan period) : base(memory_buffer, period)
         {
         }
         public void AddMemoryReader(IGrouping<OSAI_ReadPriority, IOSAI_AsyncVariable> variables)
         {
-            MemoryReaders.AddOrUpdate(new OSAI_MemoryReader(ConnectionProvider, $"{variables.Key}", variables, 5));
+            MemoryReaders.AddOrUpdate(new OSAI_MemoryReader(MemoryBuffer, $"{variables.Key}", variables));
         }
     }
 
@@ -238,7 +234,7 @@ namespace Flux.ViewModels
 
             var memory_reader = MemoryReaders.Lookup(period);
             if (!memory_reader.HasValue)
-                MemoryReaders.AddOrUpdate(new OSAI_MemoryReaderGroup(ConnectionProvider, period, default));
+                MemoryReaders.AddOrUpdate(new OSAI_MemoryReaderGroup(this, period));
             memory_reader = MemoryReaders.Lookup(period);
             if (!memory_reader.HasValue)
                 return;

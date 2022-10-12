@@ -37,23 +37,20 @@ namespace Flux.ViewModels
 
     public struct RRF_Request
     {
-        //public RestRequest Request { get; }
+        public TimeSpan Timeout { get; }
         public HttpRequestMessage Request { get; }
         public RRF_RequestPriority Priority { get; }
-        public CancellationToken CancellationToken { get; }
+        public CancellationToken Cancellation { get; }
         public TaskCompletionSource<RRF_Response> Response { get; }
-        public RRF_Request(string request, 
-            HttpMethod httpMethod,
-            //Method httpMethod,
-            RRF_RequestPriority priority, CancellationToken ct)
+        public RRF_Request(string request, HttpMethod httpMethod, RRF_RequestPriority priority, CancellationToken ct, TimeSpan timeout = default)
         {
+            Timeout = timeout;
+            Cancellation = ct;
             Priority = priority;
-            CancellationToken = ct;
             Request = new HttpRequestMessage(httpMethod, request);
-            //Request = new RestRequest(request, httpMethod);
             Response = new TaskCompletionSource<RRF_Response>(TaskCreationOptions.RunContinuationsAsynchronously);
         }
-        public override string ToString() => $"{nameof(RRF_Request)} Method:{Request.Method} Resource:{Request}";
+        public override string ToString() => $"{nameof(RRF_Request)} Method:{Request.Method} Resource:{Request.RequestUri}";
     }
 
     public struct RRF_Response
@@ -125,9 +122,8 @@ namespace Flux.ViewModels
 
         public async Task<RRF_Response> ExecuteAsync(RRF_Request rrf_request)
         {
-            using (rrf_request.CancellationToken.Register(() =>
-                rrf_request.Response.TrySetResult(default)))
-            { 
+            using (rrf_request.Cancellation.Register(() => rrf_request.Response.TrySetResult(default)))
+            {
                 if (!Client.HasValue)
                     return default;
                 Requests.Enqueue(rrf_request.Priority, rrf_request);
@@ -143,17 +139,20 @@ namespace Flux.ViewModels
             {
                 try
                 {
-                    var ct = rrf_request.CancellationToken;
-                    
-                    var response = await Client.Value.SendAsync(rrf_request.Request, ct);
-                    var content = await response.Content.ReadAsStringAsync(ct);
-                    
-                    //var response = await Client.Value.ExecuteAsync(rrf_request.Request, ct);
+                    using var request_cts = CancellationTokenSource.CreateLinkedTokenSource(rrf_request.Cancellation);
+                    if (rrf_request.Timeout > TimeSpan.Zero)
+                        request_cts.CancelAfter(rrf_request.Timeout);
 
-                    var rrf_response = new RRF_Response(response.StatusCode, content);
+                    var response        = await Client.Value.SendAsync(rrf_request.Request, request_cts.Token);
+                    var content         = await response.Content.ReadAsStringAsync(request_cts.Token);
+                    var rrf_response    = new RRF_Response(response.StatusCode, content);
+
                     rrf_request.Response.TrySetResult(rrf_response);
                 }
-                catch { rrf_request.Response.TrySetResult(default); }
+                catch
+                {
+                    rrf_request.Response.TrySetResult(default); 
+                }
             }
         }
 
