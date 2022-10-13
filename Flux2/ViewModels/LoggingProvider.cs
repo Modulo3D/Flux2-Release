@@ -49,7 +49,12 @@ namespace Flux.ViewModels
             var job_finished = Observable.Merge(queue_ended, queue_incremented.Select(i => i.OldValue));
 
             var mcode_events = Flux.ConnectionProvider
-                .ObserveVariable(c => c.MCODE_EVENT);
+                .ObserveVariable(c => c.MCODE_EVENT)
+                .Convert(get_events)
+                .ConvertMany(Observable.FromAsync);
+
+            Func<Task<Optional<MCodeEventStorage>>> get_events(MCodeEventStoragePreview events) =>
+                () => events.GetMCodeEventStorage(Flux.ConnectionProvider);
 
             mcode_events.Subscribe(async events =>
             {
@@ -64,26 +69,25 @@ namespace Flux.ViewModels
 
                     foreach (var job in mcode.Value)
                     {
-                        try
+                        var program_history = new JobHistory()
                         {
-                            var program_history = new JobHistory()
-                            {
-                                JobKey = job.Key.ToString(),
-                                MCodeKey = mcode.Key.ToString(),
-                                Name = mcode_vm.Value.Analyzer.MCode.Name,
-                                GCodeMetadata = mcode_vm.Value.Analyzer.MCode.Serialize(),
-                            };
+                            JobKey = job.Key.ToString(),
+                            MCodeKey = mcode.Key.ToString(),
+                            Name = mcode_vm.Value.Analyzer.MCode.Name,
+                            GCodeMetadata = mcode_vm.Value.Analyzer.MCode.Serialize(),
+                        };
 
-
-                            foreach (var @event in job.Value)
-                            {
-                                flux.Logger.LogInformation(new EventId(0, $"job_started"), $"{@event}");
+                        foreach (var @event in job.Value)
+                        {
+                            flux.Logger.LogInformation(new EventId(0, $"job_event"), $"{@event}");
                                 
-                                // TODO
-                                var core_settings = Flux.SettingsProvider.CoreSettings.Local;
-                                if (!core_settings.LoggerAddress.HasValue)
-                                    continue;
+                            // TODO
+                            var core_settings = Flux.SettingsProvider.CoreSettings.Local;
+                            if (!core_settings.LoggerAddress.HasValue)
+                                continue;
                        
+                            try
+                            {
                                 switch (@event.Event.Event)
                                 {
                                     case "start":
@@ -100,13 +104,13 @@ namespace Flux.ViewModels
                                         break;
                                 }
                             }
+                            catch (Exception ex)
+                            { 
+                            }
+                        }
 
-                            using var delete_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                            await Flux.ConnectionProvider.DeleteAsync(c => c.JobEventPath, $"{mcode.Key};{job.Key}", false, delete_cts.Token);
-                        }
-                        catch (Exception ex)
-                        { 
-                        }
+                        using var delete_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                        await Flux.ConnectionProvider.DeleteAsync(c => c.JobEventPath, $"{mcode.Key};{job.Key}", false, delete_cts.Token);
                     }
                 }
             });

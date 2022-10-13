@@ -175,7 +175,7 @@ namespace Flux.ViewModels
                 return false;
             if (queue_size > 1)
                 return true;
-            if (!printing_eval.CurrentMCode.HasValue && !printing_eval.CurrentRecovery.HasValue)
+            if (!printing_eval.CurrentMCode.HasValue)
                 return true;
             if (!status.ConvertOr(s => s == FLUX_ProcessStatus.IDLE, () => false))
                 return false;

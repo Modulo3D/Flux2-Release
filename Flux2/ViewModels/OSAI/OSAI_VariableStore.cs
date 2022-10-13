@@ -61,14 +61,12 @@ namespace Flux.ViewModels
                 model.CreateArray(c    => c.Z_PROBE_OFFSET, 4, "!Z_PRB_OF_T",  OSAI_ReadPriority.LOW);    
 
 
-                model.CreateVariable(c => c.QUEUE,          OSAI_ReadPriority.MEDIUM,    GetJobQueue);         
-                model.CreateVariable(c => c.STORAGE,        OSAI_ReadPriority.MEDIUM,    GetMCodeStorage);       
+                model.CreateVariable(c => c.JOB_QUEUE,      OSAI_ReadPriority.MEDIUM,    GetJobQueue);           
                 model.CreateVariable(c => c.PROCESS_STATUS, OSAI_ReadPriority.ULTRAHIGH, GetProcessStatusAsync); 
                 model.CreateVariable(c => c.PROCESS_MODE,   OSAI_ReadPriority.ULTRAHIGH, GetProcessModeAsync, SetProcessModeAsync); 
                 model.CreateVariable(c => c.BOOT_PHASE,     OSAI_ReadPriority.ULTRAHIGH, GetBootPhaseAsync);     
                 model.CreateVariable(c => c.BOOT_MODE,      OSAI_ReadPriority.ULTRAHIGH, _ => Task.FromResult(new ValueResult<Unit>(Unit.Default)), SetBootModeAsync);    
                 model.CreateVariable(c => c.PROGRESS,       OSAI_ReadPriority.ULTRAHIGH, _ => Task.FromResult(new ValueResult<ParamacroProgress>(new ParamacroProgress("", 70)))); 
-                model.CreateVariable(c => c.MCODE_RECOVERY, OSAI_ReadPriority.MEDIUM,    GetMCodeRecoveryAsync); 
 
 
                 // GW VARIABLES                                                                                                                                                                                                                                                                              
@@ -155,125 +153,20 @@ namespace Flux.ViewModels
             }
         }
 
-        private static Task<ValueResult<IFLUX_MCodeRecovery>> GetMCodeRecoveryAsync(OSAI_ConnectionProvider connection_provider)
-        {
-            return Task.FromResult(new ValueResult<IFLUX_MCodeRecovery>(default));
-            /*try
-            {
-                var connection = connection_provider.Connection;
-                if (!connection.HasValue)
-                    return default;
-
-                var hold_tool = await connection.Value.ReadNamedShortAsync("!HOLD_TOOL");
-                if (!hold_tool.HasValue)
-                    return default;
-
-                var hold_blk_num = await connection.Value.ReadNamedDoubleAsync("!HOLD_BLK");
-                if (!hold_blk_num.HasValue)
-                    return default;
-
-                var req_hold = await connection.Value.ReadNamedBoolAsync("!REQ_HOLD");
-                if (!req_hold.HasValue)
-                    return default;
-
-                var is_hold = await connection.Value.ReadNamedBoolAsync("!IS_HOLD");
-                if (!is_hold.HasValue)
-                    return default;
-
-                if (!req_hold.Value && !is_hold.Value)
-                    return default;
-
-                var hold_temperatures = new Dictionary<ushort, double>();
-                for (ushort position = 0; position < 4; position++)
-                {
-                    var hold_temperature = await connection.Value.ReadNamedDoubleAsync(new OSAI_NamedAddress("!HOLD_TEMP", position));
-                    if (!hold_temperature.HasValue)
-                        continue;
-                    hold_temperatures.Add(position, hold_temperature.Value);
-                }
-
-                if (hold_temperatures.Count < 1)
-                    return default;
-
-                var hold_positions = new Dictionary<ushort, double>();
-                for (ushort position = 0; position < 4; position++)
-                {
-                    var hold_position = await connection.Value.ReadNamedDoubleAsync(new OSAI_NamedAddress("!HOLD_POS", position));
-                    if (!hold_position.HasValue)
-                        continue;
-                    hold_positions.Add(position, hold_position.Value);
-                }
-
-                if (hold_positions.Count < 1)
-                    return default;
-
-                var hold_pp_str = await connection.Value.ReadNamedStringAsync("!HOLD_PP", 36);
-                if (!hold_pp_str.HasValue)
-                    return default;
-
-                var hold_pp = MCodePartProgram.Parse(hold_pp_str.Value);
-                if (!hold_pp.HasValue)
-                    return default;
-
-                var hold_mcode_lookup = connection.Flux.MCodes.AvaiableMCodes.Lookup(hold_pp.Value.MCodeKey);
-                if (!hold_mcode_lookup.HasValue)
-                    return default;
-
-                var hold_analyzer = hold_mcode_lookup.Value.Analyzer;
-                if (!hold_analyzer.HasValue)
-                    return default;
-
-                var selected_pp = await connection.Value.ReadVariableAsync(m => m.PART_PROGRAM);
-                var is_selected = selected_pp.ConvertOr(pp =>
-                {
-                    if (!is_hold.Value)
-                        return false;
-                    if (!pp.IsRecovery)
-                        return false;
-                    if (pp.MCodeKey != hold_analyzer.Value.MCode.MCodeKey)
-                        return false;
-                    if (pp.StartBlock != hold_blk_num.Value)
-                        return false;
-                    return true;
-                }, () => false);
-
-                return new OSAI_MCodeRecovery(
-                    hold_pp.Value.MCodeKey,
-                    hold_pp.Value.StartBlock,
-                    is_selected,
-                    (uint)hold_blk_num.Value,
-                    hold_tool.Value,
-                    hold_temperatures,
-                    hold_positions);
-            }
-            catch (Exception ex)
-            {
-                return default;
-            }*/
-        }
-
-        private static async Task<ValueResult<MCodeStorage>> GetMCodeStorage(OSAI_ConnectionProvider connection_provider)
-        {
-            var connection = connection_provider.Connection;
-            using var qctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            var storage = await connection.ListFilesAsync(
-                c => c.StoragePath,
-                qctk.Token);
-            if (!storage.HasValue)
-                return default;
-            return storage.Value.GetMCodeStorage();
-        }
-
         private static async Task<ValueResult<JobQueue>> GetJobQueue(OSAI_ConnectionProvider connection_provider)
         {
             var connection = connection_provider.Connection;
-            using var qctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            var queue = await connection.ListFilesAsync(
-                c => c.QueuePath,
-                qctk.Token);
-            if (!queue.HasValue)
+            using var queue_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var queue_files = await connection.ListFilesAsync(c => c.QueuePath, queue_ctk.Token);
+            if (!queue_files.HasValue)
                 return default;
-            return queue.Value.GetJobQueue();
+
+            using var storage_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var storage_files = await connection.ListFilesAsync(c => c.StoragePath, queue_ctk.Token);
+            if (!storage_files.HasValue)
+                return default;
+
+            return FLUX_FileList.GetJobQueue(queue_files.Value, storage_files.Value);
         }
 
         private static async Task<ValueResult<LineNumber>> GetBlockNumAsync(OSAI_ConnectionProvider connection_provider)

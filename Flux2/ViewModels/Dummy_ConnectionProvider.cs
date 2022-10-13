@@ -68,10 +68,8 @@ namespace Flux.ViewModels
             CreateDummy(s => s.AXIS_ENDSTOP);
             CreateDummy(s => s.ENABLE_DRIVERS);
             CreateDummy(s => s.PROGRESS);
-            CreateDummy(s => s.STORAGE);
-            CreateDummy(s => s.MCODE_RECOVERY);
             CreateDummy(s => s.TOOL_NUM);
-            CreateDummy(s => s.QUEUE);
+            CreateDummy(s => s.JOB_QUEUE);
             CreateDummy(s => s.TOOL_CUR);
             CreateDummy(s => s.PROCESS_STATUS);
             CreateDummy(s => s.IS_HOMED);
@@ -186,7 +184,7 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override Optional<IEnumerable<string>> GetStartPartProgramGCode(Job job)
+        public override Optional<IEnumerable<string>> GetStartPartProgramGCode(JobPartPrograms job_partprograms)
         {
             throw new NotImplementedException();
         }

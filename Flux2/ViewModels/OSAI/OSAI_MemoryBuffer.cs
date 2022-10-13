@@ -21,7 +21,7 @@ namespace Flux.ViewModels
         {
             Variables = variables;
         }
-        public override async Task TryScheduleAsync()
+        public override async Task<Optional<Unit>> TryScheduleAsync()
         {
             var has_memory_read = true;
             foreach (var variable in Variables)
@@ -30,6 +30,7 @@ namespace Flux.ViewModels
                 has_memory_read = has_memory_read && memory_updated;
             }
             HasMemoryRead = has_memory_read;
+            return default;
         }
     }
 

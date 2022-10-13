@@ -20,8 +20,6 @@ namespace Flux.ViewModels
         public IFLUX_Variable<bool, bool> ITERATOR { get; set; }
 
         public RRF_GlobalModelBuilder.RRF_InnerGlobalModelBuilder Global{ get; }
-        public RRF_ModelBuilder.RRF_InnerModelBuilder<FLUX_FileList> Queue { get; }
-        public RRF_ModelBuilder.RRF_InnerModelBuilder<FLUX_FileList> Storage { get; }
         public RRF_ModelBuilder.RRF_InnerModelBuilder<FLUX_FileList> JobEvents { get; }
         public RRF_ModelBuilder.RRF_InnerModelBuilder<FLUX_FileList> Extrusions { get; }
         public RRF_ModelBuilder.RRF_InnerModelBuilder<RRF_ObjectModelJob> Job { get; }
@@ -31,6 +29,7 @@ namespace Flux.ViewModels
         public RRF_ModelBuilder.RRF_InnerModelBuilder<RRF_ObjectModelSensors> Sensors { get; }
         public RRF_ModelBuilder.RRF_InnerModelBuilder<List<RRF_ObjectModelTool>> Tools { get; }
         public RRF_ModelBuilder.RRF_InnerModelBuilder<List<RRF_ObjectModelInput>> Inputs { get; }
+        public RRF_ModelBuilder.RRF_InnerModelBuilder<(FLUX_FileList queue, FLUX_FileList storage)> JobQueue { get; }
 
         public RRF_ModelBuilder.RRF_InnerModelBuilder<RRF_ObjectModelMove>.RRF_ArrayBuilder<RRF_ObjectModelAxis> Axes { get; }
         public RRF_ModelBuilder.RRF_InnerModelBuilder<RRF_ObjectModelSensors>.RRF_ArrayBuilder<RRF_ObjectModelGpIn> GpIn { get; }
@@ -62,12 +61,11 @@ namespace Flux.ViewModels
                 Move                    = RRF_ModelBuilder.CreateModel(this, m => m.Move, read_timeout);
                 State                   = RRF_ModelBuilder.CreateModel(this, m => m.State, read_timeout);
                 Tools                   = RRF_ModelBuilder.CreateModel(this, m => m.Tools, read_timeout);
-                Queue                   = RRF_ModelBuilder.CreateModel(this, m => m.Queue, read_timeout);
                 Inputs                  = RRF_ModelBuilder.CreateModel(this, m => m.Inputs, read_timeout);
-                Storage                 = RRF_ModelBuilder.CreateModel(this, m => m.Storage, read_timeout);
                 Sensors                 = RRF_ModelBuilder.CreateModel(this, m => m.Sensors, read_timeout);
                 JobEvents               = RRF_ModelBuilder.CreateModel(this, m => m.JobEvents, read_timeout);
                 Extrusions              = RRF_ModelBuilder.CreateModel(this, m => m.Extrusions, read_timeout);
+                JobQueue                = RRF_ModelBuilder.CreateModel(this, m => m.Queue, m => m.Storage, read_timeout);
 
                 Axes                    = Move.CreateArray(m => m.Axes, AxesUnits);
                 GpIn                    = Sensors.CreateArray(s => s.GpIn, GpInUnits);
@@ -81,16 +79,13 @@ namespace Flux.ViewModels
                 Axes.CreateArray(c => c.AXIS_POSITION,          (c, a) => a.MachinePosition);
                 Axes.CreateArray(c => c.ENABLE_DRIVERS,         (c, m) => m.IsEnabledDriver(), EnableDriverAsync);
                 
-                Endstops.CreateArray(c => c.AXIS_ENDSTOP,       (c, e) => e.Triggered, (c, e, u) => Task.FromResult(true));
+                Endstops.CreateArray(c => c.AXIS_ENDSTOP,       (c, e) => e.Triggered, (c, e, u) => Task.FromResult(true)); 
 
-                Extrusions.CreateVariable(c => c.EXTRUSIONS,    (c, m) => m.GetExtrusionSetQueue(c));
+                JobQueue.CreateVariable(c => c.JOB_QUEUE,       (c, m) => FLUX_FileList.GetJobQueue(m.queue, m.storage));
+                Extrusions.CreateVariable(c => c.EXTRUSIONS,    (c, m) => m.GetExtrusionSetQueue());
                 Job.CreateVariable(c => c.PROGRESS,             (c, m) => m.GetParamacroProgress());
-                JobEvents.CreateVariable(c => c.MCODE_EVENT,      (c, m) => m.GetMCodeEvents(c));
-                Queue.CreateVariable(c => c.QUEUE,              (c, m) => m.GetJobQueue());
+                JobEvents.CreateVariable(c => c.MCODE_EVENT,    (c, m) => m.GetMCodeEvents());
                 Tools.CreateVariable(c => c.TOOL_NUM,           (c, t) => (ushort)t.Count);
-                
-                Storage.CreateVariable(c => c.MCODE_RECOVERY,   (c, f) => f.GetMCodeRecoveryAsync(c));
-                Storage.CreateVariable(c => c.STORAGE,          (c, m) => m.GetMCodeStorage());
                 
                 State.CreateVariable(c => c.TOOL_CUR,           (c, s) => s.CurrentTool.Convert(t => (ArrayIndex)(t, connection_provider)));
                 State.CreateVariable(c => c.PROCESS_STATUS,     (c, m) => m.GetProcessStatus());

@@ -207,7 +207,7 @@ namespace Flux.ViewModels
                     if (has_tool_change && on_trailer == in_magazine)
                         in_change_error = true;
 
-                    var selected = tool_cur.Convert(t => t.GetZeroBaseIndex()).Convert(t => Position == t).ValueOr(() => false);
+                    var selected = tool_cur.Convert(t => t.GetZeroBaseIndex(default)).Convert(t => Position == t).ValueOr(() => false);
                     return new ToolNozzleState(has_tool_change, in_change, selected, inserted, known, locked, loaded, on_trailer, in_magazine, in_mateinance, in_change_error);
                 });
         }

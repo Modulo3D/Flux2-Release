@@ -469,7 +469,7 @@ namespace Flux.ViewModels
                 client.Timeout = TimeSpan.FromHours(1);
                 client.BaseAddress = new Uri(plc_address.Value);
                 client.DefaultRequestHeaders.Add("Connection", "Keep-Alive");
-                var response = await client.PostAsync($"rr_upload?name=0:/{folder}/{filename}&time={DateTime.Now:s}", content_stream, ct);
+                var response = await client.PostAsync($"rr_upload?name=0:/{folder}/{filename}&time={DateTime.Now}", content_stream, ct);
 
                 if (response.StatusCode != HttpStatusCode.OK)
                 {
@@ -794,12 +794,17 @@ namespace Flux.ViewModels
                 "T-1"
             };
         }
-        public override Optional<IEnumerable<string>> GetStartPartProgramGCode(Job job)
+        public override Optional<IEnumerable<string>> GetStartPartProgramGCode(JobPartPrograms job_partprograms)
         {
+            var job = job_partprograms.Job;
+            var part_program = job_partprograms.GetCurrentPartProgram();
+            if (!part_program.HasValue)
+                return default;
+
             return new[]
             {
-                $"M98 P\"/macros/job/start\" A\"{extrusion_key(0)}\" B\"{extrusion_key(1)}\" C\"{extrusion_key(2)}\" D\"{extrusion_key(3)}\" J\"{job.JobKey}\" K\"{job.PartProgram.MCodeKey}\" R1",
-                $"M32 \"0:/{StoragePath}/{job.PartProgram}\""
+                $"M98 P\"/macros/job/start\" A\"{extrusion_key(0)}\" B\"{extrusion_key(1)}\" C\"{extrusion_key(2)}\" D\"{extrusion_key(3)}\" J\"{job.JobKey}\" K\"{job.MCodeKey}\" R1",
+                $"M32 \"0:/{StoragePath}/{part_program.Value}\""
             };
 
             string extrusion_key(ushort position)

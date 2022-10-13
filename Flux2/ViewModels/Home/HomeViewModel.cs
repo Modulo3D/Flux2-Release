@@ -105,7 +105,7 @@ namespace Flux.ViewModels
                     return PreparePrintPhase;
             }
 
-            if (printing_eval.CurrentRecovery.HasValue)
+            if (printing_eval.HasRecovery)
                 if (start_eval.HasColdNozzles)
                     return ColdNozzlesPhase;
 

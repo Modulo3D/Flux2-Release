@@ -66,9 +66,8 @@ namespace Flux.ViewModels
                 .ToProperty(this, v => v.CurrentIndex)
                 .DisposeWith(Disposables);
 
-            _Storage = MCodes.AvaiableMCodes
-                .Connect()
-                .WatchOptional(job.PartProgram.MCodeKey)
+            _Storage = MCodes.AvaiableMCodes.Connect()
+                .WatchOptional(job.MCodeKey)
                 .ToProperty(this, v => v.Storage)
                 .DisposeWith(Disposables);
 
@@ -110,7 +109,7 @@ namespace Flux.ViewModels
                 .Select(e => e.CanSafeCycle);
 
             var last_queue_pos = mcodes.Flux.ConnectionProvider
-                .ObserveVariable(c => c.QUEUE)
+                .ObserveVariable(c => c.JOB_QUEUE)
                 .Convert(q => q?.Count - 1 ?? -1)
                 .Convert(c => new QueuePosition((short)c))
                 .ValueOr(() => new QueuePosition(-1));

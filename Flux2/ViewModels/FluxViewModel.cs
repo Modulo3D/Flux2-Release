@@ -257,6 +257,7 @@ namespace Flux.ViewModels
                         StatusProvider.WhenAnyValue(v => v.FluxStatus),
                         StatusProvider.WhenAnyValue(v => v.PrintingEvaluation),
                         GetStatusText)
+                        .Throttle(TimeSpan.FromSeconds(0.25))
                         .ToProperty(this, v => v.StatusText);
 
                     var offlineBrush = "#999999";
@@ -280,6 +281,7 @@ namespace Flux.ViewModels
                                 _ => idleBrush
                             };
                         })
+                        .Throttle(TimeSpan.FromSeconds(0.25))
                         .ToProperty(this, v => v.StatusBrush);
                 }
                 catch (Exception ex)
@@ -400,7 +402,7 @@ namespace Flux.ViewModels
 
             string wait()
             {
-                if (printing_evaluation.CurrentRecovery.HasValue)
+                if (printing_evaluation.HasRecovery)
                     return "IN PAUSA";
                 return "ATTESA OPERATORE";
             }

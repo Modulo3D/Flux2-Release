@@ -286,22 +286,6 @@ namespace Flux.ViewModels
 
     }
 
-    public class OSAI_MCodeRecovery : IFLUX_MCodeRecovery
-    {
-        public short ToolNumber { get; }
-        public MCodePartProgram PartProgram { get; }
-        public Dictionary<ushort, double> Positions { get; }
-        public Dictionary<ushort, double> Temperatures { get; }
-
-        public OSAI_MCodeRecovery(MCodePartProgram part_program, short hold_tool, Dictionary<ushort, double> hold_temp, Dictionary<ushort, double> hold_pos)
-        {
-            PartProgram = part_program;
-            Temperatures = hold_temp;
-            ToolNumber = hold_tool;
-            Positions = hold_pos;
-        }
-    }
-
     // MSGERROR 
     // uint     -> uint/uint    | 1508600 -> 23/1272 Asse %2 (Id %1) non sul profilo
     // uint     -> hex          | 1508600 -> 1704F8

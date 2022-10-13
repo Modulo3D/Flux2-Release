@@ -46,7 +46,7 @@ namespace Flux.ViewModels
 
             _SelectedTool = Flux.ConnectionProvider
                 .ObserveVariable(m => m.TOOL_CUR)
-                .Convert(o => o.GetZeroBaseIndex())
+                .Convert(o => o.GetZeroBaseIndex(default))
                 .Convert(o => o.ToOptional(o => o >= 0))
                 .Convert(o => (ushort)o)
                 .ToProperty(this, v => v.SelectedTool)

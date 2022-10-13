@@ -53,7 +53,7 @@ namespace Flux.ViewModels
 
         public void Initialize()
         {
-            var queue = Flux.ConnectionProvider.ObserveVariable(c => c.QUEUE);
+            var queue = Flux.ConnectionProvider.ObserveVariable(c => c.JOB_QUEUE);
             var queue_pos = Flux.ConnectionProvider.ObserveVariable(c => c.QUEUE_POS);
 
             var db_changed = Flux.DatabaseProvider.WhenAnyValue(v => v.Database);
@@ -116,8 +116,11 @@ namespace Flux.ViewModels
                 if (start_queue_pos < 0)
                     start_queue_pos = 0;
 
-                var job = job_queue.Value.LookupOptional(start_queue_pos);
-                if (!job.HasValue)
+                var job_key = job_queue.Value
+                    .LookupOptional(start_queue_pos)
+                    .Convert(j => j.Job.JobKey);
+                
+                if (!job_key.HasValue)
                     return default;
 
                 if (!database.HasValue)
@@ -128,7 +131,7 @@ namespace Flux.ViewModels
                 var document_queue = new DocumentQueue<TDocument>();
                 foreach (var feeder_report in feeder_queue.Value)
                 {
-                    if (!feeder_report.Key.Equals(job.Value.JobKey))
+                    if (!feeder_report.Key.Equals(job_key.Value))
                         continue;
 
                     var document_id = GetDocumentId(feeder_report.Value);
@@ -286,7 +289,7 @@ namespace Flux.ViewModels
                 .StartWithDefault();
 
             var queue = Flux.ConnectionProvider
-                .ObserveVariable(c => c.QUEUE)
+                .ObserveVariable(c => c.JOB_QUEUE)
                 .StartWithDefault();
 
             var mcode_analyzers = Flux.MCodes.AvaiableMCodes.Connect()
@@ -308,8 +311,8 @@ namespace Flux.ViewModels
                 Feeder.ToolNozzle.WhenAnyValue(t => t.Nfc),
                 Feeder.WhenAnyValue(v => v.SelectedMaterial)
                     .ConvertMany(m => m.WhenAnyValue(m => m.Nfc)),
-                Flux.ConnectionProvider
-                    .ObserveVariable(c => c.EXTRUSIONS),
+                Flux.Feeders.OdometerManager
+                    .WhenAnyValue(c => c.ExtrusionSetQueue),
                 (db, feeder_report_queue, tool_nozzle, material, extrusions) =>
                 {
                     if (!db.HasValue)
@@ -382,7 +385,15 @@ namespace Flux.ViewModels
 
         private bool ColdNozzle(PrintingEvaluation evaluation, Optional<FLUX_Temp> plc_temp, Optional<double> extrusion_temp)
         {
-            if (!evaluation.CurrentRecovery.ConvertOr(r =>  r.ToolNumber == Feeder.Position, () => false))
+            var tool_index = evaluation.CurrentPartProgram
+                .Convert(pp => pp.ToolNumber);
+            if (!tool_index.HasValue)
+                return false;
+
+            var variable_access = (IFLUX_VariableAccess)Flux.ConnectionProvider;
+            var tool_number = tool_index.Value.GetZeroBaseIndex(variable_access.ToOptional());
+
+            if (tool_number != Feeder.Position)
                 return false;
             if (!extrusion_temp.HasValue)
                 return true;
@@ -421,12 +432,12 @@ namespace Flux.ViewModels
                     return default;
 
                 var feeder_report_queue = new FeederReportQueue();
-                foreach (var job in job_queue.Value.Values)
+                foreach (var job_partprograms in job_queue.Value.Values)
                 {
-                    if (job.QueuePosition < queue_pos.Value)
+                    if (job_partprograms.Job.QueuePosition < queue_pos.Value)
                         continue;
 
-                    var mcode_analyzer = mcode_analyzers.Lookup(job.PartProgram.MCodeKey);
+                    var mcode_analyzer = mcode_analyzers.Lookup(job_partprograms.Job.MCodeKey);
                     if (!mcode_analyzer.HasValue)
                         continue;
 
@@ -434,7 +445,7 @@ namespace Flux.ViewModels
                     if (!feeder_report.HasValue)
                         continue;
 
-                    feeder_report_queue.Add(job.JobKey, feeder_report.Value);
+                    feeder_report_queue.Add(job_partprograms.Job.JobKey, feeder_report.Value);
                 }
                 return feeder_report_queue;
             }

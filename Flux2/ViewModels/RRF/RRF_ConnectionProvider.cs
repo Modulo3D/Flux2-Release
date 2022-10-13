@@ -75,7 +75,7 @@ namespace Flux.ViewModels
                         Flux.Messages.Messages.Clear();
                         await CreateTimeoutAsync(TimeSpan.FromSeconds(1), async ct =>
                         {
-                            var state = await MemoryBuffer.GetModelDataAsync<RRF_ObjectModelState>(ct);
+                            var state = await MemoryBuffer.GetModelDataAsync(m => m.State, ct);
                             if (!state.HasValue)
                                 return;
                             var status = state.Value.GetProcessStatus();

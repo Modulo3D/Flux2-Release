@@ -1170,7 +1170,7 @@ namespace Flux.ViewModels
             catch { return false; }
         }
 
-        public IEnumerable<string> GenerateRecoveryLines(OSAI_MCodeRecovery recovery)
+        /*public IEnumerable<string> GenerateRecoveryLines(OSAI_MCodeRecovery recovery)
         {
             if (recovery.ToolNumber < 0)
                 yield break;
@@ -1215,7 +1215,7 @@ namespace Flux.ViewModels
             yield return $"G1 A1 F2000";
 
             yield return $"G92 A{e_pos}";
-        }
+        }*/
 
         // AXIS MANAGEMENT
         public async Task<bool> AxesRefAsync(params char[] axes)
@@ -1284,9 +1284,14 @@ namespace Flux.ViewModels
         {
             return new[] { $"(CLS, MACRO\\change_tool, {position.GetArrayBaseIndex(this)})" };
         }
-        public override Optional<IEnumerable<string>> GetStartPartProgramGCode(Job job)
+        public override Optional<IEnumerable<string>> GetStartPartProgramGCode(JobPartPrograms job_partprograms)
         {
-            return new[] { $"(CLS, {StoragePath}\\{job.PartProgram})" };
+            var job = job_partprograms.Job;
+            var part_program = job_partprograms.GetCurrentPartProgram();
+            if (!part_program.HasValue)
+                return default;
+
+            return new[] { $"(CLS, {StoragePath}\\{part_program.Value})" };
         }
         public override Optional<IEnumerable<string>> GetSetToolTemperatureGCode(ArrayIndex position, double temperature)
         {

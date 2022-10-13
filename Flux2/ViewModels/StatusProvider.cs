@@ -130,7 +130,7 @@ namespace Flux.ViewModels
                     _ClampCondition = ConditionViewModel.Create(this, "clamp", clamp_open,
                         (state, value) =>
                         {
-                            var tool_cur = value.tool_cur.GetZeroBaseIndex();
+                            var tool_cur = value.tool_cur.GetZeroBaseIndex(default);
                             var toggle_clamp = state.Create("clamp", c => c.OPEN_HEAD_CLAMP, is_idle);
                             
                             if(value.in_change && value.status == FLUX_ProcessStatus.CYCLE)
@@ -622,10 +622,10 @@ namespace Flux.ViewModels
                 .StartWithDefault();
 
             var queue = Flux.ConnectionProvider
-                .ObserveVariable(m => m.QUEUE)
+                .ObserveVariable(m => m.JOB_QUEUE)
                 .StartWithDefault();
 
-            var current_job = Observable.CombineLatest(
+            var job_partprograms = Observable.CombineLatest(
                 queue_pos, queue, (queue_pos, queue) =>
                 {
                     if (!queue.HasValue)
@@ -637,8 +637,14 @@ namespace Flux.ViewModels
                     return queue.Value.Lookup(queue_pos.Value);
                 });
 
-            var current_mcode_key = current_job
-                .Convert(j => j.PartProgram.MCodeKey);
+            var current_job = job_partprograms
+                .Convert(j => j.Job);
+
+            var current_partprogram = job_partprograms
+                .Convert(j => j.GetCurrentPartProgram());
+
+            var current_mcode_key = current_partprogram
+                .Convert(j => j.MCodeKey);
 
             var current_mcode =  Flux.MCodes.AvaiableMCodes.Connect()
                 .AutoRefresh(m => m.Analyzer)
@@ -708,15 +714,10 @@ namespace Flux.ViewModels
                 .DistinctUntilChanged()
                 .ToProperty(this, v => v.StartEvaluation);
 
-            var recovery = Flux.ConnectionProvider
-                .ObserveVariable(c => c.MCODE_RECOVERY)
-                .StartWithDefault()
-                .DistinctUntilChanged();
-
             _PrintingEvaluation = Observable.CombineLatest(
                 current_job,
                 current_mcode,
-                recovery,
+                current_partprogram,
                 PrintingEvaluation.Create)
                 .DistinctUntilChanged()
                 .ToProperty(this, v => v.PrintingEvaluation);
@@ -909,7 +910,7 @@ namespace Flux.ViewModels
                 case FLUX_ProcessStatus.IDLE:
                     if (current_vm.HasValue && current_vm.Value is IOperationViewModel)
                         return FLUX_ProcessStatus.WAIT;
-                    if (printing_eval.CurrentRecovery.HasValue)
+                    if (printing_eval.HasRecovery)
                         return FLUX_ProcessStatus.WAIT;
                     if (printing_eval.CurrentMCode.HasValue)
                         return FLUX_ProcessStatus.WAIT;
@@ -954,14 +955,18 @@ namespace Flux.ViewModels
             if (!progress.HasValue)
                 return new PrintProgress(0, duration);
 
-            var paramacro_name = progress.Value.Paramacro.Split(new[] { '\\', '/' },
-                StringSplitOptions.RemoveEmptyEntries)
+            var paramacro_name = progress.Value.Paramacro
+                .Split(Flux.ConnectionProvider.PathSeparator)
                 .LastOrDefault();
 
-            if (!MCodePartProgram.TryParse(paramacro_name, out var part_program))
+            paramacro_name = paramacro_name
+                .Split(".")
+                .FirstOrDefault();
+
+            if (!MCodeKey.TryParse(paramacro_name, out var mcode_key))
                 return PrintProgress;
 
-            if (!part_program.Equals(current_job.Value.PartProgram))
+            if (!mcode_key.Equals(current_job.Value.MCodeKey))
                 return PrintProgress;
 
             var remaining_percentage = 100 - progress.Value.Percentage;
