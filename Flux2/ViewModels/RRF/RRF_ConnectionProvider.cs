@@ -6,6 +6,7 @@ using ReactiveUI;
 using RestSharp;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -75,7 +76,7 @@ namespace Flux.ViewModels
                     $"if !exists(global.{variable_name})",
                     $"    global {variable_name} = {(typeof(T) == typeof(string) ? $"\"{default(T)}\"" : default(T))}",
                 },
-                Write = v => $"set global.{variable_name} = {(typeof(T) == typeof(string) ? $"\"{v}\"" : $"{v}")}",
+                Write = v => $"set global.{variable_name} = {(typeof(T) == typeof(string) && !$"{v}".Contains('"') ? $"\"{v}\"" : $"{v}")}",
             };
             return variable.Declare;
         }
@@ -85,8 +86,8 @@ namespace Flux.ViewModels
             {
                 Name = variable_name,
                 Read = $"var.{variable_name}",
-                Declare = $"var {variable_name} = {(typeof(T) == typeof(string) ? $"\"{value}\"" : value)}",
-                Write = v => $"set var.{variable_name} = {(typeof(T) == typeof(string) ? $"\"{v}\"" : $"{v}")}",
+                Declare = $"var {variable_name} = {(typeof(T) == typeof(string) && !$"{value}".Contains('"') ? $"\"{value}\"" : value)}",
+                Write = v => $"set var.{variable_name} = {(typeof(T) == typeof(string) && !$"{v}".Contains('"') ? $"\"{v}\"" : $"{v}")}",
             };
             return variable.Declare;
         }
@@ -112,57 +113,89 @@ namespace Flux.ViewModels
             return DeclareLocalVariable(variable_name, value, out variable);
         }
 
-        public override GCodeString AppendFile(string folder, string name, string source)
-        {
-            var path = Connection.CombinePaths(folder, name);
-            return new[]
-            {
-                "; appending file {name}",
-                $"echo >>\"0:/{path}\" {source}",
-            };
-        }
-        public override GCodeString CreateFile(string folder, string name, string source)
-        {
-            var path = Connection.CombinePaths(folder, name);
-            return new[]
-            {
-                $"; creating file {name}",
-                $"echo >\"0:/{path}\" {source}"
-            };
-        }
-        public override GCodeString LogExtrusion(Job job, ExtrusionKey e, GCodeVariable<double> v)
-        {
-            if (job.QueuePosition < 0)
-                return default;
 
-            var folder = Connection.ExtrusionEventPath;
-            return AppendFile(folder, $"{e}", $"\"{job.JobKey};\"^{v}");
+        public override GCodeString DeleteFile(GCodeVariable<string> path)
+        {
+            return new[]
+            {
+                $"; deleting file {path.Name}",
+                $"M30 {{{path}}}",
+            };
+        }
+        public override GCodeString ExecuteParamacro(GCodeVariable<string> path)
+        {
+            return new[]
+            {
+                $"; execute paramacro {path.Name}",
+                $"M98 P{{{path}}}",
+            };
+        }
+        public override GCodeString RenameFile(GCodeVariable<string> old_path, GCodeVariable<string> new_path)
+        {
+            return new[]
+            {
+                $"; renaming file {old_path.Name}",
+                $"M471 S{{{old_path}}} T{{{new_path}}}",
+            };
+        }
+        
+        public override GCodeString DeleteFile(string folder, string name)
+        {
+            return new[]
+            {
+                $"; deleting file {name}",
+                $"M30 \"0:/{folder}/{name}\"",
+            };
         }
         public override GCodeString RenameFile(string old_path, string new_path)
         {
             return new[]
             {
-                $"; renaming file {old_path}",
+                $"; renaming file {old_path.Split('/').LastOrDefault()}",
                 $"M471 S{old_path} T{new_path}",
             };
         }
-        public override GCodeString ExecuteParamacro(GCodeVariable<string> path)
+        public override GCodeString ExecuteParamacro(string folder, string name)
         {
-            return $"M98 P{{{path}}}";
+            return new[]
+            {
+                $"; execute paramacro {name}",
+                $"M98 P\"0:/{folder}/{name}\"",
+            };
         }
+        public override GCodeString AppendFile(string folder, string name, GCodeString source)
+        {
+            var path = Connection.CombinePaths(folder, name);
+            return GCodeString.Create(
+                $"; appending file {name}",
+                source.Select(l => $"echo >>\"0:/{path}\" \"{l.Replace("\"", "\"\"")}\"").ToArray());
+        }
+        public override GCodeString CreateFile(string folder, string name, GCodeString source)
+        {
+            var path = Connection.CombinePaths(folder, name);
+            return GCodeString.Create(
+                $"; creating file {name}",
+                source.Select((l, i) => $"echo {(i == 0 ? ">" : ">>")}\"0:/{path}\" \"{l.Replace("\"", "\"\"")}\"").ToArray());
+        }
+
         public override GCodeString LogEvent<T>(Job job, T @event)
         {
             if (job.QueuePosition < 0)
                 return default;
-
-            var folder = Connection.JobEventPath;
-            return AppendFile(folder, $"{job.MCodeKey};{job.JobKey}", $"\"{@event.ToEnumString()};\"^{{state.time}}");
+            return $"echo >>\"0:/{Connection.JobEventPath}/{job.MCodeKey};{job.JobKey}\" \"{@event.ToEnumString()};\"^{{state.time}}";
+        }
+        public override GCodeString LogExtrusion(Job job, ExtrusionKey e, GCodeVariable<double> v)
+        {
+            if (job.QueuePosition < 0)
+                return default;
+            return $"echo >>\"0:/{Connection.ExtrusionEventPath}/{e}\" \"{job.JobKey};\"^{{{v}}}";
         }
     }
 
     public class RRF_ConnectionProvider : FLUX_ConnectionProvider<RRF_ConnectionProvider, RRF_Connection, RRF_MemoryBuffer, RRF_VariableStoreBase, RRF_ConnectionPhase>
     {
         public FluxViewModel Flux { get; }
+        public string SystemPath => Connection.SystemPath;
 
         public RRF_ConnectionProvider(FluxViewModel flux, Func<RRF_ConnectionProvider, RRF_VariableStoreBase> get_variable_store) : base(flux,
             RRF_ConnectionPhase.START_PHASE, RRF_ConnectionPhase.END_PHASE, p => (int)p,
@@ -282,13 +315,13 @@ namespace Flux.ViewModels
             if (!base_motor.HasValue)
                 return default;
 
-            var end = gcode.CreateFile(folder, "end.g", 
+            var end = GCodeFile.Create(folder, "end.g", 
                 gcode.LogEvent(job, FluxEventType.End));
 
-            var cancel = gcode.CreateFile(folder, "cancel.g",
+            var cancel = GCodeFile.Create(folder, "cancel.g",
                 gcode.LogEvent(job, FluxEventType.Cancel));
 
-            var start = gcode.CreateFile(folder, "start.g",
+            var start = GCodeFile.Create(folder, "start.g",
                 gcode.LogEvent(job, part_program.IsRecovery ? FluxEventType.Resume : FluxEventType.Start),
 
                 gcode.DeclareGlobalArray<double>(4, out var extrusion),
@@ -298,19 +331,25 @@ namespace Flux.ViewModels
             if (!t0_temp.HasValue)
                 throw new Exception("");
 
-            var pause = gcode.CreateFile(folder, "pause.g", 
+            var pause = GCodeFile.Create(folder, "pause.g", 
                 gcode.LogEvent(job, FluxEventType.Pause),
                 
-                gcode.DeclareLocalVariable<double>($"heat.heaters[max(state.currentTool + {t0_temp.Value.Address}, 0)].active", out var hold_temp),
-                gcode.DeclareLocalVariable<ushort>("state.currentTool", out var hold_tool),
+                gcode.DeclareLocalVariable<double>($"floor(heat.heaters[max(state.currentTool + {t0_temp.Value.Address}, 0)].active)", out var hold_temp),
+                gcode.DeclareLocalVariable<ushort>("max(state.currentTool, 0)", out var hold_tool),
                     
-                gcode.DeclareLocalVariable<string>($"0:/{StoragePath}/{job.MCodeKey}.\"^{{{hold_tool}}}^\".\"^{{{hold_temp}}}", out var temp_path),
-                gcode.DeclareLocalVariable<string>($"0:/{StoragePath}/recovery.temp", out var recovery_path),
+                gcode.DeclareLocalVariable<string>($"\"0:/{StoragePath}/{job.MCodeKey}.\"^{{{hold_tool}}}^\".\"^{{{hold_temp}}}", out var recovery_path),
+                gcode.DeclareLocalVariable<string>($"0:/{StoragePath}/recovery.temp", out var temp_path),
 
-                gcode.CreateFile(StoragePath, "recovery.temp", ""),
+                gcode.DeleteFile(recovery_path),
+
+                gcode.CreateFile(StoragePath, "recovery.temp", GCodeString.Create(
+
+                    gcode.LogEvent(job, FluxEventType.Resume),
+                    gcode.ExecuteParamacro(SystemPath, "resurrect.g"))),
+
                 gcode.RenameFile($"{{{temp_path}}}", $"{{{recovery_path}}}"));
 
-            var spin = gcode.CreateFile(folder, "spin.g",
+            var spin = GCodeFile.Create(folder, "spin.g",
                 gcode.DeclareLocalVariable<double>(0.0, out var extrusion_diff),
                 gcode.DeclareLocalVariable<double>(0.0, out var extrusion_pos),
 
@@ -347,8 +386,8 @@ namespace Flux.ViewModels
         public override GCodeString GenerateStartMCodeLines(MCode mcode)
         {
             var gcode = new RRF_GCodeGenerator(Connection);
-            return gcode.CreateString(
-                gcode.DeclareLocalVariable<string>($"0:/{InnerQueuePath}/\"^{{global.queue_pos}}^\"/start.g", out var start_path),
+            return GCodeString.Create(
+                gcode.DeclareLocalVariable<string>($"\"0:/{InnerQueuePath}/\"^{{global.queue_pos}}^\"/start.g", out var start_path),
                 gcode.ExecuteParamacro(start_path));
         }
         public override GCodeString GenerateEndMCodeLines(MCode mcode, Optional<ushort> queue_size)
@@ -356,9 +395,9 @@ namespace Flux.ViewModels
             var has_unload = queue_size.HasValue && queue_size.Value > 1;
 
             var gcode = new RRF_GCodeGenerator(Connection);
-            return gcode.CreateString(
+            return GCodeString.Create(
 
-                gcode.DeclareLocalVariable<string>($"0:/{InnerQueuePath}/\"^{{global.queue_pos}}^\"/end.g", out var end_macro),
+                gcode.DeclareLocalVariable<string>($"\"0:/{InnerQueuePath}/\"^{{global.queue_pos}}^\"/end.g", out var end_macro),
                 gcode.DeclareLocalVariable<string>(has_unload ? "0:/macros/end_print" : "0:/macros/unload_print", out var next_macro),
 
                 gcode.ExecuteParamacro(end_macro),

@@ -95,11 +95,12 @@ namespace Flux.ViewModels
     {
         public override bool ParkToolAfterOperation => false;
         public override string CombinePaths(params string[] paths) => string.Join("/", paths);
-        public string GlobalPath => "sys/global";
+        public string SystemPath => "sys";
         public override string MacroPath => "macros";
         public override string QueuePath => "gcodes/queue";
         public override string EventPath => "gcodes/events";
         public override string StoragePath => "gcodes/storage";
+        public string GlobalPath => CombinePaths(SystemPath, "global");
         public override string JobEventPath => CombinePaths(EventPath, "job");
         public override string InnerQueuePath => CombinePaths(QueuePath, "inner");
         public override string ExtrusionEventPath => CombinePaths(EventPath, "extr");
