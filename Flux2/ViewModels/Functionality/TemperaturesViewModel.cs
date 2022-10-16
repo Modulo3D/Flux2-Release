@@ -39,7 +39,7 @@ namespace Flux.ViewModels
             var chamber_units = Flux.ConnectionProvider.GetArrayUnits(c => c.TEMP_CHAMBER);
             foreach (var chamber_unit in chamber_units)
             {
-                var chamber_temp = Flux.ConnectionProvider.GetVariable(m => m.TEMP_CHAMBER, chamber_unit);
+                var chamber_temp = Flux.ConnectionProvider.GetVariable(m => m.TEMP_CHAMBER, chamber_unit.Alias);
                 if (chamber_temp.HasValue)
                     yield return new TemperatureViewModel(this, chamber_temp.Value);
             }
@@ -47,7 +47,7 @@ namespace Flux.ViewModels
             var plate_units = Flux.ConnectionProvider.GetArrayUnits(c => c.TEMP_PLATE);
             foreach (var plate_unit in plate_units)
             {
-                var plate_temp = Flux.ConnectionProvider.GetVariable(m => m.TEMP_PLATE, plate_unit);
+                var plate_temp = Flux.ConnectionProvider.GetVariable(m => m.TEMP_PLATE, plate_unit.Alias);
                 if (plate_temp.HasValue)
                     yield return new TemperatureViewModel(this, plate_temp.Value);
             }

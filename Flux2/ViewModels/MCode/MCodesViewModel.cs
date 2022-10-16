@@ -341,11 +341,11 @@ namespace Flux.ViewModels
                 {
                     foreach (var mcode_partprogram in job_partprograms.Value.PartPrograms)
                     {
-                        if (!mcode_partprogram.Value.MCodeKey.Equals(file.Analyzer.MCode.MCodeKey))
+                        if (!mcode_partprogram.MCodeKey.Equals(file.Analyzer.MCode.MCodeKey))
                             continue;
 
                         using var delete_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                        if (!await Flux.ConnectionProvider.DeleteAsync(c => c.StoragePath, $"{mcode_partprogram.Value}", true, delete_cts.Token))
+                        if (!await Flux.ConnectionProvider.DeleteAsync(c => c.StoragePath, $"{mcode_partprogram}", true, delete_cts.Token))
                             return false;
                     }
                 }
@@ -465,7 +465,7 @@ namespace Flux.ViewModels
             if (!queue.Value.TryGetValue(mcode.Job.QueuePosition, out var job))
                 return false;
 
-            if (!mcode.Job.Equals(job))
+            if (!mcode.Job.Equals(job.Job))
                 return false;
 
             if (queue.Value.Keys.Count <= 0)

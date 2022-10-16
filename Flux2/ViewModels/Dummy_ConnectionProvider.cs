@@ -29,9 +29,14 @@ namespace Flux.ViewModels
         }
         protected override Task RollConnectionAsync() => Task.CompletedTask;
         public override Task<bool> ResetClampAsync() => Task.FromResult(false);
-        public override Optional<IEnumerable<string>> GenerateEndMCodeLines(MCode mcode, Optional<ushort> queue_size) => default;
+        public override GCodeString GenerateEndMCodeLines(MCode mcode, Optional<ushort> queue_size) => default;
 
-        public override Optional<IEnumerable<string>> GenerateStartMCodeLines(MCode mcode)
+        public override GCodeString GenerateStartMCodeLines(MCode mcode)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override InnerQueueGCodes GenerateInnerQueue(string folder, Job job, MCodePartProgram part_program)
         {
             throw new NotImplementedException();
         }
@@ -103,12 +108,12 @@ namespace Flux.ViewModels
         public override string RootPath => throw new NotImplementedException();
         public override string QueuePath => throw new NotImplementedException();
         public override string MacroPath => throw new NotImplementedException();
+        public override string EventPath => throw new NotImplementedException();
         public override ushort ArrayBase => throw new NotImplementedException();
         public override string StoragePath => throw new NotImplementedException();
         public override string JobEventPath => throw new NotImplementedException();
-        public override string PathSeparator => throw new NotImplementedException();
-        public override string ExtrusionPath => throw new NotImplementedException();
         public override string InnerQueuePath => throw new NotImplementedException();
+        public override string ExtrusionEventPath => throw new NotImplementedException();
         public override bool ParkToolAfterOperation => throw new NotImplementedException();
 
         public Dummy_Connection(Dummy_ConnectionProvider connection_provider) : base(connection_provider)
@@ -125,75 +130,66 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override Optional<IEnumerable<string>> GetHomingGCode(params char[] axis)
+        public override GCodeString GetHomingGCode(params char[] axis)
         {
             throw new NotImplementedException();
         }
 
-        public override Optional<IEnumerable<string>> GetLowerPlateGCode()
+        public override GCodeString GetLowerPlateGCode()
         {
             throw new NotImplementedException();
         }
 
-        public override Optional<IEnumerable<string>> GetParkToolGCode()
+        public override GCodeString GetParkToolGCode()
         {
             throw new NotImplementedException();
         }
 
-        public override Optional<IEnumerable<string>> GetProbePlateGCode()
+        public override GCodeString GetProbePlateGCode()
         {
             throw new NotImplementedException();
         }
 
-        public override Optional<IEnumerable<string>> GetProbeToolGCode(ArrayIndex position, double temperature)
+        public override GCodeString GetProbeToolGCode(ArrayIndex position, double temperature)
         {
             throw new NotImplementedException();
         }
-        public override Optional<IEnumerable<string>> GetRaisePlateGCode()
-        {
-            throw new NotImplementedException();
-        }
-
-        public override Optional<IEnumerable<string>> GetRelativeEMovementGCode(double distance, double feedrate)
+        public override GCodeString GetRaisePlateGCode()
         {
             throw new NotImplementedException();
         }
 
-        public override Optional<IEnumerable<string>> GetRelativeXMovementGCode(double distance, double feedrate)
+        public override GCodeString GetRelativeEMovementGCode(double distance, double feedrate)
         {
             throw new NotImplementedException();
         }
 
-        public override Optional<IEnumerable<string>> GetRelativeYMovementGCode(double distance, double feedrate)
+        public override GCodeString GetRelativeXMovementGCode(double distance, double feedrate)
         {
             throw new NotImplementedException();
         }
 
-        public override Optional<IEnumerable<string>> GetRelativeZMovementGCode(double distance, double feedrate)
+        public override GCodeString GetRelativeYMovementGCode(double distance, double feedrate)
         {
             throw new NotImplementedException();
         }
 
-        public override Optional<IEnumerable<string>> GetSelectToolGCode(ArrayIndex position)
+        public override GCodeString GetRelativeZMovementGCode(double distance, double feedrate)
         {
             throw new NotImplementedException();
         }
 
-        public override Optional<IEnumerable<string>> GetSetToolTemperatureGCode(ArrayIndex position, double temperature)
+        public override GCodeString GetSelectToolGCode(ArrayIndex position)
         {
             throw new NotImplementedException();
         }
 
-        public override Optional<IEnumerable<string>> GetStartPartProgramGCode(JobPartPrograms job_partprograms)
+        public override GCodeString GetSetToolTemperatureGCode(ArrayIndex position, double temperature)
         {
             throw new NotImplementedException();
         }
+
         public override Task<Optional<FLUX_FileList>> ListFilesAsync(string folder, CancellationToken ct)
-        {
-            throw new NotImplementedException();
-        }
-
-        public override Task<bool> ResetAsync()
         {
             throw new NotImplementedException();
         }
@@ -208,17 +204,8 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override Task<bool> HoldAsync()
-        {
-            throw new NotImplementedException();
-        }
 
-        public override Optional<IEnumerable<string>> GetSetToolOffsetGCode(ArrayIndex position, double x, double y, double z)
-        {
-            throw new NotImplementedException();
-        }
-
-        public override Task<bool> CancelPrintAsync()
+        public override GCodeString GetSetToolOffsetGCode(ArrayIndex position, double x, double y, double z)
         {
             throw new NotImplementedException();
         }
@@ -228,9 +215,9 @@ namespace Flux.ViewModels
             string filename,
             bool is_paramacro, 
             CancellationToken ct,
-            Optional<IEnumerable<string>> source = default,
-            Optional<IEnumerable<string>> start = default,
-            Optional<IEnumerable<string>> end = default,
+            GCodeString source = default,
+            GCodeString start = default,
+            GCodeString end = default,
             Optional<uint> source_blocks = default,
             Action<double> report_progress = null)
         {
@@ -242,62 +229,51 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override Optional<IEnumerable<string>> GetSetLowCurrentGCode()
+        public override GCodeString GetSetLowCurrentGCode()
         {
             throw new NotImplementedException();
         }
 
-        public override Optional<IEnumerable<string>> GetProbeMagazineGCode()
+        public override GCodeString GetProbeMagazineGCode()
         {
             throw new NotImplementedException();
         }
 
-        public override Optional<IEnumerable<string>> GetCancelLoadFilamentGCode(ArrayIndex position)
+        public override GCodeString GetCancelLoadFilamentGCode(ArrayIndex position)
         {
             throw new NotImplementedException();
         }
 
-        public override Optional<IEnumerable<string>> GetCancelUnloadFilamentGCode(ArrayIndex position)
+        public override GCodeString GetCancelUnloadFilamentGCode(ArrayIndex position)
         {
             throw new NotImplementedException();
         }
 
-        public override Optional<IEnumerable<string>> GetCenterPositionGCode()
+        public override GCodeString GetCenterPositionGCode()
         {
             throw new NotImplementedException();
         }
 
-        public override Task<bool> ExecuteParamacroAsync(IEnumerable<string> paramacro, CancellationToken put_ct, bool wait = false, CancellationToken ct = default, bool can_cancel = false)
+        public override GCodeString GetSetExtruderMixingGCode(ArrayIndex machine_extruder, ArrayIndex mixing_extruder)
         {
             throw new NotImplementedException();
         }
 
-        public override Optional<IEnumerable<string>> GetSetExtruderMixingGCode(ArrayIndex machine_extruder, ArrayIndex mixing_extruder)
+        public override GCodeString GetManualCalibrationPositionGCode()
         {
             throw new NotImplementedException();
         }
 
-        public override Optional<IEnumerable<string>> GetManualCalibrationPositionGCode()
+        public override GCodeString GetExecuteMacroGCode(string folder, string filename)
+        {
+            throw new NotImplementedException();
+        }
+        public override GCodeString GetManualFilamentInsertGCode(ArrayIndex position, double iteration_distance, double feedrate)
         {
             throw new NotImplementedException();
         }
 
-        public override Optional<IEnumerable<string>> GetExecuteMacroGCode(string folder, string filename)
-        {
-            throw new NotImplementedException();
-        }
-
-        public override Optional<IEnumerable<string>> GetCancelOperationGCode(ushort reason)
-        {
-            throw new NotImplementedException();
-        }
-
-        public override Optional<IEnumerable<string>> GetManualFilamentInsertGCode(ArrayIndex position, double iteration_distance, double feedrate)
-        {
-            throw new NotImplementedException();
-        }
-
-        public override Optional<IEnumerable<string>> GetManualFilamentExtractGCode(ArrayIndex position, ushort iterations, double iteration_distance, double feedrate)
+        public override GCodeString GetManualFilamentExtractGCode(ArrayIndex position, ushort iterations, double iteration_distance, double feedrate)
         {
             throw new NotImplementedException();
         }
@@ -312,17 +288,46 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override Task<bool> CycleAsync(string folder, string filename, bool wait, CancellationToken ct = default)
-        {
-            throw new NotImplementedException();
-        }
-
         public override Task<Stream> GetFileStreamAsync(string folder, string name, CancellationToken ct)
         {
             throw new NotImplementedException();
         }
 
         public override Task<bool> PutFileStreamAsync(string folder, string name, Stream data, CancellationToken ct)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override string CombinePaths(params string[] paths)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override Task<bool> StopAsync()
+        {
+            throw new NotImplementedException();
+        }
+
+        public override Task<bool> PauseAsync()
+        {
+            throw new NotImplementedException();
+        }
+        public override Task<bool> StartAsync(string folder, string filename)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override Task<bool> ExecuteParamacroAsync(GCodeString paramacro, CancellationToken put_ct, bool can_cancel = false)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override GCodeString GetExitPartProgramGCode()
+        {
+            throw new NotImplementedException();
+        }
+
+        public override Task<bool> CancelAsync()
         {
             throw new NotImplementedException();
         }

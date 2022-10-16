@@ -20,10 +20,10 @@ namespace Flux.ViewModels
             Func<VariableUnit, Optional<RRF_VariableObjectModel<TModel, TRData, TWData>>> get_variable)
             : base(name)
         {
-            var source_cache = (SourceCache<IFLUX_Variable<TRData, TWData>, VariableUnit>)Variables;
+            var source_cache = (SourceCache<IFLUX_Variable<TRData, TWData>, VariableAlias>)Variables;
             foreach (var unit in variable_units)
             {
-                var variable = get_variable(unit.Key);
+                var variable = get_variable(unit.Value);
                 if (!variable.HasValue)
                     continue;
                 source_cache.AddOrUpdate(variable.Value);
@@ -145,9 +145,9 @@ namespace Flux.ViewModels
             Func<object, TData> convert_data = default)
             : base(variable)
         {
-            var source_cache = (SourceCache<IFLUX_Variable<TData, TData>, VariableUnit>)Variables;
+            var source_cache = (SourceCache<IFLUX_Variable<TData, TData>, VariableAlias>)Variables;
             foreach (var unit in variable_units)
-                source_cache.AddOrUpdate(get_variable(unit.Key));
+                source_cache.AddOrUpdate(get_variable(unit.Value));
 
             RRF_ArrayVariableGlobalModel<TData> get_variable(VariableUnit unit) => new RRF_ArrayVariableGlobalModel<TData>(connection_provider, variable, unit, stored, default_value, convert_data);
         }

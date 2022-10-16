@@ -202,9 +202,8 @@ namespace Flux.ViewModels
         }
         static async Task<bool> write_async(OSAI_ConnectionProvider connection_provider, double temp, Func<double, string> get_temp_gcode)
         {
-            var connection = connection_provider.Connection;
             using var put_write_temp_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            return await connection.ExecuteParamacroAsync(new[] { get_temp_gcode(temp) }, put_write_temp_cts.Token, false);
+            return await connection_provider.ExecuteParamacroAsync(_ => new[] { get_temp_gcode(temp) }, put_write_temp_cts.Token, false);
         }
     }
 

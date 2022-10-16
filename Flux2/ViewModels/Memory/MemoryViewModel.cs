@@ -17,7 +17,7 @@ namespace Flux.ViewModels
             VariableGroupsSource = new SourceCache<MemoryGroupViewModel, string>(vm => vm.VariableName);
             VariableGroupsSource.Edit(innerList =>
             {
-                var variables = flux.ConnectionProvider.VariableStore.Variables;
+                var variables = flux.ConnectionProvider.VariableStoreBase.Variables;
                 var groups = variables.Values
                     .GroupBy(v => v.Group)
                     .Select(group => new MemoryGroupViewModel(Flux, group));

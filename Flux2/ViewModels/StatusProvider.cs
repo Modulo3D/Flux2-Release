@@ -177,8 +177,8 @@ namespace Flux.ViewModels
                     foreach (var lock_unit in lock_units)
                     {
                         var current_lock = OptionalObservable.CombineLatestOptionalOr(
-                            Flux.ConnectionProvider.ObserveVariable(m => m.LOCK_CLOSED, lock_unit),
-                            Flux.ConnectionProvider.ObserveVariable(m => m.OPEN_LOCK, lock_unit),
+                            Flux.ConnectionProvider.ObserveVariable(m => m.LOCK_CLOSED, lock_unit.Alias),
+                            Flux.ConnectionProvider.ObserveVariable(m => m.OPEN_LOCK, lock_unit.Alias),
                             is_idle.Select(i => i.ToOptional()).ToOptional(),
                             (closed, open, is_idle) => (closed, open, is_idle), () => default);
 
@@ -460,8 +460,8 @@ namespace Flux.ViewModels
                     foreach (var lock_unit in lock_units)
                     {
                         var current_lock = OptionalObservable.CombineLatestOptionalOr(
-                            Flux.ConnectionProvider.ObserveVariable(m => m.LOCK_CLOSED, lock_unit),
-                            Flux.ConnectionProvider.ObserveVariable(m => m.OPEN_LOCK, lock_unit),
+                            Flux.ConnectionProvider.ObserveVariable(m => m.LOCK_CLOSED, lock_unit.Alias),
+                            Flux.ConnectionProvider.ObserveVariable(m => m.OPEN_LOCK, lock_unit.Alias),
                             (closed, open) => (closed, open), () => (closed: false, open: false));
 
                         var lock_open = ConditionViewModel.Create(this, lock_unit.Alias, current_lock,
@@ -570,8 +570,8 @@ namespace Flux.ViewModels
                     foreach (var lock_unit in lock_units)
                     {
                         var current_lock = OptionalObservable.CombineLatestOptionalOr(
-                            Flux.ConnectionProvider.ObserveVariable(m => m.LOCK_CLOSED, lock_unit),
-                            Flux.ConnectionProvider.ObserveVariable(m => m.OPEN_LOCK, lock_unit),
+                            Flux.ConnectionProvider.ObserveVariable(m => m.LOCK_CLOSED, lock_unit.Alias),
+                            Flux.ConnectionProvider.ObserveVariable(m => m.OPEN_LOCK, lock_unit.Alias),
                             (closed, open) => (closed, open), () => (closed: false, open: false));
 
                         var lock_toggle = ConditionViewModel.Create(this, lock_unit.Alias, current_lock,
@@ -955,18 +955,8 @@ namespace Flux.ViewModels
             if (!progress.HasValue)
                 return new PrintProgress(0, duration);
 
-            var paramacro_name = progress.Value.Paramacro
-                .Split(Flux.ConnectionProvider.PathSeparator)
-                .LastOrDefault();
-
-            paramacro_name = paramacro_name
-                .Split(".")
-                .FirstOrDefault();
-
-            if (!MCodeKey.TryParse(paramacro_name, out var mcode_key))
-                return PrintProgress;
-
-            if (!mcode_key.Equals(current_job.Value.MCodeKey))
+            var paramacro_name = progress.Value.Paramacro;
+            if (!paramacro_name.Contains($"{current_job.Value.MCodeKey}"))
                 return PrintProgress;
 
             var remaining_percentage = 100 - progress.Value.Percentage;

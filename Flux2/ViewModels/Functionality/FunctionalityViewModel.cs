@@ -442,7 +442,7 @@ namespace Flux.ViewModels
 
                     AddCommand(
                         "stopOperation",
-                        async () => await Flux.ConnectionProvider.CancelPrintAsync(false),
+                        async () => await Flux.ConnectionProvider.StopAsync(),
                         can_execute: Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation).Select(s => s.CanSafeStop).ToOptional());
 
                     AddCommand(

@@ -84,7 +84,7 @@ namespace Flux.ViewModels
                     e.IsHomed &&
                     e.IsEnabledAxis);
 
-            async Task moveAsync(Func<IFLUX_Connection, Optional<IEnumerable<string>>> func)
+            async Task moveAsync(Func<IFLUX_Connection, GCodeString> func)
             {
                 using var put_move_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 await Flux.ConnectionProvider.ExecuteParamacroAsync(func, put_move_cts.Token, false);
@@ -102,7 +102,7 @@ namespace Flux.ViewModels
             MovePrinterExtrudeCommand = ReactiveCommand.CreateFromTask(() => moveAsync(c => c.GetRelativeEMovementGCode(MovePrinterDistance, MovePrinterFeedrate)), can_move);
             MovePrinterRetractCommand = ReactiveCommand.CreateFromTask(() => moveAsync(c => c.GetRelativeEMovementGCode(-MovePrinterDistance, MovePrinterFeedrate)), can_move);
 
-            StopPrinterCommand = ReactiveCommand.CreateFromTask(async () => { await Flux.ConnectionProvider.ResetAsync(); });
+            StopPrinterCommand = ReactiveCommand.CreateFromTask(async () => { await Flux.ConnectionProvider.StopAsync(); });
         }
     }
 }

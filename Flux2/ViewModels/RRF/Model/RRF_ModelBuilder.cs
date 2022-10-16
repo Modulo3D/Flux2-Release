@@ -126,7 +126,7 @@ namespace Flux.ViewModels
 
             public class RRF_ArrayBuilder<TList>
             {
-                private VariableUnits Units { get; }
+                public VariableUnits Units { get; }
 
                 public RRF_ConnectionProvider ConnectionProvider { get; }
                 public Func<TModel, Optional<List<TList>>> GetVariables { get; }
@@ -163,20 +163,7 @@ namespace Flux.ViewModels
                         return new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, $"{array_name} {unit.Alias}", ReadModel, GetModel, get_variable, unit: unit);
                     }
 
-                    IEnumerable<VariableUnit> find_units(VariableRange range)
-                    {
-                        foreach (var alias in range.Aliases)
-                        {
-                            var unit = Units.Keys.FirstOrOptional(u => u.Alias == alias);
-                            if (unit.HasValue)
-                                yield return unit.Value;
-                        }
-                    }
-
-                    var variable_units = variables_range.Length == 0 ? Units : variables_range
-                        .SelectMany(find_units)
-                        .ToArray();
-
+                    var variable_units = variables_range.Length == 0 ? Units : new(variables_range);
                     var array = new RRF_ArrayObjectModel<TModel, TRData, TWData>(array_name, variable_units, get_variable);
                     array_setter.Invoke(VariableStore.RegisterArray(array));
                 }
@@ -194,20 +181,7 @@ namespace Flux.ViewModels
                         return new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, $"{array_name} {unit.Alias}", ReadModel, GetModel, get_variable, unit: unit);
                     }
 
-                    IEnumerable<VariableUnit> find_units(VariableRange range)
-                    {
-                        foreach (var alias in range.Aliases)
-                        {
-                            var unit = Units.Keys.FirstOrOptional(u => u.Alias == alias);
-                            if (unit.HasValue)
-                                yield return unit.Value;
-                        }
-                    }
-
-                    var variable_units = variables_range.Length == 0 ? Units : variables_range
-                        .SelectMany(find_units)
-                        .ToArray();
-
+                    var variable_units = variables_range.Length == 0 ? Units : new(variables_range);
                     var array = new RRF_ArrayObjectModel<TModel, TRData, TWData>(array_name, variable_units, get_variable);
                     array_setter.Invoke(VariableStore.RegisterArray(array));
                 }
@@ -227,20 +201,7 @@ namespace Flux.ViewModels
                         return new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, $"{array_name} {unit.Alias}", ReadModel, GetModel, get_variable, write_unit_data, unit);
                     }
 
-                    IEnumerable<VariableUnit> find_units(VariableRange range)
-                    {
-                        foreach (var alias in range.Aliases)
-                        {
-                            var unit = Units.Keys.FirstOrOptional(u => u.Alias == alias);
-                            if (unit.HasValue)
-                                yield return unit.Value;
-                        }
-                    }
-
-                    var variable_units = variables_range.Length == 0 ? Units : variables_range
-                        .SelectMany(find_units)
-                        .ToArray();
-
+                    var variable_units = variables_range.Length == 0 ? Units : new(variables_range);
                     var array = new RRF_ArrayObjectModel<TModel, TRData, TWData>(array_name, variable_units, get_variable);
                     array_setter.Invoke(VariableStore.RegisterArray(array));
                 }
@@ -260,20 +221,7 @@ namespace Flux.ViewModels
                         return new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, $"{array_name} {unit.Alias}", ReadModel, GetModel, get_variable, write_unit_data, unit);
                     }
 
-                    IEnumerable<VariableUnit> find_units(VariableRange range)
-                    {
-                        foreach (var alias in range.Aliases)
-                        {
-                            var unit = Units.Keys.FirstOrOptional(u => u.Alias == alias);
-                            if(unit.HasValue)
-                                yield return unit.Value;
-                        }
-                    }
-
-                    var variable_units = variables_range.Length == 0 ? Units : variables_range
-                        .SelectMany(find_units)
-                        .ToArray();
-
+                    var variable_units = variables_range.Length == 0 ? Units : new(variables_range);
                     var array = new RRF_ArrayObjectModel<TModel, TRData, TWData>(array_name, variable_units, get_variable);
                     array_setter.Invoke(VariableStore.RegisterArray(array));
                 }
@@ -292,7 +240,7 @@ namespace Flux.ViewModels
                         return new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, variable_name, ReadModel, GetModel, get_variable, unit: unit);
                     }
 
-                    var unit = Units.Keys.FirstOrOptional(u => u.Alias == alias);
+                    var unit = Units.Lookup(alias);
                     if (!unit.HasValue)
                         return;
 
@@ -319,7 +267,7 @@ namespace Flux.ViewModels
                         return new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, variable_name, ReadModel, GetModel, get_variable, write_unit_data, unit);
                     }
 
-                    var unit = Units.Keys.FirstOrOptional(u => u.Alias == alias);
+                    var unit = Units.Lookup(alias);
                     if (!unit.HasValue)
                         return;
 

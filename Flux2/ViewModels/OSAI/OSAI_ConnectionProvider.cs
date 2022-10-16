@@ -94,7 +94,7 @@ namespace Flux.ViewModels
 
                     // RESETS PLC
                     case OSAI_ConnectionPhase.RESET_PRINTER:
-                        var reset_plc = await ResetAsync();
+                        var reset_plc = await Connection.StopAsync();
                         if (reset_plc)
                             ConnectionPhase = OSAI_ConnectionPhase.SELECT_PROCESS_MODE;
                         else
@@ -143,12 +143,12 @@ namespace Flux.ViewModels
                 return false;
             return true;
         }
-        public override Optional<IEnumerable<string>> GenerateEndMCodeLines(MCode mcode, Optional<ushort> queue_size)
+        public override GCodeString GenerateEndMCodeLines(MCode mcode, Optional<ushort> queue_size)
         {
             return default;
         }
 
-        public override Optional<IEnumerable<string>> GenerateStartMCodeLines(MCode mcode)
+        public override GCodeString GenerateStartMCodeLines(MCode mcode)
         {
             return new[]
             {
@@ -171,6 +171,11 @@ namespace Flux.ViewModels
                 "\"end_preprocess\"",
                 "(PAS)",
             };
+        }
+
+        public override InnerQueueGCodes GenerateInnerQueue(string folder, Job job, MCodePartProgram part_program)
+        {
+            throw new NotImplementedException();
         }
     }
 }

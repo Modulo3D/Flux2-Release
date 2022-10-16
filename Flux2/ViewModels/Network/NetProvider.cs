@@ -377,7 +377,7 @@ namespace Flux.ViewModels
         [Route(HttpVerbs.Get, "/memory")]
         public async Task GetMemory()
         {
-            var variables = Flux.ConnectionProvider.VariableStore.Variables;
+            var variables = Flux.ConnectionProvider.VariableStoreBase.Variables;
             var full_variables = variables.SelectMany(v =>
             {
                 switch (v.Value)

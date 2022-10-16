@@ -69,45 +69,49 @@ namespace Flux.ViewModels
 
                     foreach (var job in mcode.Value)
                     {
-                        var program_history = new JobHistory()
-                        {
-                            JobKey = job.Key.ToString(),
-                            MCodeKey = mcode.Key.ToString(),
-                            Name = mcode_vm.Value.Analyzer.MCode.Name,
-                            GCodeMetadata = mcode_vm.Value.Analyzer.MCode.Serialize(),
-                        };
-
-                        foreach (var @event in job.Value)
-                        {
+                        foreach (var @event in job.Value) 
                             flux.Logger.LogInformation(new EventId(0, $"job_event"), $"{@event}");
-                                
-                            // TODO
-                            var core_settings = Flux.SettingsProvider.CoreSettings.Local;
-                            if (!core_settings.LoggerAddress.HasValue)
-                                continue;
-                       
-                            try
-                            {
-                                switch (@event.Event.Event)
-                                {
-                                    case "start":
-                                        program_history.BeginDate = @event.Event.DateTime.ToString();
-                                        var request = new RestRequest($"{core_settings.LoggerAddress}/api/programs");
-                                        request.AddJsonBody(program_history);
-                                        await Flux.NetProvider.Client.PostAsync(request);
-                                        break;
-                                    case "stop":
-                                        program_history.EndDate = @event.Event.DateTime.ToString();
-                                        request = new RestRequest($"{core_settings.LoggerAddress}/api/programs");
-                                        request.AddJsonBody(program_history);
-                                        await Flux.NetProvider.Client.PutAsync(request);
-                                        break;
-                                }
-                            }
-                            catch (Exception ex)
-                            { 
-                            }
-                        }
+                        
+                        // TODO
+                        //var program_history = new JobHistory()
+                        //{
+                        //    JobKey = job.Key.ToString(),
+                        //    MCodeKey = mcode.Key.ToString(),
+                        //    Name = mcode_vm.Value.Analyzer.MCode.Name,
+                        //    GCodeMetadata = mcode_vm.Value.Analyzer.MCode.Serialize(),
+                        //};
+
+                        //foreach (var @event in job.Value)
+                        //{
+                        //    flux.Logger.LogInformation(new EventId(0, $"job_event"), $"{@event}");
+
+                        //    
+                        //    var core_settings = Flux.SettingsProvider.CoreSettings.Local;
+                        //    if (!core_settings.LoggerAddress.HasValue)
+                        //        continue;
+
+                        //    try
+                        //    {
+                        //        switch (@event.Event.Event)
+                        //        {
+                        //            case :
+                        //                program_history.BeginDate = @event.Event.DateTime.ToString();
+                        //                var request = new RestRequest($"{core_settings.LoggerAddress}/api/programs");
+                        //                request.AddJsonBody(program_history);
+                        //                await Flux.NetProvider.Client.PostAsync(request);
+                        //                break;
+                        //            case "stop":
+                        //                program_history.EndDate = @event.Event.DateTime.ToString();
+                        //                request = new RestRequest($"{core_settings.LoggerAddress}/api/programs");
+                        //                request.AddJsonBody(program_history);
+                        //                await Flux.NetProvider.Client.PutAsync(request);
+                        //                break;
+                        //        }
+                        //    }
+                        //    catch (Exception ex)
+                        //    { 
+                        //    }
+                        //}
 
                         using var delete_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                         await Flux.ConnectionProvider.DeleteAsync(c => c.JobEventPath, $"{mcode.Key};{job.Key}", false, delete_cts.Token);
@@ -214,10 +218,10 @@ namespace Flux.ViewModels
             this IFLUX_ConnectionProvider connection_provider,
             ILogger logger,
             Func<IFLUX_VariableStore, IFLUX_Array<TRData, TWData>> get_variable,
-            VariableUnit unit,
+            VariableAlias alias,
             Func<TRData, TLData> get_log)
         {
-            var variable = connection_provider.GetVariable(get_variable, unit);
+            var variable = connection_provider.GetVariable(get_variable, alias);
             if (!variable.HasValue)
                 return;
 
@@ -232,10 +236,10 @@ namespace Flux.ViewModels
             this IFLUX_ConnectionProvider connection_provider,
             ILogger logger,
             Func<IFLUX_VariableStore, Optional<IFLUX_Array<TRData, TWData>>> get_variable,
-            VariableUnit unit,
+            VariableAlias alias,
             Func<TRData, TLData> get_log)
         {
-            var variable = connection_provider.GetVariable(get_variable, unit);
+            var variable = connection_provider.GetVariable(get_variable, alias);
             if (!variable.HasValue)
                 return;
 

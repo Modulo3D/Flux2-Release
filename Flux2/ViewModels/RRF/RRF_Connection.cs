@@ -94,14 +94,15 @@ namespace Flux.ViewModels
     public class RRF_Connection : FLUX_Connection<RRF_ConnectionProvider, RRF_VariableStoreBase, HttpClient>
     {
         public override bool ParkToolAfterOperation => false;
-        public override string InnerQueuePath => "gcodes/queue/inner";
-        public override string ExtrusionPath => "gcodes/events/extr";
-        public override string JobEventPath => "gcodes/events/job";
-        public override string StoragePath => "gcodes/storage";
-        public override string QueuePath => "gcodes/queue";
-        public override string PathSeparator => "/";
-        public override string MacroPath => "macros";
+        public override string CombinePaths(params string[] paths) => string.Join("/", paths);
         public string GlobalPath => "sys/global";
+        public override string MacroPath => "macros";
+        public override string QueuePath => "gcodes/queue";
+        public override string EventPath => "gcodes/events";
+        public override string StoragePath => "gcodes/storage";
+        public override string JobEventPath => CombinePaths(EventPath, "job");
+        public override string InnerQueuePath => CombinePaths(QueuePath, "inner");
+        public override string ExtrusionEventPath => CombinePaths(EventPath, "extr");
         public override string RootPath => "";
         public override ushort ArrayBase => 0;
 
@@ -120,16 +121,6 @@ namespace Flux.ViewModels
                 .DisposeWith(Disposables);
         }
 
-        public async Task<RRF_Response> ExecuteAsync(RRF_Request rrf_request)
-        {
-            using (rrf_request.Cancellation.Register(() => rrf_request.Response.TrySetResult(default)))
-            {
-                if (!Client.HasValue)
-                    return default;
-                Requests.Enqueue(rrf_request.Priority, rrf_request);
-                return await rrf_request.Response.Task;
-            }
-        }
         private async Task TryDequeueAsync()
         {
             if (!Client.HasValue)
@@ -155,7 +146,35 @@ namespace Flux.ViewModels
                 }
             }
         }
+        public async Task<RRF_Response> ExecuteAsync(RRF_Request rrf_request)
+        {
+            using (rrf_request.Cancellation.Register(() => rrf_request.Response.TrySetResult(default)))
+            {
+                if (!Client.HasValue)
+                    return default;
+                Requests.Enqueue(rrf_request.Priority, rrf_request);
+                return await rrf_request.Response.Task;
+            }
+        }
 
+        public override Task<bool> CloseAsync()
+        {
+            try
+            {
+                if (!Client.HasValue)
+                    return Task.FromResult(true);
+                Client = null;
+
+                while (Requests.TryDequeu(out var rrf_request))
+                    rrf_request.Response.TrySetResult(default);
+
+                return Task.FromResult(true);
+            }
+            catch
+            {
+                return Task.FromResult(false);
+            }
+        }
         public override async Task<bool> ConnectAsync()
         {
             try
@@ -181,25 +200,35 @@ namespace Flux.ViewModels
                 return false;
             }
         }
-        public override Task<bool> CloseAsync()
+
+        public async Task<bool> CreateVariablesAsync(CancellationToken ct)
         {
-            try
-            {
-                if (!Client.HasValue)
-                    return Task.FromResult(true);
-                Client = null;
+            var missing_variables = await FindMissingVariables(ct);
+            if (!missing_variables.result)
+                return false;
 
-                while (Requests.TryDequeu(out var rrf_request))
-                    rrf_request.Response.TrySetResult(default);
+            if (missing_variables.variables.Count == 0)
+                return true;
 
-                return Task.FromResult(true);
-            }
-            catch
-            {
-                return Task.FromResult(false);
-            }
+            var advanced_mode = Flux.MCodes.OperatorUSB
+                .ConvertOr(usb => usb.AdvancedSettings, () => false);
+            if (!advanced_mode)
+                return false;
+
+            var files_str = string.Join(Environment.NewLine, missing_variables.variables.Select(v => v.LoadVariableMacro));
+            var create_variables_result = await Flux.ShowConfirmDialogAsync("Creare file di variabile?", files_str);
+
+            if (create_variables_result != ContentDialogResult.Primary)
+                return false;
+
+            await Flux.ConnectionProvider.DeleteAsync(c => ((RRF_Connection)c).GlobalPath, "initialize_variables.g", false, ct);
+
+            foreach (var variable in missing_variables.variables)
+                if (!await variable.CreateVariableAsync(ct))
+                    return false;
+
+            return true;
         }
-
         public async Task<bool> InitializeVariablesAsync(CancellationToken ct)
         {
             var written_file = await GetFileAsync(GlobalPath, "initialize_variables.g", ct);
@@ -238,7 +267,6 @@ namespace Flux.ViewModels
 
             return await PostGCodeAsync(new[] { "M98 P\"/sys/global/initialize_variables.g\"" }, ct);
         }
-
         private async Task<(bool result, List<IRRF_VariableGlobalModel> variables)> FindMissingVariables(CancellationToken ct)
         {
             var variables = VariableStore.Variables.Values
@@ -275,37 +303,46 @@ namespace Flux.ViewModels
             return (true, missing_variables);
         }
 
-        public async Task<bool> CreateVariablesAsync(CancellationToken ct)
-        {
-            var missing_variables = await FindMissingVariables(ct);
-            if (!missing_variables.result)
-                return false;
-
-            if (missing_variables.variables.Count == 0)
-                return true;
-
-            var advanced_mode = Flux.MCodes.OperatorUSB
-                .ConvertOr(usb => usb.AdvancedSettings, () => false);
-            if (!advanced_mode)
-                return false;
-
-            var files_str = string.Join(Environment.NewLine, missing_variables.variables.Select(v => v.LoadVariableMacro));
-            var create_variables_result = await Flux.ShowConfirmDialogAsync("Creare file di variabile?", files_str);
-
-            if (create_variables_result != ContentDialogResult.Primary)
-                return false;
-
-            await Flux.ConnectionProvider.DeleteAsync(c => ((RRF_Connection)c).GlobalPath, "initialize_variables.g", false, ct);
-
-            foreach (var variable in missing_variables.variables)
-                if (!await variable.CreateVariableAsync(ct))
-                    return false;
-
-            return true;
-        }
 
         // GCODE
-        public async Task<bool> PostGCodeAsync(IEnumerable<string> gcode, CancellationToken ct, bool wait = false, CancellationToken gcode_ct = default)
+        public override async Task<bool> StopAsync()
+        {
+            using var put_reset_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            return await PostGCodeAsync(new[]
+            {
+                "M108", "M25",
+                "set global.iterator = false", "M0"
+            }, put_reset_cts.Token);
+        }
+        public override async Task<bool> PauseAsync()
+        {
+            using var put_reset_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            return await PostGCodeAsync(new[]
+            {
+                "M108", "M25",
+                "set global.iterator = false", "M0",
+            }, put_reset_cts.Token);
+        }
+        public override async Task<bool> CancelAsync()
+        {
+            using var put_reset_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            return await PostGCodeAsync(new GCodeString[]
+            {
+                "M108", "M25",
+                "set global.iterator = false", "M0",
+                GetExecuteMacroGCode(MacroPath, "cancel_print")
+            }, put_reset_cts.Token);
+        }
+        public int GetGCodeLenght(GCodeString paramacro)
+        {
+            return $"rr_gcode?gcode={string.Join("%0A", paramacro)}".Length;
+        }
+        public override async Task<bool> StartAsync(string folder, string filename)
+        {
+            using var put_reset_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            return await PostGCodeAsync(new[] { $"M32 \"0:/{folder}/{filename}\"" }, put_reset_cts.Token);
+        }
+        public async Task<bool> PostGCodeAsync(GCodeString gcode, CancellationToken ct)
         {
             try
             {
@@ -324,16 +361,6 @@ namespace Flux.ViewModels
                     return false;
                 }
 
-                if (wait && gcode_ct != CancellationToken.None && !await WaitProcessStatusAsync(
-                    status => status == FLUX_ProcessStatus.IDLE,
-                    TimeSpan.FromSeconds(0.5),
-                    TimeSpan.FromSeconds(0.1),
-                    gcode_ct))
-                {
-                    Flux.Messages.LogMessage($"{request}", $"Timeout esecuzione gcode", MessageLevel.ERROR, 0);
-                    return false;
-                }
-
                 return true;
             }
             catch
@@ -341,51 +368,17 @@ namespace Flux.ViewModels
                 return false;
             }
         }
-
-        public override async Task<bool> HoldAsync()
-        {
-            using var put_hold_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            using var wait_hold_cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            return await PostGCodeAsync(new[] { "M108", "M25", "M0" }, put_hold_cts.Token, true, wait_hold_cts.Token);
-        }
-        public override async Task<bool> ResetAsync()
-        {
-            using var put_reset_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            using var wait_reset_cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            return await PostGCodeAsync(new[]
-            {
-                "M108", "M25",
-                "set global.iterator = false", "M0"
-            }, put_reset_cts.Token, true, wait_reset_cts.Token);
-        }
-        private int GetGCodeLenght(IEnumerable<string> paramacro)
-        {
-            return $"rr_gcode?gcode={string.Join("%0A", paramacro)}".Length;
-        }
-        public override async Task<bool> CancelPrintAsync()
-        {
-            using var put_cancel_print_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            using var wait_cancel_print_cts = new CancellationTokenSource(TimeSpan.FromMinutes(1));
-            return await PostGCodeAsync(new[]
-            {
-                "M108", "M25",
-                "set global.iterator = false", "M0",
-                "M98 P\"/macros/cancel_print\" R-1",
-            }, put_cancel_print_cts.Token, true, wait_cancel_print_cts.Token);
-        }
-        public override async Task<bool> CycleAsync(string folder, string filename, bool wait = false, CancellationToken wait_ct = default)
-        {
-            using var put_start_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            return await PostGCodeAsync(new[] { $"M32 \"0:/{folder}/{filename}\"" }, put_start_cts.Token, wait, wait_ct);
-        }
-        public override async Task<bool> ExecuteParamacroAsync(IEnumerable<string> paramacro, CancellationToken put_ct, bool wait = false, CancellationToken wait_ct = default, bool can_cancel = false)
+        public override async Task<bool> ExecuteParamacroAsync(GCodeString paramacro, CancellationToken put_ct, bool can_cancel = false)
         {
             try
             {
+                if (!paramacro.HasValue)
+                    return false;
+
                 var lenght = GetGCodeLenght(paramacro);
                 if (!can_cancel && lenght < 160)
                 {
-                    return await PostGCodeAsync(paramacro, put_ct, wait, wait_ct);
+                    return await PostGCodeAsync(paramacro, put_ct);
                 }
                 else
                 {
@@ -413,20 +406,17 @@ namespace Flux.ViewModels
                         return false;
 
                     // Set PLC to Cycle
-                    return await CycleAsync(StoragePath, "job.mcode", wait, wait_ct);
+                    return await StartAsync(StoragePath, "job.mcode");
 
                     IEnumerable<string> get_job_gcode()
                     {
                         yield return $"M98 P\"0:/gcodes/storage/paramacro.mcode\"";
-                        yield return $"if global.iterator == false";
-                        yield return $" M98 P\"0:/macros/cancel_print\" R0";
                     }
 
                     IEnumerable<string> get_paramacro_gcode()
                     {
                         yield return $"M98 R{(can_cancel ? 1 : 0)}";
                         yield return $"set global.iterator = true";
-                        yield return $"";
                         foreach (var line in paramacro)
                             yield return line.TrimEnd();
                     }
@@ -444,9 +434,9 @@ namespace Flux.ViewModels
             string filename,
             bool is_paramacro,
             CancellationToken ct,
-            Optional<IEnumerable<string>> source = default,
-            Optional<IEnumerable<string>> start = default,
-            Optional<IEnumerable<string>> end = default,
+            GCodeString source = default,
+            GCodeString start = default,
+            GCodeString end = default,
             Optional<uint> source_blocks = default,
             Action<double> report_progress = null)
         {
@@ -481,12 +471,20 @@ namespace Flux.ViewModels
 
                 IEnumerable<string> get_full_source()
                 {
+                    if (start.HasValue)
+                    {
+                        yield return "; flux start gcode";
+                        foreach (var line in start)
+                            yield return line;
+                        yield return "";
+                    }
+
                     long current_block = 0;
                     if (source.HasValue)
                     {
                         if (source_blocks.HasValue && source_blocks.Value > 0)
                         {
-                            foreach (var line in source.Value)
+                            foreach (var line in source)
                             {
                                 var progress = (double)current_block++ / source_blocks.Value * 100;
                                 if (progress - (int)progress < 0.001)
@@ -496,15 +494,15 @@ namespace Flux.ViewModels
                         }
                         else
                         {
-                            foreach (var line in source.Value)
+                            foreach (var line in source)
                                 yield return line;
                         }
                     }
 
                     if (end.HasValue)
                     {
-                        yield return "; end";
-                        foreach (var line in end.Value)
+                        yield return "; flux end gcode";
+                        foreach (var line in end)
                             yield return line;
                         yield return "";
                     }
@@ -734,51 +732,51 @@ namespace Flux.ViewModels
             }
         }
 
-        public override Optional<IEnumerable<string>> GetParkToolGCode()
+        public override GCodeString GetParkToolGCode()
         {
-            return new[] { $"T-1" };
+            return $"T-1";
         }
-        public override Optional<IEnumerable<string>> GetProbePlateGCode()
+        public override GCodeString GetProbePlateGCode()
         {
-            return new[] { "M98 P\"/macros/probe_plate\"" };
+            return "M98 P\"/macros/probe_plate\"";
         }
-        public override Optional<IEnumerable<string>> GetLowerPlateGCode()
+        public override GCodeString GetLowerPlateGCode()
         {
-            return new[] { "M98 P\"/macros/lower_plate\"" };
+            return "M98 P\"/macros/lower_plate\"";
         }
-        public override Optional<IEnumerable<string>> GetRaisePlateGCode()
+        public override GCodeString GetRaisePlateGCode()
         {
-            return new[] { "M98 P\"/macros/raise_plate\"" };
+            return "M98 P\"/macros/raise_plate\"";
         }
-        public override Optional<IEnumerable<string>> GetCenterPositionGCode()
+        public override GCodeString GetCenterPositionGCode()
         {
-            return new[] { "M98 P\"/macros/center_position\"" };
+            return "M98 P\"/macros/center_position\"";
         }
-        public override Optional<IEnumerable<string>> GetSetLowCurrentGCode()
+        public override GCodeString GetSetLowCurrentGCode()
         {
-            return new[] { "M98 P\"/macros/low_current\"" };
+            return "M98 P\"/macros/low_current\"";
         }
-        public override Optional<IEnumerable<string>> GetProbeMagazineGCode()
+        public override GCodeString GetProbeMagazineGCode()
         {
-            return new[] { "M98 P\"/macros/probe_magazine\"" };
+            return "M98 P\"/macros/probe_magazine\"";
         }
-        public override Optional<IEnumerable<string>> GetHomingGCode(params char[] axis)
+        public override GCodeString GetExitPartProgramGCode()
         {
-            return new[] { $"G28 {string.Join(" ", axis.Select(a => $"{a}0"))}" };
+            return "M99";
         }
-        public override Optional<IEnumerable<string>> GetSelectToolGCode(ArrayIndex position)
+        public override GCodeString GetHomingGCode(params char[] axis)
         {
-            return new[] { $"T{position.GetArrayBaseIndex(this)}" };
+            return $"G28 {string.Join(" ", axis.Select(a => $"{a}0"))}";
         }
-        public override Optional<IEnumerable<string>> GetManualCalibrationPositionGCode()
+        public override GCodeString GetManualCalibrationPositionGCode()
         {
-            return new[] { "M98 P\"/macros/manual_calibration_position\"" };
+            return "M98 P\"/macros/manual_calibration_position\"";
         }
-        public override Optional<IEnumerable<string>> GetExecuteMacroGCode(string folder, string filename)
+        public override GCodeString GetSelectToolGCode(ArrayIndex position)
         {
-            return new[] { $"M98 P\"0:/{folder}/{filename}\"" };
+            return $"T{position.GetArrayBaseIndex(this)}";
         }
-        public override Optional<IEnumerable<string>> GetCancelLoadFilamentGCode(ArrayIndex position)
+        public override GCodeString GetCancelLoadFilamentGCode(ArrayIndex position)
         {
             return new[] 
             {
@@ -786,7 +784,7 @@ namespace Flux.ViewModels
                 "T-1"
             };
         }
-        public override Optional<IEnumerable<string>> GetCancelUnloadFilamentGCode(ArrayIndex position)
+        public override GCodeString GetCancelUnloadFilamentGCode(ArrayIndex position)
         {
             return new[]
              {
@@ -794,32 +792,19 @@ namespace Flux.ViewModels
                 "T-1"
             };
         }
-        public override Optional<IEnumerable<string>> GetStartPartProgramGCode(JobPartPrograms job_partprograms)
+        public override GCodeString GetExecuteMacroGCode(string folder, string filename)
         {
-            var job = job_partprograms.Job;
-            var part_program = job_partprograms.GetCurrentPartProgram();
-            if (!part_program.HasValue)
-                return default;
-
-            return new[]
-            {
-                $"M98 P\"/macros/job/start\" A\"{extrusion_key(0)}\" B\"{extrusion_key(1)}\" C\"{extrusion_key(2)}\" D\"{extrusion_key(3)}\" J\"{job.JobKey}\" K\"{job.MCodeKey}\" R1",
-                $"M32 \"0:/{StoragePath}/{part_program.Value}\""
-            };
-
-            string extrusion_key(ushort position)
-            {
-                return Flux.Feeders.Feeders.Lookup(position)
-                    .Convert(f => f.SelectedMaterial)
-                    .Convert(m => m.ExtrusionKey)
-                    .ConvertOrDefault(e => $"{e}");
-            }
+            return $"M98 P\"0:/{folder}/{filename}\"";
         }
-        public override Optional<IEnumerable<string>> GetSetToolTemperatureGCode(ArrayIndex position, double temperature)
+        public override GCodeString GetProbeToolGCode(ArrayIndex position, double temperature)
         {
-            return new[] { $"M104 T{position.GetArrayBaseIndex(this)} S{temperature}" };
+            throw new NotImplementedException();
         }
-        public override Optional<IEnumerable<string>> GetSetToolOffsetGCode(ArrayIndex position, double x, double y, double z)
+        public override GCodeString GetSetToolTemperatureGCode(ArrayIndex position, double temperature)
+        {
+            return $"M104 T{position.GetArrayBaseIndex(this)} S{temperature}";
+        }
+        public override GCodeString GetSetToolOffsetGCode(ArrayIndex position, double x, double y, double z)
         {
             return new[]
             {
@@ -828,11 +813,7 @@ namespace Flux.ViewModels
                 $"G10 P{position.GetArrayBaseIndex(this)} Z{{{z * -1}}}",
             };
         }
-        public override Optional<IEnumerable<string>> GetProbeToolGCode(ArrayIndex position, double temperature)
-        {
-            throw new NotImplementedException();
-        }
-        public override Optional<IEnumerable<string>> GetSetExtruderMixingGCode(ArrayIndex machine_extruder, ArrayIndex mixing_extruder)
+        public override GCodeString GetSetExtruderMixingGCode(ArrayIndex machine_extruder, ArrayIndex mixing_extruder)
         {
             var extruder_count = Flux.SettingsProvider.ExtrudersCount;
             if (!extruder_count.HasValue)
@@ -845,66 +826,64 @@ namespace Flux.ViewModels
             var mixing = Enumerable.Range(mixing_start, mixing_count)
                 .Select(i => i == selected_extruder ? "1" : "0");
 
-            return new[] { $"M567 P{machine_extruder.GetArrayBaseIndex(this)} E1:{string.Join(":", mixing)}" };
+            return $"M567 P{machine_extruder.GetArrayBaseIndex(this)} E1:{string.Join(":", mixing)}";
         }
-        public override Optional<IEnumerable<string>> GetRelativeXMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 X{distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
-        public override Optional<IEnumerable<string>> GetRelativeYMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 Y{distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
-        public override Optional<IEnumerable<string>> GetRelativeZMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 Z{distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
-        public override Optional<IEnumerable<string>> GetRelativeEMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 E{distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
+        public override GCodeString GetRelativeXMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 X{distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
+        public override GCodeString GetRelativeYMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 Y{distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
+        public override GCodeString GetRelativeZMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 Z{distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
+        public override GCodeString GetRelativeEMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 E{distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
 
-        public override Optional<IEnumerable<string>> GetCancelOperationGCode(ushort reason)
-        {
-            return new[] { $"M98 P\"0:/macros/cancel_print\" R{reason}", "M99" };
-        }
-
-        public override Optional<IEnumerable<string>> GetManualFilamentInsertGCode(ArrayIndex position, double iteration_distance, double feedrate)
-        {
-            var gcode = new List<string>();
-
-            var select_tool_gcode = GetSelectToolGCode(position);
-            if (!select_tool_gcode.HasValue)
-                return default;
-            gcode.Add(select_tool_gcode.Value);
-
-            var movement_gcode = GetRelativeEMovementGCode(iteration_distance, feedrate);
-            if (!movement_gcode.HasValue)
-                return default;
-            gcode.Add(movement_gcode.Value);
-
-            return gcode;
-        }
-
-        public override Optional<IEnumerable<string>> GetManualFilamentExtractGCode(ArrayIndex position, ushort iterations, double iteration_distance, double feedrate)
-        {
-            var gcode = new List<string>();
-
-            var select_tool_gcode = GetSelectToolGCode(position);
-            if (!select_tool_gcode.HasValue)
-                return default;
-            gcode.Add(select_tool_gcode.Value);
-
-            var extract_distance = (iteration_distance * iterations) + 50;
-            var movement_gcode = GetRelativeEMovementGCode(-extract_distance, 500);
-            if (!movement_gcode.HasValue)
-                return default;
-            gcode.Add(movement_gcode.Value);
-
-            var park_tool_gcode = GetParkToolGCode();
-            if (!park_tool_gcode.HasValue)
-                return default;
-            gcode.Add(park_tool_gcode.Value);
-
-            return gcode;
-        }
-
-        public override Task<bool> PutFileStreamAsync(string folder, string name, Stream data, CancellationToken ct)
-        {
-            throw new NotImplementedException();
-        }
 
         public override Task<Stream> GetFileStreamAsync(string folder, string name, CancellationToken ct)
         {
             throw new NotImplementedException();
         }
+        public override Task<bool> PutFileStreamAsync(string folder, string name, Stream data, CancellationToken ct)
+        {
+            throw new NotImplementedException();
+        }
+        public override GCodeString GetManualFilamentInsertGCode(ArrayIndex position, double iteration_distance, double feedrate)
+        {
+            var gcode = new List<string>();
+
+            var select_tool_gcode = GetSelectToolGCode(position);
+            if (!select_tool_gcode.HasValue)
+                return default;
+
+            var movement_gcode = GetRelativeEMovementGCode(iteration_distance, feedrate);
+            if (!movement_gcode.HasValue)
+                return default;
+
+            return new[]
+            {
+                select_tool_gcode,
+                movement_gcode
+            };
+        }
+        public override GCodeString GetManualFilamentExtractGCode(ArrayIndex position, ushort iterations, double iteration_distance, double feedrate)
+        {
+            var gcode = new List<string>();
+
+            var select_tool_gcode = GetSelectToolGCode(position);
+            if (!select_tool_gcode.HasValue)
+                return default;
+            
+            var extract_distance = (iteration_distance * iterations) + 50;
+            var movement_gcode = GetRelativeEMovementGCode(-extract_distance, 500);
+            if (!movement_gcode.HasValue)
+                return default;
+            
+            var park_tool_gcode = GetParkToolGCode();
+            if (!park_tool_gcode.HasValue)
+                return default;
+
+            return new[]
+            {
+                select_tool_gcode,
+                movement_gcode,
+                park_tool_gcode
+            };
+        }
+
     }
 }

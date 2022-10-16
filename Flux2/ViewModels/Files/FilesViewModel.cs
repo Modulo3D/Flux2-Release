@@ -79,7 +79,7 @@ namespace Flux.ViewModels
                 return;
 
             using var fs_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            var path = Folder.ConvertOr(f => f.FSFullPath, () => Flux.ConnectionProvider.PathSeparator);
+            var path = Folder.ConvertOr(f => f.FSFullPath, () => Flux.ConnectionProvider.CombinePaths("", ""));
             switch (options.Value.Value)
             {
                 case FLUX_FileType.File:
@@ -190,11 +190,11 @@ namespace Flux.ViewModels
                 switch (file.Type)
                 {
                     case FLUX_FileType.File:
-                        var file_vm = new FileViewModel(this, file_list.folder, file, Flux.ConnectionProvider.PathSeparator);
+                        var file_vm = new FileViewModel(this, file_list.folder, file);
                         yield return file_vm;
                         break;
                     case FLUX_FileType.Directory:
-                        var folder_vm = new FolderViewModel(this, file_list.folder, file, Flux.ConnectionProvider.PathSeparator);
+                        var folder_vm = new FolderViewModel(this, file_list.folder, file);
                         yield return folder_vm;
                         break;
                 }

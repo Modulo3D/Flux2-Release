@@ -72,9 +72,9 @@ namespace Flux.ViewModels
                     e.printing.CurrentMCode.HasValue &&
                     e.status.CanSafeStop);
 
-            StartCommand = ReactiveCommand.CreateFromTask(StartAsync, canStart);
-            HoldCommand = ReactiveCommand.CreateFromTask(HoldAsync, canHold);
-            ResetCommand = ReactiveCommand.CreateFromTask(ResetAsync, canStop);
+            StartCommand = ReactiveCommand.CreateFromTask(StartPrintAsync, canStart);
+            HoldCommand = ReactiveCommand.CreateFromTask(PausePrintAsync, canHold);
+            ResetCommand = ReactiveCommand.CreateFromTask(CancelPrintAsync, canStop);
 
             _SelectedMCodeName = Flux.StatusProvider
                 .WhenAnyValue(v => v.PrintingEvaluation)
@@ -119,19 +119,19 @@ namespace Flux.ViewModels
                 .ToProperty(this, v => v.ExpectedMaterials);
         }
 
-        public async Task ResetAsync()
+        public async Task CancelPrintAsync()
         {
             await Flux.ConnectionProvider.CancelPrintAsync(false);
         }
 
-        public async Task HoldAsync()
+        public async Task PausePrintAsync()
         {
-            await Flux.ConnectionProvider.HoldAsync(false);
+            await Flux.ConnectionProvider.PausePrintAsync(false);
         }
 
-        public async Task StartAsync()
+        public async Task StartPrintAsync()
         {
-            await Flux.ConnectionProvider.StartAsync();
+            await Flux.ConnectionProvider.StartPrintAsync();
         }
 
         public Task EnterPhaseAsync()

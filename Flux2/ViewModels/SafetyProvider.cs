@@ -130,7 +130,7 @@ namespace Flux.ViewModels
         {
             return new ConditionCommand(action_icon, () => Flux.ConnectionProvider.ToggleVariableAsync(get_variable), can_execute);
         }
-        public ConditionCommand Create(string action_icon, Func<IFLUX_VariableStore, IFLUX_Array<bool, bool>> get_variable, VariableUnit unit, IObservable<bool> can_execute = null)
+        public ConditionCommand Create(string action_icon, Func<IFLUX_VariableStore, IFLUX_Array<bool, bool>> get_variable, VariableAlias unit, IObservable<bool> can_execute = null)
         {
             return new ConditionCommand(action_icon, () => Flux.ConnectionProvider.ToggleVariableAsync(get_variable, unit), can_execute);
         }
@@ -138,7 +138,7 @@ namespace Flux.ViewModels
         {
             return new ConditionCommand(action_icon, () => Flux.ConnectionProvider.WriteVariableAsync(get_variable, value), can_execute);
         }
-        public ConditionCommand Create<TRData, TWData>(string action_icon, Func<IFLUX_VariableStore, IFLUX_Array<TRData, TWData>> get_variable, VariableUnit unit, TWData value, IObservable<bool> can_execute = null)
+        public ConditionCommand Create<TRData, TWData>(string action_icon, Func<IFLUX_VariableStore, IFLUX_Array<TRData, TWData>> get_variable, VariableAlias unit, TWData value, IObservable<bool> can_execute = null)
         {
             return new ConditionCommand(action_icon, () => Flux.ConnectionProvider.WriteVariableAsync(get_variable, unit, value), can_execute);
         }
@@ -147,7 +147,7 @@ namespace Flux.ViewModels
         {
             return new ConditionCommand(action_icon, () => Flux.ConnectionProvider.ToggleVariableAsync(get_variable), can_execute);
         }
-        public ConditionCommand Create(string action_icon, Func<IFLUX_VariableStore, Optional<IFLUX_Array<bool, bool>>> get_variable, VariableUnit unit, IObservable<bool> can_execute = null)
+        public ConditionCommand Create(string action_icon, Func<IFLUX_VariableStore, Optional<IFLUX_Array<bool, bool>>> get_variable, VariableAlias unit, IObservable<bool> can_execute = null)
         {
             return new ConditionCommand(action_icon, () => Flux.ConnectionProvider.ToggleVariableAsync(get_variable, unit), can_execute);
         }
@@ -155,7 +155,7 @@ namespace Flux.ViewModels
         {
             return new ConditionCommand(action_icon, () => Flux.ConnectionProvider.WriteVariableAsync(get_variable, value), can_execute);
         }
-        public ConditionCommand Create<TRData, TWData>(string action_icon, Func<IFLUX_VariableStore, Optional<IFLUX_Array<TRData, TWData>>> get_variable, VariableUnit unit, TWData value, IObservable<bool> can_execute = null)
+        public ConditionCommand Create<TRData, TWData>(string action_icon, Func<IFLUX_VariableStore, Optional<IFLUX_Array<TRData, TWData>>> get_variable, VariableAlias unit, TWData value, IObservable<bool> can_execute = null)
         {
             return new ConditionCommand(action_icon, () => Flux.ConnectionProvider.WriteVariableAsync(get_variable, unit, value), can_execute);
         }

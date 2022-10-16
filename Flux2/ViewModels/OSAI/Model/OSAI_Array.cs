@@ -26,12 +26,12 @@ namespace Flux.ViewModels
             Group = $"{address.VarCode}";
             TAddress cur_address = address;
 
-            var source_cache = (SourceCache<IFLUX_Variable<TRData, TWData>, VariableUnit>)Variables;
+            var source_cache = (SourceCache<IFLUX_Variable<TRData, TWData>, VariableAlias>)Variables;
             for (ushort i = 0; i < count; i++)
             {
                 var v_unit = custom_unit
                     .Convert(u => u.ElementAtOrDefault(i))
-                    .Convert(u => u.Key)
+                    .Convert(u => u.Value)
                     .ValueOr(() => new VariableUnit((ushort)(i + 1)));
 
                 var i_name = $"{name} {v_unit}";

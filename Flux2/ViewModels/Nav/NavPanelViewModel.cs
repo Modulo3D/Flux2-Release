@@ -118,11 +118,11 @@ namespace Flux.ViewModels
         public void AddCommand(
             string name,
             Func<IFLUX_VariableStore, Optional<IFLUX_Array<bool, bool>>> get_array,
-            VariableUnit unit,
+            VariableAlias alias,
             OptionalObservable<bool> can_execute = default,
             OptionalObservable<bool> visible = default)
         {
-            var variable = Flux.ConnectionProvider.GetVariable(get_array, unit);
+            var variable = Flux.ConnectionProvider.GetVariable(get_array, alias);
             if (variable.HasValue)
                 Buttons.Add(new ToggleButton(name, Flux, variable.Value, can_execute, visible));
         }
@@ -130,11 +130,11 @@ namespace Flux.ViewModels
         public void AddCommand(
             string name,
             Func<IFLUX_VariableStore, IFLUX_Array<bool, bool>> get_array,
-            VariableUnit unit,
+            VariableAlias alias,
             OptionalObservable<bool> can_execute = default,
             OptionalObservable<bool> visible = default)
         {
-            var variable = Flux.ConnectionProvider.GetVariable(get_array, unit);
+            var variable = Flux.ConnectionProvider.GetVariable(get_array, alias);
             if (variable.HasValue)
                 Buttons.Add(new ToggleButton(name, Flux, variable.Value, can_execute, visible));
         }

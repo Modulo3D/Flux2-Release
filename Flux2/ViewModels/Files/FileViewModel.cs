@@ -28,20 +28,18 @@ namespace Flux.ViewModels
         public string FSPath { get; }
         public string FSFullPath { get; }
         public FilesViewModel Files { get; }
-        public string PathSeparator { get; }
         public Optional<FolderViewModel> Folder { get; }
 
-        public FSViewModel(FilesViewModel files, Optional<FolderViewModel> folder, FLUX_File file, string path_separator) : base($"{typeof(TViewModel).GetRemoteControlName()}??{file.Name}")
+        public FSViewModel(FilesViewModel files, Optional<FolderViewModel> folder, FLUX_File file) : base($"{typeof(TViewModel).GetRemoteControlName()}??{file.Name}")
         {
             Files = files;
             Folder = folder;
             FSName = file.Name;
-            PathSeparator = path_separator;
-            FSPath = Folder.ConvertOr(f => $"{f.FSPath}{path_separator}{f.FSName}".TrimStart(path_separator.ToCharArray()), () => "");
-            FSFullPath = Folder.ConvertOr(f => $"{f.FSPath}{path_separator}{f.FSName}{path_separator}{FSName}".TrimStart(path_separator.AsArray()), () => FSName);
+            FSPath = Folder.ConvertOr(f => files.Flux.ConnectionProvider.CombinePaths(f.FSPath, f.FSName).TrimStart(), () => "");
+            FSFullPath = Folder.ConvertOr(f => files.Flux.ConnectionProvider.CombinePaths(f.FSPath, f.FSName, FSName).TrimStart(), () => FSName);
         }
 
-        public override string ToString() => $"{FSPath}{PathSeparator}{FSName}";
+        public override string ToString() => Files.Flux.ConnectionProvider.CombinePaths(FSPath, FSName);
     }
 
     public enum FLUX_FileModify : uint
@@ -59,7 +57,7 @@ namespace Flux.ViewModels
         [RemoteCommand]
         public Optional<ReactiveCommand<Unit, Unit>> ExecuteFileCommand { get; }
 
-        public FileViewModel(FilesViewModel files, Optional<FolderViewModel> folder, FLUX_File file, string path_separator) : base(files, folder, file, path_separator)
+        public FileViewModel(FilesViewModel files, Optional<FolderViewModel> folder, FLUX_File file) : base(files, folder, file)
         {
             EditFileCommand = ReactiveCommand.CreateFromTask(() => files.EditFileAsync(this))
                 .DisposeWith(Disposables);

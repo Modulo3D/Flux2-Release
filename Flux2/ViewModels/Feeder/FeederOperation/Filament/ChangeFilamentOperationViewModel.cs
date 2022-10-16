@@ -71,12 +71,12 @@ namespace Flux.ViewModels
         {
             return Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation).Select(s => s.CanSafeStop);
         }
-        protected async Task<bool> CancelFilamentOperationAsync(Func<IFLUX_Connection, Func<ArrayIndex, Optional<IEnumerable<string>>>> cancel_filament_operation)
+        protected async Task<bool> CancelFilamentOperationAsync(Func<IFLUX_Connection, Func<ArrayIndex, GCodeString>> cancel_filament_operation)
         {
             try
             {
                 IsCanceled = true;
-                if (!await Flux.ConnectionProvider.ResetAsync())
+                if (!await Flux.ConnectionProvider.StopAsync())
                     return false;
 
                 using var put_cancel_filament_op_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
@@ -96,7 +96,7 @@ namespace Flux.ViewModels
                 return false;
             }
         }
-        protected async Task<bool> ExecuteFilamentOperation(Optional<GCodeFilamentOperation> settings, Func<IFLUX_Connection, Func<GCodeFilamentOperation, Optional<IEnumerable<string>>>> filament_operation)
+        protected async Task<bool> ExecuteFilamentOperation(Optional<GCodeFilamentOperation> settings, Func<IFLUX_Connection, Func<GCodeFilamentOperation, GCodeString>> filament_operation)
         {
             try
             {
@@ -105,7 +105,7 @@ namespace Flux.ViewModels
                 if (!settings.HasValue)
                     return false;
 
-                if (!await Flux.ConnectionProvider.ResetAsync())
+                if (!await Flux.ConnectionProvider.StopAsync())
                     return false;
 
                 using var put_filament_op_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));

@@ -174,29 +174,31 @@ namespace Flux.ViewModels
                 var select_tool_gcode = c.GetSelectToolGCode(Position);
                 if (!select_tool_gcode.HasValue)
                     return default;
-                gcode.AddRange(select_tool_gcode.Value);
-
+                
                 var set_tool_temp_gcode = c.GetSetToolTemperatureGCode(Position, print_temperature.Value);
                 if (!set_tool_temp_gcode.HasValue)
                     return default;
-                gcode.AddRange(set_tool_temp_gcode.Value);
-
+                
                 var set_tool_offset_gcode = c.GetSetToolOffsetGCode(Position, tool_offset.Value.X, tool_offset.Value.Y, 0);
                 if (!set_tool_offset_gcode.HasValue)
                     return default;
-                gcode.AddRange(set_tool_offset_gcode.Value);
-
+                
                 var manual_calibration_position_gcode = c.GetManualCalibrationPositionGCode();
                 if (!manual_calibration_position_gcode.HasValue)
                     return default;
-                gcode.AddRange(manual_calibration_position_gcode.Value);
-
+                
                 var raise_plate_gcode = c.GetRaisePlateGCode();
                 if (!raise_plate_gcode.HasValue)
                     return default;
-                gcode.AddRange(raise_plate_gcode.Value);
 
-                return gcode;
+                return new[]
+                {
+                    select_tool_gcode,
+                    set_tool_temp_gcode,
+                    set_tool_offset_gcode,
+                    manual_calibration_position_gcode,
+                    raise_plate_gcode
+                };
 
             }, put_select_tool_cts.Token, true, wait_select_tool_cts.Token);
         }
