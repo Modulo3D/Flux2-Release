@@ -274,6 +274,9 @@ namespace Flux.ViewModels
 
         private ObservableAsPropertyHelper<bool> _HasColdNozzle;
         public bool HasColdNozzle => _HasColdNozzle.Value;
+
+        private ObservableAsPropertyHelper<Optional<double>> _TargetTemperature;
+        public Optional<double> TargetTemperature => _TargetTemperature.Value;
         public FeederEvaluator(FluxViewModel flux, IFluxFeederViewModel feeder)
         {
             Flux = flux;
@@ -372,10 +375,13 @@ namespace Flux.ViewModels
             var material = Feeder.WhenAnyValue(f => f.SelectedMaterial);
             var tool_material = material.Convert(m => m.ToolMaterial);
 
+            _TargetTemperature = Flux.StatusProvider.WhenAnyValue(s => s.PrintingEvaluation)
+                .Select(TargetTemp)
+                .ToProperty(this, v => v.TargetTemperature);
+
             _HasColdNozzle = Observable.CombineLatest(
                 Flux.StatusProvider.WhenAnyValue(s => s.PrintingEvaluation),
                 Feeder.ToolNozzle.WhenAnyValue(t => t.NozzleTemperature),
-                tool_material.ConvertMany(tm => tm.WhenAnyValue(t => t.ExtrusionTemp)),
                 ColdNozzle)
                 .ToProperty(this, e => e.HasColdNozzle);
 
@@ -383,10 +389,15 @@ namespace Flux.ViewModels
             ToolNozzle.Initialize();
         }
 
-        private bool ColdNozzle(PrintingEvaluation evaluation, Optional<FLUX_Temp> plc_temp, Optional<double> extrusion_temp)
+        private bool ColdNozzle(PrintingEvaluation evaluation, Optional<FLUX_Temp> plc_temp)
         {
             var tool_index = evaluation.CurrentPartProgram
-                .Convert(pp => pp.ToolNumber);
+                .Convert(pp => pp.ToolIndex);
+            if (!tool_index.HasValue)
+                return false;
+
+            var temperature = evaluation.CurrentPartProgram
+                .Convert(pp => pp.Temperature);
             if (!tool_index.HasValue)
                 return false;
 
@@ -395,15 +406,31 @@ namespace Flux.ViewModels
 
             if (tool_number != Feeder.Position)
                 return false;
-            if (!extrusion_temp.HasValue)
-                return true;
             if (!plc_temp.HasValue)
                 return true;
             if (plc_temp.Value.Target == 0)
                 return true;
-            return plc_temp.Value.Target.ValueOr(() => 0) - plc_temp.Value.Current > 10;
+            return temperature.Value - plc_temp.Value.Current > 10;
         }
+        private Optional<double> TargetTemp(PrintingEvaluation evaluation)
+        {
+            var tool_index = evaluation.CurrentPartProgram
+                .Convert(pp => pp.ToolIndex);
+            if (!tool_index.HasValue)
+                return default;
 
+            var temperature = evaluation.CurrentPartProgram
+                .Convert(pp => pp.Temperature);
+            if (!temperature.HasValue)
+                return default;
+
+            var variable_access = (IFLUX_VariableAccess)Flux.ConnectionProvider;
+            var tool_number = tool_index.Value.GetZeroBaseIndex(variable_access.ToOptional());
+
+            if (tool_number != Feeder.Position)
+                return default;
+            return temperature.Value;
+        }
         private Optional<IFluxOffsetViewModel> FindOffset(IQuery<IFluxOffsetViewModel, ushort> offsets)
         {
             return offsets.LookupOptional(Feeder.Position);

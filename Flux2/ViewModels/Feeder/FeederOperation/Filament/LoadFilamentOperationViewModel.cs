@@ -40,7 +40,7 @@ namespace Flux.ViewModels
             if (!Flux.ConnectionProvider.HasVariable(c => c.FILAMENT_ON_HEAD))
                 Material.SetMaterialLoaded(true);
 
-            var filament_settings = GCodeFilamentOperation.Create(Material, false, true);
+            var filament_settings = GCodeFilamentOperation.Create(Material, park_tool:false, keep_temp:true);
             if (!await ExecuteFilamentOperation(filament_settings, c => c.GetLoadFilamentGCode))
                 return false;
 

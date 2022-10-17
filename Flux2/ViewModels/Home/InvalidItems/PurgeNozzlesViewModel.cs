@@ -22,20 +22,22 @@ namespace Flux.ViewModels
         public PurgeNozzleViewModel(FeederEvaluator eval) : base($"{typeof(PurgeNozzleViewModel).GetRemoteControlName()}??{eval.Feeder.Position}", eval)
         {
             var material = eval.Feeder.WhenAnyValue(f => f.SelectedMaterial);
+            var target_temp = eval.WhenAnyValue(e => e.TargetTemperature);
             var tool_material = material.Convert(m => m.ToolMaterial);
 
             _InvalidItemBrush = Observable.CombineLatest(
-               eval.Feeder.ToolNozzle.WhenAnyValue(m => m.NozzleTemperature),
-               tool_material.ConvertMany(tm => tm.WhenAnyValue(m => m.ExtrusionTemp)).ValueOr(() => 0),
-               (temp, expected_temp) =>
+               eval.Feeder.ToolNozzle.WhenAnyValue(m => m.NozzleTemperature), 
+               target_temp,
+               (temp, target_temp) =>
                {
                    if (!temp.HasValue)
                        return FluxColors.Error;
-                   var target_temp = temp.Value.Target;
-                   if (target_temp.ValueOr(() => 0) < expected_temp)
+                   if (!target_temp.HasValue)
+                       return FluxColors.Error; 
+                   if (target_temp.ValueOr(() => 0) < target_temp.Value)
                        return FluxColors.Error;
                    var current_temp = temp.Value.Current;
-                   var missing_temp = expected_temp - current_temp;
+                   var missing_temp = target_temp.Value - current_temp;
                    if (missing_temp > 15)
                        return FluxColors.Error;
                    return FluxColors.Warning;
@@ -60,10 +62,7 @@ namespace Flux.ViewModels
         }
         public override IObservable<Optional<string>> GetExpectedValue(FeederEvaluator evaluation)
         {
-            return evaluation.Feeder
-                .WhenAnyValue(f => f.SelectedMaterial)
-                .Convert(m => m.ToolMaterial)
-                .ConvertMany(tm => tm.WhenAnyValue(t => t.ExtrusionTemp))
+            return evaluation.WhenAnyValue(e => e.TargetTemperature)
                 .Select(t => $"{t:0}°C")
                 .Select(t => t.ToOptional());
         }

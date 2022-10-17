@@ -326,45 +326,6 @@ namespace Flux.ViewModels
             AddCommand("openClamp", m => m.OPEN_HEAD_CLAMP, can_execute: IS_IDLE, visible: advanced_mode);
             AddCommand("reloadDatabase", () => Flux.DatabaseProvider.Initialize(), visible: advanced_mode);
 
-            AddCommand("testRoutines", async () => 
-            {
-                foreach (var feeder in Flux.Feeders.Feeders.Items)
-                {
-                    foreach (var material in feeder.Materials.Items)
-                    {
-                        var filament_operation = GCodeFilamentOperation.Create(material, false, false);
-                        if (!filament_operation.HasValue)
-                            continue;
-                
-                        using var load_filament_cts = new CancellationTokenSource(TimeSpan.FromMinutes(1));
-                        await Flux.ConnectionProvider.PutFileAsync(
-                            f => f.StoragePath,
-                            $"f{feeder.Position} m{material.Position} load_filament.gcode",
-                            false,
-                            load_filament_cts.Token,
-                            filament_operation.Value.GetLoadFilamentGCode());
-            
-                        using var purge_filament_cts = new CancellationTokenSource(TimeSpan.FromMinutes(1));
-                        await Flux.ConnectionProvider.PutFileAsync(
-                            f => f.StoragePath,
-                            $"f{feeder.Position} m{material.Position} purge_filament.gcode",
-                            false,
-                            purge_filament_cts.Token,
-                            filament_operation.Value.GetPurgeFilamentGCode());
-
-                        using var unload_filament_cts = new CancellationTokenSource(TimeSpan.FromMinutes(1));
-                        await Flux.ConnectionProvider.PutFileAsync(
-                            f => f.StoragePath,
-                            $"f{feeder.Position} m{material.Position} unload_filament.gcode",
-                            false,
-                            unload_filament_cts.Token,
-                            filament_operation.Value.GetUnloadFilamentGCode());
-                    }
-                }
-            }, visible: advanced_mode);
-
-            AddCommand("testStoreMaterial", Flux.Feeders.OdometerManager.StoreCurrentWeightsAsync, visible: advanced_mode);
-
             AddModal(() => new MemoryViewModel(Flux), visible: advanced_mode);
             AddModal(() => new FilesViewModel(Flux), visible: advanced_mode);
             AddModal(() => new MoveViewModel(Flux), visible: advanced_mode);

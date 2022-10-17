@@ -1209,8 +1209,8 @@ namespace Flux.ViewModels
         private Optional<FLUX_FileList> _Extrusions;
         public Optional<FLUX_FileList> Extrusions { get => _Extrusions; set => this.RaiseAndSetIfChanged(ref _Extrusions, value); }
 
-        private Optional<FLUX_FileList> _Jobs;
-        public Optional<FLUX_FileList> JobEvents { get => _Jobs; set => this.RaiseAndSetIfChanged(ref _Jobs, value); }
+        private Optional<FLUX_FileList> _JobEvents;
+        public Optional<FLUX_FileList> JobEvents { get => _JobEvents; set => this.RaiseAndSetIfChanged(ref _JobEvents, value); }
     }
 
     public class RRF_ObjectModelResponse<T>

@@ -152,7 +152,7 @@ namespace Flux.ViewModels
             return new[]
             {
                 $"; renaming file {old_path.Split('/').LastOrDefault()}",
-                $"M471 S{old_path} T{new_path}",
+                $"M471 S{old_path} T{new_path} D1",
             };
         }
         public override GCodeString ExecuteParamacro(string folder, string name)
@@ -207,39 +207,31 @@ namespace Flux.ViewModels
         {
             try
             {
-                switch (ConnectionPhase)
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                while (ConnectionPhase != RRF_ConnectionPhase.END_PHASE && !cts.IsCancellationRequested)
                 {
-                    case RRF_ConnectionPhase.START_PHASE:
-                        await CreateTimeoutAsync(TimeSpan.FromSeconds(5), async ct =>
-                        {
-                            if(await Connection.ConnectAsync())
+                    switch (ConnectionPhase)
+                    {
+                        case RRF_ConnectionPhase.START_PHASE:
+                            if (await Connection.ConnectAsync())
                                 ConnectionPhase = RRF_ConnectionPhase.DISCONNECTING_CLIENT;
-                        });
-                        break;
+                            break;
 
-                    case RRF_ConnectionPhase.DISCONNECTING_CLIENT:
-                        await CreateTimeoutAsync(TimeSpan.FromSeconds(5), async ct =>
-                        {
-                            var request = new RRF_Request("rr_disconnect", HttpMethod.Get, RRF_RequestPriority.Immediate, ct);
+                        case RRF_ConnectionPhase.DISCONNECTING_CLIENT:
+                            var request = new RRF_Request("rr_disconnect", HttpMethod.Get, RRF_RequestPriority.Immediate, cts.Token);
                             var disconnected = await Connection.ExecuteAsync(request);
                             ConnectionPhase = disconnected.Ok ? RRF_ConnectionPhase.CONNECTING_CLIENT : RRF_ConnectionPhase.START_PHASE;
-                        });
-                        break;
+                            break;
 
-                    case RRF_ConnectionPhase.CONNECTING_CLIENT:
-                        await CreateTimeoutAsync(TimeSpan.FromSeconds(5), async ct =>
-                        {
-                            var request = new RRF_Request($"rr_connect?password=\"\"&time={DateTime.UtcNow:O}", HttpMethod.Get, RRF_RequestPriority.Immediate, ct);
+                        case RRF_ConnectionPhase.CONNECTING_CLIENT:
+                            request = new RRF_Request($"rr_connect?password=\"\"&time={DateTime.Now}", HttpMethod.Get, RRF_RequestPriority.Immediate, cts.Token);
                             var connected = await Connection.ExecuteAsync(request);
                             ConnectionPhase = connected.Ok ? RRF_ConnectionPhase.READING_STATUS : RRF_ConnectionPhase.START_PHASE;
-                        });
-                        break;
+                            break;
 
-                    case RRF_ConnectionPhase.READING_STATUS:
-                        Flux.Messages.Messages.Clear();
-                        await CreateTimeoutAsync(TimeSpan.FromSeconds(1), async ct =>
-                        {
-                            var state = await MemoryBuffer.GetModelDataAsync(m => m.State, ct);
+                        case RRF_ConnectionPhase.READING_STATUS:
+                            Flux.Messages.Messages.Clear();
+                            var state = await MemoryBuffer.GetModelDataAsync(m => m.State, cts.Token);
                             if (!state.HasValue)
                                 return;
                             var status = state.Value.GetProcessStatus();
@@ -249,34 +241,28 @@ namespace Flux.ViewModels
                                 ConnectionPhase = RRF_ConnectionPhase.READING_MEMORY;
                             else
                                 ConnectionPhase = RRF_ConnectionPhase.CREATING_VARIABLES;
-                        });
-                        break;
+                            break;
 
-                    case RRF_ConnectionPhase.CREATING_VARIABLES:
-                        await CreateTimeoutAsync(TimeSpan.FromSeconds(5), async ct =>
-                        {
-                            var result = await Connection.CreateVariablesAsync(ct);
+                        case RRF_ConnectionPhase.CREATING_VARIABLES:
+                            var result = await Connection.CreateVariablesAsync(cts.Token);
                             if (result)
                                 ConnectionPhase = RRF_ConnectionPhase.INITIALIZING_VARIABLES;
-                        });
-                        break;
+                            break;
 
-                    case RRF_ConnectionPhase.INITIALIZING_VARIABLES:
-                        await CreateTimeoutAsync(TimeSpan.FromSeconds(5), async ct =>
-                        {
-                            var result = await Connection.InitializeVariablesAsync(ct);
+                        case RRF_ConnectionPhase.INITIALIZING_VARIABLES:
+                            result = await Connection.InitializeVariablesAsync(cts.Token);
                             if (result)
                                 ConnectionPhase = RRF_ConnectionPhase.READING_MEMORY;
-                        });
-                        break;
+                            break;
 
-                    case RRF_ConnectionPhase.READING_MEMORY:
-                        if (MemoryBuffer.HasFullMemoryRead)
-                            ConnectionPhase = RRF_ConnectionPhase.END_PHASE;
-                        break;
+                        case RRF_ConnectionPhase.READING_MEMORY:
+                            if (MemoryBuffer.HasFullMemoryRead)
+                                ConnectionPhase = RRF_ConnectionPhase.END_PHASE;
+                            break;
 
-                    case RRF_ConnectionPhase.END_PHASE:
-                        break;
+                        case RRF_ConnectionPhase.END_PHASE:
+                            break;
+                    }
                 }
             }
             catch (Exception ex)
@@ -295,18 +281,6 @@ namespace Flux.ViewModels
                 "T-1 P0"
             }, put_reset_clamp_cts.Token, true, wait_reset_clamp_cts.Token);
         }
-        private static async Task CreateTimeoutAsync(TimeSpan timeout, Func<CancellationToken, Task> func)
-        {
-            try
-            {
-                using var cts = new CancellationTokenSource(timeout);
-                await func(cts.Token);
-            }
-            catch
-            {
-            }
-        }
-
         public override InnerQueueGCodes GenerateInnerQueue(string folder, Job job, MCodePartProgram part_program)
         {
             var gcode = new RRF_GCodeGenerator(Connection);
@@ -322,32 +296,17 @@ namespace Flux.ViewModels
                 gcode.LogEvent(job, FluxEventType.Cancel));
 
             var start = GCodeFile.Create(folder, "start.g",
-                gcode.LogEvent(job, part_program.IsRecovery ? FluxEventType.Resume : FluxEventType.Start),
-
+                gcode.LogEvent(job, FluxEventType.Start),
                 gcode.DeclareGlobalArray<double>(4, out var extrusion),
                 extrusion.Foreach((var, i) => var.Write($"move.extruders[{i + base_motor.Value.Address}].position")));
-
+           
             var t0_temp = GetArrayUnit(c => c.TEMP_TOOL, "T1");
             if (!t0_temp.HasValue)
                 throw new Exception("");
 
             var pause = GCodeFile.Create(folder, "pause.g", 
-                gcode.LogEvent(job, FluxEventType.Pause),
-                
-                gcode.DeclareLocalVariable<double>($"floor(heat.heaters[max(state.currentTool + {t0_temp.Value.Address}, 0)].active)", out var hold_temp),
-                gcode.DeclareLocalVariable<ushort>("max(state.currentTool, 0)", out var hold_tool),
-                    
-                gcode.DeclareLocalVariable<string>($"\"0:/{StoragePath}/{job.MCodeKey}.\"^{{{hold_tool}}}^\".\"^{{{hold_temp}}}", out var recovery_path),
-                gcode.DeclareLocalVariable<string>($"0:/{StoragePath}/recovery.temp", out var temp_path),
-
-                gcode.DeleteFile(recovery_path),
-
-                gcode.CreateFile(StoragePath, "recovery.temp", GCodeString.Create(
-
-                    gcode.LogEvent(job, FluxEventType.Resume),
-                    gcode.ExecuteParamacro(SystemPath, "resurrect.g"))),
-
-                gcode.RenameFile($"{{{temp_path}}}", $"{{{recovery_path}}}"));
+                gcode.LogEvent(job, FluxEventType.Pause),    
+                gcode.RenameFile($"\"0:/{SystemPath}/resurrect.g\"", $"\"0:/{StoragePath}/resurrect.g\""));
 
             var spin = GCodeFile.Create(folder, "spin.g",
                 gcode.DeclareLocalVariable<double>(0.0, out var extrusion_diff),

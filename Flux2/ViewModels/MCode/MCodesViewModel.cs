@@ -484,7 +484,7 @@ namespace Flux.ViewModels
                 using var delete_queue_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 if (!await Flux.ConnectionProvider.DeleteAsync(
                     c => c.QueuePath,
-                    $"{current_job}",
+                    $"{current_job.Job}",
                     true,
                     delete_queue_cts.Token))
                     return false;
@@ -546,14 +546,14 @@ namespace Flux.ViewModels
             using var delete_current_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             if (!await Flux.ConnectionProvider.DeleteAsync(
                 c => c.QueuePath,
-                $"{current_job}",
+                $"{current_job.Value.Job}",
                 true, delete_current_cts.Token))
                 return false;
 
             using var delete_other_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             if (!await Flux.ConnectionProvider.DeleteAsync(
                 c => c.QueuePath,
-                $"{other_job}",
+                $"{other_job.Value.Job}",
                 true, delete_other_cts.Token))
                 return false;
 

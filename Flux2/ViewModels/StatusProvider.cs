@@ -81,8 +81,8 @@ namespace Flux.ViewModels
         public FluxViewModel Flux { get; }
         public ConditionStateCreator StateCreator { get; }
         public IObservableCache<FeederEvaluator, ushort> FeederEvaluators { get; private set; }
-        public IObservableList<Optional<DocumentQueue<Material>>> ExpectedMaterialsQueue { get; private set; }
-        public IObservableList<Optional<DocumentQueue<Nozzle>>> ExpectedNozzlesQueue { get; private set; }
+        public IObservableCache<Optional<DocumentQueue<Material>>, ushort> ExpectedMaterialsQueue { get; private set; }
+        public IObservableCache<Optional<DocumentQueue<Nozzle>>, ushort> ExpectedNozzlesQueue { get; private set; }
 
         private bool _StartWithLowMaterials;
         public bool StartWithLowMaterials
@@ -606,14 +606,12 @@ namespace Flux.ViewModels
             ExpectedMaterialsQueue = FeederEvaluators.Connect()
                 .Transform(f => f.Material, true)
                 .AutoTransform(f => f.ExpectedDocumentQueue)
-                .RemoveKey()
-                .AsObservableList();
+                .AsObservableCache();
 
             ExpectedNozzlesQueue = FeederEvaluators.Connect()
                 .Transform(f => f.ToolNozzle, true)
                 .AutoTransform(f => f.ExpectedDocumentQueue)
-                .RemoveKey()
-                .AsObservableList();
+                .AsObservableCache();
 
             var core_settings = Flux.SettingsProvider.CoreSettings.Local;
 

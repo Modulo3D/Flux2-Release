@@ -171,7 +171,7 @@ namespace Flux.ViewModels
             var medium = TimeSpan.FromMilliseconds(350);
             var slow = TimeSpan.FromMilliseconds(500);
             var job = TimeSpan.FromSeconds(5);
-            var extrusion = TimeSpan.FromSeconds(10);
+            var extrusion = TimeSpan.FromSeconds(5);
 
             MemoryReaders = new Dictionary<string, IRRF_MemoryReader>();
             MemoryReaderGroups = new SourceCache<RRF_MemoryReaderGroup, TimeSpan>(f => f.Period);

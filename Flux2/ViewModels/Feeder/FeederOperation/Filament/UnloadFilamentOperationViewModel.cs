@@ -26,7 +26,7 @@ namespace Flux.ViewModels
         }
         protected override async Task<bool> ExecuteOperationAsync()
         {
-            var filament_settings = GCodeFilamentOperation.Create(Material, true, false);
+            var filament_settings = GCodeFilamentOperation.Create(Material);
             if (!await ExecuteFilamentOperation(filament_settings, c => c.GetUnloadFilamentGCode))
                 return false;
 

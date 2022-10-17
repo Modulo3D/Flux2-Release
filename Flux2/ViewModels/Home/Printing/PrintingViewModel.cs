@@ -101,7 +101,7 @@ namespace Flux.ViewModels
 
             var materials = Observable.CombineLatest(
                 current_job, material_queue, (current_job, material_queue) =>
-                material_queue.Select(m => current_job.Convert(j => m.Convert(m => m.Lookup(j.JobKey))))); 
+                material_queue.Items.Select(m => current_job.Convert(j => m.Convert(m => m.Lookup(j.JobKey))))); 
 
             _ExpectedMaterials = materials
                 .Select(i => i.Select(i => i.ConvertOr(i => i.Name, () => "---")))
@@ -112,11 +112,11 @@ namespace Flux.ViewModels
 
             var nozzles = Observable.CombineLatest(
                 current_job, nozzle_queue, (current_job, nozzle_queue) =>
-                nozzle_queue.Select(m => current_job.Convert(j => m.Convert(m => m.Lookup(j.JobKey)))));
+                nozzle_queue.Items.Select(m => current_job.Convert(j => m.Convert(m => m.Lookup(j.JobKey)))));
 
             _ExpectedNozzles = nozzles
                 .Select(i => i.Select(i => i.ConvertOr(i => i.Name, () => "---")))
-                .ToProperty(this, v => v.ExpectedMaterials);
+                .ToProperty(this, v => v.ExpectedNozzles);
         }
 
         public async Task CancelPrintAsync()

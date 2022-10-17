@@ -81,7 +81,7 @@ namespace Flux.ViewModels
                 
                 Endstops.CreateArray(c => c.AXIS_ENDSTOP,       (c, e) => e.Triggered, (c, e, u) => Task.FromResult(true)); 
 
-                JobQueue.CreateVariable(c => c.JOB_QUEUE,       (c, m) => FLUX_FileList.GetJobQueue(m.queue, m.storage));
+                JobQueue.CreateVariable(c => c.JOB_QUEUE,       (c, m) => GetJobQueue(c, m.queue, m.storage));
                 Extrusions.CreateVariable(c => c.EXTRUSIONS,    (c, m) => m.GetExtrusionSetQueue());
                 Job.CreateVariable(c => c.PROGRESS,             (c, m) => m.GetParamacroProgress());
                 JobEvents.CreateVariable(c => c.MCODE_EVENT,    (c, m) => m.GetMCodeEvents());
@@ -115,7 +115,91 @@ namespace Flux.ViewModels
                 Console.WriteLine(ex);
             }
         }
+        private async Task ParseRecoveryAsync(RRF_ConnectionProvider connection_provider, FLUX_FileList storage)
+        {
+            if (storage.Files.Any(f => f.Name == "resurrect.g"))
+            {
+                try
+                {
+                    var get_resurrect_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    var source = await connection_provider.GetFileAsync(
+                        f => f.StoragePath, "resurrect.g", get_resurrect_cts.Token);
+                    if (!source.HasValue)
+                        return;
 
+                    var hold_plates_temp = source.Matches("(?m)^M140.*");
+                    var hold_chambers_temp = source.Matches("(?m)^M141.*");
+                    var hold_moves = source.MatchesOrException("(?m)^G0.*");
+                    var hold_e_pos = source.MatchOrException("(?m)^G92 E.*").Value;
+                    var select_offset = source.MatchOrException("(?m)^M26.*").Value;
+                    var hold_feedrate = source.MatchOrException("(?m)^G1 F.*").Value;
+                    var select_mcode = source.MatchOrException("(?m)^M23.*\\/(.*)\"");
+                    var hold_temps = source.MatchesOrException("G10 P(.*) S(.*) R(.*)");
+
+                    var mcode_key = select_mcode.Lookup(1).Convert(m => MCodeKey.Parse(m));
+                    if (!mcode_key.HasValue)
+                        return;
+
+                    var hold_tool = source.Match("T([+-]?[0-9]+) P([+-]?[0-9]+)")
+                        .Lookup(1).ConvertOr(t => short.Parse(t), () => 0);
+
+                    var hold_temp = hold_temps.FirstOrOptional(m => m.Lookup(1) == $"{hold_tool}")
+                        .Lookup(2).ConvertOr(t => double.Parse(t), () => 0.0);
+ 
+                    var file_name = $"{mcode_key}.{hold_tool}.{(int)hold_temp}";
+                    var put_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    if (!await connection_provider.PutFileAsync(
+                        f => f.StoragePath, file_name,
+                        false, put_cts.Token, new GCodeString(get_recovery_lines())))
+                        return;
+
+                    var delete_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    await connection_provider.DeleteAsync(f => f.StoragePath, "resurrect.g", false, delete_cts.Token);
+
+                    IEnumerable<string> get_recovery_lines()
+                    {
+                        yield return "; log resume";
+                        yield return "if global.queue_pos > -1";
+                        yield return "    var resume_path = \"0:/gcodes/queue/inner/\"^{global.queue_pos}^\"/resume.g\"";
+                        yield return "    M98 P{var.resume_path}";
+
+                        // heat chamber and plates
+                        if (hold_plates_temp.HasValue)
+                            foreach (Match hold_plate in hold_plates_temp.Value)
+                                yield return hold_plate.Value;
+                        if (hold_chambers_temp.HasValue)
+                            foreach (Match hold_chamber in hold_chambers_temp.Value)
+                                yield return hold_chamber.Value;
+                        yield return "M116";
+
+                        yield return $"T{hold_tool}";
+                        yield return hold_e_pos;
+
+                        foreach (Match hold_temp in hold_temps)
+                            yield return hold_temp.Value;
+                        yield return "M116";
+
+                        yield return select_mcode.Value;
+                        yield return select_offset;
+
+                        foreach (Match hold_move in hold_moves)
+                            yield return hold_move.Value;
+
+                        yield return hold_feedrate;
+
+                        yield return "M24";
+                    }
+                }
+                catch (Exception ex)
+                {
+                }
+            }
+        }
+        private async Task<Optional<JobQueue>> GetJobQueue(RRF_ConnectionProvider connection_provider, FLUX_FileList queue, FLUX_FileList storage)
+        {
+            await ParseRecoveryAsync(connection_provider, storage);
+            return FLUX_FileList.GetJobQueue(queue, storage);
+        }
         protected async Task<bool> SetPlateTemperatureAsync(RRF_ConnectionProvider connection_provider, double temperature, VariableUnit unit)
         {
             var connection = connection_provider.Connection;
