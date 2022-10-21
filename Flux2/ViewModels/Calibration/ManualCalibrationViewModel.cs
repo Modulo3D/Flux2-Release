@@ -63,7 +63,7 @@ namespace Flux.ViewModels
 
         protected async Task ExitAsync()
         {
-            await Flux.ConnectionProvider.CancelPrintAsync(true);
+            await Flux.ConnectionProvider.ParkPrinterAsync();
             Flux.Navigator.NavigateBack();
         }
     }

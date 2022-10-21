@@ -25,10 +25,9 @@ namespace Flux.ViewModels
         DISCONNECTING_CLIENT = 1,
         CONNECTING_CLIENT = 2,
         READING_STATUS = 3,
-        CREATING_VARIABLES = 4,
-        INITIALIZING_VARIABLES = 5,
-        READING_MEMORY = 6,
-        END_PHASE = 7,
+        INITIALIZING_VARIABLES = 4,
+        READING_MEMORY = 5,
+        END_PHASE = 6,
     }
 
     public class RRF_GCodeGenerator : FLUX_GCodeGenerator<RRF_Connection>
@@ -203,66 +202,56 @@ namespace Flux.ViewModels
         {
             Flux = flux;
         }
-        protected override async Task RollConnectionAsync()
+        protected override async Task RollConnectionAsync(CancellationToken ct)
         {
             try
             {
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                while (ConnectionPhase != RRF_ConnectionPhase.END_PHASE && !cts.IsCancellationRequested)
+                switch (ConnectionPhase)
                 {
-                    switch (ConnectionPhase)
-                    {
-                        case RRF_ConnectionPhase.START_PHASE:
-                            if (await Connection.ConnectAsync())
-                                ConnectionPhase = RRF_ConnectionPhase.DISCONNECTING_CLIENT;
-                            break;
+                    case RRF_ConnectionPhase.START_PHASE:
+                        if (await Connection.ConnectAsync())
+                            ConnectionPhase = RRF_ConnectionPhase.DISCONNECTING_CLIENT;
+                        break;
 
-                        case RRF_ConnectionPhase.DISCONNECTING_CLIENT:
-                            var request = new RRF_Request("rr_disconnect", HttpMethod.Get, RRF_RequestPriority.Immediate, cts.Token);
-                            var disconnected = await Connection.ExecuteAsync(request);
-                            ConnectionPhase = disconnected.Ok ? RRF_ConnectionPhase.CONNECTING_CLIENT : RRF_ConnectionPhase.START_PHASE;
-                            break;
+                    case RRF_ConnectionPhase.DISCONNECTING_CLIENT:
+                        var request = new RRF_Request("rr_disconnect", HttpMethod.Get, RRF_RequestPriority.Immediate, ct);
+                        var disconnected = await Connection.ExecuteAsync(request);
+                        ConnectionPhase = disconnected.Ok ? RRF_ConnectionPhase.CONNECTING_CLIENT : RRF_ConnectionPhase.START_PHASE;
+                        break;
 
-                        case RRF_ConnectionPhase.CONNECTING_CLIENT:
-                            request = new RRF_Request($"rr_connect?password=\"\"&time={DateTime.Now}", HttpMethod.Get, RRF_RequestPriority.Immediate, cts.Token);
-                            var connected = await Connection.ExecuteAsync(request);
-                            ConnectionPhase = connected.Ok ? RRF_ConnectionPhase.READING_STATUS : RRF_ConnectionPhase.START_PHASE;
-                            break;
+                    case RRF_ConnectionPhase.CONNECTING_CLIENT:
+                        request = new RRF_Request($"rr_connect?password=\"\"&time={DateTime.Now}", HttpMethod.Get, RRF_RequestPriority.Immediate, ct);
+                        var connected = await Connection.ExecuteAsync(request);
+                        ConnectionPhase = connected.Ok ? RRF_ConnectionPhase.READING_STATUS : RRF_ConnectionPhase.START_PHASE;
+                        break;
 
-                        case RRF_ConnectionPhase.READING_STATUS:
-                            Flux.Messages.Messages.Clear();
-                            var state = await MemoryBuffer.GetModelDataAsync(m => m.State, cts.Token);
-                            if (!state.HasValue)
-                                return;
-                            var status = state.Value.GetProcessStatus();
-                            if (!status.HasValue)
-                                return;
-                            if (status.Value == FLUX_ProcessStatus.CYCLE)
-                                ConnectionPhase = RRF_ConnectionPhase.READING_MEMORY;
-                            else
-                                ConnectionPhase = RRF_ConnectionPhase.CREATING_VARIABLES;
-                            break;
+                    case RRF_ConnectionPhase.READING_STATUS:
+                        Flux.Messages.Messages.Clear();
+                        var state = await MemoryBuffer.GetModelDataAsync(m => m.State, ct);
+                        if (!state.HasValue)
+                            return;
+                        var status = state.Value.GetProcessStatus();
+                        if (!status.HasValue)
+                            return;
+                        if (status.Value == FLUX_ProcessStatus.CYCLE)
+                            ConnectionPhase = RRF_ConnectionPhase.READING_MEMORY;
+                        else
+                            ConnectionPhase = RRF_ConnectionPhase.INITIALIZING_VARIABLES;
+                        break;
 
-                        case RRF_ConnectionPhase.CREATING_VARIABLES:
-                            var result = await Connection.CreateVariablesAsync(cts.Token);
-                            if (result)
-                                ConnectionPhase = RRF_ConnectionPhase.INITIALIZING_VARIABLES;
-                            break;
+                    case RRF_ConnectionPhase.INITIALIZING_VARIABLES:
+                        var result = await Connection.InitializeVariablesAsync(ct);
+                        if (result)
+                            ConnectionPhase = RRF_ConnectionPhase.READING_MEMORY;
+                        break;
 
-                        case RRF_ConnectionPhase.INITIALIZING_VARIABLES:
-                            result = await Connection.InitializeVariablesAsync(cts.Token);
-                            if (result)
-                                ConnectionPhase = RRF_ConnectionPhase.READING_MEMORY;
-                            break;
+                    case RRF_ConnectionPhase.READING_MEMORY:
+                        if (MemoryBuffer.HasFullMemoryRead)
+                            ConnectionPhase = RRF_ConnectionPhase.END_PHASE;
+                        break;
 
-                        case RRF_ConnectionPhase.READING_MEMORY:
-                            if (MemoryBuffer.HasFullMemoryRead)
-                                ConnectionPhase = RRF_ConnectionPhase.END_PHASE;
-                            break;
-
-                        case RRF_ConnectionPhase.END_PHASE:
-                            break;
-                    }
+                    case RRF_ConnectionPhase.END_PHASE:
+                        break;
                 }
             }
             catch (Exception ex)
@@ -296,13 +285,13 @@ namespace Flux.ViewModels
                 gcode.LogEvent(job, FluxEventType.Cancel));
 
             var start = GCodeFile.Create(folder, "start.g",
-                gcode.LogEvent(job, FluxEventType.Start),
+                gcode.LogEvent(job, part_program.IsRecovery ? FluxEventType.Resume : FluxEventType.Start),
                 gcode.DeclareGlobalArray<double>(4, out var extrusion),
                 extrusion.Foreach((var, i) => var.Write($"move.extruders[{i + base_motor.Value.Address}].position")));
-           
-            var t0_temp = GetArrayUnit(c => c.TEMP_TOOL, "T1");
-            if (!t0_temp.HasValue)
-                throw new Exception("");
+
+            var end_filament = GCodeFile.Create(folder, "end_filament.g",
+                gcode.LogEvent(job, FluxEventType.EndFilament),
+                gcode.RenameFile($"\"0:/{SystemPath}/resurrect.g\"", $"\"0:/{StoragePath}/resurrect.g\""));
 
             var pause = GCodeFile.Create(folder, "pause.g", 
                 gcode.LogEvent(job, FluxEventType.Pause),    
@@ -332,6 +321,7 @@ namespace Flux.ViewModels
                 Start = start,
                 Pause = pause,
                 Cancel = cancel,
+                EndFilament = end_filament,
             };
 
             Optional<ExtrusionKey> extrusion_key(ushort position)
@@ -346,7 +336,7 @@ namespace Flux.ViewModels
         {
             var gcode = new RRF_GCodeGenerator(Connection);
             return GCodeString.Create(
-                gcode.DeclareLocalVariable<string>($"\"0:/{InnerQueuePath}/\"^{{global.queue_pos}}^\"/start.g", out var start_path),
+                gcode.DeclareLocalVariable<string>($"\"0:/{InnerQueuePath}/\"^{{global.queue_pos}}^\"/start.g\"", out var start_path),
                 gcode.ExecuteParamacro(start_path));
         }
         public override GCodeString GenerateEndMCodeLines(MCode mcode, Optional<ushort> queue_size)
@@ -356,7 +346,7 @@ namespace Flux.ViewModels
             var gcode = new RRF_GCodeGenerator(Connection);
             return GCodeString.Create(
 
-                gcode.DeclareLocalVariable<string>($"\"0:/{InnerQueuePath}/\"^{{global.queue_pos}}^\"/end.g", out var end_macro),
+                gcode.DeclareLocalVariable<string>($"\"0:/{InnerQueuePath}/\"^{{global.queue_pos}}^\"/end.g\"", out var end_macro),
                 gcode.DeclareLocalVariable<string>(has_unload ? "0:/macros/end_print" : "0:/macros/unload_print", out var next_macro),
 
                 gcode.ExecuteParamacro(end_macro),

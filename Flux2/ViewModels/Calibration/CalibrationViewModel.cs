@@ -62,7 +62,7 @@ namespace Flux.ViewModels
                 .WatchOptional(group_tool)
                 .ConvertMany(f =>
                 {
-                    return f.ToolNozzle.WhenAnyValue(n => n.Nfc)
+                    return f.ToolNozzle.NFCSlot.WhenAnyValue(n => n.Nfc)
                         .Select(nfc => (f.Position, nfc));
                 })
                 .Convert(f =>

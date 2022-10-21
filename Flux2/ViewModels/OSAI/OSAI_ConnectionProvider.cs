@@ -36,7 +36,7 @@ namespace Flux.ViewModels
                 .DistinctUntilChanged()
                 .Subscribe(debug => WriteVariableAsync(m => m.DEBUG, debug));
         }
-        protected override async Task RollConnectionAsync()
+        protected override async Task RollConnectionAsync(CancellationToken ct)
         {
             try
             {

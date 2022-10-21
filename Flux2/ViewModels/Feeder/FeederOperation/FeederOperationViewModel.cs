@@ -117,8 +117,8 @@ namespace Flux.ViewModels
         private async Task SafeExecuteOperationAsync()
         {
             var navigate_back = await ExecuteOperationAsync();
-            await Flux.ConnectionProvider.CancelPrintAsync(true);
-            if(navigate_back)
+            await Flux.ConnectionProvider.ParkPrinterAsync();
+            if (navigate_back)
                 Flux.Navigator.NavigateBack();
         }
 

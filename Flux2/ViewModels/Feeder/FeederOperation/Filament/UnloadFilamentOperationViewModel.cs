@@ -30,6 +30,12 @@ namespace Flux.ViewModels
             if (!await ExecuteFilamentOperation(filament_settings, c => c.GetUnloadFilamentGCode))
                 return false;
 
+            if (Material.Odometer.CurrentValue.HasValue)
+            {
+                if (Material.Odometer.CurrentValue.Value <= 0)
+                    Material.NFCSlot.StoreTag(m => m.SetCurWeight(default));
+            }
+
             if(!Flux.ConnectionProvider.HasVariable(c => c.FILAMENT_ON_HEAD))
                 Material.SetMaterialLoaded(false);
 
@@ -69,17 +75,10 @@ namespace Flux.ViewModels
         }
         public override async Task<bool> UpdateNFCAsync()
         {
-            await Material.UpdateTagAsync();
-
-            var result = Material.Nfc.IsVirtualTag.ValueOr(() => false) ?
-                Material.UnlockTag(default) :
-                await Flux.UseReader(h => Material.UnlockTag(h));
-
-            if (!result.HasValue || !result.Value)
-                return false;
-
-            Flux.Navigator.NavigateBack();
-            return true;
+            var result = await Flux.UseReader(Material, (h, m) => m.UnlockTagAsync(h));
+            if(result)
+                Flux.Navigator.NavigateBack();
+            return result;
         }
 
         protected override Task<bool> CancelOperationAsync()

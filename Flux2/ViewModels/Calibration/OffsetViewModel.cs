@@ -108,7 +108,7 @@ namespace Flux.ViewModels
 
             var user_settings = Flux.SettingsProvider.UserSettings;
 
-            _ToolId = Feeder.ToolNozzle
+            _ToolId = Feeder.ToolNozzle.NFCSlot
                 .WhenAnyValue(v => v.Nfc)
                 .Select(nfc =>
                 {
@@ -126,7 +126,7 @@ namespace Flux.ViewModels
 
             _ToolOffset = Observable.CombineLatest(
                 Flux.DatabaseProvider.WhenAnyValue(v => v.Database),
-                Feeder.ToolNozzle.WhenAnyValue(v => v.Nfc),
+                Feeder.ToolNozzle.NFCSlot.WhenAnyValue(v => v.Nfc),
                 (db, nfc) =>
                 {
                     if (!db.HasValue)
@@ -147,7 +147,7 @@ namespace Flux.ViewModels
 
             _UserOffsetKey = Observable.CombineLatest(
                 Calibration.WhenAnyValue(v => v.GroupId),
-                Feeder.ToolNozzle.WhenAnyValue(v => v.Nfc),
+                Feeder.ToolNozzle.NFCSlot.WhenAnyValue(v => v.Nfc),
                 (group_id, tool_reading) =>
                 {
                     if (!group_id.HasValue)
@@ -178,8 +178,8 @@ namespace Flux.ViewModels
 
             _ProbeOffsetKey = Observable.CombineLatest(
                 Flux.DatabaseProvider.WhenAnyValue(v => v.Database),
-                Feeder.ToolNozzle.WhenAnyValue(v => v.Nfc),
-                material.ConvertMany(m => m.WhenAnyValue(v => v.Nfc)),
+                Feeder.ToolNozzle.NFCSlot.WhenAnyValue(v => v.Nfc),
+                material.ConvertMany(m => m.NFCSlot.WhenAnyValue(v => v.Nfc)),
                 (db, tool_reading, material_reading) =>
                 {
                     if (!tool_reading.CardId.HasValue)

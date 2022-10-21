@@ -60,7 +60,10 @@ namespace Flux.ViewModels
             get
             {
                 if (_ToolMaterial == default)
+                { 
                     _ToolMaterial = new ToolMaterialViewModel(Feeder.ToolNozzle, this);
+                    _ToolMaterial.DisposeWith(Disposables);
+                }
                 return _ToolMaterial;
             }
         }
@@ -72,14 +75,14 @@ namespace Flux.ViewModels
         private ObservableAsPropertyHelper<Optional<ExtrusionKey>> _ExtrusionKey;
         public Optional<ExtrusionKey> ExtrusionKey => _ExtrusionKey.Value;
 
-        public MaterialViewModel(FeederViewModel feeder, ushort position) : base(feeder, position, s => s.Materials, (db, m) =>
+        public MaterialViewModel(FeedersViewModel feeders, FeederViewModel feeder, ushort position) : base(feeders, feeder, position, s => s.NFCMaterials, (db, m) =>
         {
             return m.GetDocument<Material>(db, m => m.MaterialGuid);
-        }, t => t.MaterialGuid)
+        }, t => t.MaterialGuid, pause_on_odometer: true)
         {
             _ExtrusionKey = Observable.CombineLatest(
-                  Feeder.ToolNozzle.WhenAnyValue(t => t.Nfc),
-                  this.WhenAnyValue(m => m.Nfc),
+                  Feeder.ToolNozzle.NFCSlot.WhenAnyValue(t => t.Nfc),
+                  NFCSlot.WhenAnyValue(m => m.Nfc),
                   (tool_nozzle, material) => Modulo3DStandard.ExtrusionKey.Create(tool_nozzle, material))
                   .ToProperty(this, v => v.ExtrusionKey)
                   .DisposeWith(Disposables);
@@ -113,7 +116,7 @@ namespace Flux.ViewModels
                 .ToProperty(this, v => v.DocumentLabel)
                 .DisposeWith(Disposables);
 
-            _MaterialLoaded = this.WhenAnyValue(v => v.Nfc)
+            _MaterialLoaded = NFCSlot.WhenAnyValue(v => v.Nfc)
                 .Select(nfc => nfc.Tag)
                 .Convert(tag => tag.Loaded)
                 .Convert(l => l == Feeder.Position)
@@ -140,17 +143,17 @@ namespace Flux.ViewModels
             });
         }
         
-        public NFCReading<NFCMaterial> SetMaterialLoaded(Optional<bool> material_loaded)
+        public bool SetMaterialLoaded(Optional<bool> material_loaded)
         {
             if (!material_loaded.HasValue)
                 return default;
-            if (!Nfc.Tag.HasValue)
+            if (!NFCSlot.Nfc.Tag.HasValue)
                 return default;
 
             if (material_loaded.Value)
-                return StoreTag(t => t.SetLoaded(Feeder.Position));
+                return NFCSlot.StoreTag(t => t.SetLoaded(Feeder.Position));
             else
-                return StoreTag(t => t.SetLoaded(default));
+                return NFCSlot.StoreTag(t => t.SetLoaded(default));
         }
         public override void Initialize()
         {
@@ -213,7 +216,7 @@ namespace Flux.ViewModels
                 .DisposeWith(Disposables);
 
             Observable.CombineLatest(
-                this.WhenAnyValue(m => m.Nfc),
+                NFCSlot.WhenAnyValue(m => m.Nfc),
                 this.WhenAnyValue(v => v.FilamentPresenceBeforeGear),
                 (nfc, material_inserted) => (nfc, material_inserted))
                 .SubscribeOn(RxApp.MainThreadScheduler)
@@ -223,13 +226,13 @@ namespace Flux.ViewModels
                         return;
                     if (t.material_inserted.Value)
                         return;
-                    
-                    StoreTag(t => t.SetInserted(default));
-                    StoreTag(t => t.SetLoaded(default));
+
+                    NFCSlot.StoreTag(t => t.SetInserted(default));
+                    NFCSlot.StoreTag(t => t.SetLoaded(default));
                 });
 
             Observable.CombineLatest(
-                this.WhenAnyValue(m => m.Nfc),
+                NFCSlot.WhenAnyValue(m => m.Nfc),
                 this.WhenAnyValue(v => v.FilamentPresenceAfterGear),
                 (nfc, material_preloaded) => (nfc, material_preloaded))
                 .SubscribeOn(RxApp.MainThreadScheduler)
@@ -239,7 +242,7 @@ namespace Flux.ViewModels
                         return;
                     if (!t.material_preloaded.Value)
                         return;
-                    StoreTag(t => t.SetInserted(Feeder.Position));
+                    NFCSlot.StoreTag(t => t.SetInserted(Feeder.Position));
                 });
 
 
@@ -250,7 +253,7 @@ namespace Flux.ViewModels
 
             Observable.CombineLatest(
                 other_filament_after_gear,
-                this.WhenAnyValue(m => m.Nfc),
+                NFCSlot.WhenAnyValue(m => m.Nfc),
                 this.WhenAnyValue(v => v.FilamentPresenceAfterGear),
                 this.WhenAnyValue(v => v.FilamentPresenceOnHead),
                 (other_loaded, nfc, material_preloaded, material_loaded) => (other_loaded, nfc, material_preloaded, material_loaded))
@@ -267,13 +270,13 @@ namespace Flux.ViewModels
                         return;
                     if (!t.material_loaded.Value)
                         return;
-                    StoreTag(t => t.SetLoaded(Feeder.Position));
+                    NFCSlot.StoreTag(t => t.SetLoaded(Feeder.Position));
                 })
                 .DisposeWith(Disposables);
         }
         private IObservable<MaterialState> FindMaterialState()
         {
-            var inserted = this.WhenAnyValue(m => m.Nfc)
+            var inserted = NFCSlot.WhenAnyValue(m => m.Nfc)
                 .Select(nfc => nfc.Tag.Convert(t => t.Inserted))
                 .Convert(i => i == Feeder.Position)
                 .ValueOr(() => false);
@@ -282,14 +285,14 @@ namespace Flux.ViewModels
                 .Select(document => document.HasValue)
                 .DistinctUntilChanged();
 
-            var loaded = this.WhenAnyValue(m => m.Nfc)
+            var loaded = NFCSlot.WhenAnyValue(m => m.Nfc)
                 .Select(nfc => nfc.Tag.Convert(t => t.Loaded))
                 .ConvertOr(l => l == Feeder.Position, () => false);
 
-            var core_settings = Feeder.Flux.SettingsProvider.CoreSettings.Local;
+            var core_settings = Flux.SettingsProvider.CoreSettings.Local;
             var printer_guid = core_settings.WhenAnyValue(s => s.PrinterGuid);
 
-            var tag_printer_guid = this.WhenAnyValue(m => m.Nfc)
+            var tag_printer_guid = NFCSlot.WhenAnyValue(m => m.Nfc)
                 .Select(nfc => nfc.Tag
                 .Convert(t => t.PrinterGuid));
 
@@ -350,63 +353,6 @@ namespace Flux.ViewModels
             {
                 Flux.Navigator.Navigate(LoadFilamentOperation.Value);
             }
-        }
-        public override async Task<ValueResult<NFCMaterial>> CreateTagAsync(Optional<NFCReading<NFCMaterial>> reading)
-        {
-            var database = Flux.DatabaseProvider.Database;
-            if (!database.HasValue)
-                return default;
-
-            var printer = Flux.SettingsProvider.Printer;
-            if (!printer.HasValue)
-                return default;
-
-            var documents = CompositeQuery.Create(database.Value,
-                    db => _ => db.Find(printer.Value, Tool.SchemaInstance), db => db.GetTarget,
-                    db => t => db.Find(t, Nozzle.SchemaInstance), db => db.GetTarget,
-                    db => n => db.Find(n, Modulo3DStandard.ToolMaterial.SchemaInstance), db => db.GetTarget,
-                    db => tm => db.Find(Material.SchemaInstance, tm), db => db.GetSource)
-                    .Execute()
-                    .Convert<Material>();
-
-            var materials = documents.Documents
-                .Distinct()
-                .OrderBy(d => d[d => d.MaterialType, ""])
-                .ThenBy(d => d.Name)
-                .AsObservableChangeSet(m => m.Id)
-                .AsObservableCache();
-
-            var last_tag = reading.Convert(r => r.Tag);
-
-            var last_loaded = last_tag.Convert(t => t.Loaded);
-            var last_cur_weight = last_tag.Convert(t => t.CurWeightG).ValueOr(() => 1000.0);
-            var last_max_weight = last_tag.Convert(t => t.MaxWeightG).ValueOr(() => 1000.0);
-            var last_printer_guid = last_tag.ConvertOr(t => t.PrinterGuid, () => Guid.Empty);
-            var last_material_guid = last_tag.ConvertOr(t => t.MaterialGuid, () => Guid.Empty);
-
-            var material_option = ComboOption.Create("material", "MATERIALE:", materials);
-            var cur_weight_option = new NumericOption("curWeight", "PESO CORRENTE:", last_cur_weight, 50.0, converter: typeof(WeightConverter));
-            var max_weight_option = new NumericOption("maxWeight", "PESO TOTALE:", last_max_weight, 50.0, value_changed: v =>
-            {
-                cur_weight_option.Min = 0f;
-                cur_weight_option.Max = v;
-                cur_weight_option.Value = v;
-            }, converter: typeof(WeightConverter));
-
-            var result = await Flux.ShowSelectionAsync(
-                $"MATERIALE N.{Feeder.Position + 1}", new IDialogOption[] { material_option, max_weight_option, cur_weight_option });
-
-            if (result != ContentDialogResult.Primary)
-                return default;
-
-            var material = material_option.Value;
-            if (!material.HasValue)
-                return default;
-
-            var max_weight = max_weight_option.Value;
-            var cur_weight = cur_weight_option.Value;
-
-            return new NFCMaterial(material.Value, max_weight, cur_weight, last_printer_guid, last_loaded);
         }
     }
 }

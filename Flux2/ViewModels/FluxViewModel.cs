@@ -2,6 +2,9 @@
 using DynamicData;
 using DynamicData.Kernel;
 using GreenSuperGreen.Queues;
+using MessagePack;
+using MessagePack.Formatters;
+using MessagePack.Resolvers;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Modulo3DDatabase;
@@ -165,10 +168,6 @@ namespace Flux.ViewModels
 
         public FluxViewModel(ILogger<IFlux> logger) : base("flux")
         {
-            var mcode = new MCodeKey(Luid.NewLuid());
-            var mcode_str = mcode.ToString();
-            var mcode2 = MCodeKey.Parse(mcode_str);
-
             Logger = logger;
 
             ServicePointManager.UseNagleAlgorithm = false;
@@ -477,10 +476,9 @@ namespace Flux.ViewModels
                 return dialog;
             });
         }
-        public async Task<ValueResult<TResult>> ShowNFCDialog<TResult>(Optional<INFCHandle> handle, Func<Optional<INFCHandle>, Task<ValueResult<TResult>>> func)
+        public async Task<bool> ShowNFCDialog(Optional<INFCHandle> handle, Func<Optional<INFCHandle>, Task<bool>> func)
         {
-            bool reading = true;
-            Optional<TResult> value = default;
+            var reading = true;
 
             using var dialog = new ContentDialog(this, "Lettura tag in corso...", 
                 can_cancel: Observable.Return(true).ToOptional());
@@ -497,8 +495,7 @@ namespace Flux.ViewModels
                 bool success = false;
                 do
                 {
-                    value = await func(handle);
-                    success = value.HasValue;
+                    success = await func(handle);
                     if (!success)
                         await Task.Delay(1000);
                 }
@@ -508,79 +505,33 @@ namespace Flux.ViewModels
                 return success;
             });
 
-            var success = await Task.WhenAll(dialog_result, reading_result);
-            if (success[1])
-                return new ValueResult<TResult>(value);
-
-            return default;
+            var result = await Task.WhenAll(dialog_result, reading_result);
+            return result[1];
         }
 
-        public Task<ValueResult<TResult>> UseReader<TResult>(Func<Optional<INFCHandle>, TResult> func)
-        {
-            return UseReader(h =>
-            {
-                var value = func(h);
-                return new ValueResult<TResult>(value);
-            });
-        }
-        public Task<ValueResult<TResult>> UseReader<TResult>(Func<Optional<INFCHandle>, Task<TResult>> func)
-        {
-            return UseReader(async h =>
-            {
-                var value = await func(h);
-                return new ValueResult<TResult>(value);
-            });
-        }
-        public Task<ValueResult<TResult>> UseReader<TResult>(Func<Optional<INFCHandle>, Optional<TResult>> func)
-        {
-            return UseReader(h =>
-            {
-                var value = func(h);
-                return new ValueResult<TResult>(value);
-            });
-        }
-        public Task<ValueResult<TResult>> UseReader<TResult>(Func<Optional<INFCHandle>, Task<Optional<TResult>>> func)
-        {
-            return UseReader(async h => 
-            {
-                var value = await func(h);
-                return new ValueResult<TResult>(value);
-            });
-        }
-        public async Task<ValueResult<TResult>> UseReader<TResult>(Func<Optional<INFCHandle>, ValueResult<TResult>> func)
-        {
-            var task = await NFCReader.OpenAsync(log_result);
-            if (task.HasValue)
-                return task.Value;
 
-            return func(default);
-
-            async Task<ValueResult<TResult>> log_result(INFCHandle handle)
+        public async Task<bool> UseReader(IFluxTagViewModel tag, Func<Optional<INFCHandle>, INFCSlot, Task<bool>> func)
+        {
+            var reading = tag.NFCSlot.Nfc;
+            if (!reading.IsVirtualTag.ValueOr(() => false))
             {
-                var reading = await ShowNFCDialog(handle.ToOptional(), h => Task.FromResult(func(h)));
-
-                var light = reading.Result ? LightSignalMode.LongGreen : LightSignalMode.LongRed;
-                var beep = reading.Result ? BeepSignalMode.TripleShort : BeepSignalMode.DoubleShort;
-                handle.ReaderUISignal(light, beep);
-
-                return reading;
+                var task = await NFCReader.OpenAsync(h => log_result(h.ToOptional()));
+                if (task.HasValue && task.Value)
+                    return true;
             }
-        }
-        public async Task<ValueResult<TResult>> UseReader<TResult>(Func<Optional<INFCHandle>, Task<ValueResult<TResult>>> func)
-        {
-            var task = await NFCReader.OpenAsync(log_result);
-            if (task.HasValue)
-                return task.Value;
 
-            return await func(default);
+            return await func(default, tag.NFCSlot);
 
-            async Task<ValueResult<TResult>> log_result(INFCHandle handle)
+            async Task<bool> log_result(Optional<INFCHandle> handle)
             {
-                var reading = await ShowNFCDialog(handle.ToOptional(), func);
+                var reading = await ShowNFCDialog(handle, h => func(h, tag.NFCSlot));
 
-                var light = reading.Result ? LightSignalMode.LongGreen : LightSignalMode.LongRed;
-                var beep = reading.Result ? BeepSignalMode.TripleShort : BeepSignalMode.DoubleShort;
-                handle.ReaderUISignal(light, beep);
+                if (handle.HasValue)
+                { 
+                    var light = reading ? LightSignalMode.LongGreen : LightSignalMode.LongRed;
+                    var beep = reading ? BeepSignalMode.TripletMelody : BeepSignalMode.Short;
+                    handle.Value.ReaderUISignal(light, beep);
+                }
 
                 return reading;
             }

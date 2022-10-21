@@ -54,22 +54,23 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public string ToolNozzleBrush => _ToolNozzleBrush.Value;
 
+        public ushort MixingCount { get; }
+
         // CONSTRUCTOR
-        public FeederViewModel(FeedersViewModel feeders, ushort position) : base($"{typeof(FeederViewModel).GetRemoteControlName()}??{position}")
+        public FeederViewModel(FeedersViewModel feeders, ushort position, ushort mixing_count) : base($"{typeof(FeederViewModel).GetRemoteControlName()}??{position}")
         {
             Feeders = feeders;
             Flux = feeders.Flux;
             Position = position; 
-            ToolNozzle = new ToolNozzleViewModel(this);
-            
+            MixingCount = mixing_count;
+            ToolNozzle = new ToolNozzleViewModel(feeders, this);
+
             var extruders = Flux.SettingsProvider
                 .WhenAnyValue(v => v.ExtrudersCount);
 
             // TODO
-            Materials = extruders
-                .Select(CreateMaterials)
-                .ToObservableChangeSet(f => f.Position)
-                .DisposeMany()
+            Materials = Feeders.ToolMaterials.Connect()
+                .Filter(m => m.Feeder == this)
                 .AsObservableCache()
                 .DisposeWith(Disposables);
 
@@ -142,14 +143,6 @@ namespace Flux.ViewModels
                 })
                 .ToProperty(this, v => v.ToolNozzleBrush)
                 .DisposeWith(Disposables);
-        }
-
-        private IEnumerable<IFluxMaterialViewModel> CreateMaterials(Optional<(ushort machine_extruders, ushort mixing_extruders)> extruders)
-        {
-            if (!extruders.HasValue)
-                yield break;
-            for (ushort position = 0; position < extruders.Value.mixing_extruders; position++)
-                yield return new MaterialViewModel(this, (ushort)((Position * extruders.Value.mixing_extruders) + position));
         }
 
         private Optional<TViewModel> FindSelectedViewModel<TViewModel>(

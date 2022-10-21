@@ -188,8 +188,6 @@ namespace Flux.ViewModels
             var s_value = sanitize_value(value);
             yield return $"if (!exists(global.{variable}))";
             yield return $"    global {variable} = {s_value}";
-            yield return $"else";
-            yield return $"    set global.{variable} = {s_value}";
         }
     }
 }

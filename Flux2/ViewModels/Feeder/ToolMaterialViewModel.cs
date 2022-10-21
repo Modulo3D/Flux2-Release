@@ -8,12 +8,12 @@ using System.Reactive.Linq;
 
 namespace Flux.ViewModels
 {
-    public class ToolMaterialViewModel : ReactiveObject, IFluxToolMaterialViewModel
+    public class ToolMaterialViewModel : ReactiveObject, IFluxToolMaterialViewModel, IDisposable
     {
         public ushort Position { get; }
         public FluxViewModel Flux { get; }
-        public MaterialViewModel Material { get; }
-        public ToolNozzleViewModel ToolNozzle { get; }
+        public IFluxMaterialViewModel Material { get; }
+        public IFluxToolNozzleViewModel ToolNozzle { get; }
 
         private ObservableAsPropertyHelper<Optional<ToolMaterial>> _Document;
         public Optional<ToolMaterial> Document => _Document.Value;
@@ -27,11 +27,14 @@ namespace Flux.ViewModels
         private ObservableAsPropertyHelper<ToolMaterialState> _State;
         public ToolMaterialState State => _State.Value;
 
-        public ToolMaterialViewModel(ToolNozzleViewModel tool_nozzle, MaterialViewModel material)
+        public CompositeDisposable Disposables { get; }
+
+        public ToolMaterialViewModel(IFluxToolNozzleViewModel tool_nozzle, MaterialViewModel material)
         {
             Material = material;
             Flux = material.Flux;
             ToolNozzle = tool_nozzle;
+            Disposables = new CompositeDisposable();
 
             _Document = Observable.CombineLatest(
                 Material.WhenAnyValue(v => v.Document),
@@ -39,7 +42,7 @@ namespace Flux.ViewModels
                 Flux.DatabaseProvider.WhenAnyValue(v => v.Database),
                 FindToolMaterial)
                 .ToProperty(this, v => v.Document)
-                .DisposeWith(Material.Disposables);
+                .DisposeWith(Disposables);
 
             _State = Observable.CombineLatest(
                 Material.WhenAnyValue(v => v.Document),
@@ -47,17 +50,17 @@ namespace Flux.ViewModels
                 Flux.DatabaseProvider.WhenAnyValue(v => v.Database),
                 FindToolMaterialState)
                 .ToProperty(this, v => v.State)
-                .DisposeWith(Material.Disposables);
+                .DisposeWith(Disposables);
 
             _ExtrusionTemp = this.WhenAnyValue(f => f.Document)
                 .Select(d => d.Convert(d => d[d => d.PrintTemperature, 0.0]))
                 .ToProperty(this, v => v.ExtrusionTemp)
-                .DisposeWith(Material.Disposables);
+                .DisposeWith(Disposables);
 
             _BreakTemp = this.WhenAnyValue(f => f.Document)
                 .Select(d => d.Convert(d => d[d => d.BreakTemperature, 0.0]))
                 .ToProperty(this, v => v.BreakTemp)
-                .DisposeWith(Material.Disposables);
+                .DisposeWith(Disposables);
         }
 
         private ToolMaterialState FindToolMaterialState(Optional<Material> material, (Optional<Tool> tool, Optional<Nozzle> nozzle) tool_nozzle, Optional<ILocalDatabase> database)
@@ -105,6 +108,11 @@ namespace Flux.ViewModels
                 .Convert<ToolMaterial>();
 
             return toolmaterials.Documents.FirstOrDefault().ToOptional();
+        }
+
+        public void Dispose()
+        {
+            Disposables.Dispose();
         }
     }
 }

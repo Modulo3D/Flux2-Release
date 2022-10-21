@@ -48,6 +48,7 @@
     <PackageReference Include="GreenSuperGreen.NetStandard" Version="1.2.6.1" />
     <PackageReference Include="HttpMultipartParser" Version="5.0.1" />
     <PackageReference Include="LiteDB" Version="4.1.4" />
+    <PackageReference Include="MessagePack" Version="2.4.35" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="6.0.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="6.0.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Systemd" Version="6.0.0" />

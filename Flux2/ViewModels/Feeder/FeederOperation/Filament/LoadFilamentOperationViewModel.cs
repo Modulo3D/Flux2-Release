@@ -100,16 +100,7 @@ namespace Flux.ViewModels
 
         public override async Task<bool> UpdateNFCAsync()
         {
-            await Material.UpdateTagAsync();
-
-            var result = Material.Nfc.IsVirtualTag.ValueOr(() => false) ?
-                Material.LockTag(default) :
-                await Flux.UseReader(h => Material.LockTag(h));
-
-            if (!result.HasValue || !result.Value)
-                return false;
-
-            return true;
+            return await Flux.UseReader(Material, (h, m) => m.LockTagAsync(h));
         }
         protected override Task<bool> CancelOperationAsync()
         {

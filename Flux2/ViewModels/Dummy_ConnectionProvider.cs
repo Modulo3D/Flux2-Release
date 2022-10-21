@@ -27,8 +27,8 @@ namespace Flux.ViewModels
         {
             Flux = flux;
         }
-        protected override Task RollConnectionAsync() => Task.CompletedTask;
         public override Task<bool> ResetClampAsync() => Task.FromResult(false);
+        protected override Task RollConnectionAsync(CancellationToken ct) => Task.CompletedTask;
         public override GCodeString GenerateEndMCodeLines(MCode mcode, Optional<ushort> queue_size) => default;
 
         public override GCodeString GenerateStartMCodeLines(MCode mcode)
@@ -308,7 +308,7 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override Task<bool> PauseAsync()
+        public override Task<bool> PauseAsync(bool end_filament)
         {
             throw new NotImplementedException();
         }

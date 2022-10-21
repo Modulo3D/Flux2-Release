@@ -126,7 +126,7 @@ namespace Flux.ViewModels
 
         public async Task PausePrintAsync()
         {
-            await Flux.ConnectionProvider.PausePrintAsync(false);
+            await Flux.ConnectionProvider.PausePrintAsync(false, false);
         }
 
         public async Task StartPrintAsync()

@@ -920,7 +920,7 @@ namespace Flux.ViewModels
                 return false;
             }
         }
-        public override async Task<bool> PauseAsync()
+        public override async Task<bool> PauseAsync(bool end_filament)
         {
             return await WriteVariableAsync("!REQ_HOLD", true);
         }

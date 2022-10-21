@@ -127,8 +127,6 @@ namespace Flux.ViewModels
             var s_value = sanitize_value(value);
             yield return $"if (!exists(global.{variable}_{unit.Address}))";
             yield return $"    global {variable}_{unit.Address} = {s_value}";
-            yield return $"else";
-            yield return $"    set global.{variable}_{unit.Address} = {s_value}";
         }
     }
 

@@ -202,38 +202,33 @@ namespace Flux.ViewModels
             }
         }
 
-        public async Task<bool> CreateVariablesAsync(CancellationToken ct)
+        public async Task<bool> InitializeVariablesAsync(CancellationToken ct)
         {
             var missing_variables = await FindMissingVariables(ct);
             if (!missing_variables.result)
                 return false;
 
-            if (missing_variables.variables.Count == 0)
-                return true;
-
-            var advanced_mode = Flux.MCodes.OperatorUSB
-                .ConvertOr(usb => usb.AdvancedSettings, () => false);
-            if (!advanced_mode)
-                return false;
-
-            var files_str = string.Join(Environment.NewLine, missing_variables.variables.Select(v => v.LoadVariableMacro));
-            var create_variables_result = await Flux.ShowConfirmDialogAsync("Creare file di variabile?", files_str);
-
-            if (create_variables_result != ContentDialogResult.Primary)
-                return false;
-
-            await Flux.ConnectionProvider.DeleteAsync(c => ((RRF_Connection)c).GlobalPath, "initialize_variables.g", false, ct);
-
-            foreach (var variable in missing_variables.variables)
-                if (!await variable.CreateVariableAsync(ct))
+            if (missing_variables.variables.Count != 0)
+            {
+                var advanced_mode = Flux.MCodes.OperatorUSB
+                    .ConvertOr(usb => usb.AdvancedSettings, () => false);
+                if (!advanced_mode)
                     return false;
 
-            return true;
-        }
-        public async Task<bool> InitializeVariablesAsync(CancellationToken ct)
-        {
-            var written_file = await GetFileAsync(GlobalPath, "initialize_variables.g", ct);
+                var files_str = string.Join(Environment.NewLine, missing_variables.variables.Select(v => v.LoadVariableMacro));
+                var create_variables_result = await Flux.ShowConfirmDialogAsync("Creare file di variabile?", files_str);
 
+                if (create_variables_result != ContentDialogResult.Primary)
+                    return false;
+
+                await ConnectionProvider.DeleteAsync(c => ((RRF_Connection)c).GlobalPath, "initialize_variables.g", false, ct);
+
+                foreach (var variable in missing_variables.variables)
+                    if (!await variable.CreateVariableAsync(ct))
+                        return false;
+            }
+
+            var written_file = await GetFileAsync(GlobalPath, "initialize_variables.g", ct);
             var variables = VariableStore.Variables.Values
                .SelectMany(v => v switch
                {
@@ -244,29 +239,19 @@ namespace Flux.ViewModels
                .Where(v => v is IRRF_VariableGlobalModel global)
                .Select(v => (IRRF_VariableGlobalModel)v);
 
-            var source_variables = variables
-                .Select(v => v.LoadVariableMacro)
-                .Select(m => $"M98 P\"/sys/global/{m}\"")
-                .ToOptional();
+            var source_variables = new GCodeString(variables
+                .Select(v => GetExecuteMacroGCode(GlobalPath, v.LoadVariableMacro)));
 
             using var sha256 = SHA256.Create();
-            var written_hash = written_file.ConvertOr(w =>
-            {
-                var written = w.Split(Environment.NewLine.ToCharArray(),
-                    StringSplitOptions.RemoveEmptyEntries);
-                return sha256.ComputeHash(Encoding.UTF8.GetBytes(string.Join("", written))).ToHex();
-            }, () => "");
+            var source_hash = sha256.ComputeHash(string.Join("", source_variables)).ToHex();
 
-            var source_hash = source_variables.ConvertOr(s =>
-            {
-                return sha256.ComputeHash(Encoding.UTF8.GetBytes(string.Join("", s))).ToHex();
-            }, () => "");
+            var written_hash = written_file.Convert(w => sha256.ComputeHash(string.Join("", w.SplitLines())).ToHex());
 
-            if (written_hash != source_hash)
-                if (!await PutFileAsync(c => ((RRF_Connection)c).GlobalPath, "initialize_variables.g", true, ct, source_variables))
+            if (!written_hash.HasValue || written_hash != source_hash)
+                if (!await PutFileAsync(GlobalPath, "initialize_variables.g", true, ct, source_variables))
                     return false;
 
-            return await PostGCodeAsync(new[] { "M98 P\"/sys/global/initialize_variables.g\"" }, ct);
+            return await PostGCodeAsync(GetExecuteMacroGCode(GlobalPath, "initialize_variables.g"), ct);
         }
         private async Task<(bool result, List<IRRF_VariableGlobalModel> variables)> FindMissingVariables(CancellationToken ct)
         {
@@ -315,13 +300,14 @@ namespace Flux.ViewModels
                 "set global.iterator = false", "M0"
             }, put_reset_cts.Token);
         }
-        public override async Task<bool> PauseAsync()
+        public override async Task<bool> PauseAsync(bool end_filament)
         {
             using var put_reset_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             return await PostGCodeAsync(new[]
             {
                 "M108", "M25",
                 "set global.iterator = false", "M0",
+                GetExecuteMacroGCode(CombinePaths(MacroPath, "job"), end_filament ? "end_filament.g" : "pause.g")
             }, put_reset_cts.Token);
         }
         public override async Task<bool> CancelAsync()
@@ -331,7 +317,8 @@ namespace Flux.ViewModels
             {
                 "M108", "M25",
                 "set global.iterator = false", "M0",
-                GetExecuteMacroGCode(MacroPath, "cancel_print")
+                GetExecuteMacroGCode(CombinePaths(MacroPath, "job"), "cancel.g"),
+                GetExecuteMacroGCode(MacroPath, "end_print")
             }, put_reset_cts.Token);
         }
         public int GetGCodeLenght(GCodeString paramacro)

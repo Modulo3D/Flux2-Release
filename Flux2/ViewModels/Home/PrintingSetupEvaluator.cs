@@ -311,9 +311,9 @@ namespace Flux.ViewModels
                 Flux.DatabaseProvider
                     .WhenAnyValue(d => d.Database),
                 this.WhenAnyValue(f => f.FeederReportQueue),
-                Feeder.ToolNozzle.WhenAnyValue(t => t.Nfc),
+                Feeder.ToolNozzle.NFCSlot.WhenAnyValue(t => t.Nfc),
                 Feeder.WhenAnyValue(v => v.SelectedMaterial)
-                    .ConvertMany(m => m.WhenAnyValue(m => m.Nfc)),
+                    .ConvertMany(m => m.NFCSlot.WhenAnyValue(m => m.Nfc)),
                 Flux.Feeders.OdometerManager
                     .WhenAnyValue(c => c.ExtrusionSetQueue),
                 (db, feeder_report_queue, tool_nozzle, material, extrusions) =>
@@ -322,10 +322,6 @@ namespace Flux.ViewModels
                         return default;
 
                     if (!feeder_report_queue.HasValue)
-                        return default;
-
-                    var tool_document = tool_nozzle.Tag.Convert(t => t.GetDocument<Tool>(db.Value, tn => tn.ToolGuid));
-                    if (!tool_document.HasValue)
                         return default;
 
                     var material_document = material.Convert(m => m.Tag).Convert(t => t.GetDocument<Material>(db.Value, tn => tn.MaterialGuid));
@@ -346,7 +342,7 @@ namespace Flux.ViewModels
 
                     var extrusion_queue_g = new ExtrusionQueue<ExtrusionG>();
                     foreach (var extrusion in extrusion_queue_mm.Value)
-                        extrusion_queue_g.Add(extrusion.Key, ExtrusionG.CreateExtrusion(tool_document.Value, material_document.Value, extrusion.Value));
+                        extrusion_queue_g.Add(extrusion.Key, ExtrusionG.CreateExtrusion(material_document.Value, extrusion.Value));
 
                     foreach (var extrusion in extrusion_queue_g)
                         if (total_extrusion_queue.ContainsKey(extrusion.Key))
@@ -398,7 +394,7 @@ namespace Flux.ViewModels
 
             var temperature = evaluation.CurrentPartProgram
                 .Convert(pp => pp.Temperature);
-            if (!tool_index.HasValue)
+            if (!temperature.HasValue)
                 return false;
 
             var variable_access = (IFLUX_VariableAccess)Flux.ConnectionProvider;
