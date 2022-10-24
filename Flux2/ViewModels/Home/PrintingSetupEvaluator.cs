@@ -45,6 +45,9 @@ namespace Flux.ViewModels
         private ObservableAsPropertyHelper<bool> _HasLowWeight;
         public bool HasLowWeight => _HasLowWeight.Value;
 
+        private ObservableAsPropertyHelper<bool> _HasEmptyWeight;
+        public bool HasEmptyWeight => _HasEmptyWeight.Value;
+
         public TagViewModelEvaluator(FluxViewModel flux, FeederEvaluator feeder_eval)
         {
             Flux = flux;
@@ -95,6 +98,12 @@ namespace Flux.ViewModels
                 eval_changed,
                 LowWeight)
                 .ToProperty(this, v => v.HasLowWeight);
+
+            _HasEmptyWeight = Observable.CombineLatest(
+               this.WhenAnyValue(v => v.CurrentWeight),
+               eval_changed,
+               EmptyWeight)
+               .ToProperty(this, v => v.HasEmptyWeight);
         }
 
         public abstract int GetDocumentId(FeederReport feeder_report);
@@ -166,6 +175,16 @@ namespace Flux.ViewModels
             {
                 return false;
             }
+        }
+        private bool EmptyWeight(Optional<double> current, Optional<FeederReportQueue> feeder_queue)
+        {
+            if (!feeder_queue.HasValue)
+                return true;
+            if (feeder_queue.Value.Count == 0)
+                return false;
+            if (!current.HasValue)
+                return true;
+            return current.Value <= -100;
         }
     }
 

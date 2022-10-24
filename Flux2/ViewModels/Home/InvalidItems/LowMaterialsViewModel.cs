@@ -62,7 +62,9 @@ namespace Flux.ViewModels
     {
         public override string Title => "MATERIALI NON SUFFICIENTI";
         public override string ChangeName => "CAMBIA MATERIALE";
-        public override bool CanStartWithInvalidValues => true;
+
+        private ObservableAsPropertyHelper<bool> _CanStartWithInvalidValues;
+        public override bool CanStartWithInvalidValues => _CanStartWithInvalidValues.Value;
 
         public LowMaterialsViewModel(FluxViewModel flux) : base(flux)
         {
@@ -77,6 +79,10 @@ namespace Flux.ViewModels
                 .Transform(line => (IInvalidValueViewModel)new LowMaterialViewModel(line))
                 .Sort(EvaluationComparer)
                 .AsObservableList();
+
+            _CanStartWithInvalidValues = Flux.StatusProvider.FeederEvaluators.Connect()
+                .TrueForAny(line => line.Material.WhenAnyValue(m => m.HasEmptyWeight), e => e)
+                .ToProperty(this, v => v.CanStartWithInvalidValues);
         }
 
         public override void StartWithInvalidValues()
