@@ -163,12 +163,13 @@ namespace Flux.ViewModels
             var wire_range_end = wire_range_start + extruders.Value.mixing_extruders;
 
             var selected_wire = wire_presence.Change.Items
-                .Select((wire, index) => (wire, index))
+                .Select((wire, index) => (wire, index:(short)index))
                 .FirstOrOptional(t => t.index >= wire_range_start && t.index < wire_range_end && t.wire == true);
             
             if (!selected_wire.HasValue)
                 return default;
 
+            var variable_store = Flux.ConnectionProvider.VariableStoreBase;
             return viewmodels.Lookup((ushort)selected_wire.Value.index);
         }
 

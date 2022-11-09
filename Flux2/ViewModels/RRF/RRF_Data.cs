@@ -1255,40 +1255,5 @@ namespace Flux.ViewModels
                 return default;
             }
         }
-
-        public static Optional<LineNumber> GetBlockNum(this (RRF_ObjectModelJob job, RRF_ObjectModelState state, List<RRF_ObjectModelInput> input) data)
-        {
-            try
-            {
-                if (!data.job.File.HasValue)
-                    return default;
-
-                var file = data.job.File.Value;
-                if (!file.FileName.HasValue)
-                    return (LineNumber)0;
-                if (!data.input[2].StackDepth.HasValue)
-                    return (LineNumber)0;
-
-                if (!data.state.Status.HasValue)
-                    return (LineNumber)0;
-                var line_number = data.input[2].LineNumber;
-                if (!line_number.HasValue)
-                    return (LineNumber)0;
-
-                if (string.IsNullOrEmpty(file.FileName.Value))
-                    return (LineNumber)0;
-                if (data.input[2].StackDepth.Value > 0)
-                    return (LineNumber)0;
-                return data.state.Status.Value switch
-                {
-                    "idle" or "halted" => default,
-                    _ => (LineNumber)(line_number.Value / 2),
-                };
-            }
-            catch
-            {
-                return default;
-            }
-        }
     }
 }

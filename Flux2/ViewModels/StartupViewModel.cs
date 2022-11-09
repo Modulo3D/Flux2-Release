@@ -50,7 +50,7 @@ namespace Flux.ViewModels
             SettingsCommand = ReactiveCommand.Create(NavigateToSettingsAsync);
             ResetPrinterCommand = ReactiveCommand.Create(ResetPrinter);
 
-            if (Flux.ConnectionProvider.HasToolChange)
+            if (Flux.ConnectionProvider.VariableStoreBase.HasToolChange)
                 MagazineCommand = ReactiveCommand.Create(NavigateToMagazineAsync);
         }
 

@@ -87,7 +87,11 @@ namespace Flux.ViewModels
                   .ToProperty(this, v => v.ExtrusionKey)
                   .DisposeWith(Disposables);
 
-            var before_gear_key = Flux.ConnectionProvider.GetArrayUnit(m => m.FILAMENT_BEFORE_GEAR, Position);
+            var varable_store = Flux.ConnectionProvider.VariableStoreBase;
+            var material_index = ArrayIndex.FromZeroBase(Position, varable_store);
+            var feeder_index = ArrayIndex.FromZeroBase(Feeder.Position, varable_store);
+
+            var before_gear_key = Flux.ConnectionProvider.GetArrayUnit(m => m.FILAMENT_BEFORE_GEAR, material_index);
             _WirePresenceBeforeGear = Flux.ConnectionProvider.ObserveVariable(
                 m => m.FILAMENT_BEFORE_GEAR,
                 before_gear_key)
@@ -95,7 +99,7 @@ namespace Flux.ViewModels
                 .ToProperty(this, v => v.FilamentPresenceBeforeGear)
                 .DisposeWith(Disposables);
 
-            var after_gear_key = Flux.ConnectionProvider.GetArrayUnit(m => m.FILAMENT_AFTER_GEAR, Position);
+            var after_gear_key = Flux.ConnectionProvider.GetArrayUnit(m => m.FILAMENT_AFTER_GEAR, material_index);
             _WirePresenceAfterGear = Flux.ConnectionProvider.ObserveVariable(
                 m => m.FILAMENT_AFTER_GEAR,
                 after_gear_key)
@@ -103,7 +107,7 @@ namespace Flux.ViewModels
                 .ToProperty(this, v => v.FilamentPresenceAfterGear)
                 .DisposeWith(Disposables);
 
-            var on_head_key = Flux.ConnectionProvider.GetArrayUnit(m => m.FILAMENT_ON_HEAD, Feeder.Position);
+            var on_head_key = Flux.ConnectionProvider.GetArrayUnit(m => m.FILAMENT_ON_HEAD, feeder_index);
             _WirePresenceOnHead = Flux.ConnectionProvider.ObserveVariable(
                 m => m.FILAMENT_ON_HEAD,
                 on_head_key)
@@ -124,7 +128,7 @@ namespace Flux.ViewModels
                 .ToProperty(this, v => v.MaterialLoaded)
                 .DisposeWith(Disposables);
 
-            var humidity_unit = Flux.ConnectionProvider.GetArrayUnit(c => c.FILAMENT_HUMIDITY, Position);
+            var humidity_unit = Flux.ConnectionProvider.GetArrayUnit(c => c.FILAMENT_HUMIDITY, material_index);
             _Humidity = Flux.ConnectionProvider.ObserveVariable(c => c.FILAMENT_HUMIDITY, humidity_unit)
                 .ObservableOrDefault()
                 .ToProperty(this, v => v.Humidity);

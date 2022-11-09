@@ -48,7 +48,10 @@ namespace Flux.ViewModels
                 tn.GetDocument<Nozzle>(db, tn => tn.NozzleGuid));
         }, t => t.ToolGuid, pause_on_odometer: false)
         {
-            var tool_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TEMP_TOOL, Position);
+            var variable_store = Flux.ConnectionProvider.VariableStoreBase;
+            var feeder_index = ArrayIndex.FromZeroBase(Position, variable_store);
+
+            var tool_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TEMP_TOOL, feeder_index);
             _NozzleTemperature = Flux.ConnectionProvider
                 .ObserveVariable(m => m.TEMP_TOOL, tool_key)
                 .ObservableOrDefault()
@@ -124,7 +127,7 @@ namespace Flux.ViewModels
         }
         private IObservable<ToolNozzleState> FindToolState()
         {
-            var has_tool_change = Flux.ConnectionProvider.HasToolChange;
+            var has_tool_change = Flux.ConnectionProvider.VariableStoreBase.HasToolChange;
 
             var tool_cur = Flux.ConnectionProvider
                 .ObserveVariable(m => m.TOOL_CUR);
@@ -145,19 +148,22 @@ namespace Flux.ViewModels
             var inserted = this.WhenAnyValue(v => v.NozzleTemperature)
                 .ConvertOr(t => t.Current > -100 && t.Current < 1000, () => false);
 
-            var mem_magazine_key = Flux.ConnectionProvider.GetArrayUnit(m => m.MEM_TOOL_IN_MAGAZINE, Position);
+            var variable_store = Flux.ConnectionProvider.VariableStoreBase;
+            var feeder_index = ArrayIndex.FromZeroBase(Position, variable_store);
+
+            var mem_magazine_key = Flux.ConnectionProvider.GetArrayUnit(m => m.MEM_TOOL_IN_MAGAZINE, feeder_index);
             var mem_magazine = Flux.ConnectionProvider
                 .ObserveVariable(m => m.MEM_TOOL_IN_MAGAZINE, mem_magazine_key);
 
-            var mem_trailer_key = Flux.ConnectionProvider.GetArrayUnit(m => m.MEM_TOOL_ON_TRAILER, Position);
+            var mem_trailer_key = Flux.ConnectionProvider.GetArrayUnit(m => m.MEM_TOOL_ON_TRAILER, feeder_index);
             var mem_trailer = Flux.ConnectionProvider
                 .ObserveVariable(m => m.MEM_TOOL_ON_TRAILER, mem_trailer_key);
 
-            var input_magazine_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TOOL_IN_MAGAZINE, Position);
+            var input_magazine_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TOOL_IN_MAGAZINE, feeder_index);
             var input_magazine = Flux.ConnectionProvider
                 .ObserveVariable(m => m.TOOL_IN_MAGAZINE, input_magazine_key);
 
-            var input_trailer_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TOOL_ON_TRAILER, Position);
+            var input_trailer_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TOOL_ON_TRAILER, feeder_index);
             var input_trailer = Flux.ConnectionProvider
                 .ObserveVariable(m => m.TOOL_ON_TRAILER, input_trailer_key);
 
@@ -207,7 +213,7 @@ namespace Flux.ViewModels
                     if (has_tool_change && on_trailer == in_magazine)
                         in_change_error = true;
 
-                    var selected = tool_cur.Convert(t => t.GetZeroBaseIndex(default)).Convert(t => Position == t).ValueOr(() => false);
+                    var selected = tool_cur.Convert(t => t.GetZeroBaseIndex()).Convert(t => Position == t).ValueOr(() => false);
                     return new ToolNozzleState(has_tool_change, in_change, selected, inserted, known, locked, loaded, on_trailer, in_magazine, in_mateinance, in_change_error);
                 });
         }

@@ -36,33 +36,37 @@ namespace Flux.ViewModels
         { 
         }
 
-        public override GCodeString DeclareGlobalArray<T>(string array_name, int count, out GCodeArray<T> array)
+        public override GCodeString DeclareGlobalArray<T>(string[] array_names, out GCodeArray<T> array)
         {
             array = new GCodeArray<T>()
             {
-                Name = array_name,
-                Variables = Enumerable.Range(0, count).Select(i =>
+                Variables = array_names.Select(name =>
                 {
-                    var variable_name = $"{array_name}_{i}";
-                    DeclareGlobalVariable<T>(variable_name, out var variable);
+                    DeclareGlobalVariable<T>(name, out var variable);
                     return variable;
                 }).ToArray(),
             };
             return array.Foreach((v, i) => v.Declare);
         }
-        public override GCodeString DeclareLocalArray<T>(string array_name, int count, object value, out GCodeArray<T> array)
+        public override GCodeString DeclareLocalArray<T>(string[] array_names, Union<GCodeVariable<T>, T> value, out GCodeArray<T> array)
         {
             array = new GCodeArray<T>()
             {
-                Name = array_name,
-                Variables = Enumerable.Range(0, count).Select(i =>
+                Variables = array_names.Select(name =>
                 {
-                    var variable_name = $"{array_name}_{i}";
-                    DeclareLocalVariable<T>(variable_name, value, out var variable);
+                    DeclareLocalVariable(name, value, out var variable);
                     return variable;
                 }).ToArray(),
             };
             return array.Foreach((v, i) => v.Declare);
+        }
+        public GCodeString DeclareGlobalArray<T>(string array_name, int count, out GCodeArray<T> array)
+        {
+            return DeclareGlobalArray(Enumerable.Range(0, count).Select(i => $"{array_name}_{i}").ToArray(), out array);
+        }
+        public GCodeString DeclareLocalArray<T>(string array_name, int count, Union<GCodeVariable<T>, T> value, out GCodeArray<T> array)
+        {
+            return DeclareLocalArray(Enumerable.Range(0, count).Select(i => $"{array_name}_{i}").ToArray(), value, out array);
         }
         public override GCodeString DeclareGlobalVariable<T>(string variable_name, out GCodeVariable<T> variable)
         {
@@ -79,14 +83,14 @@ namespace Flux.ViewModels
             };
             return variable.Declare;
         }
-        public override GCodeString DeclareLocalVariable<T>(string variable_name, object value, out GCodeVariable<T> variable)
+        public override GCodeString DeclareLocalVariable<T>(string variable_name, Union<GCodeVariable<T>, T> value, out GCodeVariable<T> variable)
         {
             variable = new GCodeVariable<T>()
             {
                 Name = variable_name,
                 Read = $"var.{variable_name}",
-                Declare = $"var {variable_name} = {(typeof(T) == typeof(string) && !$"{value}".Contains('"') ? $"\"{value}\"" : value)}",
                 Write = v => $"set var.{variable_name} = {(typeof(T) == typeof(string) && !$"{v}".Contains('"') ? $"\"{v}\"" : $"{v}")}",
+                Declare = $"var {variable_name} = {(value.IsType1 ? $"{value.Item1}" : typeof(T) == typeof(string) && !$"{value.Item2}".Contains('"') ? $"\"{value.Item2}\"" : value.Item2)}",
             };
             return variable.Declare;
         }
@@ -96,7 +100,7 @@ namespace Flux.ViewModels
             array_name = array_name.Split(" ").LastOrDefault();
             return DeclareGlobalArray(array_name, count, out array);    
         }
-        public GCodeString DeclareLocalArray<T>(int count, object value, out GCodeArray<T> array, [CallerArgumentExpression("array")] string array_name = null)
+        public GCodeString DeclareLocalArray<T>(int count, Union<GCodeVariable<T>, T> value, out GCodeArray<T> array, [CallerArgumentExpression("array")] string array_name = null)
         {
             array_name = array_name.Split(" ").LastOrDefault();
             return DeclareLocalArray(array_name, count, value, out array);
@@ -106,7 +110,7 @@ namespace Flux.ViewModels
             variable_name = variable_name.Split(" ").LastOrDefault();
             return DeclareGlobalVariable(variable_name, out variable);   
         }
-        public GCodeString DeclareLocalVariable<T>(object value, out GCodeVariable<T> variable, [CallerArgumentExpression("variable")] string variable_name = null)
+        public GCodeString DeclareLocalVariable<T>(Union<GCodeVariable<T>, T> value, out GCodeVariable<T> variable, [CallerArgumentExpression("variable")] string variable_name = null)
         {
             variable_name = variable_name.Split(" ").LastOrDefault();
             return DeclareLocalVariable(variable_name, value, out variable);
@@ -165,9 +169,7 @@ namespace Flux.ViewModels
         public override GCodeString AppendFile(string folder, string name, GCodeString source)
         {
             var path = Connection.CombinePaths(folder, name);
-            return GCodeString.Create(
-                $"; appending file {name}",
-                source.Select(l => $"echo >>\"0:/{path}\" \"{l.Replace("\"", "\"\"")}\"").ToArray());
+            return source.Select(line => $"echo >>\"0:/{path}\" {(line.StartsWith("\"") ? line : $"\"{line.Replace("\"", "\"\"")}\"")}").ToArray();
         }
         public override GCodeString CreateFile(string folder, string name, GCodeString source)
         {
@@ -181,13 +183,13 @@ namespace Flux.ViewModels
         {
             if (job.QueuePosition < 0)
                 return default;
-            return $"echo >>\"0:/{Connection.JobEventPath}/{job.MCodeKey};{job.JobKey}\" \"{@event.ToEnumString()};\"^{{state.time}}";
+            return AppendFile(Connection.JobEventPath, $"{job.MCodeKey};{job.JobKey}", $"\"{@event.ToEnumString()};\"^{{state.time}}");
         }
         public override GCodeString LogExtrusion(Job job, ExtrusionKey e, GCodeVariable<double> v)
         {
             if (job.QueuePosition < 0)
                 return default;
-            return $"echo >>\"0:/{Connection.ExtrusionEventPath}/{e}\" \"{job.JobKey};\"^{{{v}}}";
+            return AppendFile(Connection.ExtrusionEventPath, $"{e}", $"\"{job.JobKey};\"^{{{v}}}");
         }
     }
 
@@ -270,7 +272,7 @@ namespace Flux.ViewModels
                 "T-1 P0"
             }, put_reset_clamp_cts.Token, true, wait_reset_clamp_cts.Token);
         }
-        public override InnerQueueGCodes GenerateInnerQueue(string folder, Job job, MCodePartProgram part_program)
+        public override InnerQueueGCodes GenerateInnerQueue(string folder, Job job, MCodePartProgramPreview part_program)
         {
             var gcode = new RRF_GCodeGenerator(Connection);
 
@@ -303,7 +305,7 @@ namespace Flux.ViewModels
 
                 extrusion.Foreach((e, i) =>
                 {
-                    return extrusion_key((ushort)i).Convert(k => new[]
+                    return extrusion_key(i, k => new[]
                     {
                         $"; extrusion {i}",
                         extrusion_pos.Write($"move.extruders[{i + base_motor.Value.Address}].position"),
@@ -324,33 +326,38 @@ namespace Flux.ViewModels
                 EndFilament = end_filament,
             };
 
-            Optional<ExtrusionKey> extrusion_key(ushort position)
+            Optional<GCodeString> extrusion_key(int position, Func<ExtrusionKey, GCodeString> func)
             {
-                return Flux.Feeders.Feeders.Lookup(position)
+                return Flux.Feeders.Feeders.Lookup((ushort)position)
                     .Convert(f => f.SelectedMaterial)
-                    .Convert(m => m.ExtrusionKey);
+                    .Convert(m => m.ExtrusionKey)
+                    .Convert(k => func(k));
             }
         }
 
-        public override GCodeString GenerateStartMCodeLines(MCode mcode)
+        public override GCodeString GenerateStartMCodeLines()
         {
             var gcode = new RRF_GCodeGenerator(Connection);
             return GCodeString.Create(
                 gcode.DeclareLocalVariable<string>($"\"0:/{InnerQueuePath}/\"^{{global.queue_pos}}^\"/start.g\"", out var start_path),
                 gcode.ExecuteParamacro(start_path));
         }
-        public override GCodeString GenerateEndMCodeLines(MCode mcode, Optional<ushort> queue_size)
+        public override GCodeString GenerateEndMCodeLines(Optional<ushort> queue_size)
         {
             var has_unload = queue_size.HasValue && queue_size.Value > 1;
 
             var gcode = new RRF_GCodeGenerator(Connection);
             return GCodeString.Create(
 
-                gcode.DeclareLocalVariable<string>($"\"0:/{InnerQueuePath}/\"^{{global.queue_pos}}^\"/end.g\"", out var end_macro),
-                gcode.DeclareLocalVariable<string>(has_unload ? "0:/macros/end_print" : "0:/macros/unload_print", out var next_macro),
+                gcode.DeclareLocalVariable<string>($"\"0:/{InnerQueuePath}/\"^{{global.queue_pos}}^\"/end.g\"", out var log_end),
+                gcode.DeclareLocalVariable<string>(has_unload ? "0:/macros/unload_print" : "0:/macros/end_print", out var next_macro),
 
-                gcode.ExecuteParamacro(end_macro),
+                gcode.ExecuteParamacro(log_end),
                 gcode.ExecuteParamacro(next_macro));
+        }
+        public override Optional<FLUX_MCodeRecovery> GetMCodeRecoveryFromSource(MCodeKey mcode, Optional<string> value)
+        {
+            throw new NotImplementedException();
         }
     }
 }

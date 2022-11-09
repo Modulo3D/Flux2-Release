@@ -28,13 +28,16 @@ namespace Flux.ViewModels
         }
         protected override async Task<bool> ExecuteOperationAsync()
         {
+            var variable_store = Flux.ConnectionProvider.VariableStoreBase;
+            var feeder_index = ArrayIndex.FromZeroBase(Feeder.Position, variable_store);
+
             if (!Flux.ConnectionProvider.HasVariable(c => c.FILAMENT_AFTER_GEAR))
             {
                 var insert_iteration_dist = 10;
                 ushort max_insert_iterations = 3;
                 if (!await Flux.IterateConfirmDialogAsync("CARICO FILO", "FILO INSERITO CORRETTAMENTE?", max_insert_iterations,
-                    () => Flux.ConnectionProvider.ManualFilamentInsert(Feeder.Position, insert_iteration_dist, 100)))
-                    return await Flux.ConnectionProvider.ManualFilamentExtract(Feeder.Position, max_insert_iterations, insert_iteration_dist, 500);
+                    () => Flux.ConnectionProvider.ManualFilamentInsert(feeder_index, insert_iteration_dist, 100)))
+                    return await Flux.ConnectionProvider.ManualFilamentExtract(feeder_index, max_insert_iterations, insert_iteration_dist, 500);
             }
 
             if (!Flux.ConnectionProvider.HasVariable(c => c.FILAMENT_ON_HEAD))

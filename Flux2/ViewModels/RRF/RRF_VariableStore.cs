@@ -49,8 +49,15 @@ namespace Flux.ViewModels
         public virtual VariableUnits EndstopsUnits { get; }
         public virtual VariableUnits FilamentUnits { get; }
 
+        public override ushort ArrayBase => 0;
+        public override char FeederAxis => 'E';
+        public override bool ParkToolAfterOperation => true;
+        public override FLUX_AxisMoveTransform MoveTransform { get; }
+
         public RRF_VariableStoreBase(RRF_ConnectionProvider connection_provider, ushort max_extruders) : base(connection_provider)
-        {     
+        {
+            MoveTransform = new FLUX_AxisMoveTransform(m => m);
+
             try
             { 
                 var read_timeout        = TimeSpan.FromSeconds(5);
@@ -87,7 +94,7 @@ namespace Flux.ViewModels
                 JobEvents.CreateVariable(c => c.MCODE_EVENT,    (c, m) => m.GetMCodeEvents());
                 Tools.CreateVariable(c => c.TOOL_NUM,           (c, t) => (ushort)t.Count);
                 
-                State.CreateVariable(c => c.TOOL_CUR,           (c, s) => s.CurrentTool.Convert(t => (ArrayIndex)(t, connection_provider)));
+                State.CreateVariable(c => c.TOOL_CUR,           (c, s) => s.CurrentTool.Convert(t => ArrayIndex.FromArrayBase(t, this)));
                 State.CreateVariable(c => c.PROCESS_STATUS,     (c, m) => m.GetProcessStatus());
                 State.CreateVariable(c => c.IN_CHANGE,          (c, m) => m.IsInChange());
                 
@@ -235,6 +242,8 @@ namespace Flux.ViewModels
     // S300
     public class RRF_VariableStoreS300 : RRF_VariableStoreBase
     {
+        public override bool CanMeshProbePlate => true;
+
         public override VariableUnits ExtrudersUnits    => new(("T", 4));
 
         public override VariableUnits HeaterUnits       => new("main.plate", ("T", 4));
@@ -305,6 +314,8 @@ namespace Flux.ViewModels
     // MP500
     public class RRF_VariableStoreMP500 : RRF_VariableStoreBase
     {
+        public override bool CanMeshProbePlate => false;
+
         public override VariableUnits ExtrudersUnits    => new(("T", 2));
         public override VariableUnits AxesUnits         => new("X", "Y", "Z", "U", "V");
         public override VariableUnits EndstopsUnits     => new("X", "Y", "Z", "U", "V");

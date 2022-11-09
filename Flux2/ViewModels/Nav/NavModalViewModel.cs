@@ -5,6 +5,7 @@ using ReactiveUI;
 using System;
 using System.Reactive;
 using System.Reactive.Linq;
+using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
@@ -28,6 +29,15 @@ namespace Flux.ViewModels
             NavigateBackCommand = ReactiveCommand.Create(
                 () => { Flux.Navigator.NavigateBack(); },
                 can_navigate_back.ObservableOr(() => true));
+        }
+
+        public override Task OnNavigatedFromAsync(Optional<IFluxRoutableViewModel> from)
+        {
+            return Content.OnNavigatedFromAsync(from);
+        }
+        public override Task OnNavigateToAsync(IFluxRoutableViewModel to)
+        {
+            return Content.OnNavigateToAsync(to);
         }
     }
 }

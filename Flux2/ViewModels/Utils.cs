@@ -83,20 +83,20 @@ namespace Flux.ViewModels
     {
         public double Min
         {
-            get => RemoteInputs.Lookup("value").ConvertOr(v => v.Min, () => double.MinValue);
-            set => RemoteInputs.Lookup("value").IfHasValue(v => v.Min = value);
+            get => RemoteInputs.Lookup("value").ConvertOr(v => v.Element.Min, () => double.MinValue);
+            set => RemoteInputs.Lookup("value").IfHasValue(v => v.Element.Min = value);
         }
 
         public double Max
         {
-            get => RemoteInputs.Lookup("value").ConvertOr(v => v.Max, () => double.MaxValue);
-            set => RemoteInputs.Lookup("value").IfHasValue(v => v.Max = value);
+            get => RemoteInputs.Lookup("value").ConvertOr(v => v.Element.Max, () => double.MaxValue);
+            set => RemoteInputs.Lookup("value").IfHasValue(v => v.Element.Max = value);
         }
 
         public Optional<double> Step
         {
-            get => RemoteInputs.Lookup("value").Convert(v => v.Step);
-            set => RemoteInputs.Lookup("value").IfHasValue(v => v.Step = value);
+            get => RemoteInputs.Lookup("value").Convert(v => v.Element.Step);
+            set => RemoteInputs.Lookup("value").IfHasValue(v => v.Element.Step = value);
         }
 
         private double _Value;

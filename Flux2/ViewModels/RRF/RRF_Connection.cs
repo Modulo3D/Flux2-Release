@@ -93,9 +93,9 @@ namespace Flux.ViewModels
 
     public class RRF_Connection : FLUX_Connection<RRF_ConnectionProvider, RRF_VariableStoreBase, HttpClient>
     {
-        public override bool ParkToolAfterOperation => false;
         public override string CombinePaths(params string[] paths) => string.Join("/", paths);
         public string SystemPath => "sys";
+        public override string RootPath => "";
         public override string MacroPath => "macros";
         public override string QueuePath => "gcodes/queue";
         public override string EventPath => "gcodes/events";
@@ -104,8 +104,6 @@ namespace Flux.ViewModels
         public override string JobEventPath => CombinePaths(EventPath, "job");
         public override string InnerQueuePath => CombinePaths(QueuePath, "inner");
         public override string ExtrusionEventPath => CombinePaths(EventPath, "extr");
-        public override string RootPath => "";
-        public override ushort ArrayBase => 0;
 
         public FluxViewModel Flux { get; }
         private PriorityQueueNotifierUC<RRF_RequestPriority, RRF_Request> Requests { get; }
@@ -325,11 +323,6 @@ namespace Flux.ViewModels
         {
             return $"rr_gcode?gcode={string.Join("%0A", paramacro)}".Length;
         }
-        public override async Task<bool> StartAsync(string folder, string filename)
-        {
-            using var put_reset_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            return await PostGCodeAsync(new[] { $"M32 \"0:/{folder}/{filename}\"" }, put_reset_cts.Token);
-        }
         public async Task<bool> PostGCodeAsync(GCodeString gcode, CancellationToken ct)
         {
             try
@@ -372,9 +365,13 @@ namespace Flux.ViewModels
                 {
                     using var delete_job_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                     var delete_job_response = await DeleteAsync(StoragePath, "job.mcode", true, delete_job_ctk.Token);
+                    if (!delete_job_response)
+                        return false;
 
                     using var delete_paramacro_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                     var delete_paramacro_response = await DeleteAsync(StoragePath, "paramacro.mcode", true, delete_paramacro_ctk.Token);
+                    if (!delete_paramacro_response)
+                        return false;
 
                     // put file
                     var put_paramacro_response = await PutFileAsync(
@@ -385,21 +382,18 @@ namespace Flux.ViewModels
                     if (put_paramacro_response == false)
                         return false;
 
+                    var job_source = $"M98 P\"0:/gcodes/storage/paramacro.mcode\"";
                     var put_job_response = await PutFileAsync(
                         StoragePath,
                         "job.mcode", true,
-                        put_ct, get_job_gcode().ToOptional());
+                        put_ct, job_source);
 
                     if (put_job_response == false)
                         return false;
 
                     // Set PLC to Cycle
-                    return await StartAsync(StoragePath, "job.mcode");
-
-                    IEnumerable<string> get_job_gcode()
-                    {
-                        yield return $"M98 P\"0:/gcodes/storage/paramacro.mcode\"";
-                    }
+                    using var put_reset_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    return await PostGCodeAsync(new[] { $"M32 \"0:/{CombinePaths(StoragePath, "job.mcode")}\"" }, put_reset_cts.Token);
 
                     IEnumerable<string> get_paramacro_gcode()
                     {
@@ -425,7 +419,7 @@ namespace Flux.ViewModels
             GCodeString source = default,
             GCodeString start = default,
             GCodeString end = default,
-            Optional<uint> source_blocks = default,
+            Optional<BlockNumber> source_blocks = default,
             Action<double> report_progress = null)
         {
             try
@@ -672,7 +666,7 @@ namespace Flux.ViewModels
                         .Merge(1);
 
                     return await WaitUtils.WaitForOptionalAsync(
-                        file_system,
+                        file_system, TimeSpan.FromSeconds(0.2),
                         f => !f.Files.Any(f => f.Name == filename),
                         ct);
                 }
@@ -707,7 +701,7 @@ namespace Flux.ViewModels
                         .Merge(1);
 
                     return await WaitUtils.WaitForOptionalAsync(
-                        file_system,
+                        file_system, TimeSpan.FromSeconds(0.2),
                         f => f.Files.Any(f => f.Name == new_filename),
                         ct);
                 }
@@ -762,13 +756,13 @@ namespace Flux.ViewModels
         }
         public override GCodeString GetSelectToolGCode(ArrayIndex position)
         {
-            return $"T{position.GetArrayBaseIndex(this)}";
+            return $"T{position.GetArrayBaseIndex()}";
         }
         public override GCodeString GetCancelLoadFilamentGCode(ArrayIndex position)
         {
             return new[] 
             {
-                $"G10 P{position.GetArrayBaseIndex(this)} S0 R0",
+                $"G10 P{position.GetArrayBaseIndex()} S0 R0",
                 "T-1"
             };
         }
@@ -776,7 +770,7 @@ namespace Flux.ViewModels
         {
             return new[]
              {
-                $"G10 P{position.GetArrayBaseIndex(this)} S0 R0",
+                $"G10 P{position.GetArrayBaseIndex()} S0 R0",
                 "T-1"
             };
         }
@@ -788,39 +782,62 @@ namespace Flux.ViewModels
         {
             throw new NotImplementedException();
         }
-        public override GCodeString GetSetToolTemperatureGCode(ArrayIndex position, double temperature)
+        public override GCodeString GetSetToolTemperatureGCode(ArrayIndex position, double temperature, bool wait)
         {
-            return $"M104 T{position.GetArrayBaseIndex(this)} S{temperature}";
+            return $"{(wait ? "M109" : "M104")} T{position.GetArrayBaseIndex()} S{temperature}";
+        }
+        public override GCodeString GetSetPlateTemperatureGCode(ArrayIndex position, double temperature, bool wait)
+        {
+            return $"{(wait ? "M190" : "M140")} P{position.GetArrayBaseIndex()} S{temperature}";
+        }
+        public override GCodeString GetSetChamberTemperatureGCode(ArrayIndex position, double temperature, bool wait)
+        {
+            return $"{(wait ? "M191" : "M141")} P{position.GetArrayBaseIndex()} S{temperature}";
+        }
+        public override GCodeString GetResetPositionGCodeInner(FLUX_AxisMove axis_move)
+        {
+            return $"G92 {axis_move.GetAxisPosition()}";
+        }
+        public override GCodeString GetFilamentSensorSettingsGCode(ArrayIndex position, bool enabled)
+        {
+            var filament_unit = VariableStore.GetArrayUnit(c => c.FILAMENT_BEFORE_GEAR, position);
+            if (!filament_unit.HasValue)
+                return default;
+
+            return $"M591 D{filament_unit.Value.Index} S{(enabled ? 1 : 0)}";
+        }
+        public override GCodeString GetMovementGCodeInner(FLUX_AxisMove axis_move)
+        {
+            return GCodeString.Create(
+                axis_move.Relative ? new[] { "M120", "G91" } : default,
+                $"G1 {axis_move.GetAxisPosition()} {axis_move.GetFeedrate('F')}",
+                axis_move.Relative ? new[] { "G90", "M121" } : default);
         }
         public override GCodeString GetSetToolOffsetGCode(ArrayIndex position, double x, double y, double z)
         {
             return new[]
             {
-                $"G10 P{position.GetArrayBaseIndex(this)} X{{{x * -1}}}",
-                $"G10 P{position.GetArrayBaseIndex(this)} Y{{{y * -1}}}",
-                $"G10 P{position.GetArrayBaseIndex(this)} Z{{{z * -1}}}",
+                $"G10 P{position.GetArrayBaseIndex()} X{{{x * -1}}}",
+                $"G10 P{position.GetArrayBaseIndex()} Y{{{y * -1}}}",
+                $"G10 P{position.GetArrayBaseIndex()} Z{{{z * -1}}}",
             };
         }
+
         public override GCodeString GetSetExtruderMixingGCode(ArrayIndex machine_extruder, ArrayIndex mixing_extruder)
         {
             var extruder_count = Flux.SettingsProvider.ExtrudersCount;
             if (!extruder_count.HasValue)
                 return default;
             
-            var mixing_start = new ArrayIndex(0).GetArrayBaseIndex(this);
-            var selected_extruder = mixing_extruder.GetArrayBaseIndex(this);
+            var mixing_start = ArrayIndex.FromZeroBase(0, VariableStoreBase).GetArrayBaseIndex();
+            var selected_extruder = mixing_extruder.GetArrayBaseIndex();
 
             var mixing_count = extruder_count.Value.mixing_extruders;
             var mixing = Enumerable.Range(mixing_start, mixing_count)
                 .Select(i => i == selected_extruder ? "1" : "0");
 
-            return $"M567 P{machine_extruder.GetArrayBaseIndex(this)} E1:{string.Join(":", mixing)}";
+            return $"M567 P{machine_extruder.GetArrayBaseIndex()} E1:{string.Join(":", mixing)}";
         }
-        public override GCodeString GetRelativeXMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 X{distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
-        public override GCodeString GetRelativeYMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 Y{distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
-        public override GCodeString GetRelativeZMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 Z{distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
-        public override GCodeString GetRelativeEMovementGCode(double distance, double feedrate) => new string[] { "M120", "G91", $"G1 E{distance} F{feedrate}".Replace(",", "."), "G90", "M121" };
-
 
         public override Task<Stream> GetFileStreamAsync(string folder, string name, CancellationToken ct)
         {
@@ -830,48 +847,15 @@ namespace Flux.ViewModels
         {
             throw new NotImplementedException();
         }
-        public override GCodeString GetManualFilamentInsertGCode(ArrayIndex position, double iteration_distance, double feedrate)
+
+        public override GCodeString GetStartPartProgramGCode(string folder, string filename, BlockNumber start_block)
         {
-            var gcode = new List<string>();
-
-            var select_tool_gcode = GetSelectToolGCode(position);
-            if (!select_tool_gcode.HasValue)
-                return default;
-
-            var movement_gcode = GetRelativeEMovementGCode(iteration_distance, feedrate);
-            if (!movement_gcode.HasValue)
-                return default;
-
             return new[]
             {
-                select_tool_gcode,
-                movement_gcode
+                $"M23 0:/{CombinePaths(folder, filename)}",
+                $"M26 S{start_block}",
+                $"M24"
             };
         }
-        public override GCodeString GetManualFilamentExtractGCode(ArrayIndex position, ushort iterations, double iteration_distance, double feedrate)
-        {
-            var gcode = new List<string>();
-
-            var select_tool_gcode = GetSelectToolGCode(position);
-            if (!select_tool_gcode.HasValue)
-                return default;
-            
-            var extract_distance = (iteration_distance * iterations) + 50;
-            var movement_gcode = GetRelativeEMovementGCode(-extract_distance, 500);
-            if (!movement_gcode.HasValue)
-                return default;
-            
-            var park_tool_gcode = GetParkToolGCode();
-            if (!park_tool_gcode.HasValue)
-                return default;
-
-            return new[]
-            {
-                select_tool_gcode,
-                movement_gcode,
-                park_tool_gcode
-            };
-        }
-
     }
 }

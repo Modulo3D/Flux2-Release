@@ -19,9 +19,7 @@ namespace Flux.ViewModels
     {
         public const ushort AxisNum = 4;
         public const ushort ProcessNumber = 1;
-        public override bool ParkToolAfterOperation => false;
 
-        public override ushort ArrayBase => 1;
         public override string RootPath => "DEVICE";
         public override string MacroPath => "MACRO";
         public override string QueuePath => "PROGRAMS\\QUEUE";
@@ -775,21 +773,21 @@ namespace Flux.ViewModels
         }
 
         // WAIT MEMORY
-        public async Task<bool> WaitBootPhaseAsync(Func<OSAI_BootPhase, bool> phase_func, TimeSpan dueTime, TimeSpan sample, TimeSpan timeout)
+        public async Task<bool> WaitBootPhaseAsync(Func<OSAI_BootPhase, bool> phase_func, TimeSpan dueTime, TimeSpan sample, TimeSpan throttle, TimeSpan timeout)
         {
             var read_boot_phase = Observable.Timer(dueTime, sample)
                 .SelectMany(t => ReadVariableAsync(c => c.BOOT_PHASE));
 
             return await WaitUtils.WaitForValueResultAsync(read_boot_phase,
-                phase => phase_func(phase), timeout);
+                throttle, phase => phase_func(phase), timeout);
         }
-        public async Task<bool> WaitProcessModeAsync(Func<OSAI_ProcessMode, bool> status_func, TimeSpan dueTime, TimeSpan sample, TimeSpan timeout)
+        public async Task<bool> WaitProcessModeAsync(Func<OSAI_ProcessMode, bool> status_func, TimeSpan dueTime, TimeSpan sample, TimeSpan throttle, TimeSpan timeout)
         {
             var read_boot_mode = Observable.Timer(dueTime, sample)
                 .SelectMany(t => ReadVariableAsync(c => c.PROCESS_MODE));
 
             return await WaitUtils.WaitForValueResultAsync(read_boot_mode,
-                process => status_func(process), timeout);
+                throttle, process => status_func(process), timeout);
         }
 
         // BASIC OPERATIONS
@@ -849,22 +847,78 @@ namespace Flux.ViewModels
                     reset_response.ErrNum))
                     return false;
 
-                return await WaitProcessStatusAsync(
-                    status => status == FLUX_ProcessStatus.IDLE,
-                    TimeSpan.FromSeconds(0.1),
-                    TimeSpan.FromSeconds(0.1),
-                    TimeSpan.FromSeconds(5));
+                return true;
             }
             catch { return false; }
         }
-        public override async Task<bool> StartAsync(string folder, string filename)
+        public override async Task<bool> CancelAsync()
         {
             try
             {
                 if (!Client.HasValue)
                     return false;
 
-                var select_part_program_request = new SelectPartProgramFromDriveRequest(ProcessNumber, $"{folder}\\{filename}");
+                var reset_request = new ResetRequest(ProcessNumber);
+                var reset_response = await Client.Value.ResetAsync(reset_request);
+
+                if (!ProcessResponse(
+                    reset_response.retval,
+                    reset_response.ErrClass,
+                    reset_response.ErrNum))
+                    return false;
+
+                var wait_idle = await ConnectionProvider.WaitProcessStatusAsync(
+                    s => s == FLUX_ProcessStatus.IDLE,
+                    TimeSpan.FromSeconds(0.1),
+                    TimeSpan.FromSeconds(0.1),
+                    TimeSpan.FromSeconds(0.2),
+                    TimeSpan.FromSeconds(5));
+                
+                if (!wait_idle)
+                    return false;
+
+                var paramacro_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                return await ExecuteParamacroAsync(new []
+                {
+                    GetExecuteMacroGCode(CombinePaths(MacroPath, "JOB"), "cancel.g"),
+                    GetExecuteMacroGCode(MacroPath, "end_print")
+                }, paramacro_cts.Token);
+            }
+            catch { return false; }
+        }
+
+        public override async Task<bool> ExecuteParamacroAsync(GCodeString paramacro, CancellationToken put_ct, bool can_cancel = false)
+        {
+            try
+            {
+                if (!paramacro.HasValue)
+                    return false;
+
+                var deselect_part_program_request = new SelectPartProgramFromDriveRequest(ProcessNumber, $"");
+                var deselect_part_program_response = await Client.Value.SelectPartProgramFromDriveAsync(deselect_part_program_request);
+
+                if (!ProcessResponse(
+                    deselect_part_program_response.retval,
+                    deselect_part_program_response.ErrClass,
+                    deselect_part_program_response.ErrNum))
+                    return false;
+
+                using var delete_paramacro_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                var remove_file_response = await DeleteAsync(StoragePath, "paramacro.mcode", true, delete_paramacro_ctk.Token);
+                if (!remove_file_response)
+                    return false;
+
+                // put file
+                var put_paramacro_response = await PutFileAsync(
+                    StoragePath,
+                    "paramacro.mcode", true,
+                    put_ct, get_paramacro_gcode().ToOptional());
+
+                if (put_paramacro_response == false)
+                    return false;
+
+                // Set PLC to Cycle
+                var select_part_program_request = new SelectPartProgramFromDriveRequest(ProcessNumber, CombinePaths(StoragePath, "paramacro.mcode"));
                 var select_part_program_response = await Client.Value.SelectPartProgramFromDriveAsync(select_part_program_request);
 
                 if (!ProcessResponse(
@@ -883,31 +937,6 @@ namespace Flux.ViewModels
                     return false;
 
                 return true;
-            }
-            catch { return false; }
-        }
-
-        public override async Task<bool> ExecuteParamacroAsync(GCodeString paramacro, CancellationToken put_ct, bool can_cancel = false)
-        {
-            try
-            {
-                if (!paramacro.HasValue)
-                    return false;
-
-                using var delete_paramacro_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                var delete_paramacro_response = await DeleteAsync(StoragePath, "paramacro.mcode", true, delete_paramacro_ctk.Token);
-
-                // put file
-                var put_paramacro_response = await PutFileAsync(
-                    StoragePath,
-                    "paramacro.mcode", true,
-                    put_ct, get_paramacro_gcode().ToOptional());
-
-                if (put_paramacro_response == false)
-                    return false;
-
-                // Set PLC to Cycle
-                return await StartAsync(StoragePath, "paramacro.mcode");
 
                 IEnumerable<string> get_paramacro_gcode()
                 {
@@ -932,6 +961,16 @@ namespace Flux.ViewModels
                 if (!Client.HasValue)
                     return false;
 
+                if (filename != "*")
+                {
+                    var file_list = await ListFilesAsync(folder, ct);
+                    if (!file_list.HasValue)
+                        return false;
+
+                    if (!file_list.Value.Files.Any(f => f.Name == filename))
+                        return true;
+                }
+
                 var remove_file_request = new LogFSRemoveFileRequest($"{folder}\\", filename);
                 var remove_file_response = await Client.Value.LogFSRemoveFileAsync(remove_file_request);
 
@@ -945,7 +984,7 @@ namespace Flux.ViewModels
                     remove_file_response.ErrNum))
                     return false;
 
-                return true;
+                return true;    
             }
             catch { return false; }
         }
@@ -973,15 +1012,9 @@ namespace Flux.ViewModels
                 if (find_first_result.Value.Body.Finder == 0xFFFFFFFF)
                     return files_data;
 
-                if (!string.IsNullOrEmpty(find_first_result.Value.Body.FindData.FileName))
-                {
-                    var file_attributes = (OSAI_FileAttributes)find_first_result.Value.Body.FindData.FileAttributes;
-                    files_data.Files.Add(new FLUX_File()
-                    {
-                        Name = find_first_result.Value.Body.FindData.FileName,
-                        Type = file_attributes.HasFlag(OSAI_FileAttributes.FILE_ATTRIBUTE_DIRECTORY) ? FLUX_FileType.Directory : FLUX_FileType.File,
-                    });
-                }
+                var file = parse_file(find_first_result.Value.Body.FindData);
+                if (file.HasValue)
+                    files_data.Files.Add(file.Value);
 
                 var handle = find_first_result.Value.Body.Finder;
 
@@ -998,15 +1031,9 @@ namespace Flux.ViewModels
                         find_next_result.Value.Body.ErrNum))
                         return files_data;
 
-                    if (!string.IsNullOrEmpty(find_next_result.Value.Body.FindData.FileName))
-                    {
-                        var file_attributes = (OSAI_FileAttributes)find_next_result.Value.Body.FindData.FileAttributes;
-                        files_data.Files.Add(new FLUX_File() 
-                        { 
-                            Name = find_next_result.Value.Body.FindData.FileName,
-                            Type = file_attributes.HasFlag(OSAI_FileAttributes.FILE_ATTRIBUTE_DIRECTORY) ? FLUX_FileType.Directory : FLUX_FileType.File,
-                        });
-                    }
+                    file = parse_file(find_next_result.Value.Body.FindData);
+                    if (file.HasValue)
+                        files_data.Files.Add(file.Value);
                 }
                 while (find_next_result.ConvertOr(r => r.Body.Found, () => false));
             }
@@ -1026,6 +1053,28 @@ namespace Flux.ViewModels
             }
             
             return files_data;
+
+            Optional<FLUX_File> parse_file(FILEFINDDATA data)
+            {
+                if (string.IsNullOrEmpty(data.FileName))
+                    return default;
+
+                var file_name           = data.FileName;
+                var file_attributes     = (OSAI_FileAttributes)data.FileAttributes;
+                var file_size           = (ulong)data.FileSizeHigh << 32 | data.FileSizeLow;
+                var has_directory_flag  = file_attributes.HasFlag(OSAI_FileAttributes.FILE_ATTRIBUTE_DIRECTORY);
+                var file_type           = has_directory_flag ? FLUX_FileType.Directory : FLUX_FileType.File;
+
+                var file_date           = DateTime.FromFileTime((long)data.HighDateLastWriteTime << 32 | data.LowDateLastWriteTime);
+
+                return new FLUX_File()
+                {
+                    Name = file_name,
+                    Type = file_type,
+                    Date = file_date,
+                    Size = file_size,
+                };        
+            }
         }
 
         public override async Task<bool> PutFileAsync(
@@ -1036,7 +1085,7 @@ namespace Flux.ViewModels
             GCodeString source = default,
             GCodeString start = default,
             GCodeString end = default,
-            Optional<uint> source_blocks = default,
+            Optional<BlockNumber> source_blocks = default,
             Action<double> report_progress = default)
         {
             ushort file_id;
@@ -1158,7 +1207,10 @@ namespace Flux.ViewModels
                     yield return "";
                 }
             }
-            catch { return false; }
+            catch (Exception ex)
+            {
+                return false; 
+            }
 
             try
             {
@@ -1183,56 +1235,12 @@ namespace Flux.ViewModels
 
                 return true;
             }
-            catch { return false; }
+            catch (Exception ex)
+            {
+                return false; 
+            }
         }
-
-        /*public IEnumerable<string> GenerateRecoveryLines(OSAI_MCodeRecovery recovery)
-        {
-            if (recovery.ToolNumber < 0)
-                yield break;
-
-            yield return $"#!REQ_HOLD = 0.0";
-            yield return $"#!IS_HOLD = 0.0";
-            yield return $"G500 T{recovery.ToolNumber + 1}";
-            yield return $"M4999 [{{FILAMENT_ENDSTOP_1_RESET}}, {recovery.ToolNumber + 1}, 0, 1]";
-
-            for (ushort position = 0; position < recovery.Temperatures.Count; position++)
-            {
-                var current_tool_temp = recovery.Temperatures
-                    .Lookup(position)
-                    .ValueOr(() => 0);
-
-                if (current_tool_temp > 50)
-                {
-                    var hold_temp = $"{current_tool_temp:0}".Replace(",", ".");
-                    yield return $"M4104 [{position + 1}, {hold_temp}, 0]";
-                }
-            }
-
-            var recovery_tool_temp = recovery.Temperatures
-                .Lookup((ushort)recovery.ToolNumber)
-                .ValueOr(() => 0);
-
-            if (recovery_tool_temp > 50)
-            {
-                var hold_temp_t = $"{recovery_tool_temp:0}".Replace(",", ".");
-                yield return $"M4104 [{recovery.ToolNumber + 1}, {hold_temp_t}, 1]";
-            }
-
-            var x_pos = $"{recovery.Positions.Lookup((ushort)0).ValueOr(() => 0):0.000}".Replace(",", ".");
-            var y_pos = $"{recovery.Positions.Lookup((ushort)1).ValueOr(() => 0):0.000}".Replace(",", ".");
-            var z_pos = $"{recovery.Positions.Lookup((ushort)2).ValueOr(() => 0):0.000}".Replace(",", ".");
-            var e_pos = $"{recovery.Positions.Lookup((ushort)3).ValueOr(() => 0):0.000}".Replace(",", ".");
-
-            yield return $"G1 X{x_pos} Y{y_pos} F15000";
-            yield return $"G1 Z{z_pos} F5000";
-
-            yield return $"G92 A0";
-            yield return $"G1 A1 F2000";
-
-            yield return $"G92 A{e_pos}";
-        }*/
-
+        
         // AXIS MANAGEMENT
         public async Task<bool> AxesRefAsync(params char[] axes)
         {
@@ -1278,51 +1286,55 @@ namespace Flux.ViewModels
 
         public override GCodeString GetHomingGCode(params char[] axis)
         {
-            return new[] { "(CLS, MACRO\\home_printer)" };
+            return "(CLS, MACRO\\home_printer)";
         }
         public override GCodeString GetParkToolGCode()
         {
-            return new[] { "(CLS, MACRO\\change_tool, 0)" };
+            return "(CLS, MACRO\\change_tool, 0)";
         }
         public override GCodeString GetProbePlateGCode()
         {
-            return new[] { "(CLS, MACRO\\probe_plate)" };
+            return "(CLS, MACRO\\probe_plate)";
         }
         public override GCodeString GetLowerPlateGCode()
         {
-            return new[] { "(CLS, MACRO\\lower_plate)" };
+            return "(CLS, MACRO\\lower_plate)";
         }
         public override GCodeString GetRaisePlateGCode()
         {
-            return new[] { "(CLS, MACRO\\raise_plate)" };
+            return "(CLS, MACRO\\raise_plate)";
         }
         public override GCodeString GetSelectToolGCode(ArrayIndex position)
         {
-            return new[] { $"(CLS, MACRO\\change_tool, {position.GetArrayBaseIndex(this)})" };
+            return $"(CLS, MACRO\\change_tool, {position.GetArrayBaseIndex()})";
         }
-        public override GCodeString GetSetToolTemperatureGCode(ArrayIndex position, double temperature)
+        public override GCodeString GetSetToolTemperatureGCode(ArrayIndex position, double temperature, bool wait)
         {
-            return new[] { $"M4104 [{position.GetArrayBaseIndex(this)}, {temperature}, 0]" };
+            return $"M4104 [{position.GetArrayBaseIndex()}, {temperature}, {(wait ? 1 : 0)}]";
         }
         public override GCodeString GetProbeToolGCode(ArrayIndex position, double temperature)
         {
-            return new[] { $"(CLS, MACRO\\probe_tool, {position.GetArrayBaseIndex(this)}, {temperature})" };
+            return $"(CLS, MACRO\\probe_tool, {position.GetArrayBaseIndex()}, {temperature})";
         }
-        public override GCodeString GetRelativeXMovementGCode(double distance, double feedrate)
+        public override GCodeString GetFilamentSensorSettingsGCode(ArrayIndex position, bool enabled)
         {
-            return new[] { $"G1 X>>{distance / 2} Y>>{distance / 2} F{feedrate}".Replace(",", ".") };
+            return $"M4999 [{{FILAMENT_ENDSTOP_1_RESET}}, {position.GetArrayBaseIndex()}, 0, {(enabled ? 1 : 0)}]";
         }
-        public override GCodeString GetRelativeYMovementGCode(double distance, double feedrate)
+        public override GCodeString GetSetChamberTemperatureGCode(ArrayIndex position, double temperature, bool wait)
         {
-            return new[] { $"G1 X>>{distance / 2} Y>>{distance / 2} F{feedrate}".Replace(",", ".") };
+            return $"M4140 [{temperature}, {(wait ? 1 : 0)}]";
         }
-        public override GCodeString GetRelativeZMovementGCode(double distance, double feedrate)
+        public override GCodeString GetSetPlateTemperatureGCode(ArrayIndex position, double temperature, bool wait)
         {
-            return new[] { $"G1 Z>>{distance} F{feedrate}".Replace(",", ".") };
+            return $"M4141 [{temperature}, {(wait ? 1 : 0)}]";
         }
-        public override GCodeString GetRelativeEMovementGCode(double distance, double feedrate)
+        public override GCodeString GetResetPositionGCodeInner(FLUX_AxisMove axis_move)
         {
-            return new[] { $"G1 A>>{distance} F{feedrate}".Replace(",", ".") };
+            return $"G92 {axis_move.GetAxisPosition()}";
+        }
+        public override GCodeString GetMovementGCodeInner(FLUX_AxisMove axis_move)
+        {
+            return $"G1 {axis_move.GetAxisPosition(m => m.Relative ? ">>" : "")} {axis_move.GetFeedrate('F')}";
         }
 
         public override async Task<Optional<string>> GetFileAsync(string folder, string filename, CancellationToken ct)
@@ -1395,12 +1407,12 @@ namespace Flux.ViewModels
 
         public override GCodeString GetCancelLoadFilamentGCode(ArrayIndex position)
         {
-            return new[] { $"M4104 [{position.GetArrayBaseIndex(this)}, 0, 0]" };
+            return new[] { $"M4104 [{position.GetArrayBaseIndex()}, 0, 0]" };
         }
 
         public override GCodeString GetCancelUnloadFilamentGCode(ArrayIndex position)
         {
-            return new[] { $"M4104 [{position.GetArrayBaseIndex(this)}, 0, 0]" };
+            return new[] { $"M4104 [{position.GetArrayBaseIndex()}, 0, 0]" };
         }
 
         public override GCodeString GetCenterPositionGCode()
@@ -1428,16 +1440,6 @@ namespace Flux.ViewModels
             return new[] { "(REL)" };
         }
 
-        public override GCodeString GetManualFilamentInsertGCode(ArrayIndex position, double iteration_distance, double feedrate)
-        {
-            throw new NotImplementedException();
-        }
-
-        public override GCodeString GetManualFilamentExtractGCode(ArrayIndex position, ushort iterations, double iteration_distance, double feedrate)
-        {
-            throw new NotImplementedException();
-        }
-
         public override Task<Stream> GetFileStreamAsync(string folder, string name, CancellationToken ct)
         {
             throw new NotImplementedException();
@@ -1448,9 +1450,13 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override Task<bool> CancelAsync()
+        public override GCodeString GetStartPartProgramGCode(string folder, string filename, BlockNumber start_block)
         {
-            throw new NotImplementedException();
+            return new[]
+            {
+                $"LS0 = \"{CombinePaths(folder, filename)}\"",
+                $"M4026[0, {start_block}]"
+            };
         }
     }
 }

@@ -94,10 +94,15 @@ namespace Flux.ViewModels
             var no_error_probe = Offsets.Connect()
                 .TrueForAny(p => p.WhenAnyValue(o => o.ProbeState), s => s != FluxProbeState.ERROR_PROBE);
 
+            var no_partprogram = Flux.StatusProvider
+                .WhenAnyValue(s => s.PrintingEvaluation)
+                .Select(p => !p.CurrentPartProgram.HasValue);
+
             var can_probe = Observable.CombineLatest(
                 can_safe_start,
                 no_error_probe,
-                (s, p) => s && p);
+                no_partprogram,
+                (s, p, pp) => s && p && pp);
 
             var is_idle = Flux.StatusProvider
                 .WhenAnyValue(e => e.StatusEvaluation)
@@ -201,6 +206,8 @@ namespace Flux.ViewModels
 
             foreach (var offset in sorted_valid_offsets)
                 await offset.ProbeOffsetAsync();
+
+            await Flux.ConnectionProvider.CancelPrintAsync(true);
         }
     }
 

@@ -29,14 +29,17 @@ namespace Flux.ViewModels
         }
         public override Task<bool> ResetClampAsync() => Task.FromResult(false);
         protected override Task RollConnectionAsync(CancellationToken ct) => Task.CompletedTask;
-        public override GCodeString GenerateEndMCodeLines(MCode mcode, Optional<ushort> queue_size) => default;
 
-        public override GCodeString GenerateStartMCodeLines(MCode mcode)
+        public override GCodeString GenerateStartMCodeLines()
         {
             throw new NotImplementedException();
         }
-
-        public override InnerQueueGCodes GenerateInnerQueue(string folder, Job job, MCodePartProgram part_program)
+        public override GCodeString GenerateEndMCodeLines(Optional<ushort> queue_size) => default;
+        public override Optional<FLUX_MCodeRecovery> GetMCodeRecoveryFromSource(MCodeKey mcode, Optional<string> value)
+        {
+            throw new NotImplementedException();
+        }
+        public override InnerQueueGCodes GenerateInnerQueue(string folder, Job job, MCodePartProgramPreview part_program)
         {
             throw new NotImplementedException();
         }
@@ -68,6 +71,7 @@ namespace Flux.ViewModels
 
     public class Dummy_VariableStore : FLUX_VariableStore<Dummy_VariableStore, Dummy_ConnectionProvider>
     {
+        public override FLUX_AxisMoveTransform MoveTransform => throw new NotImplementedException();
         public Dummy_VariableStore(Dummy_ConnectionProvider connection_provider) : base(connection_provider)
         {
             CreateDummy(s => s.AXIS_ENDSTOP);
@@ -92,6 +96,14 @@ namespace Flux.ViewModels
             CreateDummy(s => s.TEMP_TOOL);
         }
 
+        public override ushort ArrayBase => throw new NotImplementedException();
+
+        public override bool CanMeshProbePlate => throw new NotImplementedException();
+
+        public override bool ParkToolAfterOperation => throw new NotImplementedException();
+
+        public override char FeederAxis => throw new NotImplementedException();
+
         private void CreateDummy<TRData, TWData>(Expression<Func<Dummy_VariableStore, IFLUX_Array<TRData, TWData>>> array_expression)
         {
             var array_setter = this.GetCachedSetterDelegate(array_expression);
@@ -109,12 +121,10 @@ namespace Flux.ViewModels
         public override string QueuePath => throw new NotImplementedException();
         public override string MacroPath => throw new NotImplementedException();
         public override string EventPath => throw new NotImplementedException();
-        public override ushort ArrayBase => throw new NotImplementedException();
         public override string StoragePath => throw new NotImplementedException();
         public override string JobEventPath => throw new NotImplementedException();
         public override string InnerQueuePath => throw new NotImplementedException();
         public override string ExtrusionEventPath => throw new NotImplementedException();
-        public override bool ParkToolAfterOperation => throw new NotImplementedException();
 
         public Dummy_Connection(Dummy_ConnectionProvider connection_provider) : base(connection_provider)
         {
@@ -159,35 +169,11 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override GCodeString GetRelativeEMovementGCode(double distance, double feedrate)
-        {
-            throw new NotImplementedException();
-        }
-
-        public override GCodeString GetRelativeXMovementGCode(double distance, double feedrate)
-        {
-            throw new NotImplementedException();
-        }
-
-        public override GCodeString GetRelativeYMovementGCode(double distance, double feedrate)
-        {
-            throw new NotImplementedException();
-        }
-
-        public override GCodeString GetRelativeZMovementGCode(double distance, double feedrate)
-        {
-            throw new NotImplementedException();
-        }
-
         public override GCodeString GetSelectToolGCode(ArrayIndex position)
         {
             throw new NotImplementedException();
         }
 
-        public override GCodeString GetSetToolTemperatureGCode(ArrayIndex position, double temperature)
-        {
-            throw new NotImplementedException();
-        }
 
         public override Task<Optional<FLUX_FileList>> ListFilesAsync(string folder, CancellationToken ct)
         {
@@ -218,7 +204,7 @@ namespace Flux.ViewModels
             GCodeString source = default,
             GCodeString start = default,
             GCodeString end = default,
-            Optional<uint> source_blocks = default,
+            Optional<BlockNumber> source_blocks = default,
             Action<double> report_progress = null)
         {
             throw new NotImplementedException();
@@ -268,15 +254,6 @@ namespace Flux.ViewModels
         {
             throw new NotImplementedException();
         }
-        public override GCodeString GetManualFilamentInsertGCode(ArrayIndex position, double iteration_distance, double feedrate)
-        {
-            throw new NotImplementedException();
-        }
-
-        public override GCodeString GetManualFilamentExtractGCode(ArrayIndex position, ushort iterations, double iteration_distance, double feedrate)
-        {
-            throw new NotImplementedException();
-        }
 
         public override Task<bool> ConnectAsync()
         {
@@ -312,10 +289,6 @@ namespace Flux.ViewModels
         {
             throw new NotImplementedException();
         }
-        public override Task<bool> StartAsync(string folder, string filename)
-        {
-            throw new NotImplementedException();
-        }
 
         public override Task<bool> ExecuteParamacroAsync(GCodeString paramacro, CancellationToken put_ct, bool can_cancel = false)
         {
@@ -328,6 +301,41 @@ namespace Flux.ViewModels
         }
 
         public override Task<bool> CancelAsync()
+        {
+            throw new NotImplementedException();
+        }
+
+        public override GCodeString GetFilamentSensorSettingsGCode(ArrayIndex position, bool enabled)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override GCodeString GetSetToolTemperatureGCode(ArrayIndex position, double temperature, bool wait)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override GCodeString GetSetPlateTemperatureGCode(ArrayIndex position, double temperature, bool wait)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override GCodeString GetSetChamberTemperatureGCode(ArrayIndex position, double temperature, bool wait)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override GCodeString GetStartPartProgramGCode(string folder, string filename, BlockNumber start_block)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override GCodeString GetMovementGCodeInner(FLUX_AxisMove axis_move)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override GCodeString GetResetPositionGCodeInner(FLUX_AxisMove axis_move)
         {
             throw new NotImplementedException();
         }

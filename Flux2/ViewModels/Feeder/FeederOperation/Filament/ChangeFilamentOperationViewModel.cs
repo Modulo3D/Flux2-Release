@@ -42,7 +42,11 @@ namespace Flux.ViewModels
         {
             Material = material;
 
-            var before_gear_key = Flux.ConnectionProvider.GetArrayUnit(m => m.FILAMENT_BEFORE_GEAR, material.Position);
+            var variable_store = Flux.ConnectionProvider.VariableStoreBase;
+            var feeder_index = ArrayIndex.FromZeroBase(Feeder.Position, variable_store);
+            var material_index = ArrayIndex.FromZeroBase(Material.Position, variable_store);
+
+            var before_gear_key = Flux.ConnectionProvider.GetArrayUnit(m => m.FILAMENT_BEFORE_GEAR, material_index);
             _WirePresenceBeforeGear = Flux.ConnectionProvider.ObserveVariable(
                 m => m.FILAMENT_BEFORE_GEAR,
                 before_gear_key)
@@ -50,7 +54,7 @@ namespace Flux.ViewModels
                 .ToProperty(this, v => v.WirePresenceBeforeGear)
                 .DisposeWith(Disposables);
 
-            var after_gear_key = Flux.ConnectionProvider.GetArrayUnit(m => m.FILAMENT_AFTER_GEAR, material.Position);
+            var after_gear_key = Flux.ConnectionProvider.GetArrayUnit(m => m.FILAMENT_AFTER_GEAR, material_index);
             _WirePresenceAfterGear = Flux.ConnectionProvider.ObserveVariable(
                 m => m.FILAMENT_AFTER_GEAR,
                 after_gear_key)
@@ -58,7 +62,7 @@ namespace Flux.ViewModels
                 .ToProperty(this, v => v.WirePresenceAfterGear)
                 .DisposeWith(Disposables);
 
-            var on_head_key = Flux.ConnectionProvider.GetArrayUnit(m => m.FILAMENT_ON_HEAD, Feeder.Position);
+            var on_head_key = Flux.ConnectionProvider.GetArrayUnit(m => m.FILAMENT_ON_HEAD, feeder_index);
             _WirePresenceOnHead = Flux.ConnectionProvider.ObserveVariable(
                 m => m.FILAMENT_ON_HEAD,
                 on_head_key)
@@ -79,15 +83,17 @@ namespace Flux.ViewModels
                 if (!await Flux.ConnectionProvider.StopAsync())
                     return false;
 
+                var variable_store = Flux.ConnectionProvider.VariableStoreBase;
+                var feeder_index = ArrayIndex.FromZeroBase(Feeder.Position, variable_store);
+
                 using var put_cancel_filament_op_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 using var wait_cancel_filament_op_cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
-                if (!await Flux.ConnectionProvider.ExecuteParamacroAsync(f => cancel_filament_operation(f)(Feeder.Position), put_cancel_filament_op_cts.Token, true, wait_cancel_filament_op_cts.Token))
+                if (!await Flux.ConnectionProvider.ExecuteParamacroAsync(f => cancel_filament_operation(f)(feeder_index), put_cancel_filament_op_cts.Token, true, wait_cancel_filament_op_cts.Token))
                 {
                     Flux.Messages.LogMessage(MaterialChangeResult.MATERIAL_CHANGE_ERROR_PARAMACRO, default);
                     return false;
                 }
 
-                Flux.Navigator.NavigateBack();
                 return true;
             }
             catch (Exception ex)

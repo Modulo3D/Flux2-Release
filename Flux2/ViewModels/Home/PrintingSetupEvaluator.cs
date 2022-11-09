@@ -60,13 +60,13 @@ namespace Flux.ViewModels
             var queue_pos = Flux.ConnectionProvider.ObserveVariable(c => c.QUEUE_POS);
 
             var db_changed = Flux.DatabaseProvider.WhenAnyValue(v => v.Database);
-            var eval_changed = FeederEvaluator.WhenAnyValue(e => e.FeederReportQueue);
+            var report_queue = FeederEvaluator.WhenAnyValue(e => e.FeederReportQueue);
 
             _ExpectedDocumentQueue = Observable.CombineLatest(
                 queue,
                 queue_pos,
                 db_changed,
-                eval_changed,
+                report_queue,
                 (q, p, db, f) => GetExpectedDocumentQueue(q, p, db, f))
                 .ToProperty(this, v => v.ExpectedDocumentQueue);
 
@@ -80,7 +80,7 @@ namespace Flux.ViewModels
                     .ConvertMany(t => t.WhenAnyValue(t => t.Document)),
                 this.WhenAnyValue(v => v.TagViewModel)
                     .ConvertMany(t => t.WhenAnyValue(t => t.State)),
-                eval_changed,
+                report_queue,
                 GetInvalid)
                 .ToProperty(this, e => e.IsInvalid);
 
@@ -95,13 +95,13 @@ namespace Flux.ViewModels
             _HasLowWeight = Observable.CombineLatest(
                 this.WhenAnyValue(v => v.ExpectedWeight),
                 this.WhenAnyValue(v => v.CurrentWeight),
-                eval_changed,
+                report_queue,
                 LowWeight)
                 .ToProperty(this, v => v.HasLowWeight);
 
             _HasEmptyWeight = Observable.CombineLatest(
                this.WhenAnyValue(v => v.CurrentWeight),
-               eval_changed,
+               report_queue,
                EmptyWeight)
                .ToProperty(this, v => v.HasEmptyWeight);
         }
@@ -121,12 +121,14 @@ namespace Flux.ViewModels
                 if (!job_queue.HasValue)
                     return default;
 
-                var start_queue_pos = queue_position.ValueOr(() => 0);
-                if (start_queue_pos < 0)
-                    start_queue_pos = 0;
+                if (!queue_position.HasValue)
+                    return default;
+
+                if (queue_position.Value < 0)
+                    return default;
 
                 var job_key = job_queue.Value
-                    .LookupOptional(start_queue_pos)
+                    .Lookup(queue_position.Value)
                     .Convert(j => j.Job.JobKey);
                 
                 if (!job_key.HasValue)
@@ -211,6 +213,7 @@ namespace Flux.ViewModels
         {
             if (!report_queue.HasValue)
                 return true;
+
             if (report_queue.Value.Count == 0)
                 return false;
 
@@ -407,17 +410,20 @@ namespace Flux.ViewModels
         private bool ColdNozzle(PrintingEvaluation evaluation, Optional<FLUX_Temp> plc_temp)
         {
             var tool_index = evaluation.CurrentPartProgram
-                .Convert(pp => pp.ToolIndex);
+                .Convert(pp => pp.Recovery)
+                .Convert(r => r.ToolIndex);
             if (!tool_index.HasValue)
                 return false;
 
             var temperature = evaluation.CurrentPartProgram
-                .Convert(pp => pp.Temperature);
+                .Convert(pp => pp.Recovery)
+                .Convert(pp => pp.ToolTemperatures)
+                .Convert(tt => tt.LookupOptional(tool_index));
             if (!temperature.HasValue)
                 return false;
 
-            var variable_access = (IFLUX_VariableAccess)Flux.ConnectionProvider;
-            var tool_number = tool_index.Value.GetZeroBaseIndex(variable_access.ToOptional());
+            var variable_store = Flux.ConnectionProvider.VariableStoreBase;
+            var tool_number = tool_index.Value.GetZeroBaseIndex();
 
             if (tool_number != Feeder.Position)
                 return false;
@@ -430,17 +436,20 @@ namespace Flux.ViewModels
         private Optional<double> TargetTemp(PrintingEvaluation evaluation)
         {
             var tool_index = evaluation.CurrentPartProgram
+                .Convert(pp => pp.Recovery)
                 .Convert(pp => pp.ToolIndex);
             if (!tool_index.HasValue)
                 return default;
 
             var temperature = evaluation.CurrentPartProgram
-                .Convert(pp => pp.Temperature);
+                .Convert(pp => pp.Recovery)
+                .Convert(pp => pp.ToolTemperatures)
+                .Convert(tt => tt.LookupOptional(tool_index));
             if (!temperature.HasValue)
                 return default;
 
-            var variable_access = (IFLUX_VariableAccess)Flux.ConnectionProvider;
-            var tool_number = tool_index.Value.GetZeroBaseIndex(variable_access.ToOptional());
+            var variable_store = Flux.ConnectionProvider.VariableStoreBase;
+            var tool_number = tool_index.Value.GetZeroBaseIndex();
 
             if (tool_number != Feeder.Position)
                 return default;
@@ -470,10 +479,14 @@ namespace Flux.ViewModels
             {
                 if (!job_queue.HasValue)
                     return default;
+
                 if (!queue_pos.HasValue)
                     return default;
 
                 var feeder_report_queue = new FeederReportQueue();
+                if (queue_pos.Value < 0)
+                    return feeder_report_queue;
+
                 foreach (var job_partprograms in job_queue.Value.Values)
                 {
                     if (job_partprograms.Job.QueuePosition < queue_pos.Value)

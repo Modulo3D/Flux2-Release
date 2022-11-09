@@ -72,7 +72,6 @@ namespace Flux.ViewModels
 
         public override void Initialize()
         {
-            base.Initialize();
             InvalidValues = Flux.StatusProvider.FeederEvaluators.Connect().RemoveKey()
                 .AutoRefresh(line => line.Material.HasLowWeight)
                 .Filter(line => line.Material.HasLowWeight)
@@ -83,6 +82,8 @@ namespace Flux.ViewModels
             _CanStartWithInvalidValues = Flux.StatusProvider.FeederEvaluators.Connect()
                 .TrueForAny(line => line.Material.WhenAnyValue(m => m.HasEmptyWeight), e => e)
                 .ToProperty(this, v => v.CanStartWithInvalidValues);
+            
+            base.Initialize();
         }
 
         public override void StartWithInvalidValues()

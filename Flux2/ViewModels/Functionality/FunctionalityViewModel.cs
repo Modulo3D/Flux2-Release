@@ -262,10 +262,10 @@ namespace Flux.ViewModels
                 .ObservableOr(() => true)
                 .ToOptional();
 
-            if (Flux.ConnectionProvider.HasToolChange)
+            if (Flux.ConnectionProvider.VariableStoreBase.HasToolChange)
                 AddModal(Flux.Functionality.Magazine);
 
-            if (Flux.ConnectionProvider.HasVariable(c => c.DISABLE_24V))
+            if (Flux.ConnectionProvider.VariableStoreBase.HasVariable(c => c.DISABLE_24V))
                 AddCommand("power", ShutdownAsync, can_execute: IS_IDLE);
 
             AddCommand("cleanPlate", CleanPlate);
@@ -308,7 +308,7 @@ namespace Flux.ViewModels
                     },
                     advanced_mode_source));
 
-            AddModal(() => new TemperaturesViewModel(Flux));
+            AddModal(Flux.Temperatures);
             AddCommand("resetPrinter", Flux.ConnectionProvider.StartConnection, visible: advanced_mode);
             AddCommand("vacuumPump", m => m.ENABLE_VACUUM, can_execute: IS_IDLE, visible: advanced_mode);
             AddCommand("openClamp", m => m.OPEN_HEAD_CLAMP, can_execute: IS_IDLE, visible: advanced_mode);
@@ -383,6 +383,9 @@ namespace Flux.ViewModels
                 {
                     Clear();
 
+                    if (Flux.ConnectionProvider.VariableStoreBase.CanMeshProbePlate)
+                        AddModal(() => new HeightmapViewModel(Flux));
+
                     AddCommand(
                         "homePrinter",
                         () => Flux.ConnectionProvider.HomeAsync(),
@@ -409,13 +412,14 @@ namespace Flux.ViewModels
                         Flux.ConnectionProvider.ParkToolAsync,
                         can_execute: IS_IEHS);
 
+                    var variable_store = Flux.ConnectionProvider.VariableStoreBase;
                     if (extruders.HasValue)
                     {
-                        for (ushort extruder = 0; extruder < extruders.Value.machine_extruders; extruder++)
+                        for (var extruder = ArrayIndex.FromZeroBase(0, variable_store); extruder.GetZeroBaseIndex() < extruders.Value.machine_extruders; extruder++)
                         {
                             var extr = extruder;
                             AddCommand(
-                                $"selectExtruder??{extr + 1}",
+                                $"selectExtruder??{extr.GetZeroBaseIndex() + 1}",
                                 () => Flux.ConnectionProvider.SelectToolAsync(extr),
                                 can_execute: IS_IEHS);
                         }
@@ -423,13 +427,13 @@ namespace Flux.ViewModels
 
                     if (extruders.HasValue)
                     {
-                        if (Flux.ConnectionProvider.HasToolChange)
+                        if (Flux.ConnectionProvider.VariableStoreBase.HasToolChange)
                         {
-                            for (ushort extruder = 0; extruder < extruders.Value.machine_extruders; extruder++)
+                            for (var extruder = ArrayIndex.FromZeroBase(0, variable_store); extruder.GetZeroBaseIndex() < extruders.Value.machine_extruders; extruder++)
                             {
                                 var extr = extruder;
                                 AddCommand(
-                                    $"probeMagazine??{extr + 1}",
+                                    $"probeMagazine??{extr.GetZeroBaseIndex() + 1}",
                                     () => Flux.ConnectionProvider.ProbeMagazineAsync(extr),
                                     can_execute: IS_IEHS,
                                     visible: advanced_mode);

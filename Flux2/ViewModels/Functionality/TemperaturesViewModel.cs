@@ -25,9 +25,12 @@ namespace Flux.ViewModels
         {
             if (extruders.HasValue)
             {
+                var variable_store = Flux.ConnectionProvider.VariableStoreBase;
+                
                 for (ushort i = 0; i < extruders.Value.machine_extruders; i++)
                 {
-                    var extr_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TEMP_TOOL, i);
+                    var extr_index = ArrayIndex.FromZeroBase(i, variable_store);
+                    var extr_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TEMP_TOOL, extr_index);
                     var extr_temp = Flux.ConnectionProvider.GetVariable(m => m.TEMP_TOOL, extr_key);
                     if (!extr_temp.HasValue)
                         continue;

@@ -399,7 +399,10 @@ namespace Flux.ViewModels
             if (!ProbeOffsetKey.HasValue)
                 return;
 
-            var offset_z = await Flux.ConnectionProvider.ProbeOffsetAsync(Feeder.Position);
+            var variable_store = Flux.ConnectionProvider.VariableStoreBase;
+            var feeder_index = ArrayIndex.FromZeroBase(Feeder.Position, variable_store);
+
+            var offset_z = await Flux.ConnectionProvider.ProbeOffsetAsync(feeder_index);
             if (!offset_z.HasValue)
                 return;
 

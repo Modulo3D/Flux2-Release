@@ -72,6 +72,7 @@ namespace Flux.ViewModels
                 Flux.StatusProvider.WhenAnyValue(v => v.StartEvaluation),
                 Flux.StatusProvider.WhenAnyValue(v => v.PrintingEvaluation),
                 GetHomeViewModel)
+                .Throttle(TimeSpan.FromSeconds(0.25))
                 .ToProperty(this, h => h.HomePhase);
         }
 

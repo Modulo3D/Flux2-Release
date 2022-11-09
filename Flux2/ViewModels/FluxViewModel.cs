@@ -117,6 +117,7 @@ namespace Flux.ViewModels
         public StatusBarViewModel StatusBar { get; private set; }
         public CalibrationViewModel Calibration { get; private set; }
         public FunctionalityViewModel Functionality { get; private set; }
+        public Lazy<TemperaturesViewModel> Temperatures { get; private set; }
         public NetProvider NetProvider { get; private set; }
         public StatsProvider StatsProvider { get; private set; }
         public StatusProvider StatusProvider { get; private set; }
@@ -219,6 +220,7 @@ namespace Flux.ViewModels
                     Navigator       = new FluxNavigatorViewModel(this);
                     LoggingProvider = new LoggingProvider(this);
                     Startup         = new StartupViewModel(this);
+                    Temperatures    = new Lazy<TemperaturesViewModel>(() => new TemperaturesViewModel(this));
 
                     var main_lock_unit = ConnectionProvider.GetArrayUnit(m => m.OPEN_LOCK, "main.lock");
                     _LeftIconForeground = ConnectionProvider.ObserveVariable(m => m.OPEN_LOCK, main_lock_unit)
@@ -411,6 +413,28 @@ namespace Flux.ViewModels
         {
             using var dialog = get_dialog(this);
             return await dialog.ShowAsync();
+        }
+        public async Task<ContentDialogResult> ShowModalDialogAsync<T>(Func<FluxViewModel, T> get_route) where T : IFluxRoutableViewModel
+        {
+            return await ShowContentDialogAsync(f =>
+            {
+                var route = get_route(this);
+                var dialog = new ContentDialog(f, route.Name,
+                    can_cancel: Observable.Return(true).ToOptional());
+                dialog.AddContent(route, disposeOnParentDispose:false);
+                return dialog;
+            });
+        }
+        public async Task<ContentDialogResult> ShowModalDialogAsync<T>(Func<FluxViewModel, Lazy<T>> get_route) where T : IFluxRoutableViewModel
+        {
+            return await ShowContentDialogAsync(f =>
+            {
+                var route = get_route(this);
+                var dialog = new ContentDialog(f, route.Value.Name,
+                    can_cancel: Observable.Return(true).ToOptional());
+                dialog.AddContent(route.Value, disposeOnParentDispose: false);
+                return dialog;
+            });
         }
         public async Task<ContentDialogResult> ShowConfirmDialogAsync(string title, string content)
         {

@@ -164,12 +164,12 @@ namespace Flux.ViewModels
             RRFObjectModel = new RRF_ObjectModel();
 
             TaskTimeout = TimeSpan.FromSeconds(10);
-            RequestTimeout = TimeSpan.FromMilliseconds(300);
+            RequestTimeout = TimeSpan.FromMilliseconds(500);
 
-            var ultra_fast = TimeSpan.FromMilliseconds(100);
-            var fast = TimeSpan.FromMilliseconds(250);
-            var medium = TimeSpan.FromMilliseconds(350);
-            var slow = TimeSpan.FromMilliseconds(500);
+            var ultra_fast = TimeSpan.FromMilliseconds(200);
+            var fast = TimeSpan.FromMilliseconds(350);
+            var medium = TimeSpan.FromMilliseconds(500);
+            var slow = TimeSpan.FromMilliseconds(750);
             var job = TimeSpan.FromSeconds(5);
             var extrusion = TimeSpan.FromSeconds(5);
 

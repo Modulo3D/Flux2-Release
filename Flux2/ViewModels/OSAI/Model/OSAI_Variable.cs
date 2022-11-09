@@ -19,16 +19,26 @@ namespace Flux.ViewModels
         ULTRALOW,
         ULTRAHIGH,
     }
-    public interface IOSAI_ObservableVariable
+    public interface IOSAI_AddressVariable
     {
         IOSAI_Address Address { get; }
+    }
+    public interface IOSAI_ObservableVariable : IOSAI_AddressVariable
+    {
     }
     public interface IOSAI_AsyncVariable : IFLUX_AsyncVariable
     {
         OSAI_ReadPriority Priority { get; }
     }
 
-    public class OSAI_AsyncVariable<TRData, TWData> : FLUX_AsyncVariable<OSAI_ConnectionProvider, TRData, TWData>, IOSAI_AsyncVariable
+    public interface IOSAI_ObservableVariable<TRData, TWData> : IOSAI_ObservableVariable
+    {
+    }
+    public interface IOSAI_AsyncVariable<TRData, TWData> : IOSAI_AsyncVariable
+    {
+    }
+
+    public class OSAI_AsyncVariable<TRData, TWData> : FLUX_AsyncVariable<OSAI_ConnectionProvider, TRData, TWData>, IOSAI_AsyncVariable<TRData, TWData>
     {
         public OSAI_ReadPriority Priority { get; }
         public OSAI_AsyncVariable(
@@ -42,7 +52,7 @@ namespace Flux.ViewModels
             Priority = priority;
         }
     }
-    public class OSAI_ObservableVariable<TRData, TWData> : FLUX_ObservableVariable<OSAI_ConnectionProvider, TRData, TWData>, IOSAI_ObservableVariable
+    public class OSAI_ObservableVariable<TRData, TWData> : FLUX_ObservableVariable<OSAI_ConnectionProvider, TRData, TWData>, IOSAI_ObservableVariable<TRData, TWData>
     {
         public IOSAI_Address Address { get; }
         public override string Group { get; }
@@ -124,10 +134,10 @@ namespace Flux.ViewModels
             : base(connection_provider, name, address,
                 observe_func: m => m.ObserveWordVar(address)
                     .Convert(s => ShortConverter.Convert(s))
-                    .Convert(s => (ArrayIndex)(s, connection_provider)),
+                    .Convert(s => ArrayIndex.FromArrayBase(s, connection_provider.VariableStoreBase)),
                 read_func: c => c.Connection
-                    .ReadShortAsync<ArrayIndex>(address, a => (a, connection_provider)),
-                write_func: (c, v) => c.Connection.WriteVariableAsync(address, v.GetArrayBaseIndex(connection_provider)),
+                    .ReadShortAsync(address, a => ArrayIndex.FromArrayBase(a, connection_provider.VariableStoreBase)),
+                write_func: (c, v) => c.Connection.WriteVariableAsync(address, v.GetArrayBaseIndex()),
                 unit)
         {
         }
@@ -151,9 +161,12 @@ namespace Flux.ViewModels
         }
     }
 
-    public class OSAI_VariableText : OSAI_AsyncVariable<string, string>
+    public class OSAI_VariableText : OSAI_AsyncVariable<string, string>, IOSAI_AddressVariable
     {
         public override string Group { get; }
+        public OSAI_IndexAddress Address { get; }
+        IOSAI_Address IOSAI_AddressVariable.Address => Address;
+
         public OSAI_VariableText(
             OSAI_ConnectionProvider connection_provider,
             string name,
@@ -165,13 +178,39 @@ namespace Flux.ViewModels
                   write_func: (c, v) => c.Connection.WriteVariableAsync(address, v),
                   unit)
         {
+            Address = address;
             Group = $"{address.VarCode}";
         }
     }
 
-    public class OSAI_VariableTemp : OSAI_AsyncVariable<FLUX_Temp, double>
+    public class OSAI_VariableString : OSAI_AsyncVariable<string, string>, IOSAI_AddressVariable
     {
         public override string Group { get; }
+        public OSAI_IndexAddress Address { get; }
+        IOSAI_Address IOSAI_AddressVariable.Address => Address;
+
+        public OSAI_VariableString(
+            OSAI_ConnectionProvider connection_provider,
+            string name,
+            OSAI_IndexAddress address,
+            OSAI_ReadPriority priority,
+            VariableUnit unit = default)
+            : base(connection_provider, name, priority,
+                  read_func: c => c.Connection.ReadTextAsync(address),
+                  write_func: (c, v) => c.Connection.WriteVariableAsync(address, v),
+                  unit)
+        {
+            Address = address;
+            Group = $"{address.VarCode}";
+        }
+    }
+
+    public class OSAI_VariableTemp : OSAI_AsyncVariable<FLUX_Temp, double>, IOSAI_AddressVariable
+    {
+        public override string Group { get; }
+        public OSAI_IndexAddress Address { get; }
+        IOSAI_Address IOSAI_AddressVariable.Address => Address;
+
         public OSAI_VariableTemp(
             OSAI_ConnectionProvider connection_provider,
             string name,
@@ -184,6 +223,7 @@ namespace Flux.ViewModels
                   write_func: (c,v) => write_async(c, v, get_temp_gcode),
                   unit)
         {
+            Address = address;
             Group = $"{address.VarCode}";
         }
 
@@ -207,9 +247,12 @@ namespace Flux.ViewModels
         }
     }
 
-    public abstract class OSAI_VariableNamed<TRData, TWData> : OSAI_AsyncVariable<TRData, TWData>
+    public abstract class OSAI_VariableNamed<TRData, TWData> : OSAI_AsyncVariable<TRData, TWData>, IOSAI_AddressVariable
     {
         public override string Group { get; }
+        public OSAI_NamedAddress Address { get; }
+        IOSAI_Address IOSAI_AddressVariable.Address => Address;
+
         public OSAI_VariableNamed(
             OSAI_ConnectionProvider connection_provider,
             string name,
@@ -220,6 +263,7 @@ namespace Flux.ViewModels
             VariableUnit unit = default)
             : base(connection_provider, name, priority, read_func, write_func, unit)
         {
+            Address = address;
             Group = $"{address.VarCode}";
         }
     }

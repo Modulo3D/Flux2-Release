@@ -16,11 +16,19 @@ namespace Flux.ViewModels
 {
     public class OSAI_VariableStore : FLUX_VariableStore<OSAI_VariableStore, OSAI_ConnectionProvider>
     {
+        public override ushort ArrayBase => 1;
+        public override char FeederAxis => 'A';
+        public override bool CanMeshProbePlate => false;
+        public override bool ParkToolAfterOperation => false;
+        public override FLUX_AxisMoveTransform MoveTransform { get; }
+
         public IFLUX_Variable<OSAI_ProcessMode, OSAI_ProcessMode> PROCESS_MODE { get; set; }
         public IFLUX_Variable<Unit, OSAI_BootMode> BOOT_MODE { get; set; }
         public IFLUX_Variable<OSAI_BootPhase, Unit> BOOT_PHASE { get; set; }
         public IFLUX_Variable<bool, bool> AUX_ON { get; set; }
 
+        public IFLUX_Array<string, string> EXTR_KEY { get; set; }
+        public IFLUX_Variable<string, string> CUR_JOB { get; set; }
         public IFLUX_Array<double, double> HOME_OFFSET { get; set; }
         public IFLUX_Variable<double, double> Y_SAFE_MAX { get; set; }
         public IFLUX_Array<double, double> PURGE_POSITION { get; set; }
@@ -30,6 +38,26 @@ namespace Flux.ViewModels
 
         public OSAI_VariableStore(OSAI_ConnectionProvider connection_provider) : base(connection_provider)
         {
+            MoveTransform = new FLUX_AxisMoveTransform(m =>
+            {
+                var x = m.AxisMove.Lookup('X');
+                var y = m.AxisMove.Lookup('Y');
+                
+                if (x.HasValue != y.HasValue)
+                    return default;
+                
+                if(x.HasValue && y.HasValue)
+                {
+                    var core_x = x.Value + y.Value;
+                    var core_y = x.Value - y.Value;
+
+                    m.AxisMove['X'] = core_x;
+                    m.AxisMove['Y'] = core_y;
+                }
+
+                return m;
+            });
+
             try
             {
                 var chamber_unit    = new VariableUnits("main.chamber");
@@ -43,9 +71,9 @@ namespace Flux.ViewModels
 
                 var model = new OSAI_ModelBuilder(this);
 
-                model.CreateVariable(c => c.QUEUE_POS,      "!Q_POS",       OSAI_ReadPriority.MEDIUM);   
                 model.CreateVariable(c => c.IS_HOMED,       "!IS_HOMED",    OSAI_ReadPriority.HIGH);     
                 model.CreateVariable(c => c.IS_HOMING,      "!IS_HOMING",   OSAI_ReadPriority.HIGH);     
+                model.CreateVariable(c => c.QUEUE_POS,      "!Q_POS",       OSAI_ReadPriority.ULTRAHIGH);   
 
                 model.CreateVariable(c => c.WATCH_VACUUM,   "!WTC_VACUUM",  OSAI_ReadPriority.ULTRALOW); 
                 model.CreateVariable(c => c.Z_BED_HEIGHT,   "!Z_PLATE_H",   OSAI_ReadPriority.ULTRALOW); 
@@ -61,13 +89,14 @@ namespace Flux.ViewModels
                 model.CreateArray(c    => c.Z_PROBE_OFFSET, 4, "!Z_PRB_OF_T",  OSAI_ReadPriority.LOW);    
 
 
-                model.CreateVariable(c => c.JOB_QUEUE,      OSAI_ReadPriority.MEDIUM,    GetJobQueue);           
-                model.CreateVariable(c => c.PROCESS_STATUS, OSAI_ReadPriority.ULTRAHIGH, GetProcessStatusAsync); 
-                model.CreateVariable(c => c.PROCESS_MODE,   OSAI_ReadPriority.ULTRAHIGH, GetProcessModeAsync, SetProcessModeAsync); 
-                model.CreateVariable(c => c.BOOT_PHASE,     OSAI_ReadPriority.ULTRAHIGH, GetBootPhaseAsync);     
-                model.CreateVariable(c => c.BOOT_MODE,      OSAI_ReadPriority.ULTRAHIGH, _ => Task.FromResult(new ValueResult<Unit>(Unit.Default)), SetBootModeAsync);    
-                model.CreateVariable(c => c.PROGRESS,       OSAI_ReadPriority.ULTRAHIGH, _ => Task.FromResult(new ValueResult<ParamacroProgress>(new ParamacroProgress("", 70)))); 
-
+                model.CreateVariable(c => c.JOB_QUEUE,      OSAI_ReadPriority.HIGH,         GetJobQueueAsync);           
+                model.CreateVariable(c => c.BOOT_PHASE,     OSAI_ReadPriority.ULTRAHIGH,    GetBootPhaseAsync);     
+                model.CreateVariable(c => c.PROCESS_STATUS, OSAI_ReadPriority.ULTRAHIGH,    GetProcessStatusAsync); 
+                model.CreateVariable(c => c.MCODE_EVENT,    OSAI_ReadPriority.HIGH,         GetMCodeEventsAsync); 
+                model.CreateVariable(c => c.EXTRUSIONS,     OSAI_ReadPriority.HIGH,         GetExtrusionSetQueueAsync);
+                model.CreateVariable(c => c.PROCESS_MODE,   OSAI_ReadPriority.ULTRAHIGH,    GetProcessModeAsync, SetProcessModeAsync); 
+                model.CreateVariable(c => c.BOOT_MODE,      OSAI_ReadPriority.ULTRAHIGH,    _ => Task.FromResult(new ValueResult<Unit>(Unit.Default)), SetBootModeAsync);    
+                model.CreateVariable(c => c.PROGRESS,       OSAI_ReadPriority.ULTRAHIGH,    GetProgressAsync);
 
                 // GW VARIABLES                                                                                                                                                                                                                                                                              
                 model.CreateVariable(c => c.TOOL_CUR,     (OSAI_VARCODE.GW_CODE, 0)); 
@@ -108,10 +137,12 @@ namespace Flux.ViewModels
                 model.CreateArray(c => c.X_MAGAZINE_POS, 4, (OSAI_VARCODE.L_CODE, 1));
                 model.CreateArray(c => c.Y_MAGAZINE_POS, 4, (OSAI_VARCODE.L_CODE, 18));
 
-                // STRINGS                                                                                                                                                                                                                                                                               
-                model.CreateArray(c => c.TEMP_CHAMBER,  1,  (OSAI_VARCODE.AA_CODE, 0), OSAI_ReadPriority.MEDIUM, (i, t) => $"M4140[{t}, 0]", chamber_unit);
-                model.CreateArray(c => c.TEMP_PLATE,    1,  (OSAI_VARCODE.AA_CODE, 1), OSAI_ReadPriority.MEDIUM, (i, t) => $"M4141[{t}, 0]", plate_unit);
-                model.CreateArray(c => c.TEMP_TOOL,     4,  (OSAI_VARCODE.AA_CODE, 2), OSAI_ReadPriority.MEDIUM, (i, t) => $"M4104[{i + 1}, {t}, 0]");
+                // STRINGS
+                model.CreateVariable(c => c.CUR_JOB,        (OSAI_VARCODE.AA_CODE, 0), OSAI_ReadPriority.MEDIUM);
+                model.CreateArray(c => c.TEMP_CHAMBER,  1,  (OSAI_VARCODE.AA_CODE, 1), OSAI_ReadPriority.MEDIUM, (i, t) => $"M4140[{t}, 0]", chamber_unit);
+                model.CreateArray(c => c.TEMP_PLATE,    1,  (OSAI_VARCODE.AA_CODE, 2), OSAI_ReadPriority.MEDIUM, (i, t) => $"M4141[{t}, 0]", plate_unit);
+                model.CreateArray(c => c.EXTR_KEY,      4,  (OSAI_VARCODE.AA_CODE, 3), OSAI_ReadPriority.MEDIUM);
+                model.CreateArray(c => c.TEMP_TOOL,     4,  (OSAI_VARCODE.AA_CODE, 7), OSAI_ReadPriority.MEDIUM, (i, t) => $"M4104[{i + 1}, {t}, 0]");
 
                 // INPUTS                                                                                                                                                                                                                                                                             
                 model.CreateArray(c => c.LOCK_CLOSED,          2, (OSAI_VARCODE.MW_CODE, 10201), lock_unit);  
@@ -153,7 +184,7 @@ namespace Flux.ViewModels
             }
         }
 
-        private static async Task<ValueResult<JobQueue>> GetJobQueue(OSAI_ConnectionProvider connection_provider)
+        private static async Task<ValueResult<JobQueue>> GetJobQueueAsync(OSAI_ConnectionProvider connection_provider)
         {
             var connection = connection_provider.Connection;
             using var queue_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
@@ -168,33 +199,59 @@ namespace Flux.ViewModels
 
             return FLUX_FileList.GetJobQueue(queue_files.Value, storage_files.Value);
         }
-
-        private static async Task<ValueResult<LineNumber>> GetBlockNumAsync(OSAI_ConnectionProvider connection_provider)
+        private static async Task<ValueResult<ExtrusionSetQueuePreview<ExtrusionMM>>> GetExtrusionSetQueueAsync(OSAI_ConnectionProvider connection_provider)
         {
-            try
-            {
-                var client = connection_provider.Connection.Client;
-                if (client.HasValue)
-                    return default;
+            var connection = connection_provider.Connection;
+            using var queue_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var queue_files = await connection.ListFilesAsync(c => c.ExtrusionEventPath, queue_ctk.Token);
+            if (!queue_files.HasValue)
+                return default;
 
-                var get_blk_num_response = await client.Value.GetBlkNumAsync(OSAI_Connection.ProcessNumber);
-
-                if (!OSAI_Connection.ProcessResponse(
-                    get_blk_num_response.Body.retval,
-                    get_blk_num_response.Body.ErrClass,
-                    get_blk_num_response.Body.ErrNum))
-                    return default;
-
-                return (LineNumber)get_blk_num_response.Body.GetBlkNum.MainActBlk;
-            }
-            catch { return default; }
+            return queue_files.Value.GetExtrusionSetQueue();
         }
+        private static async Task<ValueResult<MCodeEventStoragePreview>> GetMCodeEventsAsync(OSAI_ConnectionProvider connection_provider)
+        {
+            var connection = connection_provider.Connection;
+            using var queue_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var queue_files = await connection.ListFilesAsync(c => c.JobEventPath, queue_ctk.Token);
+            if (!queue_files.HasValue)
+                return default;
+
+            return queue_files.Value.GetMCodeEvents();
+        }
+        private static async Task<ValueResult<ParamacroProgress>> GetProgressAsync(OSAI_ConnectionProvider connection_provider)
+        {
+            var client = connection_provider.Connection.Client;
+            if (!client.HasValue)
+                return default;
+
+            var get_pp_request = new GetActivePartProgramRequest(OSAI_Connection.ProcessNumber);
+            var get_pp_response = await client.Value.GetActivePartProgramAsync(get_pp_request);
+
+            if (!OSAI_Connection.ProcessResponse(
+                get_pp_response.retval,
+                get_pp_response.ErrClass,
+                get_pp_response.ErrNum))
+                return default;
+
+            var get_blk_num_response = await client.Value.GetBlkNumAsync(OSAI_Connection.ProcessNumber);
+
+            if (!OSAI_Connection.ProcessResponse(
+                get_blk_num_response.Body.retval,
+                get_blk_num_response.Body.ErrClass,
+                get_blk_num_response.Body.ErrNum))
+                return default;
+
+            var block_number = new BlockNumber(get_blk_num_response.Body.GetBlkNum.MainActBlk, BlockType.Line);
+            return new ParamacroProgress(get_pp_response.Main, block_number);
+        }
+
         private static async Task<ValueResult<OSAI_BootPhase>> GetBootPhaseAsync(OSAI_ConnectionProvider connection_provider)
         {
             try
             {
                 var client = connection_provider.Connection.Client;
-                if (client.HasValue)
+                if (!client.HasValue)
                     return default;
 
                 var boot_phase_request = new BootPhaseEnquiryRequest();
@@ -215,7 +272,7 @@ namespace Flux.ViewModels
             try
             {
                 var client = connection_provider.Connection.Client;
-                if (client.HasValue)
+                if (!client.HasValue)
                     return default;
 
                 var boot_mode_request = new BootModeRequest((ushort)boot_mode);
@@ -236,7 +293,7 @@ namespace Flux.ViewModels
             try
             {
                 var client = connection_provider.Connection.Client;
-                if (client.HasValue)
+                if (!client.HasValue)
                     return default;
 
                 var process_status_response = await client.Value.GetProcessStatusAsync(OSAI_Connection.ProcessNumber);
@@ -256,7 +313,7 @@ namespace Flux.ViewModels
             try
             {
                 var client = connection_provider.Connection.Client;
-                if (client.HasValue)
+                if (!client.HasValue)
                     return default;
 
                 var process_status_response = await client.Value.GetProcessStatusAsync(OSAI_Connection.ProcessNumber);
@@ -302,7 +359,7 @@ namespace Flux.ViewModels
             try
             {
                 var client = connection_provider.Connection.Client;
-                if (client.HasValue)
+                if (!client.HasValue)
                     return default;
 
                 var set_process_mode_request = new SetProcessModeRequest(OSAI_Connection.ProcessNumber, (ushort)process_mode);
@@ -318,6 +375,7 @@ namespace Flux.ViewModels
                     m => m == process_mode,
                     TimeSpan.FromSeconds(0),
                     TimeSpan.FromSeconds(0.1),
+                    TimeSpan.FromSeconds(0.2),
                     TimeSpan.FromSeconds(1));
             }
             catch { return false; }

@@ -99,6 +99,22 @@ namespace Flux.ViewModels
         }
     }
 
+    public class OSAI_ArrayString : OSAI_Array<OSAI_VariableString, OSAI_IndexAddress, string, string>
+    {
+        public OSAI_ReadPriority Priority { get; }
+        public OSAI_ArrayString(
+            OSAI_ConnectionProvider connection_provider,
+            string name,
+            ushort count,
+            OSAI_IndexAddress address,
+            OSAI_ReadPriority priority,
+            Optional<VariableUnits> custom_unit = default)
+            : base(name, count, address, (name, addr, unit, i) => new OSAI_VariableString(connection_provider, name, addr, priority, unit), custom_unit)
+        {
+            Priority = priority;
+        }
+    }
+
     public class OSAI_ArrayTemp : OSAI_Array<OSAI_VariableTemp, OSAI_IndexAddress, FLUX_Temp, double>
     {
         public OSAI_ReadPriority Priority { get; }

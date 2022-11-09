@@ -113,6 +113,8 @@ namespace Flux.ViewModels
         {
             get 
             {
+                var variable_store = Flux.ConnectionProvider.VariableStoreBase;
+
                 if (!_ClampCondition.HasValue)
                 {
                     var clamp_open = OptionalObservable.CombineLatestOptionalOr(
@@ -121,7 +123,7 @@ namespace Flux.ViewModels
                         Flux.ConnectionProvider.ObserveVariable(m => m.TOOL_CUR).ToOptional(),
                         Flux.ConnectionProvider.ObserveVariable(m => m.OPEN_HEAD_CLAMP),
                         (status, in_change, tool_cur, open) => (status, in_change, tool_cur, open), 
-                        () => (status: FLUX_ProcessStatus.NONE, in_change: false, tool_cur: (ArrayIndex)(-1), open:false));
+                        () => (status: FLUX_ProcessStatus.NONE, in_change: false, tool_cur: ArrayIndex.FromZeroBase(-1, variable_store), open:false));
 
                     var is_idle = Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS)
                         .Convert(data => data == FLUX_ProcessStatus.IDLE)
@@ -130,7 +132,7 @@ namespace Flux.ViewModels
                     _ClampCondition = ConditionViewModel.Create(this, "clamp", clamp_open,
                         (state, value) =>
                         {
-                            var tool_cur = value.tool_cur.GetZeroBaseIndex(default);
+                            var tool_cur = value.tool_cur.GetZeroBaseIndex();
                             var toggle_clamp = state.Create("clamp", c => c.OPEN_HEAD_CLAMP, is_idle);
                             
                             if(value.in_change && value.status == FLUX_ProcessStatus.CYCLE)
@@ -630,8 +632,6 @@ namespace Flux.ViewModels
                         return default;
                     if (!queue_pos.HasValue)
                         return default;
-                    if (queue_pos.Value == -1)
-                        return queue.Value.Lookup(0);
                     return queue.Value.Lookup(queue_pos.Value);
                 });
 
@@ -639,8 +639,9 @@ namespace Flux.ViewModels
                 .Convert(j => j.Job);
 
             var current_partprogram = job_partprograms
-                .Convert(j => j.GetCurrentPartProgram());
-
+                .Convert(j => j.GetCurrentPartProgram())
+                .ConvertMany(pp => Observable.FromAsync(() => pp.GetMCodePartProgramAsync(Flux.ConnectionProvider)));
+                
             var current_mcode_key = current_partprogram
                 .Convert(j => j.MCodeKey);
 
@@ -953,13 +954,20 @@ namespace Flux.ViewModels
             if (!progress.HasValue)
                 return new PrintProgress(0, duration);
 
+            var percentage = progress.Value.GetPercentage(current_mcode.Value.BlockCount).ValueOr(() => 0);
+            var remaining_ticks = ((double)duration.Ticks / 100) * (100 - percentage);
+            var print_progress = new PrintProgress(percentage, new TimeSpan((long)remaining_ticks));
+
             var paramacro_name = progress.Value.Paramacro;
             if (!paramacro_name.Contains($"{current_job.Value.MCodeKey}"))
-                return PrintProgress;
+            {
+                if (PrintProgress.Percentage == 0)
+                    return print_progress;
 
-            var remaining_percentage = 100 - progress.Value.Percentage;
-            var remaining_ticks = ((double)duration.Ticks / 100) * remaining_percentage;
-            return new PrintProgress(progress.Value.Percentage, new TimeSpan((long)remaining_ticks));
+                return PrintProgress;
+            }
+
+            return print_progress;
         }
         private IEnumerable<FeederEvaluator> CreateFeederEvaluator(IQuery<IFluxFeederViewModel, ushort> query)
         {

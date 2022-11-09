@@ -6,6 +6,7 @@ using ReactiveUI;
 using System;
 using System.Collections.Generic;
 using System.Reactive;
+using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
 
@@ -70,6 +71,19 @@ namespace Flux.ViewModels
             FeedersCommand = feeders.Command;
             CalibrationCommand = calibration.Command;
             FunctionalityCommand = functionality.Command;
+
+            this.WhenAnyValue(v => v.CurrentViewModel)
+                .PairWithPreviousValue()
+                .Subscribe(async v =>
+                {
+                    if (v.NewValue.HasValue)
+                    {
+                        await v.NewValue.Value.OnNavigatedFromAsync(v.OldValue);
+                        if (v.OldValue.HasValue)
+                            await v.OldValue.Value.OnNavigateToAsync(v.NewValue.Value);
+                    }
+                })
+                .DisposeWith(Disposables);
         }
 
         public void Navigate<TFluxRoutableViewModel>(TFluxRoutableViewModel route, bool reset = false)
@@ -149,11 +163,12 @@ namespace Flux.ViewModels
             ShowNavBar = show_navbar.ObservableOr(() => false);
         }
 
-        public virtual Task OnNavigatedFromAsync()
+        public virtual Task OnNavigatedFromAsync(Optional<IFluxRoutableViewModel> from)
         {
             return Task.CompletedTask;
         }
-        public virtual Task OnNavigateToAsync()
+
+        public virtual Task OnNavigateToAsync(IFluxRoutableViewModel to)
         {
             return Task.CompletedTask;
         }

@@ -80,6 +80,7 @@ namespace Flux.ViewModels
                 .WhenAnyValue(v => v.PrintingEvaluation)
                 .Select(e => e.CurrentMCode)
                 .Convert(m => m.Name)
+                .Throttle(TimeSpan.FromSeconds(0.25))
                 .ToProperty(this, v => v.SelectedMCodeName);
 
             _PrintProgress = Flux.StatusProvider
@@ -105,6 +106,7 @@ namespace Flux.ViewModels
 
             _ExpectedMaterials = materials
                 .Select(i => i.Select(i => i.ConvertOr(i => i.Name, () => "---")))
+                .Throttle(TimeSpan.FromSeconds(0.25))
                 .ToProperty(this, v => v.ExpectedMaterials);
 
             var nozzle_queue = Flux.StatusProvider.ExpectedNozzlesQueue.Connect()
@@ -116,6 +118,7 @@ namespace Flux.ViewModels
 
             _ExpectedNozzles = nozzles
                 .Select(i => i.Select(i => i.ConvertOr(i => i.Name, () => "---")))
+                .Throttle(TimeSpan.FromSeconds(0.25))
                 .ToProperty(this, v => v.ExpectedNozzles);
         }
 

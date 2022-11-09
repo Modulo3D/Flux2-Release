@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
@@ -95,7 +96,10 @@ namespace Flux.ViewModels
                 Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation).Select(s => s.CanSafeCycle),
                 (can_cycle, conditions) => can_cycle && conditions);
 
-            var tool_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TEMP_TOOL, Feeder.Position);
+            var variable_store = Flux.ConnectionProvider.VariableStoreBase;
+
+            var tool_index = ArrayIndex.FromZeroBase(Feeder.Position, variable_store);
+            var tool_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TEMP_TOOL, tool_index);
             _CurrentTemperature = Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_TOOL, tool_key)
                 .ObservableOrDefault()
                 .ToProperty(this, v => v.CurrentTemperature);
@@ -104,23 +108,57 @@ namespace Flux.ViewModels
                 .ConvertOr(t => t.Percentage, () => 0)
                 .ToProperty(this, v => v.TemperaturePercentage);
 
-            CancelOperationCommand = ReactiveCommand.CreateFromTask(CancelOperationAsync, can_cancel);
+            CancelOperationCommand = ReactiveCommand.CreateFromTask(SafeCancelOperationAsync, can_cancel);
             ExecuteOperationCommand = ReactiveCommand.CreateFromTask(SafeExecuteOperationAsync, can_execute);
         }
 
         public abstract Task UpdateNFCAsync();
 
-        protected abstract Task CancelOperationAsync();
+        protected abstract Task<bool> CancelOperationAsync();
+        private async Task SafeCancelOperationAsync()
+        {
+            var (result, success) = await SafeExecuteAsync(CancelOperationAsync);
+            if (result.HasValue && result.Value && success)
+                Flux.Navigator.NavigateBack();
+        }
         protected abstract IObservable<bool> CanCancelOperation();
 
         protected abstract Task<bool> ExecuteOperationAsync();
         private async Task SafeExecuteOperationAsync()
         {
-            var navigate_back = await ExecuteOperationAsync();
-            if (Flux.ConnectionProvider.ParkToolAfterOperation)
-                await Flux.ConnectionProvider.ParkToolAsync();
-            if (navigate_back)
+            var (result, success) = await SafeExecuteAsync(ExecuteOperationAsync);
+            if (result.HasValue && result.Value && success)
                 Flux.Navigator.NavigateBack();
+        }
+
+        private async Task<(Optional<TResult> result, bool success)> SafeExecuteAsync<TResult>(Func<Task<TResult>> execute_task)
+        {
+            var park_tool_gcode = Flux.ConnectionProvider.ConnectionBase.GetParkToolGCode();
+            if (!park_tool_gcode.HasValue)
+                return (default, false);
+
+            var variable_store = Flux.ConnectionProvider.VariableStoreBase;
+            var set_tool_temp_gcode = Flux.ConnectionProvider.ConnectionBase.GetSetToolTemperatureGCode(ArrayIndex.FromZeroBase(Feeder.Position, variable_store), 0, false);
+            if (!set_tool_temp_gcode.HasValue)
+                return (default, false);
+
+            var result = await execute_task();
+
+            using var put_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var wait_cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            var success = await Flux.ConnectionProvider.ExecuteParamacroAsync(c => new GCodeString(get_safe_gcode()), put_cts.Token, true, wait_cts.Token, false);
+
+            return (result, success);
+
+            IEnumerable<string> get_safe_gcode()
+            {
+                foreach (var line in set_tool_temp_gcode)
+                    yield return line;
+
+                if (variable_store.ParkToolAfterOperation)
+                    foreach (var line in park_tool_gcode)
+                        yield return line;
+            }
         }
 
         protected abstract string FindTitleText(bool idle);

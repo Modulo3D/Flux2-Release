@@ -46,7 +46,7 @@ namespace Flux.ViewModels
 
             _SelectedTool = Flux.ConnectionProvider
                 .ObserveVariable(m => m.TOOL_CUR)
-                .Convert(o => o.GetZeroBaseIndex(default))
+                .Convert(o => o.GetZeroBaseIndex())
                 .Convert(o => o.ToOptional(o => o >= 0))
                 .Convert(o => (ushort)o)
                 .ToProperty(this, v => v.SelectedTool)
@@ -63,7 +63,7 @@ namespace Flux.ViewModels
 
         protected async Task ExitAsync()
         {
-            await Flux.ConnectionProvider.ParkPrinterAsync();
+            await Flux.ConnectionProvider.CancelPrintAsync(true);
             Flux.Navigator.NavigateBack();
         }
     }
@@ -166,20 +166,23 @@ namespace Flux.ViewModels
             if (!tool_offset.HasValue)
                 return;
 
+            var variable_store = ManualCalibration.Flux.ConnectionProvider.VariableStoreBase;
+            var tool_index = ArrayIndex.FromZeroBase(Position, variable_store);
+
             using var put_select_tool_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             using var wait_select_tool_cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             await ManualCalibration.Flux.ConnectionProvider.ExecuteParamacroAsync(c =>
             {
                 var gcode = new List<string>();
-                var select_tool_gcode = c.GetSelectToolGCode(Position);
+                var select_tool_gcode = c.GetSelectToolGCode(tool_index);
                 if (!select_tool_gcode.HasValue)
                     return default;
                 
-                var set_tool_temp_gcode = c.GetSetToolTemperatureGCode(Position, print_temperature.Value);
+                var set_tool_temp_gcode = c.GetSetToolTemperatureGCode(tool_index, print_temperature.Value, false);
                 if (!set_tool_temp_gcode.HasValue)
                     return default;
                 
-                var set_tool_offset_gcode = c.GetSetToolOffsetGCode(Position, tool_offset.Value.X, tool_offset.Value.Y, 0);
+                var set_tool_offset_gcode = c.GetSetToolOffsetGCode(tool_index, tool_offset.Value.X, tool_offset.Value.Y, 0);
                 if (!set_tool_offset_gcode.HasValue)
                     return default;
                 
@@ -237,7 +240,9 @@ namespace Flux.ViewModels
                    if (!t.HasValue)
                        return Observable.Return(Optional<FLUX_Temp>.None);
 
-                   var tool_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TEMP_TOOL, t.Value);
+                   var variable_store = Flux.ConnectionProvider.VariableStoreBase;
+                   var tool_index = ArrayIndex.FromZeroBase(t.Value, variable_store);
+                   var tool_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TEMP_TOOL, tool_index);
                    if (!tool_key.HasValue)
                        return Observable.Return(Optional<FLUX_Temp>.None);
 
@@ -337,6 +342,8 @@ namespace Flux.ViewModels
         }
         CmdButton FindMoveButton(double distance, bool can_unsafe_cycle)
         {
+            var variable_store = Flux.ConnectionProvider.VariableStoreBase;
+
             var can_safe_cycle = Flux.StatusProvider
                 .WhenAnyValue(s => s.StatusEvaluation)
                 .Select(e => e.CanSafePrint);
@@ -363,10 +370,10 @@ namespace Flux.ViewModels
 
             return new CmdButton($"Z??{(distance > 0 ? $"+{distance:0.00mm}" : $"{distance:0.00mm}")}", () => move_tool(distance), can_execute);
 
-            async Task move_tool(double d)
+            async Task move_tool(double distance)
             {
                 using var put_relative_movement_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                await Flux.ConnectionProvider.ExecuteParamacroAsync(c => c.GetRelativeZMovementGCode(d, 500), put_relative_movement_cts.Token);
+                await Flux.ConnectionProvider.ExecuteParamacroAsync(c => c.GetMovementGCode(('Z', distance, 500), variable_store.MoveTransform), put_relative_movement_cts.Token);
             }
         }
         private IEnumerable<ManualCalibrationItemViewModel> FindCalibrationItems(Optional<(ushort machine_extruders, ushort mixing_extruders)> extruders, IObservable<bool> not_executing)
