@@ -1,5 +1,5 @@
 ﻿using DynamicData;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Linq;

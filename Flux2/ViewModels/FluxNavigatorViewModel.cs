@@ -1,7 +1,6 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Modulo3DDatabase;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
@@ -48,7 +47,7 @@ namespace Flux.ViewModels
             Routes = new SourceList<INavButton>();
             PreviousViewModels = new Stack<IFluxRoutableViewModel>();
 
-            var home = new NavButton<HomeViewModel>(Flux, Flux.Home, reset:true);
+            var home = new NavButton<HomeViewModel>(Flux, Flux.Home, reset: true);
             var storage = new NavButton<MCodesViewModel>(Flux, Flux.MCodes, reset: true);
             var feeders = new NavButton<FeedersViewModel>(Flux, Flux.Feeders, reset: true);
             var calibration = new NavButton<CalibrationViewModel>(Flux, Flux.Calibration, reset: true);

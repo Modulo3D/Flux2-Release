@@ -1,11 +1,8 @@
 ﻿using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
-using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Reactive.Linq;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
@@ -36,7 +33,7 @@ namespace Flux.ViewModels
                     Material.NFCSlot.StoreTag(m => m.SetCurWeight(default));
             }
 
-            if(!Flux.ConnectionProvider.HasVariable(c => c.FILAMENT_ON_HEAD))
+            if (!Flux.ConnectionProvider.HasVariable(c => c.FILAMENT_ON_HEAD))
                 Material.SetMaterialLoaded(false);
 
             return false;
@@ -76,7 +73,7 @@ namespace Flux.ViewModels
         public override async Task<bool> UpdateNFCAsync()
         {
             var result = await Flux.UseReader(Material, (h, m) => m.UnlockTagAsync(h));
-            if(result)
+            if (result)
                 Flux.Navigator.NavigateBack();
             return result;
         }

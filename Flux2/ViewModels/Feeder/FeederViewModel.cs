@@ -1,12 +1,9 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Modulo3DDatabase;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Reactive;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
 
@@ -61,7 +58,7 @@ namespace Flux.ViewModels
         {
             Feeders = feeders;
             Flux = feeders.Flux;
-            Position = position; 
+            Position = position;
             MixingCount = mixing_count;
             ToolNozzle = new ToolNozzleViewModel(feeders, this);
 
@@ -76,8 +73,7 @@ namespace Flux.ViewModels
 
             var selected_positions = Flux.ConnectionProvider
                 .ObserveVariable(c => c.FILAMENT_AFTER_GEAR)
-                .Convert(c => c.QueryWhenChanged())
-                .ToOptionalObservable();
+                .Convert(c => c.QueryWhenChanged());
 
             var materials = Materials.Connect()
                 .QueryWhenChanged();
@@ -88,7 +84,7 @@ namespace Flux.ViewModels
 
             foreach (MaterialViewModel m in Materials.Items)
                 m.Initialize();
-            
+
             ToolNozzle.Initialize();
 
             _FeederState = ToolNozzle.WhenAnyValue(v => v.State)
@@ -102,7 +98,7 @@ namespace Flux.ViewModels
                 .DisposeWith(Disposables);
 
             FeederStateChanged = this.WhenAnyValue(f => f.FeederState);
-            HasInvalidStateChanged = this.WhenAnyValue(f => f.HasInvalidState);     
+            HasInvalidStateChanged = this.WhenAnyValue(f => f.HasInvalidState);
 
             _FeederStateStr = this.WhenAnyValue(v => v.FeederState)
                 .Select(state => state switch
@@ -146,7 +142,7 @@ namespace Flux.ViewModels
         }
 
         private Optional<TViewModel> FindSelectedViewModel<TViewModel>(
-            IQuery<TViewModel, ushort> viewmodels, 
+            IQuery<TViewModel, ushort> viewmodels,
             Optional<(ushort machine_extruders, ushort mixing_extruders)> extruders,
             OptionalChange<IQuery<Optional<bool>, VariableAlias>> wire_presence)
         {
@@ -154,7 +150,7 @@ namespace Flux.ViewModels
                 return default;
             if (!wire_presence.HasChange)
             {
-                if(extruders.Value.mixing_extruders == 1)
+                if (extruders.Value.mixing_extruders == 1)
                     return viewmodels.Lookup(Position);
                 return default;
             }
@@ -163,9 +159,9 @@ namespace Flux.ViewModels
             var wire_range_end = wire_range_start + extruders.Value.mixing_extruders;
 
             var selected_wire = wire_presence.Change.Items
-                .Select((wire, index) => (wire, index:(short)index))
+                .Select((wire, index) => (wire, index: (short)index))
                 .FirstOrOptional(t => t.index >= wire_range_start && t.index < wire_range_end && t.wire == true);
-            
+
             if (!selected_wire.HasValue)
                 return default;
 

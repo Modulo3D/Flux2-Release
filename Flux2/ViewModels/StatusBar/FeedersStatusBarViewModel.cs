@@ -1,12 +1,4 @@
-﻿using DynamicData;
-using DynamicData.Kernel;
-using Modulo3DStandard;
-using ReactiveUI;
-using System;
-using System.Linq;
-using System.Reactive.Linq;
-
-namespace Flux.ViewModels
+﻿namespace Flux.ViewModels
 {
     /*public class FeedersStatusBarViewModel : StatusBarItemViewModel<FeedersStatusBarViewModel>
     {

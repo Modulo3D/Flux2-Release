@@ -1,39 +1,37 @@
 ﻿using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using System.Reactive;
 using System.Runtime.Serialization;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
     [DataContract]
-    public class Heightmap 
+    public class Heightmap
     {
         [DataMember(Name = "axis0")]
         public char Axis0 { get; set; }
-        
+
         [DataMember(Name = "axis1")]
         public char Axis1 { get; set; }
-        
+
         [DataMember(Name = "min0")]
         public double Min0 { get; set; }
-        
+
         [DataMember(Name = "min1")]
         public double Min1 { get; set; }
 
         [DataMember(Name = "max0")]
         public double Max0 { get; set; }
-        
+
         [DataMember(Name = "max1")]
         public double Max1 { get; set; }
-        
+
         [DataMember(Name = "radius")]
         public double Radius { get; set; }
 
@@ -45,7 +43,7 @@ namespace Flux.ViewModels
 
         [DataMember(Name = "num0")]
         public int Num0 { get; set; }
-        
+
         [DataMember(Name = "num1")]
         public int Num1 { get; set; }
 
@@ -62,7 +60,7 @@ namespace Flux.ViewModels
     {
         public Optional<Heightmap> _Heightmap;
         [RemoteOutput(true)]
-        public Optional<Heightmap> Heightmap 
+        public Optional<Heightmap> Heightmap
         {
             get => _Heightmap;
             set => this.RaiseAndSetIfChanged(ref _Heightmap, value);
@@ -128,8 +126,8 @@ namespace Flux.ViewModels
             //var max1 = printer_size.Value.depth - printer_size.Value.border / 2;
             //var spacing_depth = (max1 - min1) / (DepthProbePoints - 1);
 
-            var put_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            var wait_cts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+            using var put_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var wait_cts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
             await Flux.ConnectionProvider.ExecuteParamacroAsync(_ => new[]
             {
                 "T-1",
@@ -145,7 +143,7 @@ namespace Flux.ViewModels
         {
             try
             {
-                var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 var heightmap_csv = await Flux.ConnectionProvider.GetFileAsync("/sys", "heightmap.csv", cts.Token);
                 if (!heightmap_csv.HasValue)
                     return;
@@ -184,7 +182,7 @@ namespace Flux.ViewModels
 
                 Heightmap = heightmap;
             }
-            catch (Exception ex)
+            catch (Exception)
             {
             }
         }

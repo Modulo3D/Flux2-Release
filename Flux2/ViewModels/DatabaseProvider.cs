@@ -1,7 +1,6 @@
 ﻿using DynamicData.Kernel;
 using LiteDB;
-using Modulo3DDatabase;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.IO;
@@ -61,7 +60,7 @@ namespace Flux.ViewModels
                     };
 
                     database = new LocalDatabase(connection);
-                    database.Initialize(Modulo3DStandard.Database.RegisterCuraSlicerDatabase);
+                    database.Initialize(Modulo3DNet.Database.RegisterCuraSlicerDatabase);
 
                     initialize_callback?.Invoke(database);
                     Database = database.ToOptional();

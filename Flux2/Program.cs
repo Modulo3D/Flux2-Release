@@ -1,8 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Modulo3DStandard;
-using System;
 using System.Diagnostics;
 
 namespace Flux.ViewModels
@@ -29,7 +27,7 @@ namespace Flux.ViewModels
                         o.FileSizeLimitBytes = 5242880;
                     });*/
 
-                    if(Debugger.IsAttached)
+                    if (Debugger.IsAttached)
                         logging.AddConsole();
                 })
                 .ConfigureServices((hostContext, services) =>

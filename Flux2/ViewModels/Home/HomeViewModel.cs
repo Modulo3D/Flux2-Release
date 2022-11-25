@@ -1,5 +1,4 @@
-﻿using DynamicData.Kernel;
-using Modulo3DStandard;
+﻿using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Reactive;
@@ -96,12 +95,12 @@ namespace Flux.ViewModels
             if (!status_eval.IsCycle)
             {
                 if (start_eval.HasLowMaterials)
-                    if(!start_eval.StartWithLowMaterials)
+                    if (!start_eval.StartWithLowMaterials)
                         return LowMaterialsPhase;
-                
+
                 if (start_eval.HasLowNozzles)
                     return LowMaterialsPhase;
-                
+
                 if (!status_eval.CanSafePrint)
                     return PreparePrintPhase;
             }

@@ -1,6 +1,6 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
@@ -56,7 +56,7 @@ namespace Flux.ViewModels
                 .Select(f => Observable.FromAsync(() => ListFilesAsync(f)))
                 .Merge(1)
                 .Select(GetFolderContent)
-                .ToObservableChangeSet(f => f.FSName);
+                .AsObservableChangeSet(f => f.FSName);
 
             FileSystem = folderContent
                 .DisposeMany()
@@ -70,7 +70,7 @@ namespace Flux.ViewModels
             var name = new TextBox("name", "Nome del documento", "", false);
 
             var result = await Flux.ShowSelectionAsync(
-                "Cosa vuoi creare?", new IDialogOption[] {options, name});
+                "Cosa vuoi creare?", new IDialogOption[] { options, name });
 
             if (result != ContentDialogResult.Primary)
                 return;
@@ -96,10 +96,10 @@ namespace Flux.ViewModels
         public async Task ModifyFSAsync(IFSViewModel fs)
         {
             var modify_option = ComboOption.Create("operations", "Operazione:", Enum.GetValues<FLUX_FileModify>(), f => (uint)f);
-            
+
             var modify_dialog_result = await Flux.ShowSelectionAsync(
                 "Tipo di operazione", new[] { modify_option });
-            
+
             if (modify_dialog_result != ContentDialogResult.Primary)
                 return;
 
@@ -120,7 +120,7 @@ namespace Flux.ViewModels
                     if (rename_dialog_result != ContentDialogResult.Primary)
                         return;
 
-                    var rename_result = await Flux.ConnectionProvider.RenameAsync(fs.FSPath, fs.FSName, rename_option.Value, true, fs_cts.Token);
+                    var rename_result = await Flux.ConnectionProvider.RenameAsync(fs.FSPath, fs.FSName, rename_option.Value, fs_cts.Token);
                     if (rename_result)
                         UpdateFolder.OnNext(Unit.Default);
                     break;
@@ -130,7 +130,7 @@ namespace Flux.ViewModels
                     if (delete_dialog_result != ContentDialogResult.Primary)
                         return;
 
-                    var delete_result = await Flux.ConnectionProvider.DeleteAsync(fs.FSPath, fs.FSName, true, fs_cts.Token);
+                    var delete_result = await Flux.ConnectionProvider.DeleteAsync(fs.FSPath, fs.FSName, fs_cts.Token);
                     if (delete_result)
                         UpdateFolder.OnNext(Unit.Default);
                     break;
@@ -153,8 +153,8 @@ namespace Flux.ViewModels
             var textbox = new TextBox("source", file.FSName, file_source.Value, multiline: true);
 
             var result = await Flux.ShowSelectionAsync(
-                "Modifica File", new[] { textbox }); 
-            
+                "Modifica File", new[] { textbox });
+
             if (result != ContentDialogResult.Primary)
                 return;
 

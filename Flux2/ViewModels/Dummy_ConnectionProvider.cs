@@ -1,11 +1,8 @@
-﻿using DynamicData;
-using DynamicData.Kernel;
-using Modulo3DStandard;
+﻿using DynamicData.Kernel;
+using Modulo3DNet;
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq.Expressions;
-using System.Reactive;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -30,16 +27,11 @@ namespace Flux.ViewModels
         public override Task<bool> ResetClampAsync() => Task.FromResult(false);
         protected override Task RollConnectionAsync(CancellationToken ct) => Task.CompletedTask;
 
-        public override GCodeString GenerateStartMCodeLines()
-        {
-            throw new NotImplementedException();
-        }
-        public override GCodeString GenerateEndMCodeLines(Optional<ushort> queue_size) => default;
         public override Optional<FLUX_MCodeRecovery> GetMCodeRecoveryFromSource(MCodeKey mcode, Optional<string> value)
         {
             throw new NotImplementedException();
         }
-        public override InnerQueueGCodes GenerateInnerQueue(string folder, Job job, MCodePartProgramPreview part_program)
+        public override Optional<DateTime> ParseDateTime(string date_time)
         {
             throw new NotImplementedException();
         }
@@ -71,6 +63,7 @@ namespace Flux.ViewModels
 
     public class Dummy_VariableStore : FLUX_VariableStore<Dummy_VariableStore, Dummy_ConnectionProvider>
     {
+        public override bool HasPrintUnloader => throw new NotImplementedException();
         public override FLUX_AxisMoveTransform MoveTransform => throw new NotImplementedException();
         public Dummy_VariableStore(Dummy_ConnectionProvider connection_provider) : base(connection_provider)
         {
@@ -83,7 +76,6 @@ namespace Flux.ViewModels
             CreateDummy(s => s.PROCESS_STATUS);
             CreateDummy(s => s.IS_HOMED);
             CreateDummy(s => s.DEBUG);
-            CreateDummy(s => s.QUEUE_SIZE);
             CreateDummy(s => s.QUEUE_POS);
             CreateDummy(s => s.X_USER_OFFSET);
             CreateDummy(s => s.Y_USER_OFFSET);
@@ -126,16 +118,17 @@ namespace Flux.ViewModels
         public override string InnerQueuePath => throw new NotImplementedException();
         public override string ExtrusionEventPath => throw new NotImplementedException();
 
+
         public Dummy_Connection(Dummy_ConnectionProvider connection_provider) : base(connection_provider)
         {
         }
 
-        public override Task<bool> ClearFolderAsync(string folder, bool wait, CancellationToken ct = default)
+        public override Task<bool> ClearFolderAsync(string folder, CancellationToken ct)
         {
             throw new NotImplementedException();
         }
 
-        public override Task<bool> DeleteAsync(string folder, string filename, bool wait, CancellationToken ct)
+        public override Task<bool> DeleteAsync(string folder, string filename, CancellationToken ct)
         {
             throw new NotImplementedException();
         }
@@ -199,7 +192,7 @@ namespace Flux.ViewModels
         public override Task<bool> PutFileAsync(
             string folder,
             string filename,
-            bool is_paramacro, 
+            bool is_paramacro,
             CancellationToken ct,
             GCodeString source = default,
             GCodeString start = default,
@@ -210,7 +203,7 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override Task<bool> RenameAsync(string folder, string old_filename, string new_filename, bool wait, CancellationToken ct = default)
+        public override Task<bool> RenameAsync(string folder, string old_filename, string new_filename, CancellationToken ct)
         {
             throw new NotImplementedException();
         }
@@ -310,17 +303,17 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override GCodeString GetSetToolTemperatureGCode(ArrayIndex position, double temperature, bool wait)
+        protected override GCodeString GetSetToolTemperatureGCodeInner(ArrayIndex position, double temperature, bool wait)
         {
             throw new NotImplementedException();
         }
 
-        public override GCodeString GetSetPlateTemperatureGCode(ArrayIndex position, double temperature, bool wait)
+        protected override GCodeString GetSetPlateTemperatureGCodeInner(ArrayIndex position, double temperature, bool wait)
         {
             throw new NotImplementedException();
         }
 
-        public override GCodeString GetSetChamberTemperatureGCode(ArrayIndex position, double temperature, bool wait)
+        protected override GCodeString GetSetChamberTemperatureGCodeInner(ArrayIndex position, double temperature, bool wait)
         {
             throw new NotImplementedException();
         }
@@ -339,6 +332,16 @@ namespace Flux.ViewModels
         {
             throw new NotImplementedException();
         }
+
+        public override Task<bool> InitializeVariablesAsync(CancellationToken ct)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override InnerQueueGCodes GenerateInnerQueueGCodes(JobPartPrograms job_partprograms)
+        {
+            throw new NotImplementedException();
+        }
     }
     public class Dummy_MemoryBuffer : FLUX_MemoryBuffer<Dummy_ConnectionProvider, Dummy_VariableStore>
     {
@@ -346,7 +349,7 @@ namespace Flux.ViewModels
         public override bool HasFullMemoryRead => false;
         public Dummy_MemoryBuffer(Dummy_ConnectionProvider connection_provider)
         {
-            ConnectionProvider = connection_provider;         
+            ConnectionProvider = connection_provider;
         }
 
         public override void Initialize(Dummy_VariableStore variableStore)

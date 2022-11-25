@@ -1,6 +1,6 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using OSAI;
 using ReactiveUI;
 using System;
@@ -230,7 +230,7 @@ namespace Flux.ViewModels
         private void AddModelReader(Dictionary<OSAI_ReadPriority, IGrouping<OSAI_ReadPriority, IOSAI_AsyncVariable>> variables, OSAI_ReadPriority priority, TimeSpan period)
         {
             var priority_variables = variables.Lookup(priority);
-            if(!priority_variables.HasValue || !priority_variables.Value.Any())
+            if (!priority_variables.HasValue || !priority_variables.Value.Any())
                 return;
 
             var memory_reader = MemoryReaders.Lookup(period);
@@ -279,7 +279,7 @@ namespace Flux.ViewModels
                 var client = ConnectionProvider.Connection.Client;
                 if (!client.HasValue)
                     return default;
-                
+
                 var response = await client.Value.ReadVarDoubleAsync(request);
                 if (OSAI_Connection.ProcessResponse(
                     response.retval,

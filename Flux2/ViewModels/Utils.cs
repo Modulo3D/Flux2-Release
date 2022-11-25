@@ -1,7 +1,6 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Modulo3DDatabase;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
@@ -150,7 +149,7 @@ namespace Flux.ViewModels
 
         public ContentDialog(
             IFlux flux,
-            string title, 
+            string title,
             Func<Task> confirm = default,
             OptionalObservable<bool> can_confirm = default,
             Func<Task> cancel = default,

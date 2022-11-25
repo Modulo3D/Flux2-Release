@@ -1,16 +1,13 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
-using System.Net.NetworkInformation;
-using System.Net.Sockets;
 using System.Reactive;
 using System.Reactive.Linq;
-using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
@@ -63,7 +60,7 @@ namespace Flux.ViewModels
         }
 
         private Optional<int> _StandbyMinutes = 0;
-        [RemoteInput(step:15, min:0, max:120, converter:typeof(StandbyConverter))]
+        [RemoteInput(step: 15, min: 0, max: 120, converter: typeof(StandbyConverter))]
         public Optional<int> StandbyMinutes
         {
             get => _StandbyMinutes;
@@ -78,7 +75,7 @@ namespace Flux.ViewModels
             var database_changed = flux.DatabaseProvider.WhenAnyValue(v => v.Database);
 
             var printer_cache = database_changed.Select(FindPrinters)
-                .ToObservableChangeSet(p => p.ConvertOr(p => p.Id, () => 0));
+                .AsObservableChangeSet(p => p.ConvertOr(p => p.Id, () => 0));
             Printers = OptionalSelectableCache.Create(printer_cache);
 
             var host_address_cache = Flux.SettingsProvider.HostAddressCache

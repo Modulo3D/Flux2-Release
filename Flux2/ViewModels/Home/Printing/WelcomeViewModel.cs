@@ -1,4 +1,4 @@
-﻿using Modulo3DStandard;
+﻿using Modulo3DNet;
 using ReactiveUI;
 using System.Reactive;
 using System.Reactive.Disposables;

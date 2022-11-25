@@ -1,6 +1,6 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Linq;
@@ -46,7 +46,7 @@ namespace Flux.ViewModels
         {
             return (tn.GetDocument<Tool>(db, tn => tn.ToolGuid),
                 tn.GetDocument<Nozzle>(db, tn => tn.NozzleGuid));
-        }, t => t.ToolGuid, pause_on_odometer: false)
+        }, t => t.ToolGuid, watch_odometer_for_pause: false)
         {
             var variable_store = Flux.ConnectionProvider.VariableStoreBase;
             var feeder_index = ArrayIndex.FromZeroBase(Position, variable_store);
@@ -191,9 +191,9 @@ namespace Flux.ViewModels
                         if (mem_trailer.HasChange && mem_trailer.Change != input_trailer.Change)
                             in_change_error = true;
                     }
-                    else 
+                    else
                     {
-                        if(mem_trailer.HasChange)
+                        if (mem_trailer.HasChange)
                             on_trailer = mem_trailer.Change.ValueOr(() => false);
                     }
 

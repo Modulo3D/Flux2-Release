@@ -1,6 +1,6 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Linq;
@@ -26,14 +26,14 @@ namespace Flux.ViewModels
             var tool_material = material.Convert(m => m.ToolMaterial);
 
             _InvalidItemBrush = Observable.CombineLatest(
-               eval.Feeder.ToolNozzle.WhenAnyValue(m => m.NozzleTemperature), 
+               eval.Feeder.ToolNozzle.WhenAnyValue(m => m.NozzleTemperature),
                target_temp,
                (temp, target_temp) =>
                {
                    if (!temp.HasValue)
                        return FluxColors.Error;
                    if (!target_temp.HasValue)
-                       return FluxColors.Error; 
+                       return FluxColors.Error;
                    if (target_temp.ValueOr(() => 0) < target_temp.Value)
                        return FluxColors.Error;
                    var current_temp = temp.Value.Current;

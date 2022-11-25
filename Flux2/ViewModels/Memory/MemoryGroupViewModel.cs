@@ -1,6 +1,6 @@
 ﻿using DynamicData;
 using DynamicData.PLinq;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Linq;

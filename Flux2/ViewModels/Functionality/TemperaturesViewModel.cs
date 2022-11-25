@@ -1,6 +1,6 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System.Collections.Generic;
 using System.Reactive.Linq;
@@ -17,7 +17,7 @@ namespace Flux.ViewModels
             Temperatures = Flux.SettingsProvider
                 .WhenAnyValue(v => v.ExtrudersCount)
                 .Select(FindTemperatures)
-                .ToObservableChangeSet(t => t.Name)
+                .AsObservableChangeSet(t => t.Name)
                 .AsObservableCache();
         }
 
@@ -26,7 +26,7 @@ namespace Flux.ViewModels
             if (extruders.HasValue)
             {
                 var variable_store = Flux.ConnectionProvider.VariableStoreBase;
-                
+
                 for (ushort i = 0; i < extruders.Value.machine_extruders; i++)
                 {
                     var extr_index = ArrayIndex.FromZeroBase(i, variable_store);

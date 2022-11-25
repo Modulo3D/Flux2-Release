@@ -1,6 +1,6 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
@@ -102,7 +102,7 @@ namespace Flux.ViewModels
 
             var materials = Observable.CombineLatest(
                 current_job, material_queue, (current_job, material_queue) =>
-                material_queue.Items.Select(m => current_job.Convert(j => m.Convert(m => m.Lookup(j.JobKey))))); 
+                material_queue.Items.Select(m => current_job.Convert(j => m.Convert(m => m.Lookup(j.JobKey)))));
 
             _ExpectedMaterials = materials
                 .Select(i => i.Select(i => i.ConvertOr(i => i.Name, () => "---")))

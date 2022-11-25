@@ -1,5 +1,5 @@
 ﻿using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using OSAI;
 using System;
 using System.Collections.Generic;
@@ -8,7 +8,6 @@ using System.IO;
 using System.Linq;
 using System.Reactive.Linq;
 using System.Runtime.CompilerServices;
-using System.ServiceModel;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -38,6 +37,22 @@ namespace Flux.ViewModels
             Flux = flux;
         }
 
+        // CONNECT
+        public override async Task<bool> CloseAsync()
+        {
+            try
+            {
+                if (!Client.HasValue)
+                    return true;
+                await Client.Value.CloseAsync();
+                Client = null;
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
         public override async Task<bool> ConnectAsync()
         {
             try
@@ -54,21 +69,6 @@ namespace Flux.ViewModels
                     return false;
 
                 Client = new OPENcontrolPortTypeClient(OPENcontrolPortTypeClient.EndpointConfiguration.OPENcontrol, plc_address.Value);
-                return true;
-            }
-            catch 
-            {
-                return false;
-            }
-        }
-        public override async Task<bool> CloseAsync()
-        {
-            try
-            {
-                if (!Client.HasValue)
-                    return true;
-                await Client.Value.CloseAsync();
-                Client = null;
                 return true;
             }
             catch
@@ -445,7 +445,7 @@ namespace Flux.ViewModels
                     address.ToString()))
                     return default;
 
-                return read_named_variable_response.Value[0] == 1.0 ? true : false;
+                return read_named_variable_response.Value[0] == 1.0;
             }
             catch { return default; }
         }
@@ -672,7 +672,7 @@ namespace Flux.ViewModels
                     address.ToString()))
                     return default;
 
-                return convert_func(read_named_variable_response.Value[0] == 1.0 ? true : false);
+                return convert_func(read_named_variable_response.Value[0] == 1.0);
             }
             catch { return default; }
         }
@@ -771,7 +771,50 @@ namespace Flux.ViewModels
             }
             return true;
         }
+        public override InnerQueueGCodes GenerateInnerQueueGCodes(JobPartPrograms job_partprograms)
+        {
+            var gcode = new OSAI_GCodeGenerator(this);
 
+            var job = job_partprograms.Job;
+            var queue_pos = job_partprograms.Job.QueuePosition;
+            var part_program = job_partprograms.GetCurrentPartProgram();
+            if (!part_program.HasValue)
+                return default;
+
+            var end = GCodeString.Create(gcode.LogEvent(job, FluxEventType.End));
+            var pause = GCodeString.Create(gcode.LogEvent(job, FluxEventType.Pause));
+            var cancel = GCodeString.Create(gcode.LogEvent(job, FluxEventType.Cancel));
+            var end_filament = GCodeString.Create(gcode.LogEvent(job, FluxEventType.EndFilament));
+
+            var begin = GCodeString.Create(
+                gcode.DeclareGlobalVariable(0, c => c.CUR_JOB, out var cur_job),
+                gcode.DeclareGlobalArray(1, c => c.EXTR_KEY, out var extr_key),
+
+                cur_job.Write($"{job.JobKey}"),
+                extr_key.Foreach((v, i) => extrusion_key(i, k => v.Write($"{k}"))),
+                gcode.LogEvent(job, part_program.Value.IsRecovery ? FluxEventType.Resume : FluxEventType.Begin));
+
+            return new InnerQueueGCodes()
+            {
+                End = end,
+                Begin = begin,
+                Pause = pause,
+                Cancel = cancel,
+                EndFilament = end_filament,
+            };
+
+            Optional<GCodeString> extrusion_key(int position, Func<ExtrusionKey, GCodeString> func)
+            {
+                return Flux.Feeders.Feeders.Lookup((ushort)position)
+                    .Convert(f => f.SelectedMaterial)
+                    .Convert(m => m.ExtrusionKey)
+                    .Convert(k => func(k));
+            }
+        }
+        public override Task<bool> InitializeVariablesAsync(CancellationToken ct)
+        {
+            return Task.FromResult(true);
+        }
         // WAIT MEMORY
         public async Task<bool> WaitBootPhaseAsync(Func<OSAI_BootPhase, bool> phase_func, TimeSpan dueTime, TimeSpan sample, TimeSpan throttle, TimeSpan timeout)
         {
@@ -791,46 +834,28 @@ namespace Flux.ViewModels
         }
 
         // BASIC OPERATIONS
-        public async Task<bool> ShutdownAsync()
+        public async Task<bool> AxesRefAsync(params char[] axes)
         {
             try
             {
                 if (!Client.HasValue)
                     return false;
 
-                var shutdown_request = new BootShutDownRequest();
-                var shutdown_response = await Client.Value.BootShutDownAsync(shutdown_request);
+                var axes_ref_request = new AxesRefRequest(ProcessNumber, (ushort)axes.Length, string.Join("", axes));
+                var axes_ref_response = await Client.Value.AxesRefAsync(axes_ref_request);
 
                 if (!ProcessResponse(
-                    shutdown_response.retval,
-                    shutdown_response.ErrClass,
-                    shutdown_response.ErrNum))
+                    axes_ref_response.retval,
+                    axes_ref_response.ErrClass,
+                    axes_ref_response.ErrNum))
                     return false;
 
                 return true;
             }
             catch { return false; }
         }
-        public async Task<bool> HoldAsync(bool on)
-        {
-            try
-            {
-                if (!Client.HasValue)
-                    return false;
 
-                var hold_request = new HoldRequest(ProcessNumber, on ? (ushort)0 : (ushort)1);
-                var hold_response = await Client.Value.HoldAsync(hold_request);
-
-                if (!ProcessResponse(
-                    hold_response.retval,
-                    hold_response.ErrClass,
-                    hold_response.ErrNum))
-                    return false;
-
-                return true;
-            }
-            catch { return false; }
-        }
+        // CONTROL
         public override async Task<bool> StopAsync()
         {
             try
@@ -873,20 +898,23 @@ namespace Flux.ViewModels
                     TimeSpan.FromSeconds(0.1),
                     TimeSpan.FromSeconds(0.2),
                     TimeSpan.FromSeconds(5));
-                
+
                 if (!wait_idle)
                     return false;
 
-                var paramacro_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                return await ExecuteParamacroAsync(new []
+                using var paramacro_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                return await ExecuteParamacroAsync(new[]
                 {
-                    GetExecuteMacroGCode(CombinePaths(MacroPath, "JOB"), "cancel.g"),
+                    GetExecuteMacroGCode(InnerQueuePath, "cancel.g"),
                     GetExecuteMacroGCode(MacroPath, "end_print")
                 }, paramacro_cts.Token);
             }
             catch { return false; }
         }
-
+        public override async Task<bool> PauseAsync(bool end_filament)
+        {
+            return await WriteVariableAsync("!REQ_HOLD", true);
+        }
         public override async Task<bool> ExecuteParamacroAsync(GCodeString paramacro, CancellationToken put_ct, bool can_cancel = false)
         {
             try
@@ -904,7 +932,7 @@ namespace Flux.ViewModels
                     return false;
 
                 using var delete_paramacro_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                var remove_file_response = await DeleteAsync(StoragePath, "paramacro.mcode", true, delete_paramacro_ctk.Token);
+                var remove_file_response = await DeleteAsync(StoragePath, "paramacro.mcode", delete_paramacro_ctk.Token);
                 if (!remove_file_response)
                     return false;
 
@@ -949,134 +977,30 @@ namespace Flux.ViewModels
                 return false;
             }
         }
-        public override async Task<bool> PauseAsync(bool end_filament)
+        public override GCodeString GetBeginPartProgramGCode()
         {
-            return await WriteVariableAsync("!REQ_HOLD", true);
+            return GCodeString.Create(
+                base.GetBeginPartProgramGCode(),
+                 "; preprocessing",
+                "(GTO, end_preprocess)",
+
+                "M4140[0, 0]",
+                "M4141[0, 0]",
+                "M4104[0, 0, 0]",
+                "M4999[0, 0, 0, 0]",
+
+                "(CLS, MACRO\\probe_plate)",
+                "(CLS, MACRO\\end_print)",
+                "(CLS, MACRO\\home_printer)",
+                "(CLS, MACRO\\change_tool, 0)",
+
+                "G92 A0",
+                "G1 X0 Y0 Z0 F1000",
+
+                "\"end_preprocess\"",
+                "(PAS)");
         }
         // FILES
-        public override async Task<bool> DeleteAsync(string folder, string filename, bool wait, CancellationToken ct = default)
-        {
-            try
-            {
-                if (!Client.HasValue)
-                    return false;
-
-                if (filename != "*")
-                {
-                    var file_list = await ListFilesAsync(folder, ct);
-                    if (!file_list.HasValue)
-                        return false;
-
-                    if (!file_list.Value.Files.Any(f => f.Name == filename))
-                        return true;
-                }
-
-                var remove_file_request = new LogFSRemoveFileRequest($"{folder}\\", filename);
-                var remove_file_response = await Client.Value.LogFSRemoveFileAsync(remove_file_request);
-
-                if (remove_file_response.ErrClass == 5 &&
-                    remove_file_response.ErrNum == 17)
-                    return true;
-
-                if (!ProcessResponse(
-                    remove_file_response.retval,
-                    remove_file_response.ErrClass,
-                    remove_file_response.ErrNum))
-                    return false;
-
-                return true;    
-            }
-            catch { return false; }
-        }
-        public override async Task<Optional<FLUX_FileList>> ListFilesAsync(string folder, CancellationToken ct = default)
-        {
-            var files_data = new FLUX_FileList(folder);
-            Optional<LogFSFindFirstResponse> find_first_result = default;
-
-            try
-            {
-                if (!Client.HasValue)
-                    return default;
-
-                find_first_result = await Client.Value.LogFSFindFirstOrDefaultAsync($"{folder}\\*");
-                if (!find_first_result.HasValue)
-                    return files_data;
-
-                if (!ProcessResponse(
-                    find_first_result.Value.Body.retval,
-                    find_first_result.Value.Body.ErrClass,
-                    find_first_result.Value.Body.ErrNum))
-                    return files_data;
-
-                // empty 
-                if (find_first_result.Value.Body.Finder == 0xFFFFFFFF)
-                    return files_data;
-
-                var file = parse_file(find_first_result.Value.Body.FindData);
-                if (file.HasValue)
-                    files_data.Files.Add(file.Value);
-
-                var handle = find_first_result.Value.Body.Finder;
-
-                Optional<LogFSFindNextResponse> find_next_result;
-                do
-                {
-                    find_next_result = await Client.Value.LogFSFindNextAsync(handle);
-                    if (!find_next_result.HasValue)
-                        return files_data;
-
-                    if (!ProcessResponse(
-                        find_next_result.Value.Body.retval,
-                        find_next_result.Value.Body.ErrClass,
-                        find_next_result.Value.Body.ErrNum))
-                        return files_data;
-
-                    file = parse_file(find_next_result.Value.Body.FindData);
-                    if (file.HasValue)
-                        files_data.Files.Add(file.Value);
-                }
-                while (find_next_result.ConvertOr(r => r.Body.Found, () => false));
-            }
-            catch { return default; }
-            finally
-            {
-                if (find_first_result.HasValue)
-                {
-                    var close_request = new LogFSFindCloseRequest(find_first_result.Value.Body.Finder);
-                    var close_response = await Client.Value.LogFSFindCloseAsync(close_request);
-
-                    ProcessResponse(
-                        close_response.retval,
-                        close_response.ErrClass,
-                        close_response.ErrNum);
-                }
-            }
-            
-            return files_data;
-
-            Optional<FLUX_File> parse_file(FILEFINDDATA data)
-            {
-                if (string.IsNullOrEmpty(data.FileName))
-                    return default;
-
-                var file_name           = data.FileName;
-                var file_attributes     = (OSAI_FileAttributes)data.FileAttributes;
-                var file_size           = (ulong)data.FileSizeHigh << 32 | data.FileSizeLow;
-                var has_directory_flag  = file_attributes.HasFlag(OSAI_FileAttributes.FILE_ATTRIBUTE_DIRECTORY);
-                var file_type           = has_directory_flag ? FLUX_FileType.Directory : FLUX_FileType.File;
-
-                var file_date           = DateTime.FromFileTime((long)data.HighDateLastWriteTime << 32 | data.LowDateLastWriteTime);
-
-                return new FLUX_File()
-                {
-                    Name = file_name,
-                    Type = file_type,
-                    Date = file_date,
-                    Size = file_size,
-                };        
-            }
-        }
-
         public override async Task<bool> PutFileAsync(
             string folder,
             string filename,
@@ -1097,7 +1021,8 @@ namespace Flux.ViewModels
                 if (!Client.HasValue)
                     return false;
 
-                var remove_file_response = await DeleteAsync(folder, "file_upload.tmp", false);
+                using var delete_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                var remove_file_response = await DeleteAsync(folder, "file_upload.tmp", delete_cts.Token);
                 if (!remove_file_response)
                     return false;
 
@@ -1171,7 +1096,7 @@ namespace Flux.ViewModels
                 IEnumerable<string> get_full_source()
                 {
                     if (start.HasValue)
-                    { 
+                    {
                         foreach (var line in start)
                             yield return line;
                     }
@@ -1199,7 +1124,7 @@ namespace Flux.ViewModels
                     }
 
                     if (end.HasValue)
-                    { 
+                    {
                         foreach (var line in end)
                             yield return line;
                     }
@@ -1207,9 +1132,9 @@ namespace Flux.ViewModels
                     yield return "";
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                return false; 
+                return false;
             }
 
             try
@@ -1225,135 +1150,65 @@ namespace Flux.ViewModels
                     close_file_response.ErrNum))
                     return false;
 
-                var remove_file_response = await DeleteAsync(folder, filename, false);
+                using var delete_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                var remove_file_response = await DeleteAsync(folder, filename, delete_cts.Token);
                 if (!remove_file_response)
                     return false;
 
-                var rename_response = await RenameAsync(folder, "file_upload.tmp", filename, false);;
+                using var rename_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                var rename_response = await RenameAsync(folder, "file_upload.tmp", filename, rename_cts.Token); ;
                 if (!rename_response)
                     return false;
 
                 return true;
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                return false; 
+                return false;
             }
         }
-        
-        // AXIS MANAGEMENT
-        public async Task<bool> AxesRefAsync(params char[] axes)
+        public override Task<bool> ClearFolderAsync(string folder, CancellationToken ct)
+        {
+            return DeleteAsync(folder, "*", ct);
+        }
+        public override Task<Stream> GetFileStreamAsync(string folder, string name, CancellationToken ct)
+        {
+            throw new NotImplementedException();
+        }
+        public override async Task<bool> DeleteAsync(string folder, string filename, CancellationToken ct)
         {
             try
             {
                 if (!Client.HasValue)
                     return false;
 
-                var axes_ref_request = new AxesRefRequest(ProcessNumber, (ushort)axes.Length, string.Join("", axes));
-                var axes_ref_response = await Client.Value.AxesRefAsync(axes_ref_request);
+                if (filename != "*")
+                {
+                    var file_list = await ListFilesAsync(folder, ct);
+                    if (!file_list.HasValue)
+                        return false;
+
+                    if (!file_list.Value.Files.Any(f => f.Name == filename))
+                        return true;
+                }
+
+                var remove_file_request = new LogFSRemoveFileRequest($"{folder}\\", filename);
+                var remove_file_response = await Client.Value.LogFSRemoveFileAsync(remove_file_request);
+
+                if (remove_file_response.ErrClass == 5 &&
+                    remove_file_response.ErrNum == 17)
+                    return true;
 
                 if (!ProcessResponse(
-                    axes_ref_response.retval,
-                    axes_ref_response.ErrClass,
-                    axes_ref_response.ErrNum))
+                    remove_file_response.retval,
+                    remove_file_response.ErrClass,
+                    remove_file_response.ErrNum))
                     return false;
 
                 return true;
             }
             catch { return false; }
         }
-        public async Task<Optional<OSAI_AxisPositionDictionary>> GetAxisPosition()
-        {
-            try
-            {
-                if (!Client.HasValue)
-                    return default;
-
-                var axes_ref_request = new GetAxesPositionRequest(ProcessNumber, 0, (ushort)OSAI_AxisPositionSelect.Absolute, AxisNum);
-                var axes_ref_response = await Client.Value.GetAxesPositionAsync(axes_ref_request);
-
-                if (!ProcessResponse(
-                    axes_ref_response.retval,
-                    axes_ref_response.ErrClass,
-                    axes_ref_response.ErrNum))
-                    return default;
-
-                return new OSAI_AxisPositionDictionary(axes_ref_response.IntPos);
-            }
-            catch { return default; }
-        }
-        public override Task<bool> ClearFolderAsync(string folder, bool wait, CancellationToken ct = default) => DeleteAsync(folder, "*", wait, ct);
-
-        public override GCodeString GetHomingGCode(params char[] axis)
-        {
-            return "(CLS, MACRO\\home_printer)";
-        }
-        public override GCodeString GetParkToolGCode()
-        {
-            return "(CLS, MACRO\\change_tool, 0)";
-        }
-        public override GCodeString GetProbePlateGCode()
-        {
-            return "(CLS, MACRO\\probe_plate)";
-        }
-        public override GCodeString GetLowerPlateGCode()
-        {
-            return "(CLS, MACRO\\lower_plate)";
-        }
-        public override GCodeString GetRaisePlateGCode()
-        {
-            return "(CLS, MACRO\\raise_plate)";
-        }
-        public override GCodeString GetSelectToolGCode(ArrayIndex position)
-        {
-            return $"(CLS, MACRO\\change_tool, {position.GetArrayBaseIndex()})";
-        }
-        public override GCodeString GetSetToolTemperatureGCode(ArrayIndex position, double temperature, bool wait)
-        {
-            return $"M4104 [{position.GetArrayBaseIndex()}, {temperature}, {(wait ? 1 : 0)}]";
-        }
-        public override GCodeString GetProbeToolGCode(ArrayIndex position, double temperature)
-        {
-            return $"(CLS, MACRO\\probe_tool, {position.GetArrayBaseIndex()}, {temperature})";
-        }
-        public override GCodeString GetFilamentSensorSettingsGCode(ArrayIndex position, bool enabled)
-        {
-            return $"M4999 [{{FILAMENT_ENDSTOP_1_RESET}}, {position.GetArrayBaseIndex()}, 0, {(enabled ? 1 : 0)}]";
-        }
-        public override GCodeString GetSetChamberTemperatureGCode(ArrayIndex position, double temperature, bool wait)
-        {
-            return $"M4140 [{temperature}, {(wait ? 1 : 0)}]";
-        }
-        public override GCodeString GetSetPlateTemperatureGCode(ArrayIndex position, double temperature, bool wait)
-        {
-            return $"M4141 [{temperature}, {(wait ? 1 : 0)}]";
-        }
-        public override GCodeString GetResetPositionGCodeInner(FLUX_AxisMove axis_move)
-        {
-            return $"G92 {axis_move.GetAxisPosition()}";
-        }
-        public override GCodeString GetMovementGCodeInner(FLUX_AxisMove axis_move)
-        {
-            return $"G1 {axis_move.GetAxisPosition(m => m.Relative ? ">>" : "")} {axis_move.GetFeedrate('F')}";
-        }
-
-        public override async Task<Optional<string>> GetFileAsync(string folder, string filename, CancellationToken ct)
-        {
-            if (!Client.HasValue)
-                return default;
-
-            var get_file_request = new GetFileRequest($"{folder}\\{filename}", 1024);
-            var get_file_response = await Client.Value.GetFileAsync(get_file_request);
-
-            if (!ProcessResponse(
-                get_file_response.retval,
-                get_file_response.ErrClass,
-                get_file_response.ErrNum))
-                return default;
-
-            return get_file_response.Data;
-        }
-
         public override async Task<bool> CreateFolderAsync(string folder, string name, CancellationToken ct)
         {
             if (!Client.HasValue)
@@ -1370,15 +1225,115 @@ namespace Flux.ViewModels
 
             return true;
         }
-
-        public override GCodeString GetSetToolOffsetGCode(ArrayIndex position, double x, double y, double z)
+        public override async Task<Optional<FLUX_FileList>> ListFilesAsync(string folder, CancellationToken ct)
         {
-            var x_offset = (x + y) / 2;
-            var y_offset = (x - y) / 2;
-            return new[] { $"(UTO, 0, X({x_offset}), Y({y_offset}), Z({z}))" };
-        }
+            var files_data = new FLUX_FileList(folder);
+            Optional<LogFSFindFirstResponse> find_first_result = default;
 
-        public override async Task<bool> RenameAsync(string folder, string old_filename, string new_filename, bool wait, CancellationToken ct = default)
+            try
+            {
+                if (!Client.HasValue)
+                    return default;
+
+                find_first_result = await Client.Value.LogFSFindFirstOrDefaultAsync($"{folder}\\*");
+                if (!find_first_result.HasValue)
+                    return files_data;
+
+                if (!ProcessResponse(
+                    find_first_result.Value.Body.retval,
+                    find_first_result.Value.Body.ErrClass,
+                    find_first_result.Value.Body.ErrNum))
+                    return files_data;
+
+                // empty 
+                if (find_first_result.Value.Body.Finder == 0xFFFFFFFF)
+                    return files_data;
+
+                var file = parse_file(find_first_result.Value.Body.FindData);
+                if (file.HasValue)
+                    files_data.Files.Add(file.Value);
+
+                var handle = find_first_result.Value.Body.Finder;
+
+                Optional<LogFSFindNextResponse> find_next_result;
+                do
+                {
+                    find_next_result = await Client.Value.LogFSFindNextAsync(handle);
+                    if (!find_next_result.HasValue)
+                        return files_data;
+
+                    if (!ProcessResponse(
+                        find_next_result.Value.Body.retval,
+                        find_next_result.Value.Body.ErrClass,
+                        find_next_result.Value.Body.ErrNum))
+                        return files_data;
+
+                    file = parse_file(find_next_result.Value.Body.FindData);
+                    if (file.HasValue)
+                        files_data.Files.Add(file.Value);
+                }
+                while (find_next_result.ConvertOr(r => r.Body.Found, () => false));
+            }
+            catch { return default; }
+            finally
+            {
+                if (find_first_result.HasValue)
+                {
+                    var close_request = new LogFSFindCloseRequest(find_first_result.Value.Body.Finder);
+                    var close_response = await Client.Value.LogFSFindCloseAsync(close_request);
+
+                    ProcessResponse(
+                        close_response.retval,
+                        close_response.ErrClass,
+                        close_response.ErrNum);
+                }
+            }
+
+            return files_data;
+
+            static Optional<FLUX_File> parse_file(FILEFINDDATA data)
+            {
+                if (string.IsNullOrEmpty(data.FileName))
+                    return default;
+
+                var file_name = data.FileName;
+                var file_attributes = (OSAI_FileAttributes)data.FileAttributes;
+                var file_size = (ulong)data.FileSizeHigh << 32 | data.FileSizeLow;
+                var has_directory_flag = file_attributes.HasFlag(OSAI_FileAttributes.FILE_ATTRIBUTE_DIRECTORY);
+                var file_type = has_directory_flag ? FLUX_FileType.Directory : FLUX_FileType.File;
+
+                var file_date = DateTime.FromFileTime((long)data.HighDateLastWriteTime << 32 | data.LowDateLastWriteTime);
+
+                return new FLUX_File()
+                {
+                    Name = file_name,
+                    Type = file_type,
+                    Date = file_date,
+                    Size = file_size,
+                };
+            }
+        }
+        public override Task<bool> PutFileStreamAsync(string folder, string name, Stream data, CancellationToken ct)
+        {
+            throw new NotImplementedException();
+        }
+        public override async Task<Optional<string>> GetFileAsync(string folder, string filename, CancellationToken ct)
+        {
+            if (!Client.HasValue)
+                return default;
+
+            var get_file_request = new GetFileRequest($"{folder}\\{filename}", 1024);
+            var get_file_response = await Client.Value.GetFileAsync(get_file_request);
+
+            if (!ProcessResponse(
+                get_file_response.retval,
+                get_file_response.ErrClass,
+                get_file_response.ErrNum))
+                return default;
+
+            return get_file_response.Data;
+        }
+        public override async Task<bool> RenameAsync(string folder, string old_filename, string new_filename, CancellationToken ct)
         {
             if (!Client.HasValue)
                 return false;
@@ -1395,68 +1350,109 @@ namespace Flux.ViewModels
             return true;
         }
 
+        // GCODE
+        public override GCodeString GetParkToolGCode()
+        {
+            return "(CLS, MACRO\\change_tool, 0)";
+        }
+        public override GCodeString GetProbePlateGCode()
+        {
+            return "(CLS, MACRO\\probe_plate)";
+        }
+        public override GCodeString GetLowerPlateGCode()
+        {
+            return "(CLS, MACRO\\lower_plate)";
+        }
+        public override GCodeString GetRaisePlateGCode()
+        {
+            return "(CLS, MACRO\\raise_plate)";
+        }
         public override GCodeString GetSetLowCurrentGCode()
         {
             throw new NotImplementedException();
         }
-
         public override GCodeString GetProbeMagazineGCode()
         {
             throw new NotImplementedException();
         }
-
-        public override GCodeString GetCancelLoadFilamentGCode(ArrayIndex position)
-        {
-            return new[] { $"M4104 [{position.GetArrayBaseIndex()}, 0, 0]" };
-        }
-
-        public override GCodeString GetCancelUnloadFilamentGCode(ArrayIndex position)
-        {
-            return new[] { $"M4104 [{position.GetArrayBaseIndex()}, 0, 0]" };
-        }
-
         public override GCodeString GetCenterPositionGCode()
         {
             return new[] { "(CLS, MACRO\\center_position)" };
         }
-
-        public override GCodeString GetSetExtruderMixingGCode(ArrayIndex machine_extruder, ArrayIndex mixing_extruder)
-        {
-            throw new NotImplementedException();
-        }
-
-        public override GCodeString GetManualCalibrationPositionGCode()
-        {
-            throw new NotImplementedException();
-        }
-
-        public override GCodeString GetExecuteMacroGCode(string folder, string filename)
-        {
-            return new[] { $"(CLS, {folder}\\{filename})" };
-        }
-
         public override GCodeString GetExitPartProgramGCode()
         {
             return new[] { "(REL)" };
         }
-
-        public override Task<Stream> GetFileStreamAsync(string folder, string name, CancellationToken ct)
+        public override GCodeString GetHomingGCode(params char[] axis)
+        {
+            return "(CLS, MACRO\\home_printer)";
+        }
+        public override GCodeString GetManualCalibrationPositionGCode()
         {
             throw new NotImplementedException();
         }
-
-        public override Task<bool> PutFileStreamAsync(string folder, string name, Stream data, CancellationToken ct)
+        public override GCodeString GetSelectToolGCode(ArrayIndex position)
         {
-            throw new NotImplementedException();
+            return $"(CLS, MACRO\\change_tool, {position.GetArrayBaseIndex()})";
         }
-
+        public override GCodeString GetMovementGCodeInner(FLUX_AxisMove axis_move)
+        {
+            return $"G1 {axis_move.GetAxisPosition(m => m.Relative ? ">>" : "")} {axis_move.GetFeedrate('F')}";
+        }
+        public override GCodeString GetCancelLoadFilamentGCode(ArrayIndex position)
+        {
+            return new[] { $"M4104 [{position.GetArrayBaseIndex()}, 0, 0]" };
+        }
+        public override GCodeString GetCancelUnloadFilamentGCode(ArrayIndex position)
+        {
+            return new[] { $"M4104 [{position.GetArrayBaseIndex()}, 0, 0]" };
+        }
+        public override GCodeString GetResetPositionGCodeInner(FLUX_AxisMove axis_move)
+        {
+            return $"G92 {axis_move.GetAxisPosition()}";
+        }
+        public override GCodeString GetExecuteMacroGCode(string folder, string filename)
+        {
+            return new[] { $"(CLS, {folder}\\{filename})" };
+        }
+        public override GCodeString GetProbeToolGCode(ArrayIndex position, double temperature)
+        {
+            return $"(CLS, MACRO\\probe_tool, {position.GetArrayBaseIndex()}, {temperature})";
+        }
+        public override GCodeString GetFilamentSensorSettingsGCode(ArrayIndex position, bool enabled)
+        {
+            return $"M4999 [{{FILAMENT_ENDSTOP_1_RESET}}, {position.GetArrayBaseIndex()}, 0, {(enabled ? 1 : 0)}]";
+        }
+        public override GCodeString GetSetToolOffsetGCode(ArrayIndex position, double x, double y, double z)
+        {
+            var x_offset = (x + y) / 2;
+            var y_offset = (x - y) / 2;
+            return new[] { $"(UTO, 0, X({x_offset}), Y({y_offset}), Z({z}))" };
+        }
+        protected override GCodeString GetSetToolTemperatureGCodeInner(ArrayIndex position, double temperature, bool wait)
+        {
+            return $"M4104 [{position.GetArrayBaseIndex()}, {temperature}, {(wait ? 1 : 0)}]";
+        }
+        protected override GCodeString GetSetPlateTemperatureGCodeInner(ArrayIndex position, double temperature, bool wait)
+        {
+            return $"M4141 [{temperature}, {(wait ? 1 : 0)}]";
+        }
+        protected override GCodeString GetSetChamberTemperatureGCodeInner(ArrayIndex position, double temperature, bool wait)
+        {
+            return $"M4140 [{temperature}, {(wait ? 1 : 0)}]";
+        }
         public override GCodeString GetStartPartProgramGCode(string folder, string filename, BlockNumber start_block)
         {
             return new[]
             {
-                $"LS0 = \"{CombinePaths(folder, filename)}\"",
-                $"M4026[0, {start_block}]"
+                $"LS0 = \"{folder}\"",
+                $"LS1 = \"{filename}\"",
+                $"M4026[0, 1, {start_block}]"
             };
+        }
+        public override GCodeString GetSetExtruderMixingGCode(ArrayIndex machine_extruder, ArrayIndex mixing_extruder)
+        {
+            throw new NotImplementedException();
         }
     }
 }

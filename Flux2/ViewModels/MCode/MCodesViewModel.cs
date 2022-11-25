@@ -2,7 +2,7 @@
 using DynamicData.Binding;
 using DynamicData.Kernel;
 using DynamicData.PLinq;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
@@ -24,7 +24,7 @@ namespace Flux.ViewModels
         public ISourceCache<IFluxMCodeStorageViewModel, MCodeKey> AvaiableMCodes { get; }
 
         [RemoteContent(true)]
-        public IObservableCache<IFluxMCodeQueueViewModel, QueuePosition> QueuedMCodes { get; }
+        public IObservableCache<IFluxMCodeQueueViewModel, QueuePosition> QueuedMCodes { get; private set; }
 
         [RemoteCommand]
         public ReactiveCommand<Unit, Unit> DeleteAllCommand { get; }
@@ -61,24 +61,8 @@ namespace Flux.ViewModels
                 .ValueOr(() => new QueuePosition(-1))
                 .ToProperty(this, v => v.QueuePosition);
 
-            var filter_queue = this.WhenAnyValue(v => v.QueuePosition)
-                .Select(p =>
-                {
-                    return (Func<IFluxMCodeQueueViewModel, bool>)filter_queue_func;
-                    bool filter_queue_func(IFluxMCodeQueueViewModel queue)
-                    {
-                        return p > -1 && queue.Job.QueuePosition >= p;
-                    }
-                });
 
-            AvaiableMCodes = new SourceCache<IFluxMCodeStorageViewModel, MCodeKey>(f => f.MCodeKey);
-            QueuedMCodes = Flux.ConnectionProvider.ObserveVariable(c => c.JOB_QUEUE)
-                .ValueOr(() => new JobQueue())
-                .Select(CreateMCodeQueue)
-                .ToObservableChangeSet(kvp => kvp.Job.QueuePosition)
-                .Filter(filter_queue)
-                .DisposeMany()
-                .AsObservableCache();
+            AvaiableMCodes = new SourceCache<IFluxMCodeStorageViewModel, MCodeKey>(f => f.MCodeKey);      
 
             var can_delete_all = AvaiableMCodes.Connect()
                 .TrueForAll(mcode => mcode.WhenAnyValue(m => m.CanDelete), d => d);
@@ -95,6 +79,30 @@ namespace Flux.ViewModels
         public void Initialize()
         {
             Task.Run(() => ImportMCodesAsync());
+          
+            var filter_queue = this.WhenAnyValue(v => v.QueuePosition)
+                .Select(p =>
+                {
+                    return (Func<IFluxMCodeQueueViewModel, bool>)filter_queue_func;
+                    bool filter_queue_func(IFluxMCodeQueueViewModel queue)
+                    {
+                        return p > -1 && queue.Job.QueuePosition >= p;
+                    }
+                });
+
+            QueuedMCodes = Flux.StatusProvider
+               .WhenAnyValue(s => s.JobQueue)
+               .Select(CreateMCodeQueue)
+               .AsObservableChangeSet(kvp => kvp.Job.QueuePosition)
+               .Filter(filter_queue)
+               .DisposeMany()
+               .AsObservableCache();
+
+            Flux.StatusProvider
+                .WhenAnyValue(s => s.JobQueue)
+                .Where(q => q.HasValue)
+                .Throttle(TimeSpan.FromSeconds(1))
+                .Subscribe(async q => await Flux.ConnectionProvider.GenerateInnerQueueAsync(q.Value));
         }
 
         public void FindDrive()
@@ -249,8 +257,8 @@ namespace Flux.ViewModels
             {
                 PrepareMCodeCTS?.Cancel();
             }
-            catch (Exception ex)
-            { 
+            catch (Exception)
+            {
             }
         }
         public async Task<bool> ClearMCodeStorageAsync()
@@ -262,7 +270,7 @@ namespace Flux.ViewModels
             Directories.Clear(Directories.MCodes);
 
             using var clear_queue_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            if (!await Flux.ConnectionProvider.ClearFolderAsync(c => c.StoragePath, true, clear_queue_cts.Token))
+            if (!await Flux.ConnectionProvider.ClearFolderAsync(c => c.StoragePath, clear_queue_cts.Token))
                 return false;
 
             AvaiableMCodes.Clear();
@@ -333,7 +341,7 @@ namespace Flux.ViewModels
                 mcode_file.Delete();
                 AvaiableMCodes.Remove(file);
 
-                var job_queue = await Flux.ConnectionProvider.ReadVariableAsync(c => c.JOB_QUEUE);
+                var job_queue = await GetJobQueueAsync();
                 if (!job_queue.HasValue)
                     return false;
 
@@ -345,7 +353,7 @@ namespace Flux.ViewModels
                             continue;
 
                         using var delete_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                        if (!await Flux.ConnectionProvider.DeleteAsync(c => c.StoragePath, $"{mcode_partprogram}", true, delete_cts.Token))
+                        if (!await Flux.ConnectionProvider.DeleteAsync(c => c.StoragePath, $"{mcode_partprogram}", delete_cts.Token))
                             return false;
                     }
                 }
@@ -364,101 +372,100 @@ namespace Flux.ViewModels
         public async Task<bool> ClearQueueAsync()
         {
             using var clear_queue_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            if (!await Flux.ConnectionProvider.ClearFolderAsync(c => c.QueuePath, true, clear_queue_cts.Token))
+            if (!await Flux.ConnectionProvider.DeleteAsync(c => c.QueuePath, "queue", clear_queue_cts.Token))
                 return false;
 
             using var clear_inner_queue_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            if (!await Flux.ConnectionProvider.ClearFolderAsync(c => c.InnerQueuePath, true, clear_inner_queue_cts.Token))
+            if (!await Flux.ConnectionProvider.ClearFolderAsync(c => c.InnerQueuePath, clear_inner_queue_cts.Token))
                 return false;
 
-            return await Flux.ConnectionProvider.GenerateInnerQueueAsync();
+            return true;
+        }
+        public async Task<Optional<JobQueue>> GetJobQueueAsync()
+        {
+            var connection_provider = Flux.ConnectionProvider;
+
+            var queue_preview = await connection_provider.ReadVariableAsync(c => c.JOB_QUEUE);
+            if (!queue_preview.HasValue)
+            {
+                Flux.Messages.LogMessage("Errore durante la selezione del lavoro", "Impossibile leggere lo stato della coda", MessageLevel.ERROR, 0);
+                return default;
+            }
+
+            using var queue_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var queue = await queue_preview.Value.GetJobQueueAsync(connection_provider, queue_cts.Token);
+            if (!queue.HasValue)
+                return default;
+
+            return queue;
+        }
+        public async Task<bool> GenerateQueueAsync(IEnumerable<Job> queue)
+        {
+            var connection_provider = Flux.ConnectionProvider;
+
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var source = queue.Select((j, i) => $"{j with { QueuePosition = i }}").ToList();
+
+            if (!await connection_provider.PutFileAsync(
+                c => c.QueuePath, "queue", true, cts.Token, new GCodeString(source)))
+                return false;
+
+            var queue_pos = await Flux.ConnectionProvider
+               .ReadVariableAsync(c => c.QUEUE_POS)
+               .ToOptionalAsync();
+
+            if (!queue_pos.HasValue)
+                return false;
+
+            if (queue_pos.Value < 0)
+            { 
+                queue_pos = (QueuePosition)0;
+                if (!await Flux.ConnectionProvider.WriteVariableAsync(c => c.QUEUE_POS, queue_pos.Value))
+                    return false;
+            }
+
+            var last_queue_pos = Math.Max(0, queue.Count() - 1);
+            if (queue_pos.Value > last_queue_pos)
+            {
+                queue_pos = (QueuePosition)(queue_pos.Value - 1);
+                if (!await Flux.ConnectionProvider.WriteVariableAsync(c => c.QUEUE_POS, queue_pos.Value))
+                    return false;
+            }
+
+            if (queue_pos.Value == -1)
+                await Flux.ConnectionProvider.CancelPrintAsync(true);
+
+            return true;
         }
         public async Task<bool> AddToQueueAsync(IFluxMCodeStorageViewModel mcode)
         {
-            var queue_pos = await Flux.ConnectionProvider
-                .ReadVariableAsync(c => c.QUEUE_POS)
-                .ToOptionalAsync();
+            Flux.StatusProvider.StartWithLowMaterials = false;
 
-            if (!queue_pos.HasValue)
-            {
-                Flux.Messages.LogMessage("Errore durante la selezione del lavoro", "Posizione della coda non trovata", MessageLevel.ERROR, 0);
-                return false;
-            }
-
-            if (queue_pos.Value < 0)
-            {
-                if (!await ClearQueueAsync())
-                {
-                    Flux.Messages.LogMessage("Errore durante la selezione del lavoro", "Impossibile pulire la coda", MessageLevel.ERROR, 0);
-                    return false;
-                }
-            }
-
-            var queue = await Flux.ConnectionProvider.ReadVariableAsync(c => c.JOB_QUEUE);
-            if (!queue.HasValue)
-            {
-                Flux.Messages.LogMessage("Errore durante la selezione del lavoro", "Impossibile leggere lo stato della coda", MessageLevel.ERROR, 0);
-                return false;
-            }
-
-            var optional_queue_size = await Flux.ConnectionProvider
-                .ReadVariableAsync(c => c.QUEUE_SIZE)
-                .ToOptionalAsync();
-
-            var queue_size = optional_queue_size
-                .ConvertOr(s => s > 0 ? s : (ushort)1, () => (ushort)1);
-
-            var queue_count = queue.Value.Count;
-            var last_queue_pos = queue_count - 1;
-            if (queue_count >= queue_size)
-            {
-                var last_mcode = QueuedMCodes.Lookup(last_queue_pos);
-                if (last_mcode.HasValue)
-                { 
-                    if (!await DeleteFromQueueAsync(last_mcode.Value))
-                    {
-                        Flux.Messages.LogMessage("Errore durante la selezione del lavoro", "Impossibile cancellare il lavoro dalla coda", MessageLevel.ERROR, 0);
-                        return false;
-                    }
-                }
-                queue_count--;
-                last_queue_pos--;
-                if (queue_pos.Value > last_queue_pos)
-                    queue_pos = (QueuePosition)last_queue_pos;
-            }
+            var connection_provider = Flux.ConnectionProvider;
+            var queue_size = connection_provider.VariableStoreBase.HasPrintUnloader ? 99 : 1;
 
             if (!await PrepareMCodeAsync(mcode))
                 return false;
 
-            var current_job = Job.CreateNew(mcode.MCodeKey, last_queue_pos);
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            if (!await Flux.ConnectionProvider.PutFileAsync(
-                c => c.QueuePath, 
-                $"{current_job}",
-                true, cts.Token))
-            {
-                Flux.Messages.LogMessage("Errore durante la selezione del lavoro", "Impossibile aggiungere alla coda", MessageLevel.ERROR, 0);
+            var queue = await GetJobQueueAsync();
+            if (!queue.HasValue)
                 return false;
-            }
 
-            if (queue_pos.Value < 0)
-            {
-                Flux.StatusProvider.StartWithLowMaterials = false;
-                if (!await Flux.ConnectionProvider.WriteVariableAsync(c => c.QUEUE_POS, (short)0))
-                {
-                    Flux.Messages.LogMessage("Errore durante la selezione del lavoro", "Impossibile selezionare il lavoro", MessageLevel.ERROR, 0);
-                    return false;
-                }
-            }
+            var jobs = queue.Value.Select(j => j.Value.Job)
+                .SkipLast((queue.Value.Count + 1) - queue_size)
+                .Append(Job.CreateNew(mcode.MCodeKey, 0));
+
+            if (!await GenerateQueueAsync(jobs))
+                return false;
 
             if (queue_size <= 1)
                 Flux.Navigator.NavigateHome();
-
-            return await Flux.ConnectionProvider.GenerateInnerQueueAsync();
+            
+            return true;
         }
         public async Task<bool> DeleteFromQueueAsync(IFluxMCodeQueueViewModel mcode)
         {
-            var queue = await Flux.ConnectionProvider.ReadVariableAsync(c => c.JOB_QUEUE);
+            var queue = await GetJobQueueAsync();
             if (!queue.HasValue)
                 return false;
 
@@ -471,58 +478,17 @@ namespace Flux.ViewModels
             if (queue.Value.Keys.Count <= 0)
                 return false;
 
-            var queue_count = queue.Value.Count;
-            var last_queue_pos = queue_count - 1;
-            for (var position = mcode.Job.QueuePosition; position < queue_count; position++)
-            {
-                var current_position = position;
-                var next_position = position.Value + 1;
+            var jobs = queue.Value.Values.Select(j => j.Job)
+                .Where(j => j.QueuePosition != mcode.Job.QueuePosition);
 
-                if (!queue.Value.TryGetValue(current_position, out var current_job))
-                    continue;
-
-                using var delete_queue_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                if (!await Flux.ConnectionProvider.DeleteAsync(
-                    c => c.QueuePath,
-                    $"{current_job.Job}",
-                    true,
-                    delete_queue_cts.Token))
-                    return false;
-
-                if (!queue.Value.TryGetValue(next_position, out var next_job))
-                    continue;
-
-                using var put_queue_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                if (!await Flux.ConnectionProvider.PutFileAsync(
-                   c => c.QueuePath,
-                   $"{next_job.Job with { QueuePosition = current_position }}",
-                   true, put_queue_cts.Token))
-                   return false;
-            }
-
-            var queue_pos = await Flux.ConnectionProvider.ReadVariableAsync(c => c.QUEUE_POS);
-            if (!queue_pos.HasValue)
+            if (!await GenerateQueueAsync(jobs))
                 return false;
 
-            if (queue_pos.Value >= last_queue_pos)
-            {
-                var new_queue_pos = (short)(queue_pos.Value - 1);
-                if (!await Flux.ConnectionProvider.WriteVariableAsync(c => c.QUEUE_POS, new_queue_pos))
-                    return false;
-            }
-
-            queue_pos = await Flux.ConnectionProvider.ReadVariableAsync(c => c.QUEUE_POS);
-            if (!queue_pos.HasValue)
-                return false;
-
-            if (queue_pos.Value == -1)
-                await Flux.ConnectionProvider.CancelPrintAsync(true);
-
-            return await Flux.ConnectionProvider.GenerateInnerQueueAsync();
+            return true;
         }
         public async Task<bool> MoveInQueueAsync(IFluxMCodeQueueViewModel mcode, Func<QueuePosition, QueuePosition> move)
         {
-            var queue = await Flux.ConnectionProvider.ReadVariableAsync(c => c.JOB_QUEUE);
+            var queue = await GetJobQueueAsync();
             if (!queue.HasValue)
                 return false;
 
@@ -543,39 +509,29 @@ namespace Flux.ViewModels
             if (!other_job.HasValue)
                 return false;
 
-            using var delete_current_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            if (!await Flux.ConnectionProvider.DeleteAsync(
-                c => c.QueuePath,
-                $"{current_job.Value.Job}",
-                true, delete_current_cts.Token))
+            var new_current_job = current_job.Value.Job with { QueuePosition = other_index };
+            var new_other_job = other_job.Value.Job with { QueuePosition = current_index };
+
+            var jobs = queue.Value.Values.Select(j => j.Job)
+                .Select(j =>
+                {
+                    if (j.QueuePosition == current_index)
+                        return new_current_job;
+                    if (j.QueuePosition == other_index)
+                        return new_other_job;
+                    return j;
+                });
+
+            if (!await GenerateQueueAsync(jobs))
                 return false;
 
-            using var delete_other_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            if (!await Flux.ConnectionProvider.DeleteAsync(
-                c => c.QueuePath,
-                $"{other_job.Value.Job}",
-                true, delete_other_cts.Token))
-                return false;
-
-            using var put_other_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            if (!await Flux.ConnectionProvider.PutFileAsync(
-               c => c.QueuePath,
-               $"{other_job.Value.Job with { QueuePosition = current_index }}",
-               true, put_other_cts.Token))
-                return false;
-
-            using var put_current_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            if (!await Flux.ConnectionProvider.PutFileAsync(
-               c => c.QueuePath,
-               $"{current_job.Value.Job with { QueuePosition = other_index }}",
-               true, put_current_cts.Token))
-                return false;
-
-            return await Flux.ConnectionProvider.GenerateInnerQueueAsync();
+            return true;
         }
-        private IEnumerable<IFluxMCodeQueueViewModel> CreateMCodeQueue(JobQueue job_queue)
+        private IEnumerable<IFluxMCodeQueueViewModel> CreateMCodeQueue(Optional<JobQueue> job_queue)
         {
-            foreach (var job in job_queue.Values)
+            if (!job_queue.HasValue)
+                yield break;
+            foreach (var job in job_queue.Value.Values)
                 yield return new MCodeQueueViewModel(this, job.Job);
         }
     }

@@ -1,15 +1,11 @@
 ﻿using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
-using System.Text.RegularExpressions;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
@@ -405,7 +401,7 @@ namespace Flux.ViewModels
     }
 
     public class RRF_ObjectModelAxis
-    { 
+    {
         //[JsonProperty("acceleration")]
         //public Optional<double> Acceleration { get; set; }
 
@@ -1225,6 +1221,12 @@ namespace Flux.ViewModels
         public T Result { get; set; }
     }
 
+    public class RRF_Err
+    {
+        [JsonProperty("err")]
+        public short Error { get; set; }
+    }
+
     public static class RRF_DataUtils
     {
         public static Optional<ParamacroProgress> GetParamacroProgress(this RRF_ObjectModelJob job)
@@ -1243,7 +1245,7 @@ namespace Flux.ViewModels
                 var file_position = job.FilePosition;
                 if (!file_position.HasValue)
                     return default;
-                
+
                 var percentage = (double)file_position.Value / file_size.Value * 100.0;
                 if (percentage > 100)
                     percentage = 0;
@@ -1256,4 +1258,5 @@ namespace Flux.ViewModels
             }
         }
     }
+
 }

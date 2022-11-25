@@ -1,7 +1,6 @@
 ﻿using DynamicData;
-using DynamicData.Binding;
 using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
@@ -85,7 +84,7 @@ namespace Flux.ViewModels
                 .Transform(f => (IFluxOffsetViewModel)new OffsetViewModel(this, f))
                 .DisposeMany()
                 .AsObservableCache()
-                .DisposeWith(Disposables);;
+                .DisposeWith(Disposables); ;
 
             var can_safe_start = Flux.StatusProvider
                  .WhenAnyValue(s => s.StatusEvaluation)
@@ -187,7 +186,7 @@ namespace Flux.ViewModels
             var sorted_valid_offsets = Offsets.Items
                 .OrderBy(o => o.Feeder.Position)
                 .Where(o => o.ProbeState != FluxProbeState.ERROR_PROBE);
-            
+
             if (!hard_probe)
             {
                 if (sorted_valid_offsets.Any(o => o.ProbeState == FluxProbeState.VALID_PROBE))

@@ -1,13 +1,9 @@
-﻿using DynamicData;
-using DynamicData.Kernel;
-using Modulo3DStandard;
+﻿using DynamicData.Kernel;
+using Modulo3DNet;
 using ReactiveUI;
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reactive.Linq;
-using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
@@ -40,20 +36,17 @@ namespace Flux.ViewModels
                     return await Flux.ConnectionProvider.ManualFilamentExtract(feeder_index, max_insert_iterations, insert_iteration_dist, 500);
             }
 
-            if (!Flux.ConnectionProvider.HasVariable(c => c.FILAMENT_ON_HEAD))
-                Material.SetMaterialLoaded(true);
-
-            var filament_settings = GCodeFilamentOperation.Create(Material, park_tool:false, keep_temp:true);
+            var filament_settings = GCodeFilamentOperation.Create(Material, park_tool: false, keep_temp: true);
             if (!await ExecuteFilamentOperation(filament_settings, c => c.GetLoadFilamentGCode))
                 return false;
 
-            if (Material.State.IsLoaded())
-            { 
-                Feeder.ToolNozzle.SetLastBreakTemp(filament_settings.Value);
-                if (!await Flux.IterateConfirmDialogAsync("CARICO FILO", "FILO SPURGATO CORRETTAMENTE?", 3,
-                    () => Flux.ConnectionProvider.PurgeAsync(filament_settings.Value)))
-                    return false;
-            }
+            if (!await Flux.IterateConfirmDialogAsync("CARICO FILO", "FILO SPURGATO CORRETTAMENTE?", 3,
+                () => Flux.ConnectionProvider.PurgeAsync(filament_settings.Value)))
+                return false;
+
+            Feeder.ToolNozzle.SetLastBreakTemp(filament_settings.Value);
+            if (!Flux.ConnectionProvider.HasVariable(c => c.FILAMENT_ON_HEAD))
+                Material.SetMaterialLoaded(true);
 
             return true;
         }

@@ -1,11 +1,9 @@
 ﻿using DynamicData.Kernel;
-using Modulo3DDatabase;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Reactive;
 using System.Reactive.Disposables;
-using System.Reactive.Linq;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
@@ -59,7 +57,7 @@ namespace Flux.ViewModels
             string name,
             Action toggle,
             IObservable<Optional<bool>> is_active,
-            OptionalObservable<bool> can_execute = default, 
+            OptionalObservable<bool> can_execute = default,
             OptionalObservable<bool> visible = default)
             : base(name, toggle, can_execute, visible, is_active.ToOptional())
         {

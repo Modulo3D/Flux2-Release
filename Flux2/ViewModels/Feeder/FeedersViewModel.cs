@@ -1,7 +1,7 @@
 ﻿using DynamicData;
 using DynamicData.Binding;
 using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
@@ -45,7 +45,7 @@ namespace Flux.ViewModels
             Feeders = Flux.SettingsProvider
                 .WhenAnyValue(v => v.ExtrudersCount)
                 .Select(CreateFeeders)
-                .ToObservableChangeSet(f => f.Position)
+                .AsObservableChangeSet(f => f.Position)
                 .DisposeMany()
                 .AsObservableCache()
                 .DisposeWith(Disposables);
@@ -103,8 +103,7 @@ namespace Flux.ViewModels
 
             var selected_extruder = Flux.ConnectionProvider
                 .ObserveVariable(m => m.TOOL_ON_TRAILER)
-                .Convert(c => c.QueryWhenChanged(q => (short)q.Items.IndexOf(true)))
-                .ToOptionalObservable();
+                .Convert(c => c.QueryWhenChanged(q => (short)q.Items.IndexOf(true)));
 
             _SelectedExtruder = selected_extruder
                 .ObservableOr(() => (short)-1)
@@ -141,7 +140,7 @@ namespace Flux.ViewModels
         private IEnumerable<IFluxMaterialViewModel> CreateToolMaterials(IFluxFeederViewModel feeder)
         {
             for (ushort position = 0; position < feeder.MixingCount; position++)
-            { 
+            {
                 var material = new MaterialViewModel(this, (FeederViewModel)feeder, (ushort)(position + (feeder.Position * feeder.MixingCount)));
                 material.Initialize();
                 yield return material;

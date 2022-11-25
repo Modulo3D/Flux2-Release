@@ -1,5 +1,5 @@
 ﻿using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
@@ -200,7 +200,7 @@ namespace Flux.ViewModels
                 public void CreateArray<TRData, TWData>(
                     Expression<Func<RRF_VariableStoreBase, IFLUX_Array<TRData, TWData>>> array_expression,
                     Func<RRF_ConnectionProvider, TList, Optional<TRData>> get_data,
-                    Func<RRF_ConnectionProvider, TWData, VariableUnit, Task<bool>> write_data ,
+                    Func<RRF_ConnectionProvider, TWData, VariableUnit, Task<bool>> write_data,
                     params VariableRange[] variables_range)
                 {
                     var array_setter = VariableStore.GetCachedSetterDelegate(array_expression);
@@ -433,7 +433,7 @@ namespace Flux.ViewModels
             public void CreateVariable<TData>(
                 Expression<Func<RRF_VariableStoreBase, IFLUX_Variable<TData, TData>>> variable_expression,
                 bool stored,
-                TData default_value, 
+                TData default_value,
                 Func<object, TData> convert_value = default)
             {
                 var variable_setter = VariableStore.GetCachedSetterDelegate(variable_expression);
@@ -483,7 +483,7 @@ namespace Flux.ViewModels
                 Expression<Func<RRF_VariableStoreBase, IFLUX_Array<TData, TData>>> array_expression,
                 bool stored,
                 TData default_value,
-                Func<object, TData> convert_value, 
+                Func<object, TData> convert_value,
                 params VariableRange[] variables_range)
             {
                 var variable_units = new VariableUnits(variables_range);
@@ -496,7 +496,7 @@ namespace Flux.ViewModels
             public void CreateArray<TData>(
                 Expression<Func<RRF_VariableStoreBase, Optional<IFLUX_Array<TData, TData>>>> array_expression,
                 bool stored,
-                TData default_value, 
+                TData default_value,
                 Func<object, TData> convert_value = default,
                 params VariableRange[] variables_range)
             {

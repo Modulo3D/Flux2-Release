@@ -1,11 +1,10 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Linq;
 using System.Reactive.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
@@ -197,8 +196,8 @@ namespace Flux.ViewModels
                             if (!feeder.HasValue)
                                 continue;
                             AddModal(new NFCInnerViewModel(flux, "Tool", feeder.Value.ToolNozzle, current_machine_e));
-                            
-                            foreach(var material in feeder.Value.Materials.Keys)
+
+                            foreach (var material in feeder.Value.Materials.Keys)
                                 AddModal(new NFCInnerViewModel<IFluxMaterialViewModel>(flux, "Material", feeder.Value.Materials, material, current_machine_e));
                         }
                     }
@@ -265,6 +264,33 @@ namespace Flux.ViewModels
             if (Flux.ConnectionProvider.VariableStoreBase.HasToolChange)
                 AddModal(Flux.Functionality.Magazine);
 
+            var can_shutdown = Observable.CombineLatest(
+                IS_IDLE,
+                Flux.ConnectionProvider.ObserveVariable(c => c.TEMP_TOOL).QueryWhenChanged(),
+                Flux.ConnectionProvider.ObserveVariable(c => c.TEMP_PLATE).Convert(t => t.QueryWhenChanged()),
+                Flux.ConnectionProvider.ObserveVariable(c => c.TEMP_CHAMBER).Convert(t => t.QueryWhenChanged()),
+                (is_idle, temp_tool, temp_plate, temp_chamber) =>
+                {
+                    if (!is_idle.ValueOr(() => false))
+                        return false;
+
+                    foreach (var tool in temp_tool.Items)
+                        if (tool.Value.Current > 60)
+                            return false;
+
+                    if (temp_plate.HasChange)
+                        foreach (var plate in temp_plate.Change.Items)
+                            if (plate.Value.Current > 60)
+                                return false;
+
+                    if (temp_chamber.HasChange)
+                        foreach (var chamber in temp_chamber.Change.Items)
+                            if (chamber.Value.Current > 60)
+                                return false;
+
+                    return true;
+                });
+
             if (Flux.ConnectionProvider.VariableStoreBase.HasVariable(c => c.DISABLE_24V))
                 AddCommand("power", ShutdownAsync, can_execute: IS_IDLE);
 
@@ -308,11 +334,13 @@ namespace Flux.ViewModels
                     },
                     advanced_mode_source));
 
+
             AddModal(Flux.Temperatures);
             AddCommand("resetPrinter", Flux.ConnectionProvider.StartConnection, visible: advanced_mode);
             AddCommand("vacuumPump", m => m.ENABLE_VACUUM, can_execute: IS_IDLE, visible: advanced_mode);
             AddCommand("openClamp", m => m.OPEN_HEAD_CLAMP, can_execute: IS_IDLE, visible: advanced_mode);
             AddCommand("reloadDatabase", () => Flux.DatabaseProvider.Initialize(), visible: advanced_mode);
+            AddCommand("swFilamentSensor", Flux.SettingsProvider.UserSettings, s => s.PauseOnEmptyOdometer, visible: advanced_mode);
 
             AddModal(() => new MemoryViewModel(Flux), visible: advanced_mode);
             AddModal(() => new FilesViewModel(Flux), visible: advanced_mode);
@@ -328,16 +356,8 @@ namespace Flux.ViewModels
             Flux.StatsProvider.ClearUsedPrintAreas();
         }
 
-        public async Task ShutdownAsync()
+        private async Task ShutdownAsync()
         {
-            foreach (var feeder in Flux.Feeders.Feeders.Items)
-            {
-                if (feeder.ToolNozzle.NozzleTemperature.ConvertOr(t => t.Current > 60, () => false))
-                {
-                    Flux.Messages.LogMessage("Estrusori caldi", "Aspetta che tutti gli estrusori si siano raffreddati", MessageLevel.ERROR, 100);
-                    return;
-                }
-            }
             var result = await Flux.ShowConfirmDialogAsync("ATTENZIONE", "LA STAMPANTE VERRA' SPENTA");
             if (result == ContentDialogResult.Primary)
                 await Flux.ConnectionProvider.WriteVariableAsync(m => m.DISABLE_24V, true);

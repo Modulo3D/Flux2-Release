@@ -1,6 +1,6 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Reactive.Disposables;
@@ -34,7 +34,7 @@ namespace Flux.ViewModels
 
                    if (missing_weight < 10)
                        return FluxColors.Error;
-                   
+
                    return FluxColors.Warning;
                })
                .ToProperty(this, v => v.InvalidItemBrush)
@@ -82,7 +82,7 @@ namespace Flux.ViewModels
             _CanStartWithInvalidValues = Flux.StatusProvider.FeederEvaluators.Connect()
                 .TrueForAny(line => line.Material.WhenAnyValue(m => m.HasEmptyWeight), e => e)
                 .ToProperty(this, v => v.CanStartWithInvalidValues);
-            
+
             base.Initialize();
         }
 

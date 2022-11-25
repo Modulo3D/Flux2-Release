@@ -1,6 +1,6 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Linq;
@@ -39,7 +39,7 @@ namespace Flux.ViewModels
         public Optional<UserOffset> UserOffset => _UserOffset.Value;
 
         private ObservableAsPropertyHelper<Optional<ProbeOffset>> _ProbeOffset;
-        public Optional<ProbeOffset> ProbeOffset => _ProbeOffset.Value; 
+        public Optional<ProbeOffset> ProbeOffset => _ProbeOffset.Value;
 
         private ObservableAsPropertyHelper<Optional<FluxOffset>> _FluxOffset;
         public Optional<FluxOffset> FluxOffset => _FluxOffset.Value;
@@ -247,12 +247,12 @@ namespace Flux.ViewModels
                     if (probe_offset.HasValue && tool_offset.Value.Z - probe_offset.Value.Z > 5)
                         return FluxProbeState.ERROR_PROBE;
 
-                    if (!tool_state.IsLoaded() || 
+                    if (!tool_state.IsLoaded() ||
                         !material_state.HasValue ||
                         !material_state.Value.IsLoaded())
                         return FluxProbeState.NO_PROBE;
 
-                    if (!probe_offset.HasValue || 
+                    if (!probe_offset.HasValue ||
                         probe_offset.Value.Z >= tool_offset.Value.Z)
                         return FluxProbeState.INVALID_PROBE;
 

@@ -1,10 +1,8 @@
 ﻿using DynamicData.Kernel;
-using Modulo3DStandard;
-using ReactiveUI;
+using Modulo3DNet;
 using System;
 using System.Globalization;
 using System.Reactive;
-using System.Reactive.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -118,7 +116,7 @@ namespace Flux.ViewModels
                 observe_func: m => m.ObserveWordVar(address)
                     .Convert(s => ShortConverter.Convert(s)),
                 read_func: c => c.Connection.ReadShortAsync(address),
-                write_func: (c, v) => c.Connection.WriteVariableAsync(address, v), 
+                write_func: (c, v) => c.Connection.WriteVariableAsync(address, v),
                 unit)
         {
         }
@@ -155,7 +153,7 @@ namespace Flux.ViewModels
                 read_func: c => c.Connection
                     .ReadDoubleAsync(address),
                 write_func: (c, v) => c.Connection
-                    .WriteVariableAsync(address, v), 
+                    .WriteVariableAsync(address, v),
                 unit)
         {
         }
@@ -173,7 +171,7 @@ namespace Flux.ViewModels
             OSAI_IndexAddress address,
             OSAI_ReadPriority priority,
             VariableUnit unit = default)
-            : base(connection_provider, name, priority, 
+            : base(connection_provider, name, priority,
                   read_func: c => c.Connection.ReadTextAsync(address),
                   write_func: (c, v) => c.Connection.WriteVariableAsync(address, v),
                   unit)
@@ -220,7 +218,7 @@ namespace Flux.ViewModels
             VariableUnit unit = default)
             : base(connection_provider, name, priority,
                   read_func: c => read_async(c, address),
-                  write_func: (c,v) => write_async(c, v, get_temp_gcode),
+                  write_func: (c, v) => write_async(c, v, get_temp_gcode),
                   unit)
         {
             Address = address;
@@ -235,7 +233,7 @@ namespace Flux.ViewModels
                 return default;
 
             var datas = data.Value.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
-            
+
             var target = datas.Length > 0 ? double.Parse($"{datas[0]:0.00}", NumberStyles.Float, CultureInfo.InvariantCulture) : 0;
             var current = datas.Length > 1 ? double.Parse($"{datas[1]:0.00}", NumberStyles.Float, CultureInfo.InvariantCulture) : 0;
             return new FLUX_Temp(current, target);
@@ -276,10 +274,10 @@ namespace Flux.ViewModels
             OSAI_NamedAddress address,
             OSAI_ReadPriority priority,
             VariableUnit unit = default)
-            : base(connection_provider, name, address, priority, 
+            : base(connection_provider, name, address, priority,
                   read_func: c => c.Connection.ReadNamedDoubleAsync(address),
                   write_func: (c, v) => c.Connection.WriteVariableAsync(address, v),
-                  unit) 
+                  unit)
         {
         }
     }
@@ -361,7 +359,7 @@ namespace Flux.ViewModels
                 read_func: c => c.Connection.ReadNamedBoolAsync(address),
                 write_func: (c, v) => c.Connection.WriteVariableAsync(address, v),
                 unit)
-        { 
+        {
         }
     }
 

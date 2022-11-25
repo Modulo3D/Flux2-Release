@@ -1,6 +1,6 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
@@ -177,19 +177,19 @@ namespace Flux.ViewModels
                 var select_tool_gcode = c.GetSelectToolGCode(tool_index);
                 if (!select_tool_gcode.HasValue)
                     return default;
-                
+
                 var set_tool_temp_gcode = c.GetSetToolTemperatureGCode(tool_index, print_temperature.Value, false);
                 if (!set_tool_temp_gcode.HasValue)
                     return default;
-                
+
                 var set_tool_offset_gcode = c.GetSetToolOffsetGCode(tool_index, tool_offset.Value.X, tool_offset.Value.Y, 0);
                 if (!set_tool_offset_gcode.HasValue)
                     return default;
-                
+
                 var manual_calibration_position_gcode = c.GetManualCalibrationPositionGCode();
                 if (!manual_calibration_position_gcode.HasValue)
                     return default;
-                
+
                 var raise_plate_gcode = c.GetRaisePlateGCode();
                 if (!raise_plate_gcode.HasValue)
                     return default;
@@ -290,7 +290,7 @@ namespace Flux.ViewModels
             ToolItems = Flux.SettingsProvider
                 .WhenAnyValue(v => v.ExtrudersCount)
                 .Select(e => FindCalibrationItems(e, not_executing))
-                .ToObservableChangeSet()
+                .AsObservableChangeSet()
                 .AsObservableList()
                 .DisposeWith(Disposables);
 
@@ -308,7 +308,7 @@ namespace Flux.ViewModels
                             var z_bed_height = await Flux.ConnectionProvider.ReadVariableAsync(c => c.Z_BED_HEIGHT);
                             if (!z_bed_height.HasValue)
                                 return;
-                            
+
                             bed_height = z_bed_height.Value;
                         }
 
@@ -325,7 +325,6 @@ namespace Flux.ViewModels
 
             _AxisPosition = Flux.ConnectionProvider.ObserveVariable(m => m.AXIS_POSITION)
                 .Convert(c => c.QueryWhenChanged(p => string.Join(" ", p.KeyValues.Select(v => $"{v.Key}{v.Value:0.00}"))))
-                .ToOptionalObservable()
                 .ObservableOr(() => "")
                 .ToProperty(this, v => v.AxisPosition);
 
@@ -382,7 +381,7 @@ namespace Flux.ViewModels
                 yield break;
 
             for (ushort extruder = 0; extruder < extruders.Value.machine_extruders; extruder++)
-                yield return new ManualCalibrationItemViewModel(this, extruder, not_executing);    
+                yield return new ManualCalibrationItemViewModel(this, extruder, not_executing);
         }
     }
 

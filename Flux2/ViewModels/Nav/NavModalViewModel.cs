@@ -1,10 +1,7 @@
 ﻿using DynamicData.Kernel;
-using Modulo3DDatabase;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
-using System;
 using System.Reactive;
-using System.Reactive.Linq;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels

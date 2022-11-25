@@ -1,15 +1,8 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Modulo3DStandard;
-using Newtonsoft.Json.Linq;
-using ReactiveUI;
+using Modulo3DNet;
 using System;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Linq;
-using System.Linq.Expressions;
-using System.Reactive;
-using System.Reactive.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -46,7 +39,7 @@ namespace Flux.ViewModels
             VariableUnit unit = default) :
             base(connection_provider, name,
                 observe_func: c => observe_func(c, get_model, get_data),
-                read_func: c => read_variable(c, read_model, s => get_data(c, s)), 
+                read_func: c => read_variable(c, read_model, s => get_data(c, s)),
                 write_func: write_data,
                 unit)
         {
@@ -54,7 +47,7 @@ namespace Flux.ViewModels
 
         static IObservable<Optional<TRData>> observe_func(
             RRF_ConnectionProvider connection_provider,
-            Func<RRF_ObjectModel, IObservable<Optional<TModel>>> get_model, 
+            Func<RRF_ObjectModel, IObservable<Optional<TModel>>> get_model,
             Func<RRF_ConnectionProvider, TModel, Optional<TRData>> get_data)
         {
             return connection_provider.MemoryBuffer.ObserveModel(get_model, get_data);
@@ -68,7 +61,7 @@ namespace Flux.ViewModels
         }
         static async Task<ValueResult<TRData>> read_variable(
             RRF_ConnectionProvider connection_provider,
-            Func<RRF_MemoryBuffer, Task<Optional<TModel>>> read_model, 
+            Func<RRF_MemoryBuffer, Task<Optional<TModel>>> read_model,
             Func<TModel, Optional<TRData>> get_data)
         {
             var model = await read_model(connection_provider.MemoryBuffer);
@@ -78,7 +71,7 @@ namespace Flux.ViewModels
         }
         static async Task<ValueResult<TRData>> read_variable(
             RRF_ConnectionProvider connection_provider,
-            Func<RRF_MemoryBuffer, Task<Optional<TModel>>> read_model, 
+            Func<RRF_MemoryBuffer, Task<Optional<TModel>>> read_model,
             Func<TModel, Task<Optional<TRData>>> get_data)
         {
             var model = await read_model(connection_provider.MemoryBuffer);
@@ -173,7 +166,7 @@ namespace Flux.ViewModels
             return true;
         }
 
-        public async Task<bool> CreateVariableAsync(CancellationToken ct) 
+        public async Task<bool> CreateVariableAsync(CancellationToken ct)
         {
             var gcode = WriteVariableString(Variable, DefaultValue);
 

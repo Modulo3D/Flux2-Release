@@ -1,13 +1,8 @@
 ﻿using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
-using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Reactive;
 using System.Reactive.Disposables;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
@@ -67,7 +62,7 @@ namespace Flux.ViewModels
 
             if (folder.ConvertOr(f => f.FSFullPath.Contains(files.Flux.ConnectionProvider.MacroPath), () => false) ||
                 folder.ConvertOr(f => f.FSFullPath.Contains(files.Flux.ConnectionProvider.StoragePath), () => false))
-            { 
+            {
                 ExecuteFileCommand = ReactiveCommand.CreateFromTask(() => files.ExecuteFileAsync(this))
                     .DisposeWith(Disposables);
             }

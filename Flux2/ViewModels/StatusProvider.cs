@@ -1,18 +1,16 @@
 ﻿using DynamicData;
-using DynamicData.Aggregation;
 using DynamicData.Binding;
 using DynamicData.Kernel;
-using Microsoft.Extensions.Logging;
-using Modulo3DDatabase;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Linq.Expressions;
 using System.Reactive;
 using System.Reactive.Linq;
 using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
@@ -36,7 +34,7 @@ namespace Flux.ViewModels
         {
             Name = name;
             IncludeAlias = include_alias;
-            ExcludeAlias = exclude_alias; 
+            ExcludeAlias = exclude_alias;
             FilterOnCycle = filter_on_cycle;
             if (include_alias != null && exclude_alias != null)
                 throw new ArgumentException("non è possibile aggiungere alias di inclusione ed esclusione allo stesso momento");
@@ -54,7 +52,7 @@ namespace Flux.ViewModels
     {
         public CycleConditionAttribute(string name = default, bool filter_on_cycle = true, string[] include_alias = default, string[] exclude_alias = default)
             : base(name, filter_on_cycle, include_alias, exclude_alias)
-        { 
+        {
         }
     }
     public class PrintConditionAttribute : FilterConditionAttribute
@@ -80,6 +78,10 @@ namespace Flux.ViewModels
     {
         public FluxViewModel Flux { get; }
         public ConditionStateCreator StateCreator { get; }
+
+        private ObservableAsPropertyHelper<Optional<JobQueue>> _JobQueue;
+        public Optional<JobQueue> JobQueue => _JobQueue.Value;
+
         public IObservableCache<FeederEvaluator, ushort> FeederEvaluators { get; private set; }
         public IObservableCache<Optional<DocumentQueue<Material>>, ushort> ExpectedMaterialsQueue { get; private set; }
         public IObservableCache<Optional<DocumentQueue<Nozzle>>, ushort> ExpectedNozzlesQueue { get; private set; }
@@ -111,7 +113,7 @@ namespace Flux.ViewModels
         [StatusBarCondition]
         public Optional<IConditionViewModel> ClampCondition
         {
-            get 
+            get
             {
                 var variable_store = Flux.ConnectionProvider.VariableStoreBase;
 
@@ -122,8 +124,8 @@ namespace Flux.ViewModels
                         Flux.ConnectionProvider.ObserveVariable(m => m.IN_CHANGE),
                         Flux.ConnectionProvider.ObserveVariable(m => m.TOOL_CUR).ToOptional(),
                         Flux.ConnectionProvider.ObserveVariable(m => m.OPEN_HEAD_CLAMP),
-                        (status, in_change, tool_cur, open) => (status, in_change, tool_cur, open), 
-                        () => (status: FLUX_ProcessStatus.NONE, in_change: false, tool_cur: ArrayIndex.FromZeroBase(-1, variable_store), open:false));
+                        (status, in_change, tool_cur, open) => (status, in_change, tool_cur, open),
+                        () => (status: FLUX_ProcessStatus.NONE, in_change: false, tool_cur: ArrayIndex.FromZeroBase(-1, variable_store), open: false));
 
                     var is_idle = Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS)
                         .Convert(data => data == FLUX_ProcessStatus.IDLE)
@@ -134,8 +136,8 @@ namespace Flux.ViewModels
                         {
                             var tool_cur = value.tool_cur.GetZeroBaseIndex();
                             var toggle_clamp = state.Create("clamp", c => c.OPEN_HEAD_CLAMP, is_idle);
-                            
-                            if(value.in_change && value.status == FLUX_ProcessStatus.CYCLE)
+
+                            if (value.in_change && value.status == FLUX_ProcessStatus.CYCLE)
                                 return state.Create(EConditionState.Idle, "");
 
                             if (value.open)
@@ -146,7 +148,7 @@ namespace Flux.ViewModels
                             }
                             else
                             {
-                                if(tool_cur > -1)
+                                if (tool_cur > -1)
                                     return state.Create(EConditionState.Stable, "PINZA OK", toggle_clamp);
                                 return state.Create(EConditionState.Error, "PINZA CHIUSA SENZA UTENSILE SELEZIONATO");
                             }
@@ -190,8 +192,8 @@ namespace Flux.ViewModels
                                 var toggle_lock = state.Create("lock", c => c.OPEN_LOCK, lock_unit, is_idle);
 
                                 if (!value.closed || value.open)
-                                { 
-                                    if(!value.is_idle)
+                                {
+                                    if (!value.is_idle)
                                         return state.Create(EConditionState.Error, $"{lock_unit} APERTA DURANTE LA LAVORAZIONE");
 
                                     return state.Create(EConditionState.Warning, $"CHIUDERE {lock_unit}", toggle_lock);
@@ -212,7 +214,7 @@ namespace Flux.ViewModels
         [StatusBarCondition]
         public SourceCache<IConditionViewModel, string> ChamberConditions
         {
-            get 
+            get
             {
                 if (_ChamberConditions == default)
                 {
@@ -311,10 +313,10 @@ namespace Flux.ViewModels
 
                                 if (temperature.IsHot && (open || !closed))
                                     return state.Create(EConditionState.Warning, $"{plate_unit} ACCESA, FARE ATTENZIONE");
-                                
+
                                 if (temperature.IsOn.ValueOr(() => false))
-                                    return state.Create(EConditionState.Stable, $"{plate_unit} ACCESA");    
-          
+                                    return state.Create(EConditionState.Stable, $"{plate_unit} ACCESA");
+
                                 return state.Create(EConditionState.Disabled, $"{plate_unit} SPENTA");
 
                             }, TimeSpan.FromSeconds(1));
@@ -332,7 +334,7 @@ namespace Flux.ViewModels
         [StatusBarCondition]
         public Optional<IConditionViewModel> PressureCondition
         {
-            get 
+            get
             {
                 if (!_PressureCondition.HasValue)
                 {
@@ -533,7 +535,7 @@ namespace Flux.ViewModels
         private IConditionViewModel _MessageCondition;
 
         [StatusBarCondition]
-        public IConditionViewModel NetworkCondition 
+        public IConditionViewModel NetworkCondition
         {
             get
             {
@@ -602,7 +604,7 @@ namespace Flux.ViewModels
 
             FeederEvaluators = Flux.Feeders.Feeders.Connect()
                 .QueryWhenChanged(CreateFeederEvaluator)
-                .ToObservableChangeSet(e => e.Feeder.Position)
+                .AsObservableChangeSet(e => e.Feeder.Position)
                 .AsObservableCache();
 
             ExpectedMaterialsQueue = FeederEvaluators.Connect()
@@ -621,12 +623,21 @@ namespace Flux.ViewModels
                 .ObserveVariable(m => m.QUEUE_POS)
                 .StartWithDefault();
 
-            var queue = Flux.ConnectionProvider
+            _JobQueue = Flux.ConnectionProvider
                 .ObserveVariable(m => m.JOB_QUEUE)
-                .StartWithDefault();
+                .Convert(get_queue)
+                .ConvertMany(Observable.FromAsync)
+                .StartWithDefault()
+                .ToProperty(this, v => v.JobQueue);
+
+            Func<Task<Optional<JobQueue>>> get_queue(JobQueuePreview preview) => () =>
+            {
+                using var queue_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                return preview.GetJobQueueAsync(Flux.ConnectionProvider, queue_cts.Token);
+            };
 
             var job_partprograms = Observable.CombineLatest(
-                queue_pos, queue, (queue_pos, queue) =>
+                queue_pos, this.WhenAnyValue(s => s.JobQueue), (queue_pos, queue) =>
                 {
                     if (!queue.HasValue)
                         return default;
@@ -640,12 +651,20 @@ namespace Flux.ViewModels
 
             var current_partprogram = job_partprograms
                 .Convert(j => j.GetCurrentPartProgram())
-                .ConvertMany(pp => Observable.FromAsync(() => pp.GetMCodePartProgramAsync(Flux.ConnectionProvider)));
-                
+                .Convert(get_partprogram)
+                .ConvertMany(Observable.FromAsync)
+                .StartWithDefault();
+
+            Func<Task<Optional<MCodePartProgram>>> get_partprogram(MCodePartProgramPreview preview) => () =>
+            {
+                using var queue_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                return preview.GetMCodePartProgramAsync(Flux.ConnectionProvider, queue_cts.Token);
+            };
+
             var current_mcode_key = current_partprogram
                 .Convert(j => j.MCodeKey);
 
-            var current_mcode =  Flux.MCodes.AvaiableMCodes.Connect()
+            var current_mcode = Flux.MCodes.AvaiableMCodes.Connect()
                 .AutoRefresh(m => m.Analyzer)
                 .WatchOptional(current_mcode_key)
                 .Convert(m => m.Analyzer)
@@ -694,12 +713,12 @@ namespace Flux.ViewModels
                 .TrueForAny(line => line.WhenAnyValue(l => l.HasColdNozzle), cold => cold)
                 .StartWith(false)
                 .DistinctUntilChanged();
-            
+
             var has_invalid_printer = Observable.CombineLatest(
                 core_settings.WhenAnyValue(v => v.PrinterID),
                 current_mcode,
                 (printer_id, selected_mcode) => !selected_mcode.HasValue || selected_mcode.Value.PrinterId != printer_id);
-            
+
             _StartEvaluation = Observable.CombineLatest(
                 has_low_nozzles,
                 has_cold_nozzles,
@@ -944,9 +963,9 @@ namespace Flux.ViewModels
             var current_mcode = evaluation.CurrentMCode;
             if (!current_mcode.HasValue)
                 return new PrintProgress(0, TimeSpan.Zero);
-            
+
             var duration = current_mcode.Value.Duration;
-            
+
             var current_job = evaluation.CurrentJob;
             if (!current_job.HasValue)
                 return new PrintProgress(0, duration);

@@ -1,10 +1,10 @@
 ﻿using DynamicData;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
-using System.Reactive.Linq;
 using System.Linq;
+using System.Reactive.Linq;
 
 namespace Flux.ViewModels
 {
@@ -39,7 +39,7 @@ namespace Flux.ViewModels
             _State = conditions
                 .AsObservableChangeSet(t => t.ConditionName)
                 .AutoTransform(c => c.State)
-                .QueryWhenChanged(s => 
+                .QueryWhenChanged(s =>
                 {
                     if (s.Items.Any(s => s.State == EConditionState.Error))
                         return StatusBarState.Error;

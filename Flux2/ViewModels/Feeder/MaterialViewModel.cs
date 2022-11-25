@@ -1,7 +1,6 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Microsoft.Extensions.Logging;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Linq;
@@ -55,12 +54,12 @@ namespace Flux.ViewModels
 
         IFluxToolMaterialViewModel IFluxMaterialViewModel.ToolMaterial => ToolMaterial;
         private ToolMaterialViewModel _ToolMaterial;
-        public ToolMaterialViewModel ToolMaterial 
+        public ToolMaterialViewModel ToolMaterial
         {
             get
             {
                 if (_ToolMaterial == default)
-                { 
+                {
                     _ToolMaterial = new ToolMaterialViewModel(Feeder.ToolNozzle, this);
                     _ToolMaterial.DisposeWith(Disposables);
                 }
@@ -78,12 +77,12 @@ namespace Flux.ViewModels
         public MaterialViewModel(FeedersViewModel feeders, FeederViewModel feeder, ushort position) : base(feeders, feeder, position, s => s.NFCMaterials, (db, m) =>
         {
             return m.GetDocument<Material>(db, m => m.MaterialGuid);
-        }, t => t.MaterialGuid, pause_on_odometer: true)
+        }, t => t.MaterialGuid, watch_odometer_for_pause: true)
         {
             _ExtrusionKey = Observable.CombineLatest(
                   Feeder.ToolNozzle.NFCSlot.WhenAnyValue(t => t.Nfc),
                   NFCSlot.WhenAnyValue(m => m.Nfc),
-                  (tool_nozzle, material) => Modulo3DStandard.ExtrusionKey.Create(tool_nozzle, material))
+                  (tool_nozzle, material) => Modulo3DNet.ExtrusionKey.Create(tool_nozzle, material))
                   .ToProperty(this, v => v.ExtrusionKey)
                   .DisposeWith(Disposables);
 
@@ -146,7 +145,7 @@ namespace Flux.ViewModels
                 return unload;
             });
         }
-        
+
         public bool SetMaterialLoaded(Optional<bool> material_loaded)
         {
             if (!material_loaded.HasValue)
@@ -183,7 +182,7 @@ namespace Flux.ViewModels
                 {
                     if (m.IsNotLoaded())
                         return FluxColors.Empty;
-                    if(!tn.Inserted)
+                    if (!tn.Inserted)
                         return FluxColors.Empty;
                     if (!tn.IsLoaded())
                         return FluxColors.Inactive;
@@ -308,13 +307,15 @@ namespace Flux.ViewModels
             return Observable.CombineLatest(inserted, known, locked, loaded,
                  (inserted, known, locked, loaded) => new MaterialState(inserted, known, locked, loaded));
         }
-        private bool CanLoadMaterial(bool can_cycle, ToolNozzleState tool_nozzle, MaterialState material,  Optional<ToolMaterialState> tool_material)
+        private bool CanLoadMaterial(bool can_cycle, ToolNozzleState tool_nozzle, MaterialState material, Optional<ToolMaterialState> tool_material)
         {
             if (!can_cycle)
                 return false;
             if (!tool_nozzle.IsLoaded())
                 return false;
             if (material.IsLoaded())
+                return false;
+            if (material.Locked)
                 return false;
             if (!tool_material.HasValue)
                 return false;

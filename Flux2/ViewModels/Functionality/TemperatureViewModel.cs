@@ -1,11 +1,9 @@
 ﻿using DynamicData.Kernel;
-using Modulo3DDatabase;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Reactive;
 using System.Reactive.Linq;
-using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
@@ -29,7 +27,7 @@ namespace Flux.ViewModels
         public ReactiveCommand<Unit, Unit> SelectTargetCommand { get; }
 
         private double _TargetTemperature = 0;
-        [RemoteInput(step: 10, converter:typeof(TemperatureConverter))]
+        [RemoteInput(step: 10, converter: typeof(TemperatureConverter))]
         public double TargetTemperature
         {
             get => _TargetTemperature;
@@ -48,12 +46,12 @@ namespace Flux.ViewModels
             Label = temp_var.Name;
             Flux = temperatures.Flux;
 
-            var is_idle = Flux.StatusProvider
+            var can_safe_cycle = Flux.StatusProvider
                 .WhenAnyValue(s => s.StatusEvaluation)
-                .Select(s => s.IsIdle);
+                .Select(s => s.CanSafeCycle);
 
-            ShutTargetCommand = ReactiveCommand.CreateFromTask(async () => { await temp_var.WriteAsync(0); }, is_idle);
-            SelectTargetCommand = ReactiveCommand.CreateFromTask(async () => { await temp_var.WriteAsync(TargetTemperature); }, is_idle);
+            ShutTargetCommand = ReactiveCommand.CreateFromTask(async () => { await temp_var.WriteAsync(0); }, can_safe_cycle);
+            SelectTargetCommand = ReactiveCommand.CreateFromTask(async () => { await temp_var.WriteAsync(TargetTemperature); }, can_safe_cycle);
 
             _Temperature = temp_var.ValueChanged
                 .ToProperty(this, v => v.Temperature);

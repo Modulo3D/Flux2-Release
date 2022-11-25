@@ -1,6 +1,6 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
@@ -108,8 +108,8 @@ namespace Flux.ViewModels
                 .WhenAnyValue(s => s.StatusEvaluation)
                 .Select(e => e.CanSafeCycle);
 
-            var last_queue_pos = mcodes.Flux.ConnectionProvider
-                .ObserveVariable(c => c.JOB_QUEUE)
+            var last_queue_pos = mcodes.Flux.StatusProvider
+                .WhenAnyValue(s => s.JobQueue)
                 .Convert(q => q?.Count - 1 ?? -1)
                 .Convert(c => new QueuePosition((short)c))
                 .ValueOr(() => new QueuePosition(-1));
@@ -157,10 +157,15 @@ namespace Flux.ViewModels
                     return kvp.Value.MCode.Duration;
                 }
             }
-            catch(Exception ex)
+            catch (Exception)
             {
                 return start_time;
             }
+        }
+
+        public override void Dispose()
+        {
+            base.Dispose();
         }
     }
 }

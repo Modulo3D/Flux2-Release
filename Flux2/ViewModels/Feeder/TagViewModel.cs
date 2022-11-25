@@ -1,17 +1,13 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Modulo3DDatabase;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
-using System.IO;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
-using System.Security.Cryptography;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
@@ -54,20 +50,20 @@ namespace Flux.ViewModels
         IFluxFeederViewModel IFluxTagViewModel.Feeder => Feeder;
         IFluxFeedersViewModel IFluxTagViewModel.Feeders => Feeders;
 
-        private bool PauseOnOdometer { get; }
+        public bool WatchOdometerForPause { get; set; }
 
         public TagViewModel(
             FeedersViewModel feeders, FeederViewModel feeder, ushort position,
             Func<IFluxFeedersViewModel, INFCStorage<TNFCTag>> get_tag_storage,
             Func<ILocalDatabase, TNFCTag, TDocument> find_document,
-            Func<TNFCTag, Guid> check_tag, bool pause_on_odometer) : base($"{typeof(TTagViewModel).GetRemoteControlName()}??{position}")
+            Func<TNFCTag, Guid> check_tag, bool watch_odometer_for_pause) : base($"{typeof(TTagViewModel).GetRemoteControlName()}??{position}")
         {
             Feeder = feeder;
             Feeders = feeders;
             Flux = feeders.Flux;
             Position = position;
             CheckTag = check_tag;
-            PauseOnOdometer = pause_on_odometer;
+            WatchOdometerForPause = watch_odometer_for_pause;
 
             var virtual_card_id = Flux.MCodes
                 .WhenAnyValue(m => m.OperatorUSB)
@@ -100,7 +96,7 @@ namespace Flux.ViewModels
             NFCSlot.RestoreBackupTag();
         }
 
-        public virtual void Initialize() 
+        public virtual void Initialize()
         {
             var multiplier = Observable.Return(1.0);
             Odometer = new OdometerViewModel<TNFCTag>(this, multiplier);
@@ -117,15 +113,29 @@ namespace Flux.ViewModels
                 .Subscribe(async _ => await Odometer.OdometerManager.StoreCurrentWeightsAsync())
                 .DisposeWith(Disposables);
 
-            if (PauseOnOdometer)
+            if (WatchOdometerForPause)
             {
-                NFCSlot.WhenAnyValue(s => s.Nfc)
-                    .Where(nfc => nfc.HasTag)
-                    .Where(nfc => nfc.Tag.Value.CurWeightG.HasValue)
-                    .Where(nfc => nfc.Tag.Value.CurWeightG.Value <= 0)
+                var pause_on_empty_odometer = Flux.SettingsProvider.UserSettings.Local
+                    .WhenAnyValue(c => c.PauseOnEmptyOdometer);
+
+                var nfc = NFCSlot.WhenAnyValue(s => s.Nfc);
+
+                Observable.CombineLatest(pause_on_empty_odometer, nfc, (pause_on_empty_odometer, nfc) =>
+                    {
+                        if (!pause_on_empty_odometer)
+                            return false;
+                        if (!nfc.HasTag)
+                            return false;
+                        if (!nfc.Tag.Value.CurWeightG.HasValue)
+                            return false;
+                        if (nfc.Tag.Value.CurWeightG.Value > -50)
+                            return false;
+                        return true;
+                    })
+                    .Where(has_pause => has_pause)
                     .Subscribe(_ => Flux.ConnectionProvider.PausePrintAsync(true, true))
                     .DisposeWith(Disposables);
             }
-        }       
+        }
     }
 }

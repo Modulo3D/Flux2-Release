@@ -1,7 +1,6 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Modulo3DDatabase;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
@@ -75,7 +74,7 @@ namespace Flux.ViewModels
                 Flux.DatabaseProvider.WhenAnyValue(v => v.Database),
                 this.WhenAnyValue(v => v.Analyzer),
                 (db, a) => FindDocuments<Material>(db, a, r => r.MaterialId))
-                .ToObservableChangeSet(t => t.position)
+                .AsObservableChangeSet(t => t.position)
                 .Transform(t => t.document)
                 .AsObservableCache()
                 .DisposeWith(Disposables);
@@ -84,7 +83,7 @@ namespace Flux.ViewModels
                 Flux.DatabaseProvider.WhenAnyValue(v => v.Database),
                 this.WhenAnyValue(v => v.Analyzer),
                 (db, a) => FindDocuments<Nozzle>(db, a, r => r.NozzleId))
-                .ToObservableChangeSet(t => t.position)
+                .AsObservableChangeSet(t => t.position)
                 .Transform(t => t.document)
                 .AsObservableCache()
                 .DisposeWith(Disposables);
@@ -111,13 +110,13 @@ namespace Flux.ViewModels
                 .ToProperty(this, v => v.CanDelete)
                 .DisposeWith(Disposables);
 
-            var queue_size = Flux.ConnectionProvider
-                .ObserveVariable(c => c.QUEUE_SIZE)
-                .ValueOr(() => (ushort)0);
+            var is_idle = MCodes.Flux.StatusProvider
+                .WhenAnyValue(s => s.StatusEvaluation)
+                .Select(e => e.IsIdle);
 
             _CanSelect = Observable.CombineLatest(
+                is_idle,
                 is_selecting_file,
-                queue_size,
                 Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS),
                 Flux.StatusProvider.WhenAnyValue(e => e.PrintingEvaluation),
                 CanSelectMCode)
@@ -169,11 +168,14 @@ namespace Flux.ViewModels
             AddOutput("created", Analyzer.MCode.Created, typeof(DateTimeConverter<RelativeDateTimeFormat>));
         }
 
-        private bool CanSelectMCode(bool selecting, ushort queue_size, Optional<FLUX_ProcessStatus> status, PrintingEvaluation printing_eval)
+        private bool CanSelectMCode(bool is_idle, bool selecting, Optional<FLUX_ProcessStatus> status, PrintingEvaluation printing_eval)
         {
+            var connection_provider = Flux.ConnectionProvider;
+            /*if (!is_idle)
+                return false;*/
             if (selecting)
                 return false;
-            if (queue_size > 1)
+            if (connection_provider.VariableStoreBase.HasPrintUnloader)
                 return true;
             if (!printing_eval.CurrentMCode.HasValue)
                 return true;
@@ -193,7 +195,7 @@ namespace Flux.ViewModels
 
             return (ushort)index;
         }
-        private IEnumerable<(TDocument document, ushort position)> FindDocuments<TDocument>(Optional<ILocalDatabase> database, Optional<MCodeAnalyzer> analyzer, Func<FeederReport, int> get_id)
+        private static IEnumerable<(TDocument document, ushort position)> FindDocuments<TDocument>(Optional<ILocalDatabase> database, Optional<MCodeAnalyzer> analyzer, Func<FeederReport, int> get_id)
             where TDocument : IDocument, new()
         {
             if (!database.HasValue)

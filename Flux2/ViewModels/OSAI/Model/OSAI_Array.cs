@@ -1,9 +1,7 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.Linq;
 using System.Reactive.Linq;
 

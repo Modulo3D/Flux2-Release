@@ -1,6 +1,6 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Reactive.Disposables;
@@ -27,14 +27,14 @@ namespace Flux.ViewModels
                 {
                     if (!current_weight.HasValue || !expected_weight.HasValue)
                         return FluxColors.Error;
-                    
+
                     var missing_weight = expected_weight.Value - current_weight.Value;
                     if (missing_weight <= 0)
                         return FluxColors.Active;
-                    
+
                     if (missing_weight < 1000)
                         return FluxColors.Error;
-                    
+
                     return FluxColors.Warning;
                 })
                 .ToProperty(this, v => v.InvalidItemBrush)

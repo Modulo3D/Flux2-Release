@@ -1,15 +1,10 @@
 ﻿using DynamicData;
-using DynamicData.Aggregation;
 using DynamicData.Kernel;
 using Microsoft.Extensions.Logging;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
-using RestSharp;
 using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Linq.Expressions;
-using System.Reactive;
 using System.Reactive.Linq;
 using System.Text;
 using System.Threading;
@@ -36,13 +31,13 @@ namespace Flux.ViewModels
             var queue_incremented = queue_pos.PairWithPreviousValue()
                 .Where(q => q.OldValue.HasValue && q.OldValue.Value > -1)
                 .Where(q => q.NewValue.HasValue && q.NewValue.Value > q.OldValue.Value)
-                .Select(q => (OldValue:q.OldValue.Value, NewValue:q.NewValue.Value));
+                .Select(q => (OldValue: q.OldValue.Value, NewValue: q.NewValue.Value));
 
             var queue_ended = queue_pos.PairWithPreviousValue()
                 .Where(q => q.OldValue.HasValue && q.OldValue.Value > -1)
                 .Where(q => q.NewValue.HasValue && q.NewValue.Value == -1)
                 .Select(q => q.OldValue.Value);
-            
+
             var job_started = Observable.Merge(queue_started, queue_incremented.Select(i => i.NewValue))
                 .SelectMany(q => progress.FirstAsync(b => b.Percentage > 0).Select(_ => q));
 
@@ -53,8 +48,11 @@ namespace Flux.ViewModels
                 .Convert(get_events)
                 .ConvertMany(Observable.FromAsync);
 
-            Func<Task<Optional<MCodeEventStorage>>> get_events(MCodeEventStoragePreview events) =>
-                () => events.GetMCodeEventStorage(Flux.ConnectionProvider);
+            Func<Task<Optional<MCodeEventStorage>>> get_events(MCodeEventStoragePreview events) => () =>
+            {
+                using var storage_cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                return events.GetMCodeEventStorageAsync(Flux.ConnectionProvider, storage_cts.Token);
+            };
 
             mcode_events.Subscribe(async events =>
             {
@@ -69,9 +67,9 @@ namespace Flux.ViewModels
 
                     foreach (var job in mcode.Value)
                     {
-                        foreach (var @event in job.Value) 
+                        foreach (var @event in job.Value)
                             flux.Logger.LogInformation(new EventId(0, $"job_event"), $"{@event}");
-                        
+
                         // TODO
                         //var program_history = new JobHistory()
                         //{
@@ -114,78 +112,33 @@ namespace Flux.ViewModels
                         //}
 
                         using var delete_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                        await Flux.ConnectionProvider.DeleteAsync(c => c.JobEventPath, $"{mcode.Key};{job.Key}", false, delete_cts.Token);
+                        await Flux.ConnectionProvider.DeleteAsync(c => c.JobEventPath, $"{mcode.Key};{job.Key}", delete_cts.Token);
                     }
                 }
             });
 
+            var extrusions = Flux.StatusProvider.FeederEvaluators.Connect()
+                .AutoTransform(f => f.ExtrusionQueue)
+                .QueryWhenChanged();
 
-            /*job_started.Subscribe(async queue_position =>
+            extrusions.Subscribe(extrusions =>
             {
-                try
+                foreach (var extrusion in extrusions.KeyValues)
                 {
-                    var queue = await Flux.ConnectionProvider.ReadVariableAsync(c => c.QUEUE);
-                    if (!queue.HasValue)
-                        return;
-
-                    var job = queue.Value.Lookup(queue_position);
-                    if (!job.HasValue)
-                        return;
-
-                   
-                }
-                catch (Exception ex)
-                {
-                    flux.Logger.LogInformation(new EventId(0, "job_started"), ex.Message);
+                    if (!extrusion.Value.HasValue)
+                        continue;
+                    var total_weight = extrusion.Value.Value.Aggregate(0.0, (w, kvp) => w + kvp.Value.WeightG);
+                    flux.Logger.LogInformation(new EventId(0, $"job_event"), $"{extrusion.Key}:{total_weight:0.00}");
                 }
             });
-
-            job_finished.Subscribe(async queue_position => 
-            {
-                try
-                {
-                    var queue = await Flux.ConnectionProvider.ReadVariableAsync(c => c.QUEUE);
-                    if (!queue.HasValue)
-                        return;
-
-                    var job = queue.Value.Lookup(queue_position);
-                    if (!job.HasValue)
-                        return;
-
-                    var program_history = new JobHistory(job.Value)
-                    {
-                        EndDate = DateTime.Now.ToString(),
-                    };
-
-                    var core_settings = Flux.SettingsProvider.CoreSettings.Local;
-                    if (!core_settings.LoggerAddress.HasValue)
-                        return;
-
-                    flux.Logger.LogInformation(new EventId(0, "job_finished"), $"{job.Value.JobKey}");
-
-                    // TODO
-                    if (!core_settings.LoggerAddress.HasValue)
-                        return;
-                    if (string.IsNullOrEmpty(core_settings.LoggerAddress.Value))
-                        return;
-
-                    var request = new RestRequest($"{core_settings.LoggerAddress}/api/programs");
-                    request.AddJsonBody(program_history);
-                    await Flux.NetProvider.Client.PutAsync(request);
-                }
-                catch (Exception ex)
-                {
-                    flux.Logger.LogInformation(new EventId(0, "job_finished"), ex.Message);
-                }
-            });*/
         }
     }
 
     public static class LoggingExtentions
     {
         public static void LogVariable<TRData, TWData, TLData>(
-            this IFLUX_ConnectionProvider connection_provider, 
-            ILogger logger, 
+            this IFLUX_ConnectionProvider connection_provider,
+            ILogger logger,
             Func<IFLUX_VariableStore, IFLUX_Variable<TRData, TWData>> get_variable,
             Func<TRData, TLData> get_log)
         {

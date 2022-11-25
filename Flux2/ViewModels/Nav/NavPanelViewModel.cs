@@ -1,10 +1,12 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Modulo3DDatabase;
-using Modulo3DStandard;
+using Modulo3DNet;
+using ReactiveUI;
 using System;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Reactive.Disposables;
+using System.Reactive.Linq;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
@@ -101,7 +103,7 @@ namespace Flux.ViewModels
             OptionalObservable<bool> visible = default)
         {
             var variable = Flux.ConnectionProvider.GetVariable(get_variable);
-            if(variable.HasValue)
+            if (variable.HasValue)
                 Buttons.Add(new ToggleButton(name, Flux, variable.Value, can_execute, visible));
         }
 
@@ -138,6 +140,31 @@ namespace Flux.ViewModels
             if (variable.HasValue)
                 Buttons.Add(new ToggleButton(name, Flux, variable.Value, can_execute, visible));
         }
+
+
+        public void AddCommand<TSettings>(
+            string name,
+            LocalSettingsProvider<TSettings> settings,
+            Expression<Func<TSettings, bool>> setting_expr,
+            OptionalObservable<bool> can_execute = default,
+            OptionalObservable<bool> visible = default)
+            where TSettings : new()
+        {
+            var setting_getter = setting_expr.GetCachedGetterDelegate();
+            var setting_setter = setting_expr.GetCachedSetterDelegate();
+            var is_active = settings.Local.WhenAnyValue(setting_expr)
+                .Select(v => v.ToOptional());
+
+            Buttons.Add(new ToggleButton(name, toggle_setting, is_active, can_execute, visible));
+
+            void toggle_setting()
+            {
+                var value = setting_getter(settings.Local);
+                setting_setter.Invoke(settings.Local, !value);
+                settings.PersistLocalSettings();
+            }
+        }
+
         public void AddCommand(CmdButton button)
         {
             Buttons.Add(button);

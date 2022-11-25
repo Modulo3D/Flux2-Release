@@ -1,6 +1,6 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Diagnostics;
@@ -10,7 +10,6 @@ using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Reactive.Linq;
 using System.Runtime.InteropServices;
-using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
@@ -77,10 +76,10 @@ namespace Flux.ViewModels
                 .ToProperty(this, v => v.HostAddress);
 
             _ExtrudersCount = this.WhenAnyValue(v => v.Printer)
-                .Convert(p => 
+                .Convert(p =>
                 {
                     var machine_extruder_count = p[p => p.MachineExtruderCount, 0];
-                    var mixing_extruder_count = p[p => p.MixingExtruderCount, 0]; 
+                    var mixing_extruder_count = p[p => p.MixingExtruderCount, 0];
                     return (machine_extruder_count, mixing_extruder_count);
                 })
                 .ToProperty(this, v => v.ExtrudersCount);

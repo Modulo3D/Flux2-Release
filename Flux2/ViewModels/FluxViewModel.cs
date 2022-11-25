@@ -1,18 +1,10 @@
-﻿using Base62;
-using DynamicData;
+﻿using DynamicData;
 using DynamicData.Kernel;
-using GreenSuperGreen.Queues;
-using MessagePack;
-using MessagePack.Formatters;
-using MessagePack.Resolvers;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Modulo3DDatabase;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
-using RestSharp;
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -159,8 +151,8 @@ namespace Flux.ViewModels
 
         private Optional<IContentDialog> _ContentDialog;
         [RemoteContent(true, "dialog")]
-        public Optional<IContentDialog> ContentDialog 
-        { 
+        public Optional<IContentDialog> ContentDialog
+        {
             get => _ContentDialog;
             set => this.RaiseAndSetIfChanged(ref _ContentDialog, value);
         }
@@ -187,13 +179,13 @@ namespace Flux.ViewModels
             {
                 try
                 {
-                    Messages        = new MessagesViewModel(this);
-                    NetProvider     = new NetProvider(this);
+                    Messages = new MessagesViewModel(this);
+                    NetProvider = new NetProvider(this);
 
-                    var printer_id      = SettingsProvider.CoreSettings.Local.PrinterID;
-                    var printer_result  = db.FindById<Printer>(printer_id.ValueOr(() => 0));
-                    var printer         = printer_result.Documents.FirstOrDefault().ToOptional();
-                    ConnectionProvider  = printer.ConvertOr(p => p.Id, () => -1) switch
+                    var printer_id = SettingsProvider.CoreSettings.Local.PrinterID;
+                    var printer_result = db.FindById<Printer>(printer_id.ValueOr(() => 0));
+                    var printer = printer_result.Documents.FirstOrDefault().ToOptional();
+                    ConnectionProvider = printer.ConvertOr(p => p.Id, () => -1) switch
                     {
                         5 => new OSAI_ConnectionProvider(this),
                         6 => new OSAI_ConnectionProvider(this),
@@ -208,19 +200,19 @@ namespace Flux.ViewModels
                         _ => new Dummy_ConnectionProvider(this)
                     };
 
-                    Feeders         = new FeedersViewModel(this);
-                    MCodes          = new MCodesViewModel(this);
-                    StatusProvider  = new StatusProvider(this);
-                    Calibration     = new CalibrationViewModel(this);
-                    Webcam          = new WebcamViewModel(this);
-                    StatsProvider   = new StatsProvider(this);
-                    Home            = new HomeViewModel(this);
-                    StatusBar       = new StatusBarViewModel(this);
-                    Functionality   = new FunctionalityViewModel(this);
-                    Navigator       = new FluxNavigatorViewModel(this);
+                    Feeders = new FeedersViewModel(this);
+                    MCodes = new MCodesViewModel(this);
+                    StatusProvider = new StatusProvider(this);
+                    Calibration = new CalibrationViewModel(this);
+                    Webcam = new WebcamViewModel(this);
+                    StatsProvider = new StatsProvider(this);
+                    Home = new HomeViewModel(this);
+                    StatusBar = new StatusBarViewModel(this);
+                    Functionality = new FunctionalityViewModel(this);
+                    Navigator = new FluxNavigatorViewModel(this);
                     LoggingProvider = new LoggingProvider(this);
-                    Startup         = new StartupViewModel(this);
-                    Temperatures    = new Lazy<TemperaturesViewModel>(() => new TemperaturesViewModel(this));
+                    Startup = new StartupViewModel(this);
+                    Temperatures = new Lazy<TemperaturesViewModel>(() => new TemperaturesViewModel(this));
 
                     var main_lock_unit = ConnectionProvider.GetArrayUnit(m => m.OPEN_LOCK, "main.lock");
                     _LeftIconForeground = ConnectionProvider.ObserveVariable(m => m.OPEN_LOCK, main_lock_unit)
@@ -392,11 +384,11 @@ namespace Flux.ViewModels
         {
             return status switch
             {
-                FLUX_ProcessStatus.IDLE =>  "LIBERA",
+                FLUX_ProcessStatus.IDLE => "LIBERA",
                 FLUX_ProcessStatus.ERROR => "ERRORE",
                 FLUX_ProcessStatus.EMERG => "EMERGENZA",
                 FLUX_ProcessStatus.CYCLE => "IN FUNZIONE",
-                FLUX_ProcessStatus.NONE =>  "ACCENSIONE...",
+                FLUX_ProcessStatus.NONE => "ACCENSIONE...",
                 FLUX_ProcessStatus.WAIT => wait(),
                 _ => "ONLINE",
             };
@@ -421,7 +413,7 @@ namespace Flux.ViewModels
                 var route = get_route(this);
                 var dialog = new ContentDialog(f, route.Name,
                     can_cancel: Observable.Return(true).ToOptional());
-                dialog.AddContent(route, disposeOnParentDispose:false);
+                dialog.AddContent(route, disposeOnParentDispose: false);
                 return dialog;
             });
         }
@@ -496,7 +488,7 @@ namespace Flux.ViewModels
                     can_cancel: Observable.Return(true).ToOptional());
 
                 dialog.AddContent("options", options);
-                
+
                 return dialog;
             });
         }
@@ -504,7 +496,7 @@ namespace Flux.ViewModels
         {
             var reading = true;
 
-            using var dialog = new ContentDialog(this, "Lettura tag in corso...", 
+            using var dialog = new ContentDialog(this, "Lettura tag in corso...",
                 can_cancel: Observable.Return(true).ToOptional());
 
             var dialog_result = Task.Run(async () =>
@@ -551,7 +543,7 @@ namespace Flux.ViewModels
                 var reading = await ShowNFCDialog(handle, h => func(h, tag.NFCSlot));
 
                 if (handle.HasValue)
-                { 
+                {
                     var light = reading ? LightSignalMode.LongGreen : LightSignalMode.LongRed;
                     var beep = reading ? BeepSignalMode.TripletMelody : BeepSignalMode.Short;
                     handle.Value.ReaderUISignal(light, beep);

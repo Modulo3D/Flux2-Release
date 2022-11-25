@@ -1,6 +1,6 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using OSAI;
 using ReactiveUI;
 using System;
@@ -308,7 +308,7 @@ namespace Flux.ViewModels
             RxApp.MainThreadScheduler.Schedule(() => Messages.Add(message));
             Console.WriteLine(message.Title);
             Console.WriteLine(message.Text);
-            Console.WriteLine();    
+            Console.WriteLine();
         }
 
         public void LogMessage(string title, string text, MessageLevel level, int errCode)

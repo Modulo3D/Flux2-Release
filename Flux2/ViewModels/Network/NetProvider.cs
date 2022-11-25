@@ -4,7 +4,7 @@ using EmbedIO.Routing;
 using EmbedIO.WebApi;
 using EmbedIO.WebSockets;
 using HttpMultipartParser;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using RestSharp;
 using Swan.Logging;
@@ -17,7 +17,6 @@ using System.Net.NetworkInformation;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
@@ -191,7 +190,7 @@ namespace Flux.ViewModels
         public UdpDiscovery UdpDiscovery { get; }
 
         private bool _InterNetworkConnectivity;
-        public bool InterNetworkConnectivity    
+        public bool InterNetworkConnectivity
         {
             get => _InterNetworkConnectivity;
             set => this.RaiseAndSetIfChanged(ref _InterNetworkConnectivity, value);
@@ -207,11 +206,11 @@ namespace Flux.ViewModels
         public NetProvider(FluxViewModel main)
         {
             Flux = main;
-            Client = new RestClient();
+            Client = new RestClient(
+                configureSerialization:c => c.UseSerializer<JsonNetRestSerializer>());
             PLCNetworkPinger = new Ping();
             InterNetworkPinger = new Ping();
             UdpDiscovery = new UdpDiscovery();
-            Client.UseSerializer(() => new JsonNetRestSerializer());
         }
 
         public void Initialize()
@@ -409,22 +408,22 @@ namespace Flux.ViewModels
 
         [Route(HttpVerbs.Get, "/download")]
         public Task<Optional<string>> GetFileAsync([QueryField] string folder, [QueryField] string name) => Flux.ConnectionProvider.GetFileAsync(folder, name, HttpContext.CancellationToken);
-       
+
         /*[Route(HttpVerbs.Post, "/upload")]
         public Task<bool> PutFileAsync([QueryField] string folder, [QueryField] string name) => Flux.ConnectionProvider.PutFileAsync(folder, name, HttpContext.GetRequestBodyAsStringAsync(), HttpContext.CancellationToken);*/
 
         [Route(HttpVerbs.Get, "/delete")]
-        public Task<bool> DeleteAsync([QueryField] string folder, [QueryField] string name) => Flux.ConnectionProvider.DeleteAsync(folder, name, false, HttpContext.CancellationToken);
+        public Task<bool> DeleteAsync([QueryField] string folder, [QueryField] string name) => Flux.ConnectionProvider.DeleteAsync(folder, name, HttpContext.CancellationToken);
 
         [Route(HttpVerbs.Get, "/rename")]
-        public Task<bool> RenameAsync([QueryField] string folder, [QueryField] string old_name, [QueryField] string new_name) => Flux.ConnectionProvider.RenameAsync(folder, old_name, new_name, false, HttpContext.CancellationToken);
+        public Task<bool> RenameAsync([QueryField] string folder, [QueryField] string old_name, [QueryField] string new_name) => Flux.ConnectionProvider.RenameAsync(folder, old_name, new_name, HttpContext.CancellationToken);
 
 
         [Route(HttpVerbs.Get, "/list")]
         public Task<Optional<FLUX_FileList>> ListFilesAsync([QueryField] string folder) => Flux.ConnectionProvider.ListFilesAsync(folder, HttpContext.CancellationToken);
 
         [Route(HttpVerbs.Get, "/clear")]
-        public Task<bool> ClearFolderAsync([QueryField] string folder) => Flux.ConnectionProvider.ClearFolderAsync(folder, false, HttpContext.CancellationToken);
+        public Task<bool> ClearFolderAsync([QueryField] string folder) => Flux.ConnectionProvider.ClearFolderAsync(folder, HttpContext.CancellationToken);
 
         [Route(HttpVerbs.Get, "/create")]
         public Task<bool> CreateFolder([QueryField] string folder, [QueryField] string name) => Flux.ConnectionProvider.CreateFolderAsync(folder, name, HttpContext.CancellationToken);

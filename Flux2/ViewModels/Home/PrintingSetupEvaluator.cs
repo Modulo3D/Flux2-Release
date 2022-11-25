@@ -1,7 +1,6 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Modulo3DDatabase;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
@@ -56,7 +55,7 @@ namespace Flux.ViewModels
 
         public void Initialize()
         {
-            var queue = Flux.ConnectionProvider.ObserveVariable(c => c.JOB_QUEUE);
+            var queue = Flux.StatusProvider.WhenAnyValue(c => c.JobQueue);
             var queue_pos = Flux.ConnectionProvider.ObserveVariable(c => c.QUEUE_POS);
 
             var db_changed = Flux.DatabaseProvider.WhenAnyValue(v => v.Database);
@@ -67,7 +66,7 @@ namespace Flux.ViewModels
                 queue_pos,
                 db_changed,
                 report_queue,
-                (q, p, db, f) => GetExpectedDocumentQueue(q, p, db, f))
+                GetExpectedDocumentQueue)
                 .ToProperty(this, v => v.ExpectedDocumentQueue);
 
             _CurrentDocument = this.WhenAnyValue(v => v.TagViewModel)
@@ -112,8 +111,8 @@ namespace Flux.ViewModels
 
         private Optional<DocumentQueue<TDocument>> GetExpectedDocumentQueue(
             Optional<JobQueue> job_queue,
-            Optional<QueuePosition> queue_position, 
-            Optional<ILocalDatabase> database, 
+            Optional<QueuePosition> queue_position,
+            Optional<ILocalDatabase> database,
             Optional<FeederReportQueue> feeder_queue)
         {
             try
@@ -130,7 +129,7 @@ namespace Flux.ViewModels
                 var job_key = job_queue.Value
                     .Lookup(queue_position.Value)
                     .Convert(j => j.Job.JobKey);
-                
+
                 if (!job_key.HasValue)
                     return default;
 
@@ -154,7 +153,7 @@ namespace Flux.ViewModels
                 }
                 return document_queue;
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 return default;
             }
@@ -173,7 +172,7 @@ namespace Flux.ViewModels
                     return true;
                 return current.Value < expected.Value;
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 return false;
             }
@@ -194,7 +193,7 @@ namespace Flux.ViewModels
     {
         private ObservableAsPropertyHelper<Optional<IFluxTagViewModel<NFCMaterial, Optional<Material>, MaterialState>>> _TagViewModel;
         public override Optional<IFluxTagViewModel<NFCMaterial, Optional<Material>, MaterialState>> TagViewModel => _TagViewModel.Value;
-        
+
         public MaterialEvaluator(FluxViewModel flux, FeederEvaluator feeder_eval) : base(flux, feeder_eval)
         {
             _TagViewModel = FeederEvaluator.Feeder.WhenAnyValue(f => f.SelectedMaterial)
@@ -233,7 +232,7 @@ namespace Flux.ViewModels
 
     public class ToolNozzleEvaluator : TagViewModelEvaluator<NFCToolNozzle, (Optional<Tool> tool, Optional<Nozzle> nozzle), Nozzle, ToolNozzleState>
     {
-        public override Optional<IFluxTagViewModel<NFCToolNozzle, (Optional<Tool> tool, Optional<Nozzle> nozzle), ToolNozzleState>> TagViewModel => 
+        public override Optional<IFluxTagViewModel<NFCToolNozzle, (Optional<Tool> tool, Optional<Nozzle> nozzle), ToolNozzleState>> TagViewModel =>
             ((IFluxTagViewModel<NFCToolNozzle, (Optional<Tool> tool, Optional<Nozzle> nozzle), ToolNozzleState>)FeederEvaluator.Feeder.ToolNozzle).ToOptional();
 
         public ToolNozzleEvaluator(FluxViewModel flux, FeederEvaluator feeder_eval) : base(flux, feeder_eval)
@@ -313,9 +312,8 @@ namespace Flux.ViewModels
                 .ObserveVariable(c => c.QUEUE_POS)
                 .StartWithDefault();
 
-            var queue = Flux.ConnectionProvider
-                .ObserveVariable(c => c.JOB_QUEUE)
-                .StartWithDefault();
+            var queue = Flux.StatusProvider
+                .WhenAnyValue(s => s.JobQueue);
 
             var mcode_analyzers = Flux.MCodes.AvaiableMCodes.Connect()
                  .QueryWhenChanged(m => m.KeyValues.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.Analyzer))
@@ -504,7 +502,7 @@ namespace Flux.ViewModels
                 }
                 return feeder_report_queue;
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 return default;
             }

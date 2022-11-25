@@ -1,14 +1,11 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Modulo3DDatabase;
-using Modulo3DStandard;
-using Newtonsoft.Json;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Reactive;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
-using System.Runtime.Serialization;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
@@ -49,7 +46,7 @@ namespace Flux.ViewModels
 
         [RemoteOutput(false)]
         public string StateBrush { get; }
-        
+
         [RemoteOutput(false)]
         public Optional<string> ActionImage { get; }
 
@@ -120,7 +117,7 @@ namespace Flux.ViewModels
         public ConditionCommand Create(string action_icon, Func<Task> action, IObservable<bool> can_execute = null)
         {
             return new ConditionCommand(action_icon, action, can_execute);
-        } 
+        }
         public ConditionCommand Create(string action_icon, Func<IFLUX_ConnectionProvider, Task<bool>> execute_paramacro, IObservable<bool> can_execute = null)
         {
             return new ConditionCommand(action_icon, () => execute_paramacro(Flux.ConnectionProvider), can_execute);
@@ -192,7 +189,7 @@ namespace Flux.ViewModels
                 .ToProperty(this, v => v.Value)
                 .DisposeWith(Disposables);
 
-            if(sample != default)
+            if (sample != default)
                 value_changed = value_changed.Sample(sample);
 
             var state_creator = status_provider.StateCreator;
@@ -217,7 +214,7 @@ namespace Flux.ViewModels
             StatusProvider status_provider,
             string name,
             IObservable<TIn> value_changed,
-            Func<ConditionStateCreator, TIn, ConditionState> get_state, 
+            Func<ConditionStateCreator, TIn, ConditionState> get_state,
             TimeSpan sample = default)
             => new ConditionViewModel<TIn>(status_provider, name, value_changed, get_state, sample);
         public static Optional<IConditionViewModel> Create<TIn>(

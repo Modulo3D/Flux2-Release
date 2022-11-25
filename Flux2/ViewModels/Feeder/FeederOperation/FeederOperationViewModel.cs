@@ -1,7 +1,6 @@
 ﻿using DynamicData;
-using DynamicData.Binding;
 using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
@@ -59,7 +58,7 @@ namespace Flux.ViewModels
 
         public FeederOperationViewModel(FeederViewModel feeder) : base(feeder.Flux)
         {
-            Feeder = feeder; 
+            Feeder = feeder;
         }
 
         public void Initialize()

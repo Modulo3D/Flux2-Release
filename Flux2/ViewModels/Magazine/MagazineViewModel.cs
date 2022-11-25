@@ -1,6 +1,5 @@
 ﻿using DynamicData;
-using DynamicData.Binding;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System.Reactive;
 using System.Reactive.Linq;
