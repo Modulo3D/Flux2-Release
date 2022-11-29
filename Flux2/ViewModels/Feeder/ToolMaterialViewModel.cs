@@ -15,16 +15,16 @@ namespace Flux.ViewModels
         public IFluxMaterialViewModel Material { get; }
         public IFluxToolNozzleViewModel ToolNozzle { get; }
 
-        private ObservableAsPropertyHelper<Optional<ToolMaterial>> _Document;
+        private readonly ObservableAsPropertyHelper<Optional<ToolMaterial>> _Document;
         public Optional<ToolMaterial> Document => _Document.Value;
 
-        private ObservableAsPropertyHelper<Optional<double>> _ExtrusionTemp;
+        private readonly ObservableAsPropertyHelper<Optional<double>> _ExtrusionTemp;
         public Optional<double> ExtrusionTemp => _ExtrusionTemp.Value;
 
-        private ObservableAsPropertyHelper<Optional<double>> _BreakTemp;
+        private readonly ObservableAsPropertyHelper<Optional<double>> _BreakTemp;
         public Optional<double> BreakTemp => _BreakTemp.Value;
 
-        private ObservableAsPropertyHelper<ToolMaterialState> _State;
+        private readonly ObservableAsPropertyHelper<ToolMaterialState> _State;
         public ToolMaterialState State => _State.Value;
 
         public CompositeDisposable Disposables { get; }
@@ -87,7 +87,7 @@ namespace Flux.ViewModels
             return new ToolMaterialState(tool_material.HasValue);
         }
 
-        public Optional<ToolMaterial> FindToolMaterial(Optional<Material> material, (Optional<Tool> tool, Optional<Nozzle> nozzle) tool_nozzle, Optional<ILocalDatabase> database)
+        public static Optional<ToolMaterial> FindToolMaterial(Optional<Material> material, (Optional<Tool> tool, Optional<Nozzle> nozzle) tool_nozzle, Optional<ILocalDatabase> database)
         {
             if (!database.HasValue)
                 return default;

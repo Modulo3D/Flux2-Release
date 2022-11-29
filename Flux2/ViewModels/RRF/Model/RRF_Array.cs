@@ -57,26 +57,26 @@ namespace Flux.ViewModels
             DefaultValue = default_value;
         }
 
-        static string sanitize_value(TData value)
+        private static string sanitize_value(TData value)
         {
             return typeof(TData) == typeof(string) || typeof(TData) == typeof(CardId) ? $"\"{value}\"" : $"{value:0.00}"
                  .ToLower()
                  .Replace(',', '.');
         }
 
-        static IObservable<Optional<TData>> observe_func(RRF_ConnectionProvider connection, string variable, VariableUnit unit, Func<object, TData> convert_data)
+        private static IObservable<Optional<TData>> observe_func(RRF_ConnectionProvider connection, string variable, VariableUnit unit, Func<object, TData> convert_data)
         {
             return connection.MemoryBuffer
                 .ObserveGlobalModel(m => get_data(m, variable, unit, convert_data));
         }
 
-        static Optional<TData> get_data(RRF_ObjectModelGlobal global, string variable, VariableUnit unit, Func<object, TData> convert_data)
+        private static Optional<TData> get_data(RRF_ObjectModelGlobal global, string variable, VariableUnit unit, Func<object, TData> convert_data)
         {
             return global.Lookup($"{variable}_{unit.Address}")
                 .Convert(v => convert_data != null ? convert_data(v) : v.ToObject<TData>());
         }
 
-        static async Task<ValueResult<TData>> read_variable(RRF_ConnectionProvider connection, string variable, VariableUnit unit, Func<object, TData> convert_data = default)
+        private static async Task<ValueResult<TData>> read_variable(RRF_ConnectionProvider connection, string variable, VariableUnit unit, Func<object, TData> convert_data = default)
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             var global = await connection.MemoryBuffer.GetModelDataAsync(m => m.Global, cts.Token);
@@ -85,7 +85,7 @@ namespace Flux.ViewModels
             return get_data(global.Value, variable, unit, convert_data);
         }
 
-        static async Task<bool> write_variable(RRF_ConnectionProvider connection_provider, string variable, VariableUnit unit, TData v, bool stored)
+        private static async Task<bool> write_variable(RRF_ConnectionProvider connection_provider, string variable, VariableUnit unit, TData v, bool stored)
         {
             var connection = connection_provider.Connection;
             var s_value = sanitize_value(v);

@@ -15,7 +15,7 @@ namespace Flux.ViewModels
         public override string CurrentValueName => "MATERIALE CARICATO";
         public override string ExpectedValueName => "MATERIALE RICHIESTO";
 
-        private ObservableAsPropertyHelper<string> _InvalidItemBrush;
+        private readonly ObservableAsPropertyHelper<string> _InvalidItemBrush;
         public override string InvalidItemBrush => _InvalidItemBrush.Value;
 
         public InvalidMaterialViewModel(FeederEvaluator eval) : base($"{typeof(InvalidMaterialViewModel).GetRemoteControlName()}??{eval.Feeder.Position}", eval)

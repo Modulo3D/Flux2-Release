@@ -15,7 +15,7 @@ namespace Flux.ViewModels
         public override string CurrentValueName => "TASTATURA CORRENTE";
         public override string ExpectedValueName => "TASTATURA RICHIESTA";
 
-        private ObservableAsPropertyHelper<string> _InvalidItemBrush;
+        private readonly ObservableAsPropertyHelper<string> _InvalidItemBrush;
         public override string InvalidItemBrush => _InvalidItemBrush.Value;
 
         public InvalidProbeViewModel(FeederEvaluator eval) : base($"{typeof(InvalidProbeViewModel).GetRemoteControlName()}??{eval.Feeder.Position}", eval)

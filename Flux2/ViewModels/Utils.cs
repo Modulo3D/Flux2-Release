@@ -38,7 +38,7 @@ namespace Flux.ViewModels
             get => Items?.SelectedValue.Convert(v => v) ?? default;
             set => throw new Exception();
         }
-        private ObservableAsPropertyHelper<bool> _HasValue;
+        private readonly ObservableAsPropertyHelper<bool> _HasValue;
         [RemoteOutput(true)]
         public override bool HasValue => _HasValue.Value;
 
@@ -105,7 +105,7 @@ namespace Flux.ViewModels
             get => _Value;
             set => this.RaiseAndSetIfChanged(ref _Value, value);
         }
-        private ObservableAsPropertyHelper<bool> _HasValue;
+        private readonly ObservableAsPropertyHelper<bool> _HasValue;
         [RemoteOutput(true)]
         public override bool HasValue => _HasValue.Value;
 
@@ -126,7 +126,8 @@ namespace Flux.ViewModels
                .ToProperty(this, v => v.HasValue)
                .DisposeWith(Disposables);
         }
-        void SetValue(double value) => Value = value;
+
+        private void SetValue(double value) => Value = value;
     }
 
     public class ContentDialog : RemoteControl<ContentDialog>, IContentDialog
@@ -237,7 +238,7 @@ namespace Flux.ViewModels
         [RemoteOutput(false)]
         public bool Relaxed { get; }
 
-        private ObservableAsPropertyHelper<bool> _HasValue;
+        private readonly ObservableAsPropertyHelper<bool> _HasValue;
         [RemoteOutput(true)]
         public override bool HasValue => _HasValue.Value;
 

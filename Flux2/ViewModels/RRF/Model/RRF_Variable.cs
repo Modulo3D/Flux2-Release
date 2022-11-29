@@ -45,21 +45,23 @@ namespace Flux.ViewModels
         {
         }
 
-        static IObservable<Optional<TRData>> observe_func(
+        private static IObservable<Optional<TRData>> observe_func(
             RRF_ConnectionProvider connection_provider,
             Func<RRF_ObjectModel, IObservable<Optional<TModel>>> get_model,
             Func<RRF_ConnectionProvider, TModel, Optional<TRData>> get_data)
         {
             return connection_provider.MemoryBuffer.ObserveModel(get_model, get_data);
         }
-        static IObservable<Optional<TRData>> observe_func(
+
+        private static IObservable<Optional<TRData>> observe_func(
             RRF_ConnectionProvider connection_provider,
             Func<RRF_ObjectModel, IObservable<Optional<TModel>>> get_model,
             Func<RRF_ConnectionProvider, TModel, Task<Optional<TRData>>> get_data)
         {
             return connection_provider.MemoryBuffer.ObserveModel(get_model, get_data);
         }
-        static async Task<ValueResult<TRData>> read_variable(
+
+        private static async Task<ValueResult<TRData>> read_variable(
             RRF_ConnectionProvider connection_provider,
             Func<RRF_MemoryBuffer, Task<Optional<TModel>>> read_model,
             Func<TModel, Optional<TRData>> get_data)
@@ -69,7 +71,8 @@ namespace Flux.ViewModels
                 return default;
             return get_data(model.Value);
         }
-        static async Task<ValueResult<TRData>> read_variable(
+
+        private static async Task<ValueResult<TRData>> read_variable(
             RRF_ConnectionProvider connection_provider,
             Func<RRF_MemoryBuffer, Task<Optional<TModel>>> read_model,
             Func<TModel, Task<Optional<TRData>>> get_data)
@@ -113,25 +116,27 @@ namespace Flux.ViewModels
             DefaultValue = default_value;
         }
 
-        static string sanitize_value(TData value)
+        private static string sanitize_value(TData value)
         {
             return typeof(TData) == typeof(string) || typeof(TData) == typeof(CardId) ? $"\"{value}\"" : $"{value:0.00}"
                 .ToLower()
                 .Replace(',', '.');
         }
 
-        static Optional<TData> get_data(RRF_ObjectModelGlobal global, string variable, Func<object, TData> convert_data)
+        private static Optional<TData> get_data(RRF_ObjectModelGlobal global, string variable, Func<object, TData> convert_data)
         {
             return global.Lookup(variable)
                 .Convert(v => convert_data != null ? convert_data(v) : v.ToObject<TData>());
         }
-        static IObservable<Optional<TData>> observe_func(
+
+        private static IObservable<Optional<TData>> observe_func(
             RRF_ConnectionProvider connection_provider,
             string variable, Func<object, TData> convert_data = default)
         {
             return connection_provider.MemoryBuffer.ObserveGlobalModel(m => get_data(m, variable, convert_data));
         }
-        static async Task<ValueResult<TData>> read_variable(RRF_ConnectionProvider connection_provider, string variable, Func<object, TData> convert_data = default)
+
+        private static async Task<ValueResult<TData>> read_variable(RRF_ConnectionProvider connection_provider, string variable, Func<object, TData> convert_data = default)
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             var global = await connection_provider.MemoryBuffer.GetModelDataAsync(m => m.Global, cts.Token);
@@ -140,7 +145,7 @@ namespace Flux.ViewModels
             return get_data(global.Value, variable, convert_data);
         }
 
-        static async Task<bool> write_variable(RRF_ConnectionProvider connection_provider, string variable, TData v, bool stored)
+        private static async Task<bool> write_variable(RRF_ConnectionProvider connection_provider, string variable, TData v, bool stored)
         {
             var connection = connection_provider.Connection;
             var s_value = sanitize_value(v);

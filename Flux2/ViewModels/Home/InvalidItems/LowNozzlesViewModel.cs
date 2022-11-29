@@ -15,7 +15,7 @@ namespace Flux.ViewModels
         public override string CurrentValueName => "PESO RIMANENTE";
         public override string ExpectedValueName => "PESO RICHIESTO";
 
-        private ObservableAsPropertyHelper<string> _InvalidItemBrush;
+        private readonly ObservableAsPropertyHelper<string> _InvalidItemBrush;
         public override string InvalidItemBrush => _InvalidItemBrush.Value;
 
         public LowNozzleViewModel(FeederEvaluator eval) : base($"{typeof(LowNozzleViewModel).GetRemoteControlName()}??{eval.Feeder.Position}", eval)

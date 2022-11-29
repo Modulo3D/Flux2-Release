@@ -314,100 +314,96 @@ namespace Flux.ViewModels
                 return default;
             }
         }
-        public async Task UpdateVariablesAsync(IEnumerable<IOSAI_AsyncVariable> variables)
+        public static async Task UpdateVariablesAsync(IEnumerable<IOSAI_AsyncVariable> variables)
         {
             foreach (var variable in variables)
                 await variable.UpdateAsync();
         }
         public IObservable<Optional<ushort>> ObserveWordVar(IOSAI_Address address)
         {
-            switch (address.VarCode)
+            return address.VarCode switch
             {
-                case OSAI_VARCODE.GW_CODE:
-                    return GW_BUFFER_CHANGED
-                        .Select(buffer =>
-                        {
-                            if (!buffer.HasValue)
-                                return Optional<ushort>.None;
+                OSAI_VARCODE.GW_CODE => GW_BUFFER_CHANGED
+                    .Select(buffer =>
+                    {
+                        if (!buffer.HasValue)
+                            return Optional<ushort>.None;
 
-                            var start_addr = GW_BUFFER_RANGE.start_addr;
-                            var end_addr = GW_BUFFER_RANGE.end_addr;
-                            var index = address.Index;
-                            if (index < start_addr || index > end_addr)
-                                return Optional<ushort>.None;
+                        var start_addr = GW_BUFFER_RANGE.start_addr;
+                        var end_addr = GW_BUFFER_RANGE.end_addr;
+                        var index = address.Index;
+                        if (index < start_addr || index > end_addr)
+                            return Optional<ushort>.None;
 
-                            var position = index - start_addr;
-                            if (buffer.Value.Count < position)
-                                return Optional<ushort>.None;
+                        var position = index - start_addr;
+                        if (buffer.Value.Count < position)
+                            return Optional<ushort>.None;
 
-                            return buffer.Value[position];
-                        });
-                case OSAI_VARCODE.MW_CODE:
-                    return MW_BUFFER_CHANGED
-                        .Select(buffer =>
-                        {
-                            if (!buffer.HasValue)
-                                return Optional<ushort>.None;
+                        return buffer.Value[position];
+                    }),
+                OSAI_VARCODE.MW_CODE => MW_BUFFER_CHANGED
+                    .Select(buffer =>
+                    {
+                        if (!buffer.HasValue)
+                            return Optional<ushort>.None;
 
-                            var start_addr = MW_BUFFER_RANGE.start_addr;
-                            var end_addr = MW_BUFFER_RANGE.end_addr;
-                            var index = address.Index;
-                            if (index < start_addr || index > end_addr)
-                                return Optional<ushort>.None;
+                        var start_addr = MW_BUFFER_RANGE.start_addr;
+                        var end_addr = MW_BUFFER_RANGE.end_addr;
+                        var index = address.Index;
+                        if (index < start_addr || index > end_addr)
+                            return Optional<ushort>.None;
 
-                            var position = index - start_addr;
-                            if (buffer.Value.Count < position)
-                                return Optional<ushort>.None;
+                        var position = index - start_addr;
+                        if (buffer.Value.Count < position)
+                            return Optional<ushort>.None;
 
-                            return buffer.Value[position];
-                        });
-            }
-            return Observable.Return(Optional<ushort>.None);
+                        return buffer.Value[position];
+                    }),
+                _ => Observable.Return(Optional<ushort>.None),
+            };
         }
         public IObservable<Optional<double>> ObserveDWordVar(IOSAI_Address address)
         {
-            switch (address.VarCode)
+            return address.VarCode switch
             {
-                case OSAI_VARCODE.GD_CODE:
-                    return GD_BUFFER_CHANGED
-                        .Select(buffer =>
-                        {
-                            if (!buffer.HasValue)
-                                return Optional<double>.None;
+                OSAI_VARCODE.GD_CODE => GD_BUFFER_CHANGED
+                    .Select(buffer =>
+                    {
+                        if (!buffer.HasValue)
+                            return Optional<double>.None;
 
-                            var start_addr = GD_BUFFER_RANGE.start_addr;
-                            var end_addr = GD_BUFFER_RANGE.end_addr;
-                            var index = address.Index;
-                            if (index < start_addr || index > end_addr)
-                                return Optional<double>.None;
+                        var start_addr = GD_BUFFER_RANGE.start_addr;
+                        var end_addr = GD_BUFFER_RANGE.end_addr;
+                        var index = address.Index;
+                        if (index < start_addr || index > end_addr)
+                            return Optional<double>.None;
 
-                            var position = index - start_addr;
-                            if (buffer.Value.Count < position)
-                                return Optional<double>.None;
+                        var position = index - start_addr;
+                        if (buffer.Value.Count < position)
+                            return Optional<double>.None;
 
-                            return buffer.Value[position];
-                        });
-                case OSAI_VARCODE.L_CODE:
-                    return L_BUFFER_CHANGED
-                        .Select(buffer =>
-                        {
-                            if (!buffer.HasValue)
-                                return Optional<double>.None;
+                        return buffer.Value[position];
+                    }),
+                OSAI_VARCODE.L_CODE => L_BUFFER_CHANGED
+                    .Select(buffer =>
+                    {
+                        if (!buffer.HasValue)
+                            return Optional<double>.None;
 
-                            var start_addr = L_BUFFER_RANGE.start_addr;
-                            var end_addr = L_BUFFER_RANGE.end_addr;
-                            var index = address.Index;
-                            if (index < start_addr || index > end_addr)
-                                return Optional<double>.None;
+                        var start_addr = L_BUFFER_RANGE.start_addr;
+                        var end_addr = L_BUFFER_RANGE.end_addr;
+                        var index = address.Index;
+                        if (index < start_addr || index > end_addr)
+                            return Optional<double>.None;
 
-                            var position = index - start_addr;
-                            if (buffer.Value.Count < position)
-                                return Optional<double>.None;
+                        var position = index - start_addr;
+                        if (buffer.Value.Count < position)
+                            return Optional<double>.None;
 
-                            return buffer.Value[position];
-                        });
-            }
-            return Observable.Return(Optional<double>.None);
+                        return buffer.Value[position];
+                    }),
+                _ => Observable.Return(Optional<double>.None),
+            };
         }
     }
 }

@@ -27,7 +27,7 @@ namespace Flux.ViewModels
     public class RRF_ConnectionProvider : FLUX_ConnectionProvider<RRF_ConnectionProvider, RRF_Connection, RRF_MemoryBuffer, RRF_VariableStoreBase, RRF_ConnectionPhase>
     {
         public FluxViewModel Flux { get; }
-        public string SystemPath => RRF_Connection.SystemPath;
+        public static string SystemPath => RRF_Connection.SystemPath;
 
         public RRF_ConnectionProvider(FluxViewModel flux, Func<RRF_ConnectionProvider, RRF_VariableStoreBase> get_variable_store) : base(flux,
             RRF_ConnectionPhase.START_PHASE, RRF_ConnectionPhase.END_PHASE, p => (int)p,
@@ -55,13 +55,13 @@ namespace Flux.ViewModels
                         break;
 
                     case RRF_ConnectionPhase.DISCONNECTING_CLIENT:
-                        var request = new RRF_Request("rr_disconnect", HttpMethod.Get, RRF_RequestPriority.Immediate, ct);
+                        var request = new RRF_Request<string>("rr_disconnect", HttpMethod.Get, RRF_RequestPriority.Immediate, ct);
                         var disconnected = await Connection.ExecuteAsync(request);
                         ConnectionPhase = disconnected.Ok ? RRF_ConnectionPhase.CONNECTING_CLIENT : RRF_ConnectionPhase.START_PHASE;
                         break;
 
                     case RRF_ConnectionPhase.CONNECTING_CLIENT:
-                        request = new RRF_Request($"rr_connect?password=\"\"&time={DateTime.Now}", HttpMethod.Get, RRF_RequestPriority.Immediate, ct);
+                        request = new RRF_Request<string>($"rr_connect?password=\"\"&time={DateTime.Now}", HttpMethod.Get, RRF_RequestPriority.Immediate, ct);
                         var connected = await Connection.ExecuteAsync(request);
                         ConnectionPhase = connected.Ok ? RRF_ConnectionPhase.READING_STATUS : RRF_ConnectionPhase.START_PHASE;
                         break;

@@ -191,7 +191,7 @@ namespace Flux.ViewModels
 
     public class MaterialEvaluator : TagViewModelEvaluator<NFCMaterial, Optional<Material>, Material, MaterialState>
     {
-        private ObservableAsPropertyHelper<Optional<IFluxTagViewModel<NFCMaterial, Optional<Material>, MaterialState>>> _TagViewModel;
+        private readonly ObservableAsPropertyHelper<Optional<IFluxTagViewModel<NFCMaterial, Optional<Material>, MaterialState>>> _TagViewModel;
         public override Optional<IFluxTagViewModel<NFCMaterial, Optional<Material>, MaterialState>> TagViewModel => _TagViewModel.Value;
 
         public MaterialEvaluator(FluxViewModel flux, FeederEvaluator feeder_eval) : base(flux, feeder_eval)
@@ -275,7 +275,7 @@ namespace Flux.ViewModels
 
     public class FeederEvaluator : ReactiveObject
     {
-        FluxViewModel Flux { get; }
+        private FluxViewModel Flux { get; }
         public IFluxFeederViewModel Feeder { get; }
 
         private ObservableAsPropertyHelper<Optional<FeederReportQueue>> _FeederReportQueue;

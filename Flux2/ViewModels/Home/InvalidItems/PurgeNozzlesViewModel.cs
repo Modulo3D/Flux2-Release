@@ -16,7 +16,7 @@ namespace Flux.ViewModels
         public override string CurrentValueName => "TEMPERATURA CORRENTE";
         public override string ExpectedValueName => "TEMPERATURA RICHIESTA";
 
-        private ObservableAsPropertyHelper<string> _InvalidItemBrush;
+        private readonly ObservableAsPropertyHelper<string> _InvalidItemBrush;
         public override string InvalidItemBrush => _InvalidItemBrush.Value;
 
         public PurgeNozzleViewModel(FeederEvaluator eval) : base($"{typeof(PurgeNozzleViewModel).GetRemoteControlName()}??{eval.Feeder.Position}", eval)

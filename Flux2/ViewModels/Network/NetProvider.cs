@@ -33,7 +33,7 @@ namespace Flux.ViewModels
         }
     }
 
-    class RemoteControlWebSocket : WebSocketModule
+    internal class RemoteControlWebSocket : WebSocketModule
     {
         public FluxViewModel Flux { get; }
         public CompositeDisposable Disposables { get; }
@@ -207,7 +207,7 @@ namespace Flux.ViewModels
         {
             Flux = main;
             Client = new RestClient(
-                configureSerialization:c => c.UseSerializer<JsonNetRestSerializer>());
+                configureSerialization: c => c.UseSerializer<JsonNetRestSerializer>());
             PLCNetworkPinger = new Ping();
             InterNetworkPinger = new Ping();
             UdpDiscovery = new UdpDiscovery();
@@ -364,7 +364,7 @@ namespace Flux.ViewModels
                 return false;
             }
 
-            async Task receive_database_async(Stream stream, string database_connection)
+            static async Task receive_database_async(Stream stream, string database_connection)
             {
                 if (File.Exists(database_connection))
                     File.Delete(database_connection);

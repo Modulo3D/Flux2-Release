@@ -1,5 +1,4 @@
 ﻿using DynamicData;
-using DynamicData.Binding;
 using DynamicData.Kernel;
 using Modulo3DNet;
 using ReactiveUI;
@@ -79,7 +78,7 @@ namespace Flux.ViewModels
         public FluxViewModel Flux { get; }
         public ConditionStateCreator StateCreator { get; }
 
-        private ObservableAsPropertyHelper<Optional<JobQueue>> _JobQueue;
+        private readonly ObservableAsPropertyHelper<Optional<JobQueue>> _JobQueue;
         public Optional<JobQueue> JobQueue => _JobQueue.Value;
 
         public IObservableCache<FeederEvaluator, ushort> FeederEvaluators { get; private set; }
@@ -96,16 +95,16 @@ namespace Flux.ViewModels
         private ObservableAsPropertyHelper<FLUX_ProcessStatus> _FluxStatus;
         public FLUX_ProcessStatus FluxStatus => _FluxStatus.Value;
 
-        private ObservableAsPropertyHelper<PrintProgress> _PrintProgress;
+        private readonly ObservableAsPropertyHelper<PrintProgress> _PrintProgress;
         public PrintProgress PrintProgress => _PrintProgress.Value;
 
-        private ObservableAsPropertyHelper<PrintingEvaluation> _PrintingEvaluation;
+        private readonly ObservableAsPropertyHelper<PrintingEvaluation> _PrintingEvaluation;
         public PrintingEvaluation PrintingEvaluation => _PrintingEvaluation.Value;
 
-        private ObservableAsPropertyHelper<StatusEvaluation> _StatusEvaluation;
+        private readonly ObservableAsPropertyHelper<StatusEvaluation> _StatusEvaluation;
         public StatusEvaluation StatusEvaluation => _StatusEvaluation.Value;
 
-        private ObservableAsPropertyHelper<StartEvaluation> _StartEvaluation;
+        private readonly ObservableAsPropertyHelper<StartEvaluation> _StartEvaluation;
         public StartEvaluation StartEvaluation => _StartEvaluation.Value;
 
         [PrintCondition]

@@ -167,11 +167,11 @@ namespace Flux.ViewModels
 
     public class ConditionViewModel<T> : RemoteControl<ConditionViewModel<T>>, IConditionViewModel
     {
-        private ObservableAsPropertyHelper<ConditionState> _State;
+        private readonly ObservableAsPropertyHelper<ConditionState> _State;
         [RemoteContent(true)]
         public ConditionState State => _State.Value;
 
-        private ObservableAsPropertyHelper<T> _Value;
+        private readonly ObservableAsPropertyHelper<T> _Value;
         [RemoteOutput(true)]
         public T Value => _Value.Value;
 

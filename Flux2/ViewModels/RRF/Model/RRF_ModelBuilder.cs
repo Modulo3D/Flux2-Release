@@ -421,7 +421,7 @@ namespace Flux.ViewModels
     {
         public class RRF_InnerGlobalModelBuilder
         {
-            RRF_VariableStoreBase VariableStore { get; }
+            private RRF_VariableStoreBase VariableStore { get; }
             public RRF_ConnectionProvider ConnectionProvider { get; }
             public RRF_InnerGlobalModelBuilder(
                 RRF_VariableStoreBase variable_store)

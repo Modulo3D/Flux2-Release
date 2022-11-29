@@ -177,7 +177,7 @@ namespace Flux.ViewModels
             if (string.IsNullOrEmpty(update))
                 throw new ArgumentException();
 
-            var write = (Func<string, GCodeString>)(v =>
+            GCodeString write(string v)
             {
                 var write = address_variable.Address switch
                 {
@@ -206,7 +206,7 @@ namespace Flux.ViewModels
                     throw new ArgumentException();
 
                 return GCodeString.Create($"{variable_name} = {(typeof(T) == typeof(string) && !$"{v}".Contains('"') ? $"\"{v}\"" : $"{v}")}", write);
-            });
+            }
 
             gcode_variable = new GCodeVariable<T>()
             {

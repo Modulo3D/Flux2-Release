@@ -66,7 +66,7 @@ namespace Flux.ViewModels
             set => this.RaiseAndSetIfChanged(ref _Heightmap, value);
         }
 
-        private ObservableAsPropertyHelper<Optional<FLUX_Temp>> _PlateTemperature;
+        private readonly ObservableAsPropertyHelper<Optional<FLUX_Temp>> _PlateTemperature;
         [RemoteOutput(true, typeof(FluxTemperatureConverter))]
         public Optional<FLUX_Temp> PlateTemperature => _PlateTemperature.Value;
 

@@ -117,7 +117,7 @@ namespace Flux.ViewModels
         public DatabaseProvider DatabaseProvider { get; private set; }
         public IFLUX_ConnectionProvider ConnectionProvider { get; private set; }
 
-        private ObservableAsPropertyHelper<DateTime> _CurrentTime;
+        private readonly ObservableAsPropertyHelper<DateTime> _CurrentTime;
         [RemoteOutput(true, typeof(DateTimeConverter<AbsoluteDateTimeFormat>))]
         public DateTime CurrentTime => _CurrentTime.Value;
 

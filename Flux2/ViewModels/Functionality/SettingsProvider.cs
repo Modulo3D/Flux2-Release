@@ -17,10 +17,10 @@ namespace Flux.ViewModels
     {
         public FluxViewModel Flux { get; }
 
-        private ObservableAsPropertyHelper<Optional<Printer>> _Printer;
+        private readonly ObservableAsPropertyHelper<Optional<Printer>> _Printer;
         public Optional<Printer> Printer => _Printer.Value;
 
-        private ObservableAsPropertyHelper<Optional<IPAddress>> _HostAddress;
+        private readonly ObservableAsPropertyHelper<Optional<IPAddress>> _HostAddress;
         public Optional<IPAddress> HostAddress => _HostAddress.Value;
 
         private LocalSettingsProvider<FluxCoreSettings> _CoreSettings;
@@ -45,7 +45,7 @@ namespace Flux.ViewModels
             }
         }
 
-        private ObservableAsPropertyHelper<Optional<(ushort machine_extruders, ushort mixing_extruders)>> _ExtrudersCount;
+        private readonly ObservableAsPropertyHelper<Optional<(ushort machine_extruders, ushort mixing_extruders)>> _ExtrudersCount;
         public Optional<(ushort machine_extruders, ushort mixing_extruders)> ExtrudersCount => _ExtrudersCount.Value;
 
         public IObservableCache<IPAddress, string> HostAddressCache { get; }

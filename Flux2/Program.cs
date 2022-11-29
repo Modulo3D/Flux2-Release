@@ -5,9 +5,9 @@ using System.Diagnostics;
 
 namespace Flux.ViewModels
 {
-    class Program
+    internal class Program
     {
-        static void Main(string[] args)
+        private static void Main(string[] args)
         {
             CreateHostBuilder(args).Build().Run();
         }

@@ -1,5 +1,4 @@
 ﻿using DynamicData;
-using DynamicData.Binding;
 using DynamicData.Kernel;
 using Modulo3DNet;
 using ReactiveUI;
@@ -204,7 +203,7 @@ namespace Flux.ViewModels
             return new NFCReading<NFCMaterial>(tag, virtual_card_id);
         }
 
-        async Task<ValueResult<Tool>> FindNewToolAsync(ushort position, Optional<NFCToolNozzle> last_tag)
+        private async Task<ValueResult<Tool>> FindNewToolAsync(ushort position, Optional<NFCToolNozzle> last_tag)
         {
             var database = Flux.DatabaseProvider.Database;
             if (!database.HasValue)
@@ -239,7 +238,8 @@ namespace Flux.ViewModels
 
             return tool.Value;
         }
-        async Task<(ValueResult<Nozzle> nozzle, double max_weight, double cur_weight)> FindNewNozzleAsync(ushort position, Tool tool, Optional<NFCToolNozzle> last_tag)
+
+        private async Task<(ValueResult<Nozzle> nozzle, double max_weight, double cur_weight)> FindNewNozzleAsync(ushort position, Tool tool, Optional<NFCToolNozzle> last_tag)
         {
             var database = Flux.DatabaseProvider.Database;
             if (!database.HasValue)

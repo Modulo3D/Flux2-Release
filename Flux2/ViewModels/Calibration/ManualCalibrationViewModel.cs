@@ -35,7 +35,7 @@ namespace Flux.ViewModels
         [RemoteCommand]
         public abstract ReactiveCommand<Unit, Unit> CancelCalibrationCommand { get; protected set; }
 
-        private ObservableAsPropertyHelper<Optional<ushort>> _SelectedTool;
+        private readonly ObservableAsPropertyHelper<Optional<ushort>> _SelectedTool;
         [RemoteOutput(true)]
         public Optional<ushort> SelectedTool => _SelectedTool.Value;
 
@@ -73,7 +73,7 @@ namespace Flux.ViewModels
         [RemoteContent(true)]
         public ISourceList<IConditionViewModel> Conditions { get; private set; }
 
-        private ObservableAsPropertyHelper<bool> _HasSafeStart;
+        private readonly ObservableAsPropertyHelper<bool> _HasSafeStart;
         [RemoteOutput(true)]
         public bool HasSafeStart => _HasSafeStart?.Value ?? false;
 
@@ -109,7 +109,7 @@ namespace Flux.ViewModels
         [RemoteOutput(false)]
         public ushort Position { get; }
 
-        private ObservableAsPropertyHelper<string> _ProbeStateBrush;
+        private readonly ObservableAsPropertyHelper<string> _ProbeStateBrush;
         [RemoteOutput(true)]
         public string ProbeStateBrush => _ProbeStateBrush.Value;
         [RemoteCommand]
@@ -209,11 +209,11 @@ namespace Flux.ViewModels
 
     public class PerformManualCalibrationViewModel : ManualCalibrationPhaseViewModel<PerformManualCalibrationViewModel>
     {
-        private ObservableAsPropertyHelper<Optional<FLUX_Temp>> _CurrentTemperature;
+        private readonly ObservableAsPropertyHelper<Optional<FLUX_Temp>> _CurrentTemperature;
         [RemoteOutput(true, typeof(FluxTemperatureConverter))]
         public Optional<FLUX_Temp> CurrentTemperature => _CurrentTemperature.Value;
 
-        private ObservableAsPropertyHelper<Optional<double>> _TemperaturePercentage;
+        private readonly ObservableAsPropertyHelper<Optional<double>> _TemperaturePercentage;
         [RemoteOutput(true)]
         public Optional<double> TemperaturePercentage => _TemperaturePercentage.Value;
 
@@ -225,7 +225,7 @@ namespace Flux.ViewModels
         [RemoteContent(true)]
         public IObservableList<ManualCalibrationItemViewModel> ToolItems { get; }
 
-        private ObservableAsPropertyHelper<string> _AxisPosition;
+        private readonly ObservableAsPropertyHelper<string> _AxisPosition;
         [RemoteOutput(true)]
         public string AxisPosition => _AxisPosition.Value;
 
@@ -339,7 +339,8 @@ namespace Flux.ViewModels
 
             CancelCalibrationCommand = ReactiveCommand.CreateFromTask(ExitAsync, can_cancel);
         }
-        CmdButton FindMoveButton(double distance, bool can_unsafe_cycle)
+
+        private CmdButton FindMoveButton(double distance, bool can_unsafe_cycle)
         {
             var variable_store = Flux.ConnectionProvider.VariableStoreBase;
 
@@ -389,9 +390,11 @@ namespace Flux.ViewModels
     {
         public PrepareManualCalibrationViewModel PrepareManualCalibration { get; }
         public PerformManualCalibrationViewModel PerformManualCalibration { get; }
-        private ObservableAsPropertyHelper<IManualCalibrationPhaseViewModel> _ManualCalibrationPhase;
+
+        private readonly ObservableAsPropertyHelper<IManualCalibrationPhaseViewModel> _ManualCalibrationPhase;
         [RemoteContent(true)]
         public IManualCalibrationPhaseViewModel ManualCalibrationPhase => _ManualCalibrationPhase.Value;
+
         public ManualCalibrationViewModel(CalibrationViewModel calibration) : base(calibration.Flux)
         {
             PrepareManualCalibration = new PrepareManualCalibrationViewModel(calibration);

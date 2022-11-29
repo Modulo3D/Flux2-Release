@@ -17,34 +17,34 @@ namespace Flux.ViewModels
         public IFluxFeederViewModel Feeder { get; }
         public CalibrationViewModel Calibration { get; }
 
-        private ObservableAsPropertyHelper<bool> _DebugOffsets;
+        private readonly ObservableAsPropertyHelper<bool> _DebugOffsets;
         [RemoteOutput(true)]
         public bool DebugOffsets => _DebugOffsets.Value;
 
-        private ObservableAsPropertyHelper<Optional<ToolId>> _ToolId;
+        private readonly ObservableAsPropertyHelper<Optional<ToolId>> _ToolId;
         public Optional<ToolId> ToolId => _ToolId.Value;
 
-        private ObservableAsPropertyHelper<Optional<UserOffsetKey>> _UserOffsetKey;
+        private readonly ObservableAsPropertyHelper<Optional<UserOffsetKey>> _UserOffsetKey;
         [RemoteOutput(true, typeof(HasValueConverter<UserOffsetKey>))]
         public Optional<UserOffsetKey> UserOffsetKey => _UserOffsetKey.Value;
 
-        private ObservableAsPropertyHelper<Optional<ProbeOffsetKey>> _ProbeOffsetKey;
+        private readonly ObservableAsPropertyHelper<Optional<ProbeOffsetKey>> _ProbeOffsetKey;
         [RemoteOutput(true, typeof(HasValueConverter<ProbeOffsetKey>))]
         public Optional<ProbeOffsetKey> ProbeOffsetKey => _ProbeOffsetKey.Value;
 
-        private ObservableAsPropertyHelper<Optional<ToolOffset>> _ToolOffset;
+        private readonly ObservableAsPropertyHelper<Optional<ToolOffset>> _ToolOffset;
         public Optional<ToolOffset> ToolOffset => _ToolOffset.Value;
 
-        private ObservableAsPropertyHelper<Optional<UserOffset>> _UserOffset;
+        private readonly ObservableAsPropertyHelper<Optional<UserOffset>> _UserOffset;
         public Optional<UserOffset> UserOffset => _UserOffset.Value;
 
-        private ObservableAsPropertyHelper<Optional<ProbeOffset>> _ProbeOffset;
+        private readonly ObservableAsPropertyHelper<Optional<ProbeOffset>> _ProbeOffset;
         public Optional<ProbeOffset> ProbeOffset => _ProbeOffset.Value;
 
-        private ObservableAsPropertyHelper<Optional<FluxOffset>> _FluxOffset;
+        private readonly ObservableAsPropertyHelper<Optional<FluxOffset>> _FluxOffset;
         public Optional<FluxOffset> FluxOffset => _FluxOffset.Value;
 
-        private ObservableAsPropertyHelper<bool> _IsOffsetRoot;
+        private readonly ObservableAsPropertyHelper<bool> _IsOffsetRoot;
         [RemoteOutput(true)]
         public bool IsOffsetRoot => _IsOffsetRoot.Value;
 
@@ -77,23 +77,23 @@ namespace Flux.ViewModels
             set => this.RaiseAndSetIfChanged(ref _ZUserOffset, value);
         }
 
-        private ObservableAsPropertyHelper<double> _XProbeOffset;
+        private readonly ObservableAsPropertyHelper<double> _XProbeOffset;
         [RemoteOutput(true, converter: typeof(MillimeterConverter))]
         public double XProbeOffset => _XProbeOffset.Value;
 
-        private ObservableAsPropertyHelper<double> _YProbeOffset;
+        private readonly ObservableAsPropertyHelper<double> _YProbeOffset;
         [RemoteOutput(true, converter: typeof(MillimeterConverter))]
         public double YProbeOffset => _YProbeOffset.Value;
 
-        private ObservableAsPropertyHelper<double> _ZProbeOffset;
+        private readonly ObservableAsPropertyHelper<double> _ZProbeOffset;
         [RemoteOutput(true, converter: typeof(MillimeterConverter))]
         public double ZProbeOffset => _ZProbeOffset.Value;
 
-        private ObservableAsPropertyHelper<FluxProbeState> _ProbeState;
+        private readonly ObservableAsPropertyHelper<FluxProbeState> _ProbeState;
         [RemoteOutput(true)]
         public FluxProbeState ProbeState => _ProbeState.Value;
 
-        private ObservableAsPropertyHelper<string> _ProbeStateBrush;
+        private readonly ObservableAsPropertyHelper<string> _ProbeStateBrush;
         [RemoteOutput(true)]
         public string ProbeStateBrush => _ProbeStateBrush.Value;
 

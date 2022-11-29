@@ -12,7 +12,7 @@ namespace Flux.ViewModels
     {
         public ReactiveCommand<Unit, Unit> Command { get; }
 
-        private ObservableAsPropertyHelper<bool> _Visible;
+        private readonly ObservableAsPropertyHelper<bool> _Visible;
         public bool Visible => _Visible.Value;
 
         private CmdButton(

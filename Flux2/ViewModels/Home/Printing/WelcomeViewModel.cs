@@ -11,7 +11,7 @@ namespace Flux.ViewModels
         [RemoteCommand]
         public ReactiveCommand<Unit, Unit> SelectPartProgramCommand { get; }
 
-        private ObservableAsPropertyHelper<string> _PrinterName;
+        private readonly ObservableAsPropertyHelper<string> _PrinterName;
         [RemoteOutput(true)]
         public string PrinterName => _PrinterName.Value;
 

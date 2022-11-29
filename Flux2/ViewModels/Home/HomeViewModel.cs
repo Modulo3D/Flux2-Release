@@ -42,7 +42,7 @@ namespace Flux.ViewModels
         public InvalidPrinterViewModel InvalidPrinterPhase { get; }
         public InvalidMaterialsViewModel InvalidMaterialsPhase { get; }
 
-        private ObservableAsPropertyHelper<IHomePhaseViewModel> _HomePhase;
+        private readonly ObservableAsPropertyHelper<IHomePhaseViewModel> _HomePhase;
         [RemoteContent(true)]
         public IHomePhaseViewModel HomePhase => _HomePhase.Value;
 

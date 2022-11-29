@@ -19,7 +19,7 @@ namespace Flux.ViewModels
         [RemoteContent(true)]
         public IObservableCache<IFluxOffsetViewModel, ushort> Offsets { get; }
 
-        private ObservableAsPropertyHelper<Optional<ToolId>> _GroupId;
+        private readonly ObservableAsPropertyHelper<Optional<ToolId>> _GroupId;
         public Optional<ToolId> GroupId => _GroupId.Value;
 
 
@@ -172,7 +172,7 @@ namespace Flux.ViewModels
             ManualCalibration = new Lazy<ManualCalibrationViewModel>(() => new ManualCalibrationViewModel(this));
         }
 
-        void ModifyOffset(Func<double, double> edit_func)
+        private void ModifyOffset(Func<double, double> edit_func)
         {
             var old_offset = GlobalZOffset.ValueOr(() => 0.0);
             var new_offset = edit_func(old_offset);

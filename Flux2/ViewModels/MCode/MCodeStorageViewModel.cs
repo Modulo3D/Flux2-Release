@@ -17,7 +17,7 @@ namespace Flux.ViewModels
 
         public MCodeKey MCodeKey { get; }
 
-        private ObservableAsPropertyHelper<ushort> _FileNumber;
+        private readonly ObservableAsPropertyHelper<ushort> _FileNumber;
         [RemoteOutput(true)]
         public ushort FileNumber => _FileNumber.Value;
 
@@ -32,7 +32,7 @@ namespace Flux.ViewModels
             set => this.RaiseAndSetIfChanged(ref _UploadPercentage, value);
         }
 
-        private ObservableAsPropertyHelper<bool> _IsUploading;
+        private readonly ObservableAsPropertyHelper<bool> _IsUploading;
         public bool IsUploading => _IsUploading.Value;
 
         private bool _ShowInfo;
@@ -54,10 +54,10 @@ namespace Flux.ViewModels
         [RemoteCommand]
         public ReactiveCommand<Unit, Unit> ToggleMCodeStorageInfoCommand { get; }
 
-        private ObservableAsPropertyHelper<bool> _CanSelect;
+        private readonly ObservableAsPropertyHelper<bool> _CanSelect;
         public bool CanSelect => _CanSelect.Value;
 
-        private ObservableAsPropertyHelper<bool> _CanDelete;
+        private readonly ObservableAsPropertyHelper<bool> _CanDelete;
         public bool CanDelete => _CanDelete.Value;
 
         public MCodeStorageViewModel(MCodesViewModel mcodes, MCodeKey mcode_key, MCodeAnalyzer analyzer) : base($"{typeof(MCodeStorageViewModel).GetRemoteControlName()}??{mcode_key}")

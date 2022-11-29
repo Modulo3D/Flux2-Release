@@ -20,7 +20,7 @@ namespace Flux.ViewModels
         [RemoteCommand]
         public ReactiveCommand<Unit, Unit> SettingsCommand { get; private set; }
 
-        private ObservableAsPropertyHelper<double> _ConnectionProgress;
+        private readonly ObservableAsPropertyHelper<double> _ConnectionProgress;
         [RemoteOutput(true)]
         public double ConnectionProgress => _ConnectionProgress.Value;
 

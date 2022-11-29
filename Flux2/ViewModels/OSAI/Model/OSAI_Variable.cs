@@ -66,7 +66,8 @@ namespace Flux.ViewModels
             Address = address;
             Group = $"{address.VarCode}";
         }
-        static IObservable<Optional<TRData>> observe_value(OSAI_ConnectionProvider connection, Func<OSAI_MemoryBuffer, IObservable<Optional<TRData>>> get_data)
+
+        private static IObservable<Optional<TRData>> observe_value(OSAI_ConnectionProvider connection, Func<OSAI_MemoryBuffer, IObservable<Optional<TRData>>> get_data)
         {
             return get_data(connection.MemoryBuffer);
         }
@@ -225,7 +226,7 @@ namespace Flux.ViewModels
             Group = $"{address.VarCode}";
         }
 
-        static async Task<ValueResult<FLUX_Temp>> read_async(OSAI_ConnectionProvider connection_provider, OSAI_IndexAddress address)
+        private static async Task<ValueResult<FLUX_Temp>> read_async(OSAI_ConnectionProvider connection_provider, OSAI_IndexAddress address)
         {
             var connection = connection_provider.Connection;
             var data = await connection.ReadTextAsync(address);
@@ -238,7 +239,8 @@ namespace Flux.ViewModels
             var current = datas.Length > 1 ? double.Parse($"{datas[1]:0.00}", NumberStyles.Float, CultureInfo.InvariantCulture) : 0;
             return new FLUX_Temp(current, target);
         }
-        static async Task<bool> write_async(OSAI_ConnectionProvider connection_provider, double temp, Func<double, string> get_temp_gcode)
+
+        private static async Task<bool> write_async(OSAI_ConnectionProvider connection_provider, double temp, Func<double, string> get_temp_gcode)
         {
             using var put_write_temp_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             return await connection_provider.ExecuteParamacroAsync(_ => new[] { get_temp_gcode(temp) }, put_write_temp_cts.Token, false);
@@ -379,8 +381,10 @@ namespace Flux.ViewModels
                 unit: unit)
         {
         }
-        static TSensor SensorInstance { get; } = new TSensor();
-        static Pressure get_pressure(ushort value)
+
+        private static TSensor SensorInstance { get; } = new TSensor();
+
+        private static Pressure get_pressure(ushort value)
         {
             return SensorInstance.ValueFunc(value / 200.0);
         }

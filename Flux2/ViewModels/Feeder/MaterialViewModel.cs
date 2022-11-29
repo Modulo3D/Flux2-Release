@@ -28,23 +28,23 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public string MaterialBrush => _MaterialBrush.Value;
 
-        private ObservableAsPropertyHelper<Optional<string>> _DocumentLabel;
+        private readonly ObservableAsPropertyHelper<Optional<string>> _DocumentLabel;
         [RemoteOutput(true)]
         public override Optional<string> DocumentLabel => _DocumentLabel.Value;
 
-        private ObservableAsPropertyHelper<Optional<bool>> _WirePresenceBeforeGear;
+        private readonly ObservableAsPropertyHelper<Optional<bool>> _WirePresenceBeforeGear;
         [RemoteOutput(true)]
         public Optional<bool> FilamentPresenceBeforeGear => _WirePresenceBeforeGear.Value;
 
-        private ObservableAsPropertyHelper<Optional<bool>> _WirePresenceAfterGear;
+        private readonly ObservableAsPropertyHelper<Optional<bool>> _WirePresenceAfterGear;
         [RemoteOutput(true)]
         public Optional<bool> FilamentPresenceAfterGear => _WirePresenceAfterGear.Value;
 
-        private ObservableAsPropertyHelper<Optional<bool>> _WirePresenceOnHead;
+        private readonly ObservableAsPropertyHelper<Optional<bool>> _WirePresenceOnHead;
         [RemoteOutput(true)]
         public Optional<bool> FilamentPresenceOnHead => _WirePresenceOnHead.Value;
 
-        private ObservableAsPropertyHelper<bool> _MaterialLoaded;
+        private readonly ObservableAsPropertyHelper<bool> _MaterialLoaded;
         [RemoteOutput(true)]
         public bool MaterialLoaded => _MaterialLoaded.Value;
 
@@ -71,7 +71,7 @@ namespace Flux.ViewModels
         [RemoteOutput(true, typeof(HumidityConverter))]
         public Optional<FLUX_Humidity> Humidity => _Humidity.Value;
 
-        private ObservableAsPropertyHelper<Optional<ExtrusionKey>> _ExtrusionKey;
+        private readonly ObservableAsPropertyHelper<Optional<ExtrusionKey>> _ExtrusionKey;
         public Optional<ExtrusionKey> ExtrusionKey => _ExtrusionKey.Value;
 
         public MaterialViewModel(FeedersViewModel feeders, FeederViewModel feeder, ushort position) : base(feeders, feeder, position, s => s.NFCMaterials, (db, m) =>
@@ -307,7 +307,7 @@ namespace Flux.ViewModels
             return Observable.CombineLatest(inserted, known, locked, loaded,
                  (inserted, known, locked, loaded) => new MaterialState(inserted, known, locked, loaded));
         }
-        private bool CanLoadMaterial(bool can_cycle, ToolNozzleState tool_nozzle, MaterialState material, Optional<ToolMaterialState> tool_material)
+        private static bool CanLoadMaterial(bool can_cycle, ToolNozzleState tool_nozzle, MaterialState material, Optional<ToolMaterialState> tool_material)
         {
             if (!can_cycle)
                 return false;
@@ -323,7 +323,7 @@ namespace Flux.ViewModels
                 return false;
             return true;
         }
-        private bool CanPurgeMaterial(bool can_cycle, ToolNozzleState tool_nozzle, MaterialState material, Optional<ToolMaterialState> tool_material)
+        private static bool CanPurgeMaterial(bool can_cycle, ToolNozzleState tool_nozzle, MaterialState material, Optional<ToolMaterialState> tool_material)
         {
             if (!can_cycle)
                 return false;

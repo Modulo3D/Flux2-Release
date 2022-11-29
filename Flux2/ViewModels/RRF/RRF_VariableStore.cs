@@ -116,31 +116,31 @@ namespace Flux.ViewModels
             }
         }
 
-        protected async Task<bool> SetPlateTemperatureAsync(RRF_ConnectionProvider connection_provider, double temperature, VariableUnit unit)
+        protected static async Task<bool> SetPlateTemperatureAsync(RRF_ConnectionProvider connection_provider, double temperature, VariableUnit unit)
         {
             var connection = connection_provider.Connection;
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-            return await connection.PostGCodeAsync(new[] { $"M140 S{temperature}" }, cts.Token);
+            return await connection.PostGCodeAsync(new[] { $"M140 P{unit.Index} S{temperature}" }, cts.Token);
         }
-        protected async Task<bool> SetChamberTemperatureAsync(RRF_ConnectionProvider connection_provider, double temperature, VariableUnit unit)
+        protected static async Task<bool> SetChamberTemperatureAsync(RRF_ConnectionProvider connection_provider, double temperature, VariableUnit unit)
         {
             var connection = connection_provider.Connection;
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
             return await connection.PostGCodeAsync(new[] { $"M141 P{unit.Index} S{temperature}" }, cts.Token);
         }
-        protected async Task<bool> EnableDriverAsync(RRF_ConnectionProvider connection_provider, bool enable, VariableUnit unit)
+        protected static async Task<bool> EnableDriverAsync(RRF_ConnectionProvider connection_provider, bool enable, VariableUnit unit)
         {
             var connection = connection_provider.Connection;
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
             return await connection.PostGCodeAsync(new[] { $"{(enable ? "M17" : "M18")} {unit.Alias}" }, cts.Token);
         }
-        protected async Task<bool> SetToolTemperatureAsync(RRF_ConnectionProvider connection_provider, double temperature, VariableUnit unit)
+        protected static async Task<bool> SetToolTemperatureAsync(RRF_ConnectionProvider connection_provider, double temperature, VariableUnit unit)
         {
             var connection = connection_provider.Connection;
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
             return await connection.PostGCodeAsync(new[] { $"M104 T{unit.Index} S{temperature}" }, cts.Token);
         }
-        protected async Task<bool> WriteGpOutAsync(RRF_ConnectionProvider connection_provider, bool pwm, VariableUnit unit)
+        protected static async Task<bool> WriteGpOutAsync(RRF_ConnectionProvider connection_provider, bool pwm, VariableUnit unit)
         {
             var connection = connection_provider.Connection;
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
@@ -215,8 +215,8 @@ namespace Flux.ViewModels
     public class RRF_VariableStoreS300A : RRF_VariableStoreS300
     {
         public override bool HasPrintUnloader => true;
-        public override VariableUnits EndstopsUnits => new("X", "Y", "Z", "U");
-        public override VariableUnits AxesUnits => new("X", "Y", "Z", "B", "C", "U");
+        //public override VariableUnits EndstopsUnits => new("X", "Y", "Z", "U");
+        //public override VariableUnits AxesUnits => new("X", "Y", "Z", "B", "C", "U");
         public RRF_VariableStoreS300A(RRF_ConnectionProvider connection_provider) : base(connection_provider)
         {
         }

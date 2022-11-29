@@ -6,7 +6,7 @@ namespace Flux.ViewModels
 {
     public class WebcamViewModel : FluxRoutableViewModel<WebcamViewModel>
     {
-        private ObservableAsPropertyHelper<Optional<string>> _WebcamAddress;
+        private readonly ObservableAsPropertyHelper<Optional<string>> _WebcamAddress;
         [RemoteOutput(true)]
         public Optional<string> WebcamAddress => _WebcamAddress.Value;
 

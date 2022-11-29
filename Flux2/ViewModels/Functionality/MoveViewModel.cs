@@ -21,7 +21,7 @@ namespace Flux.ViewModels
             set => this.RaiseAndSetIfChanged(ref _MovePrinterExponent, value);
         }
 
-        private ObservableAsPropertyHelper<double> _MovePrinterDistance;
+        private readonly ObservableAsPropertyHelper<double> _MovePrinterDistance;
         [RemoteOutput(true)]
         public double MovePrinterDistance => _MovePrinterDistance.Value;
 
@@ -58,7 +58,7 @@ namespace Flux.ViewModels
         [RemoteCommand]
         public ReactiveCommand<Unit, Unit> ShowRoutinesCommand { get; }
 
-        private ObservableAsPropertyHelper<string> _AxisPosition;
+        private readonly ObservableAsPropertyHelper<string> _AxisPosition;
         [RemoteOutput(true)]
         public string AxisPosition => _AxisPosition.Value;
 

@@ -13,7 +13,7 @@ namespace Flux.ViewModels
 {
     public class FluxNavigatorViewModel : RemoteControl<FluxNavigatorViewModel>, IFluxNavigatorViewModel
     {
-        private ObservableAsPropertyHelper<bool> _ShowNavBar;
+        private readonly ObservableAsPropertyHelper<bool> _ShowNavBar;
         [RemoteOutput(true)]
         public bool ShowNavBar => _ShowNavBar.Value;
 

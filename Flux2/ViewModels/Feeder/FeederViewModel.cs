@@ -17,12 +17,12 @@ namespace Flux.ViewModels
         public FeedersViewModel Feeders { get; }
 
         // FEEDER
-        private ObservableAsPropertyHelper<EFeederState> _FeederState;
+        private readonly ObservableAsPropertyHelper<EFeederState> _FeederState;
         public EFeederState FeederState => _FeederState.Value;
 
         [RemoteContent(false)]
         public ToolNozzleViewModel ToolNozzle { get; }
-        private ObservableAsPropertyHelper<Optional<IFluxMaterialViewModel>> _SelectedMaterial;
+        private readonly ObservableAsPropertyHelper<Optional<IFluxMaterialViewModel>> _SelectedMaterial;
         public Optional<IFluxMaterialViewModel> SelectedMaterial => _SelectedMaterial.Value;
 
         [RemoteContent(true)]
@@ -30,7 +30,7 @@ namespace Flux.ViewModels
 
         IFluxToolNozzleViewModel IFluxFeederViewModel.ToolNozzle => ToolNozzle;
 
-        private ObservableAsPropertyHelper<bool> _HasInvalidState;
+        private readonly ObservableAsPropertyHelper<bool> _HasInvalidState;
         public bool HasInvalidState => _HasInvalidState.Value;
 
         public IObservable<bool> HasInvalidStateChanged { get; }
@@ -39,15 +39,15 @@ namespace Flux.ViewModels
         [RemoteOutput(false)]
         public ushort Position { get; }
 
-        private ObservableAsPropertyHelper<string> _FeederStateStr;
+        private readonly ObservableAsPropertyHelper<string> _FeederStateStr;
         [RemoteOutput(true)]
         public string FeederStateStr => _FeederStateStr.Value;
 
-        private ObservableAsPropertyHelper<string> _FeederBrush;
+        private readonly ObservableAsPropertyHelper<string> _FeederBrush;
         [RemoteOutput(true)]
         public string FeederBrush => _FeederBrush.Value;
 
-        private ObservableAsPropertyHelper<string> _ToolNozzleBrush;
+        private readonly ObservableAsPropertyHelper<string> _ToolNozzleBrush;
         [RemoteOutput(true)]
         public string ToolNozzleBrush => _ToolNozzleBrush.Value;
 
@@ -82,8 +82,8 @@ namespace Flux.ViewModels
                materials, extruders, selected_positions, FindSelectedViewModel)
                 .ToProperty(this, v => v.SelectedMaterial);
 
-            foreach (MaterialViewModel m in Materials.Items)
-                m.Initialize();
+            foreach (var material in Materials.Items.Cast<MaterialViewModel>())
+                material.Initialize();
 
             ToolNozzle.Initialize();
 

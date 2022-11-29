@@ -1052,15 +1052,10 @@ namespace Flux.ViewModels
 
         public Optional<bool> IsInChange()
         {
-            return Status.Convert(s =>
+            return Status.Convert(s => s switch
             {
-                switch (s)
-                {
-                    case "changingTool":
-                        return true;
-                    default:
-                        return false;
-                }
+                "changingTool" => true,
+                _ => false,
             });
         }
     }

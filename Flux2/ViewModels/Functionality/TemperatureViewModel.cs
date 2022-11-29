@@ -34,7 +34,7 @@ namespace Flux.ViewModels
             set => this.RaiseAndSetIfChanged(ref _TargetTemperature, value);
         }
 
-        private ObservableAsPropertyHelper<Optional<FLUX_Temp>> _Temperature;
+        private readonly ObservableAsPropertyHelper<Optional<FLUX_Temp>> _Temperature;
         [RemoteOutput(true, typeof(FluxTemperatureConverter))]
         public Optional<FLUX_Temp> Temperature => _Temperature.Value;
 

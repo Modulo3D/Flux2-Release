@@ -16,7 +16,7 @@ namespace Flux.ViewModels
     {
         public MCodesViewModel MCodes { get; }
 
-        private ObservableAsPropertyHelper<Optional<IFluxMCodeStorageViewModel>> _Storage;
+        private readonly ObservableAsPropertyHelper<Optional<IFluxMCodeStorageViewModel>> _Storage;
         public Optional<IFluxMCodeStorageViewModel> Storage => _Storage.Value;
 
         public ObservableAsPropertyHelper<Optional<string>> _MCodeName;
@@ -26,11 +26,11 @@ namespace Flux.ViewModels
         [RemoteOutput(false, typeof(ToStringConverter))]
         public Job Job { get; }
 
-        private ObservableAsPropertyHelper<short> _FileNumber;
+        private readonly ObservableAsPropertyHelper<short> _FileNumber;
         [RemoteOutput(true)]
         public short FileNumber => _FileNumber.Value;
 
-        private ObservableAsPropertyHelper<bool> _CurrentIndex;
+        private readonly ObservableAsPropertyHelper<bool> _CurrentIndex;
         [RemoteOutput(true)]
         public bool CurrentIndex => _CurrentIndex.Value;
 
@@ -43,7 +43,7 @@ namespace Flux.ViewModels
         [RemoteCommand]
         public ReactiveCommand<Unit, Unit> MoveDownMCodeQueueCommand { get; }
 
-        private ObservableAsPropertyHelper<DateTime> _EndTime;
+        private readonly ObservableAsPropertyHelper<DateTime> _EndTime;
         [RemoteOutput(true, typeof(DateTimeConverter<RelativeDateTimeFormat>))]
         public DateTime EndTime => _EndTime.Value;
 

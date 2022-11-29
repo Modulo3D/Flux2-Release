@@ -9,11 +9,11 @@ namespace Flux.ViewModels
         public FluxViewModel Flux { get; }
         public IFluxFeederViewModel Feeder { get; }
 
-        private ObservableAsPropertyHelper<string> _ToolNozzeBrush;
+        private readonly ObservableAsPropertyHelper<string> _ToolNozzeBrush;
         [RemoteOutput(true)]
         public string ToolNozzeBrush => _ToolNozzeBrush.Value;
 
-        private ObservableAsPropertyHelper<string> _Nozzle;
+        private readonly ObservableAsPropertyHelper<string> _Nozzle;
         [RemoteOutput(true)]
         public string Nozzle => _Nozzle.Value;
 

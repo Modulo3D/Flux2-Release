@@ -15,7 +15,7 @@ namespace Flux.ViewModels
         public override string CurrentValueName => "UTENSILE CARICATO";
         public override string ExpectedValueName => "UTENSILE RICHIESTO";
 
-        private ObservableAsPropertyHelper<string> _InvalidItemBrush;
+        private readonly ObservableAsPropertyHelper<string> _InvalidItemBrush;
         public override string InvalidItemBrush => _InvalidItemBrush.Value;
 
         public InvalidToolViewModel(FeederEvaluator eval) : base($"{typeof(InvalidToolViewModel).GetRemoteControlName()}??{eval.Feeder.Position}", eval)

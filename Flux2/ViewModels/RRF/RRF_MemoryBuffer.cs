@@ -79,10 +79,9 @@ namespace Flux.ViewModels
         public override async Task<Optional<TData>> TryScheduleAsync(RRF_RequestPriority priority, CancellationToken ct)
         {
             var connection = MemoryBuffer.ConnectionProvider.Connection;
-            var request = new RRF_Request($"rr_model?key={Resource}&flags={Flags}", HttpMethod.Get, priority, ct, MemoryBuffer.RequestTimeout);
+            var request = new RRF_Request<RRF_ObjectModelResponse<TData>>($"rr_model?key={Resource}&flags={Flags}", HttpMethod.Get, priority, ct, MemoryBuffer.RequestTimeout);
             var response = await connection.ExecuteAsync(request);
-            return response.GetContent<RRF_ObjectModelResponse<TData>>()
-                .Convert(m => m.Result);
+            return response.Content.Convert(m => m.Result);
         }
     }
     public class RRF_FileSystemReader : RRF_MemoryReader<FLUX_FileList>
@@ -102,10 +101,10 @@ namespace Flux.ViewModels
             do
             {
                 var first = file_list.ConvertOr(f => f.Next, () => 0);
-                var request = new RRF_Request($"rr_filelist?dir={Resource}&first={first}", HttpMethod.Get, priority, ct, MemoryBuffer.RequestTimeout);
+                var request = new RRF_Request<FLUX_FileList>($"rr_filelist?dir={Resource}&first={first}", HttpMethod.Get, priority, ct, MemoryBuffer.RequestTimeout);
                 var response = await connection.ExecuteAsync(request);
 
-                file_list = response.GetContent<FLUX_FileList>();
+                file_list = response.Content;
                 if (!file_list.HasValue)
                     break;
 
@@ -148,7 +147,7 @@ namespace Flux.ViewModels
 
         public RRF_ObjectModel RRFObjectModel { get; }
 
-        private ObservableAsPropertyHelper<bool> _HasFullMemoryRead;
+        private readonly ObservableAsPropertyHelper<bool> _HasFullMemoryRead;
         public override bool HasFullMemoryRead => _HasFullMemoryRead.Value;
         public TimeSpan TaskTimeout { get; }
         public TimeSpan RequestTimeout { get; }

@@ -24,15 +24,15 @@ namespace Flux.ViewModels
 
         private bool IsCanceled { get; set; }
 
-        private ObservableAsPropertyHelper<Optional<bool>> _WirePresenceBeforeGear;
+        private readonly ObservableAsPropertyHelper<Optional<bool>> _WirePresenceBeforeGear;
         [RemoteOutput(true)]
         public Optional<bool> WirePresenceBeforeGear => _WirePresenceBeforeGear.Value;
 
-        private ObservableAsPropertyHelper<Optional<bool>> _WirePresenceAfterGear;
+        private readonly ObservableAsPropertyHelper<Optional<bool>> _WirePresenceAfterGear;
         [RemoteOutput(true)]
         public Optional<bool> WirePresenceAfterGear => _WirePresenceAfterGear.Value;
 
-        private ObservableAsPropertyHelper<Optional<bool>> _WirePresenceOnHead;
+        private readonly ObservableAsPropertyHelper<Optional<bool>> _WirePresenceOnHead;
         [RemoteOutput(true)]
         public Optional<bool> WirePresenceOnHead => _WirePresenceOnHead.Value;
 

@@ -71,7 +71,8 @@ namespace Flux.ViewModels
             var message_str = message_builder.ToString();
             Text = message_str.TrimEnd(Environment.NewLine.ToCharArray());
         }
-        static DateTime ParseTimeStamp(SYSTEMTIMECNDEX systime)
+
+        private static DateTime ParseTimeStamp(SYSTEMTIMECNDEX systime)
         {
             return DateTime.Parse($"{systime.wDay}/{systime.wMonth}/{systime.wYear} {systime.wHour}:{systime.wMinute}:{systime.wSecond}");
         }

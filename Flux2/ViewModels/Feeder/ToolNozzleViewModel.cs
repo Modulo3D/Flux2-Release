@@ -15,11 +15,11 @@ namespace Flux.ViewModels
     {
         public override ushort VirtualTagId => 2;
 
-        private ObservableAsPropertyHelper<Optional<FLUX_Temp>> _NozzleTemperature;
+        private readonly ObservableAsPropertyHelper<Optional<FLUX_Temp>> _NozzleTemperature;
         [RemoteOutput(true, typeof(FluxTemperatureConverter))]
         public Optional<FLUX_Temp> NozzleTemperature => _NozzleTemperature.Value;
 
-        private ObservableAsPropertyHelper<ToolNozzleState> _State;
+        private readonly ObservableAsPropertyHelper<ToolNozzleState> _State;
         public override ToolNozzleState State => _State.Value;
 
         private ObservableAsPropertyHelper<Optional<IFluxMaterialViewModel>> _MaterialLoaded;
@@ -32,13 +32,13 @@ namespace Flux.ViewModels
             set => this.RaiseAndSetIfChanged(ref _InMaintenance, value);
         }
 
-        private ObservableAsPropertyHelper<string> _ToolNozzleBrush;
+        private readonly ObservableAsPropertyHelper<string> _ToolNozzleBrush;
         [RemoteOutput(true)]
         public string ToolNozzleBrush => _ToolNozzleBrush.Value;
 
         public ReactiveCommand<Unit, Unit> ChangeCommand { get; private set; }
 
-        private ObservableAsPropertyHelper<Optional<string>> _DocumentLabel;
+        private readonly ObservableAsPropertyHelper<Optional<string>> _DocumentLabel;
         [RemoteOutput(true)]
         public override Optional<string> DocumentLabel => _DocumentLabel.Value;
 
