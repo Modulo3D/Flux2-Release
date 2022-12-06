@@ -12,6 +12,7 @@ namespace Flux.ViewModels
     public abstract class RRF_VariableStoreBase : FLUX_VariableStore<RRF_VariableStoreBase, RRF_ConnectionProvider>
     {
         public IFLUX_Variable<bool, bool> ITERATOR { get; set; }
+        public IFLUX_Variable<bool, bool> INITIALIZED_VARIABLES { get; set; }
 
         public RRF_GlobalModelBuilder.RRF_InnerGlobalModelBuilder Global { get; }
         public RRF_ModelBuilder.RRF_InnerModelBuilder<FLUX_FileList> Queue { get; }
@@ -94,11 +95,12 @@ namespace Flux.ViewModels
 
                 Move.CreateVariable(c => c.IS_HOMED, (c, m) => m.IsHomed());
 
+                Global.CreateVariable(c => c.DEBUG, false, false);
                 Global.CreateVariable(c => c.ITERATOR, false, true);
                 Global.CreateVariable(c => c.RUN_DAEMON, false, true);
-                Global.CreateVariable(c => c.KEEP_CHAMBER, true, false);
                 Global.CreateVariable(c => c.KEEP_TOOL, false, false);
-                Global.CreateVariable(c => c.DEBUG, false, false);
+                Global.CreateVariable(c => c.KEEP_CHAMBER, true, false);
+                Global.CreateVariable(c => c.INITIALIZED_VARIABLES, false, false);
                 Global.CreateVariable(c => c.QUEUE_POS, false, new QueuePosition(-1), v => new QueuePosition((short)Convert.ChangeType(v, typeof(short))));
 
                 Global.CreateArray(c => c.X_USER_OFFSET, false, 0.0, max_extruders);
@@ -215,8 +217,8 @@ namespace Flux.ViewModels
     public class RRF_VariableStoreS300A : RRF_VariableStoreS300
     {
         public override bool HasPrintUnloader => true;
-        //public override VariableUnits EndstopsUnits => new("X", "Y", "Z", "U");
-        //public override VariableUnits AxesUnits => new("X", "Y", "Z", "B", "C", "U");
+        public override VariableUnits EndstopsUnits => new("X", "Y", "Z", "U");
+        public override VariableUnits AxesUnits => new("X", "Y", "Z", "B", "C", "U");
         public RRF_VariableStoreS300A(RRF_ConnectionProvider connection_provider) : base(connection_provider)
         {
         }

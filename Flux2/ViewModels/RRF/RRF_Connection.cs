@@ -223,7 +223,18 @@ namespace Flux.ViewModels
                 if (!await PutFileAsync(GlobalPath, "initialize_variables.g", true, ct, source_variables))
                     return false;
 
-            return await PostGCodeAsync(GetExecuteMacroGCode(GlobalPath, "initialize_variables.g"), ct);
+            var initialized_variables = await ReadVariableAsync(c => c.INITIALIZED_VARIABLES);
+            if (!initialized_variables.HasValue || !initialized_variables.Value)
+            { 
+                var initialized_variables_gcode = GCodeString.Create(
+                    GetExecuteMacroGCode(GlobalPath, "initialize_variables.g"),
+                    "set global.initialized_variables = true");
+
+                if (!await PostGCodeAsync(initialized_variables_gcode, ct))
+                    return false;
+            }
+
+            return true;
         }
         public async Task<bool> PostGCodeAsync(GCodeString gcode, CancellationToken ct)
         {
@@ -511,6 +522,10 @@ namespace Flux.ViewModels
             try
             {
                 if (ct.IsCancellationRequested)
+                    return false;
+
+                // delete file
+                if (!await DeleteAsync(folder, filename, ct))
                     return false;
 
                 // Write content

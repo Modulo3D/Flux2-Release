@@ -53,8 +53,7 @@ namespace Flux.ViewModels
                 flux.ConnectionProvider.WhenAnyValue(c => c.IsConnecting),
                 this.WhenAnyValue(v => v.Folder),
                 (_, _, folder) => folder)
-                .Select(f => Observable.FromAsync(() => ListFilesAsync(f)))
-                .Merge(1)
+                .SelectMany(f => Observable.FromAsync(() => ListFilesAsync(f)))
                 .Select(GetFolderContent)
                 .AsObservableChangeSet(f => f.FSName);
 

@@ -405,7 +405,9 @@ namespace Flux.ViewModels
             var connection_provider = Flux.ConnectionProvider;
 
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            var source = queue.Select((j, i) => $"{j with { QueuePosition = i }}").ToList();
+            var source = queue
+                .OrderBy(j => j.QueuePosition.Value)
+                .Select((j, i) => $"{j with { QueuePosition = i }}");
 
             if (!await connection_provider.PutFileAsync(
                 c => c.QueuePath, "queue", true, cts.Token, new GCodeString(source)))
@@ -468,7 +470,7 @@ namespace Flux.ViewModels
 
                 var jobs = queue.Value.Select(j => j.Value.Job)
                     .SkipLast((queue.Value.Count + 1) - queue_size)
-                    .Append(Job.CreateNew(mcode.MCodeKey, 0));
+                    .Append(Job.CreateNew(mcode.MCodeKey, queue_size));
 
                 if (!await GenerateQueueAsync(jobs))
                     return false;

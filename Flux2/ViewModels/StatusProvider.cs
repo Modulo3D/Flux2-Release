@@ -622,18 +622,21 @@ namespace Flux.ViewModels
                 .ObserveVariable(m => m.QUEUE_POS)
                 .StartWithDefault();
 
+            Flux.ConnectionProvider
+               .ObserveVariable(m => m.JOB_QUEUE)
+               .Subscribe(q => Console.WriteLine(q));
+
             _JobQueue = Flux.ConnectionProvider
                 .ObserveVariable(m => m.JOB_QUEUE)
-                .Convert(get_queue)
-                .ConvertMany(Observable.FromAsync)
+                .ConvertMany(preview => Observable.FromAsync(() => get_queue(preview)))
                 .StartWithDefault()
                 .ToProperty(this, v => v.JobQueue);
 
-            Func<Task<Optional<JobQueue>>> get_queue(JobQueuePreview preview) => () =>
+            Task<Optional<JobQueue>> get_queue(JobQueuePreview preview)
             {
                 using var queue_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 return preview.GetJobQueueAsync(Flux.ConnectionProvider, queue_cts.Token);
-            };
+            }
 
             var job_partprograms = Observable.CombineLatest(
                 queue_pos, this.WhenAnyValue(s => s.JobQueue), (queue_pos, queue) =>
@@ -650,15 +653,14 @@ namespace Flux.ViewModels
 
             var current_partprogram = job_partprograms
                 .Convert(j => j.GetCurrentPartProgram())
-                .Convert(get_partprogram)
-                .ConvertMany(Observable.FromAsync)
+                .ConvertMany(preview => Observable.FromAsync(() => get_partprogram(preview)))
                 .StartWithDefault();
 
-            Func<Task<Optional<MCodePartProgram>>> get_partprogram(MCodePartProgramPreview preview) => () =>
+            Task<Optional<MCodePartProgram>> get_partprogram(MCodePartProgramPreview preview)
             {
                 using var queue_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 return preview.GetMCodePartProgramAsync(Flux.ConnectionProvider, queue_cts.Token);
-            };
+            }
 
             var current_mcode_key = current_partprogram
                 .Convert(j => j.MCodeKey);

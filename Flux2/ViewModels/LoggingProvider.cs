@@ -45,10 +45,10 @@ namespace Flux.ViewModels
 
             var mcode_events = Flux.ConnectionProvider
                 .ObserveVariable(c => c.MCODE_EVENT)
-                .Convert(get_events)
-                .ConvertMany(Observable.FromAsync);
+                .ConvertMany(events => Observable.FromAsync(() => get_events(events)))
+                .StartWithDefault();
 
-            Func<Task<Optional<MCodeEventStorage>>> get_events(MCodeEventStoragePreview events) => () =>
+            Task<Optional<MCodeEventStorage>> get_events(MCodeEventStoragePreview events)
             {
                 using var storage_cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
                 return events.GetMCodeEventStorageAsync(Flux.ConnectionProvider, storage_cts.Token);

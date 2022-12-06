@@ -244,7 +244,7 @@ namespace Flux.ViewModels
             Func<RRF_ConnectionProvider, TModel, Task<Optional<TRData>>> get_data)
         {
             return get_model(RRFObjectModel)
-                .Select(s => Observable.FromAsync(() => s.ConvertAsync(async s => await get_data(ConnectionProvider, s))))
+                .Select(s => Observable.FromAsync(() => s.ConvertAsync(s => get_data(ConnectionProvider, s))))
                 .Merge(1)
                 .DistinctUntilChanged();
         }
@@ -262,9 +262,7 @@ namespace Flux.ViewModels
         {
             return RRFObjectModel
                 .WhenAnyValue(m => m.Global)
-                .Convert(s => Observable.FromAsync(async () => await get_data(s)))
-                .ValueOr(() => Observable.Return(Optional<TRData>.None))
-                .Merge(1)
+                .ConvertMany(s => Observable.FromAsync(() => get_data(s)))
                 .DistinctUntilChanged();
         }
     }
