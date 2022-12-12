@@ -5,6 +5,7 @@ using Newtonsoft.Json.Linq;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Text;
 
 namespace Flux.ViewModels
@@ -889,7 +890,7 @@ namespace Flux.ViewModels
         //public Optional<double> Inputs { get; set; }
 
         //[JsonProperty("job")]
-        //public Optional<double> Job { get; set; }
+        //public Optional<double> FluxJob { get; set; }
 
         //[JsonProperty("move")]
         //public Optional<double> Move { get; set; }
@@ -1168,7 +1169,7 @@ namespace Flux.ViewModels
         public Optional<List<RRF_ObjectModelInput>> Inputs { get => _Inputs; set => this.RaiseAndSetIfChanged(ref _Inputs, value); }
 
         private Optional<RRF_ObjectModelJob> _Job;
-        public Optional<RRF_ObjectModelJob> Job { get => _Job; set => this.RaiseAndSetIfChanged(ref _Job, value); }
+        public Optional<RRF_ObjectModelJob> FluxJob { get => _Job; set => this.RaiseAndSetIfChanged(ref _Job, value); }
 
         private Optional<RRF_ObjectModelMove> _Move;
         public Optional<RRF_ObjectModelMove> Move { get => _Move; set => this.RaiseAndSetIfChanged(ref _Move, value); }
@@ -1224,19 +1225,26 @@ namespace Flux.ViewModels
 
     public static class RRF_DataUtils
     {
-        public static Optional<ParamacroProgress> GetParamacroProgress(this RRF_ObjectModelJob job)
+        public static Optional<MCodeProgress> GetParamacroProgress(this RRF_ObjectModelJob job)
         {
             try
             {
                 var file = job.File;
                 if (!file.HasValue)
                     return default;
+                
                 var file_name = file.Value.FileName;
                 if (!file_name.HasValue)
                     return default;
+
+                var filename = Path.GetFileNameWithoutExtension(file_name.Value);
+                if (!MCodeKey.TryParse(filename, out var mcode_key))
+                    return default;
+
                 var file_size = file.Value.Size;
                 if (!file_size.HasValue)
                     return default;
+                
                 var file_position = job.FilePosition;
                 if (!file_position.HasValue)
                     return default;
@@ -1245,7 +1253,7 @@ namespace Flux.ViewModels
                 if (percentage > 100)
                     percentage = 0;
 
-                return new ParamacroProgress(file_name.Value, percentage);
+                return new MCodeProgress(mcode_key, percentage);
             }
             catch
             {

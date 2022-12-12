@@ -55,21 +55,22 @@ namespace Flux.ViewModels
                 .Select(e =>
                     e.status.IsEnabledAxis &&
                     e.status.IsHomed &&
-                    e.printing.CurrentMCode.HasValue &&
+                    e.printing.MCode.HasValue &&
                     e.status.CanSafePrint);
 
             var canHold = eval
                 .Select(e =>
                     e.status.IsEnabledAxis &&
                     e.status.IsHomed &&
-                    e.printing.CurrentMCode.HasValue &&
-                    e.status.CanSafeHold);
+                    e.status.CanSafeHold &&
+                    e.printing.MCode.HasValue &&
+                    !e.printing.Recovery.HasValue);
 
             var canStop = eval
                 .Select(e =>
                     e.status.IsEnabledAxis &&
                     e.status.IsHomed &&
-                    e.printing.CurrentMCode.HasValue &&
+                    e.printing.MCode.HasValue &&
                     e.status.CanSafeStop);
 
             StartCommand = ReactiveCommand.CreateFromTask(StartPrintAsync, canStart);
@@ -78,7 +79,7 @@ namespace Flux.ViewModels
 
             _SelectedMCodeName = Flux.StatusProvider
                 .WhenAnyValue(v => v.PrintingEvaluation)
-                .Select(e => e.CurrentMCode)
+                .Select(e => e.MCode)
                 .Convert(m => m.Name)
                 .Throttle(TimeSpan.FromSeconds(0.25))
                 .ToProperty(this, v => v.SelectedMCodeName);
@@ -95,7 +96,7 @@ namespace Flux.ViewModels
 
             var current_job = Flux.StatusProvider
                 .WhenAnyValue(s => s.PrintingEvaluation)
-                .Select(s => s.CurrentJob);
+                .Select(s => s.FluxJob);
 
             var material_queue = Flux.StatusProvider.ExpectedMaterialsQueue.Connect()
                 .QueryWhenChanged();

@@ -347,8 +347,8 @@ namespace Flux.ViewModels
         {
             if (State.Loaded && State.Locked)
             {
-                var partprogram = Flux.StatusProvider.PrintingEvaluation.CurrentPartProgram;
-                var filament_settings = GCodeFilamentOperation.Create(this, partprogram);
+                var recovery = Flux.StatusProvider.PrintingEvaluation.Recovery;
+                var filament_settings = GCodeFilamentOperation.Create(this, recovery);
                 if (!filament_settings.HasValue)
                     return;
 

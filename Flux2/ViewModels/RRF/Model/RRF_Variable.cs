@@ -99,6 +99,7 @@ namespace Flux.ViewModels
         public TData DefaultValue { get; }
         public override string Group => "Global";
         public string LoadVariableMacro => $"load_{Variable}.g";
+        public override string ToString() => $"global.{Variable.ToLower()}";
 
         public RRF_VariableGlobalModel(
             RRF_ConnectionProvider connection_provider,

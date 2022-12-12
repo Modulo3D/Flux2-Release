@@ -3,6 +3,7 @@ using DynamicData.Kernel;
 using Modulo3DNet;
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Globalization;
 using System.Linq;
 using System.Net.Http;
@@ -112,13 +113,10 @@ namespace Flux.ViewModels
             }, put_reset_clamp_cts.Token, true, wait_reset_clamp_cts.Token);
         }
 
-        public override Optional<FLUX_MCodeRecovery> GetMCodeRecoveryFromSource(MCodeKey mcode, Optional<string> source)
+        public override Optional<FluxJobRecovery> GetFluxJobRecoveryFromSource(MCodeKey mcode, string source)
         {
             try
             {
-                if (!source.HasValue)
-                    return default;
-
                 var tool_index = source
                      .Match(/* language = regex */ "(?m)^T(?<tool_nr>\\S*)")
                      .Convert(m => m.Lookup("tool_nr", nr => ArrayIndex.FromArrayBase(short.Parse(nr), VariableStore)));
@@ -159,20 +157,25 @@ namespace Flux.ViewModels
                 if (!feedrate.HasValue)
                     return default;
 
-                var xyz_pos = source
-                    .Match(/* language = regex */ "(?m)^G92 X(?<x_pos>\\S*) Y(?<y_pos>\\S*) Z(?<z_pos>\\S*)")
+                var z_pos = source
+                    .Matches(/* language = regex */ "(?m)^G0 F(?<feedrate>\\S*) Z(?<z_pos>\\S*)")
+                    .Convert(m => m.LastOrDefault().Lookup("z_pos", x => double.Parse(x, CultureInfo.InvariantCulture)));
+
+                if (!z_pos.HasValue)
+                    return default;
+
+                var xy_pos = source
+                    .Match(/* language = regex */ "(?m)^G0 F(?<feedrate>\\S*) X(?<x_pos>\\S*) Y(?<y_pos>\\S*)")
                     .Convert(m =>
                         (x_pos: m.Lookup("x_pos", x => double.Parse(x, CultureInfo.InvariantCulture)),
-                        y_pos: m.Lookup("y_pos", y => double.Parse(y, CultureInfo.InvariantCulture)),
-                        z_pos: m.Lookup("z_pos", z => double.Parse(z, CultureInfo.InvariantCulture))
+                        y_pos: m.Lookup("y_pos", y => double.Parse(y, CultureInfo.InvariantCulture))
                     ));
-                if (!xyz_pos.HasValue)
+
+                if (!xy_pos.HasValue)
                     return default;
-                if (!xyz_pos.Value.x_pos.HasValue)
+                if (!xy_pos.Value.x_pos.HasValue)
                     return default;
-                if (!xyz_pos.Value.y_pos.HasValue)
-                    return default;
-                if (!xyz_pos.Value.z_pos.HasValue)
+                if (!xy_pos.Value.y_pos.HasValue)
                     return default;
 
                 var e_pos = source
@@ -183,16 +186,16 @@ namespace Flux.ViewModels
 
                 var axis_move = new FLUX_AxisMove()
                 {
-                    AxisMove = new Dictionary<char, double>()
+                    AxisMove = ImmutableDictionary<char, double>.Empty.AddRange(new KeyValuePair<char, double>[]
                     {
-                        { 'X', xyz_pos.Value.x_pos.Value },
-                        { 'Y', xyz_pos.Value.y_pos.Value },
-                        { 'Z', xyz_pos.Value.z_pos.Value },
-                        { 'E', e_pos.Value },
-                    }
+                        new('X', xy_pos.Value.x_pos.Value),
+                        new('Y', xy_pos.Value.y_pos.Value),
+                        new('Z', z_pos.Value),
+                        new('E', e_pos.Value),
+                    })
                 };
 
-                return new FLUX_MCodeRecovery()
+                return new FluxJobRecovery()
                 {
                     MCodeKey = mcode,
                     AxisMove = axis_move,

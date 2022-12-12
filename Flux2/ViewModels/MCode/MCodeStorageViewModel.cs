@@ -177,7 +177,7 @@ namespace Flux.ViewModels
                 return false;
             if (connection_provider.VariableStoreBase.HasPrintUnloader)
                 return true;
-            if (!printing_eval.CurrentMCode.HasValue)
+            if (!printing_eval.MCode.HasValue)
                 return true;
             if (!status.ConvertOr(s => s == FLUX_ProcessStatus.IDLE, () => false))
                 return false;

@@ -27,7 +27,7 @@ namespace Flux.ViewModels
         public override Task<bool> ResetClampAsync() => Task.FromResult(false);
         protected override Task RollConnectionAsync(CancellationToken ct) => Task.CompletedTask;
 
-        public override Optional<FLUX_MCodeRecovery> GetMCodeRecoveryFromSource(MCodeKey mcode, Optional<string> value)
+        public override Optional<FluxJobRecovery> GetFluxJobRecoveryFromSource(MCodeKey mcode, string source)
         {
             throw new NotImplementedException();
         }
@@ -71,7 +71,7 @@ namespace Flux.ViewModels
             CreateDummy(s => s.ENABLE_DRIVERS);
             CreateDummy(s => s.PROGRESS);
             CreateDummy(s => s.TOOL_NUM);
-            CreateDummy(s => s.JOB_QUEUE);
+            CreateDummy(s => s.QUEUE);
             CreateDummy(s => s.TOOL_CUR);
             CreateDummy(s => s.PROCESS_STATUS);
             CreateDummy(s => s.IS_HOMED);
@@ -338,7 +338,7 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override InnerQueueGCodes GenerateInnerQueueGCodes(JobPartPrograms job_partprograms)
+        public override InnerQueueGCodes GenerateInnerQueueGCodes(FluxJob job)
         {
             throw new NotImplementedException();
         }

@@ -193,14 +193,14 @@ namespace Flux.ViewModels
                 if (create_variables_result != ContentDialogResult.Primary)
                     return false;
 
-                await ConnectionProvider.DeleteAsync(c => ((RRF_Connection)c).GlobalPath, "initialize_variables.g", ct);
+                await ConnectionProvider.DeleteAsync(c => ((RRF_Connection)c).GlobalPath, "init_vars.g", ct);
 
                 foreach (var variable in missing_variables.variables)
                     if (!await variable.CreateVariableAsync(ct))
                         return false;
             }
 
-            var written_file = await GetFileAsync(GlobalPath, "initialize_variables.g", ct);
+            var written_file = await GetFileAsync(GlobalPath, "init_vars.g", ct);
             var variables = VariableStore.Variables.Values
                .SelectMany(v => v switch
                {
@@ -220,17 +220,17 @@ namespace Flux.ViewModels
             var written_hash = written_file.Convert(w => sha256.ComputeHash(string.Join("", w.SplitLines())).ToHex());
 
             if (!written_hash.HasValue || written_hash != source_hash)
-                if (!await PutFileAsync(GlobalPath, "initialize_variables.g", true, ct, source_variables))
+                if (!await PutFileAsync(GlobalPath, "init_vars.g", true, ct, source_variables))
                     return false;
 
-            var initialized_variables = await ReadVariableAsync(c => c.INITIALIZED_VARIABLES);
-            if (!initialized_variables.HasValue || !initialized_variables.Value)
+            var init_vars = await ReadVariableAsync(c => c.INIT_VARS);
+            if (!init_vars.HasValue || !init_vars.Value)
             { 
-                var initialized_variables_gcode = GCodeString.Create(
-                    GetExecuteMacroGCode(GlobalPath, "initialize_variables.g"),
-                    "set global.initialized_variables = true");
+                var init_vars_gcode = GCodeString.Create(
+                    GetExecuteMacroGCode(GlobalPath, "init_vars.g"),
+                    "set global.init_vars = true");
 
-                if (!await PostGCodeAsync(initialized_variables_gcode, ct))
+                if (!await PostGCodeAsync(init_vars_gcode, ct))
                     return false;
             }
 
@@ -297,15 +297,9 @@ namespace Flux.ViewModels
 
             return (true, missing_variables);
         }
-        public override InnerQueueGCodes GenerateInnerQueueGCodes(JobPartPrograms job_partprograms)
+        public override InnerQueueGCodes GenerateInnerQueueGCodes(FluxJob job)
         {
             var gcode = new RRF_GCodeGenerator(this);
-
-            var job = job_partprograms.Job;
-            var queue_pos = job_partprograms.Job.QueuePosition;
-            var part_program = job_partprograms.GetCurrentPartProgram();
-            if (!part_program.HasValue)
-                return default;
 
             var base_motor = VariableStore.ExtrudersUnits.Values.FirstOrOptional(_ => true);
             if (!base_motor.HasValue)
@@ -314,30 +308,35 @@ namespace Flux.ViewModels
             var start = GCodeString.Create(
                 GetStartPartProgramGCode(StoragePath, $"{job.MCodeKey}", new BlockNumber(0, BlockType.None)));
 
-            var end = GCodeString.Create(
-                gcode.LogEvent(job, FluxEventType.End));
+            var end = gcode.LogEvent(job, FluxEventType.End);
 
-            var cancel = GCodeString.Create(
-                gcode.LogEvent(job, FluxEventType.Cancel));
+            var cancel = gcode.LogEvent(job, FluxEventType.Cancel);
 
             var begin = GCodeString.Create(
-                gcode.LogEvent(job, part_program.Value.IsRecovery ? FluxEventType.Resume : FluxEventType.Begin),
-                gcode.DeclareGlobalArray<double>(4, out var extrusion),
-                extrusion.Foreach((var, i) => var.Write($"move.extruders[{i + base_motor.Value.Address}].position")));
+                gcode.GetGlobalVariable(c => c.CUR_JOB, out var cur_job),
+                gcode.GetGlobalArray(c => c.EXTR_KEY, out var extr_key),
+                gcode.GetGlobalArray(c => c.EXTR_MM, out var extr_mm),
+
+                cur_job.Write($"{job.JobKey}"),
+                extr_mm.Foreach((var, i) => var.Write("0")),
+                extr_key.Foreach((v, i) => extrusion_key(i, k => v.Write($"{k}"))),
+                gcode.LogEvent(job, FluxEventType.Begin));
+
+            var resume = gcode.LogEvent(job, FluxEventType.Resume);
 
             var end_filament = GCodeString.Create(
                 gcode.LogEvent(job, FluxEventType.EndFilament),
-                gcode.RenameFile($"\"0:/{SystemPath}/resurrect.g\"", $"\"0:/{StoragePath}/{job.MCodeKey}.recovery\""));
+                gcode.RenameFile($"\"0:/{SystemPath}/resurrect.g\"", $"\"0:/{QueuePath}/{job.MCodeKey}.recovery\""));
 
             var pause = GCodeString.Create(
                 gcode.LogEvent(job, FluxEventType.Pause),
-                gcode.RenameFile($"\"0:/{SystemPath}/resurrect.g\"", $"\"0:/{StoragePath}/{job.MCodeKey}.recovery\""));
+                gcode.RenameFile($"\"0:/{SystemPath}/resurrect.g\"", $"\"0:/{QueuePath}/{job.MCodeKey}.recovery\""));
 
             var spin = GCodeString.Create(
                 gcode.DeclareLocalVariable<double>(0.0, out var extrusion_diff),
                 gcode.DeclareLocalVariable<double>(0.0, out var extrusion_pos),
 
-                extrusion.Foreach((e, i) =>
+                extr_mm.Foreach((e, i) =>
                 {
                     return extrusion_key(i, k => new[]
                     {
@@ -358,6 +357,7 @@ namespace Flux.ViewModels
                 Begin = begin,
                 Pause = pause,
                 Cancel = cancel,
+                Resume = resume,
                 EndFilament = end_filament,
             };
 
@@ -542,7 +542,7 @@ namespace Flux.ViewModels
                 client.Timeout = TimeSpan.FromHours(1);
                 client.BaseAddress = new Uri(plc_address.Value);
                 client.DefaultRequestHeaders.Add("Connection", "Keep-Alive");
-                var response = await client.PostAsync($"rr_upload?name=0:/{folder}/{filename}&time={DateTime.Now}", content_stream, ct);
+                var response = await client.PostAsync($"rr_upload?name=0:/{folder}/{filename}&time={DateTime.Now:s}", content_stream, ct);
 
                 if (response.StatusCode != HttpStatusCode.OK)
                 {

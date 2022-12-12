@@ -771,28 +771,25 @@ namespace Flux.ViewModels
             }
             return true;
         }
-        public override InnerQueueGCodes GenerateInnerQueueGCodes(JobPartPrograms job_partprograms)
+        public override InnerQueueGCodes GenerateInnerQueueGCodes(FluxJob job)
         {
             var gcode = new OSAI_GCodeGenerator(this);
 
-            var job = job_partprograms.Job;
-            var queue_pos = job_partprograms.Job.QueuePosition;
-            var part_program = job_partprograms.GetCurrentPartProgram();
-            if (!part_program.HasValue)
-                return default;
-
-            var end = GCodeString.Create(gcode.LogEvent(job, FluxEventType.End));
-            var pause = GCodeString.Create(gcode.LogEvent(job, FluxEventType.Pause));
-            var cancel = GCodeString.Create(gcode.LogEvent(job, FluxEventType.Cancel));
-            var end_filament = GCodeString.Create(gcode.LogEvent(job, FluxEventType.EndFilament));
+            var end = gcode.LogEvent(job, FluxEventType.End);
+            var pause = gcode.LogEvent(job, FluxEventType.Pause);
+            var cancel = gcode.LogEvent(job, FluxEventType.Cancel);
+            var resume = gcode.LogEvent(job, FluxEventType.Resume);
+            var end_filament = gcode.LogEvent(job, FluxEventType.EndFilament);
 
             var begin = GCodeString.Create(
-                gcode.DeclareGlobalVariable(0, c => c.CUR_JOB, out var cur_job),
-                gcode.DeclareGlobalArray(1, c => c.EXTR_KEY, out var extr_key),
+                gcode.GetGlobalVariable(c => c.CUR_JOB, out var cur_job),
+                gcode.GetGlobalArray(c => c.EXTR_KEY, out var extr_key),
+                gcode.GetGlobalArray(c => c.EXTR_MM, out var extr_mm),
 
                 cur_job.Write($"{job.JobKey}"),
+                extr_mm.Foreach((var, i) => var.Write("0")),
                 extr_key.Foreach((v, i) => extrusion_key(i, k => v.Write($"{k}"))),
-                gcode.LogEvent(job, part_program.Value.IsRecovery ? FluxEventType.Resume : FluxEventType.Begin));
+                gcode.LogEvent(job, FluxEventType.Begin));
 
             return new InnerQueueGCodes()
             {
@@ -800,6 +797,7 @@ namespace Flux.ViewModels
                 Begin = begin,
                 Pause = pause,
                 Cancel = cancel,
+                Resume = resume,
                 EndFilament = end_filament,
             };
 

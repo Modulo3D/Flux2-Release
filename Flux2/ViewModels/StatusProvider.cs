@@ -622,47 +622,65 @@ namespace Flux.ViewModels
                 .ObserveVariable(m => m.QUEUE_POS)
                 .StartWithDefault();
 
-            Flux.ConnectionProvider
-               .ObserveVariable(m => m.JOB_QUEUE)
-               .Subscribe(q => Console.WriteLine(q));
+            var queue_preview = Flux.ConnectionProvider
+                .ObserveVariable(m => m.QUEUE)
+                .StartWithDefault();
 
-            _JobQueue = Flux.ConnectionProvider
-                .ObserveVariable(m => m.JOB_QUEUE)
-                .ConvertMany(preview => Observable.FromAsync(() => get_queue(preview)))
+            _JobQueue = Observable.CombineLatest(queue_preview, queue_pos, 
+                (queue_preview, queue_pos) => (queue_preview, queue_pos))
+                .SelectMany(t => Observable.FromAsync(() => get_queue(t.queue_preview, t.queue_pos)))
                 .StartWithDefault()
                 .ToProperty(this, v => v.JobQueue);
 
-            Task<Optional<JobQueue>> get_queue(JobQueuePreview preview)
-            {
-                using var queue_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                return preview.GetJobQueueAsync(Flux.ConnectionProvider, queue_cts.Token);
-            }
-
-            var job_partprograms = Observable.CombineLatest(
-                queue_pos, this.WhenAnyValue(s => s.JobQueue), (queue_pos, queue) =>
-                {
-                    if (!queue.HasValue)
-                        return default;
-                    if (!queue_pos.HasValue)
-                        return default;
-                    return queue.Value.Lookup(queue_pos.Value);
-                });
-
-            var current_job = job_partprograms
-                .Convert(j => j.Job);
-
-            var current_partprogram = job_partprograms
-                .Convert(j => j.GetCurrentPartProgram())
-                .ConvertMany(preview => Observable.FromAsync(() => get_partprogram(preview)))
+            var current_job = Observable.CombineLatest(queue_preview, queue_pos,
+                (queue_preview, queue_pos) => (queue_preview, queue_pos))
+                .SelectMany(t => Observable.FromAsync(() => get_current_job(t.queue_preview, t.queue_pos)))
                 .StartWithDefault();
 
-            Task<Optional<MCodePartProgram>> get_partprogram(MCodePartProgramPreview preview)
+            async Task<Optional<JobQueue>> get_queue(Optional<FluxJobQueuePreview> preview, Optional<QueuePosition> queue_pos)
             {
+                if (!preview.HasValue)
+                    return default;
+                if (!queue_pos.HasValue)
+                    return default;
                 using var queue_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                return preview.GetMCodePartProgramAsync(Flux.ConnectionProvider, queue_cts.Token);
+                return await preview.Value.GetJobQueueAsync(Flux.ConnectionProvider, queue_pos.Value, queue_cts.Token);
             }
 
-            var current_mcode_key = current_partprogram
+            async Task<Optional<FluxJob>> get_current_job(Optional<FluxJobQueuePreview> preview, Optional<QueuePosition> queue_pos)
+            {
+                if (!preview.HasValue)
+                    return default;
+
+                if (!queue_pos.HasValue)
+                    return default;
+
+                using var queue_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                var queue = await preview.Value.GetJobQueueAsync(Flux.ConnectionProvider, queue_pos.Value, queue_cts.Token);
+
+                return queue.Lookup(queue_pos.Value);
+            }
+
+            var recovery_preview = Flux.ConnectionProvider
+                .ObserveVariable(c => c.RECOVERY)
+                .StartWithDefault();
+
+            var current_recovery = Observable.CombineLatest(recovery_preview, current_job,
+                (recovery_preview, current_job) => (recovery_preview, current_job))
+                .SelectMany(t => Observable.FromAsync(() => get_recovery(t.recovery_preview, t.current_job)))
+                .StartWithDefault();
+
+            async Task<Optional<FluxJobRecovery>> get_recovery(Optional<FluxJobRecoveryPreview> recovery_preview, Optional<FluxJob> current_job)
+            {
+                if (!recovery_preview.HasValue)
+                    return default;
+                if (!current_job.HasValue)
+                    return default;
+                using var queue_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                return await recovery_preview.Value.GetFluxJobRecoveryAsync(Flux.ConnectionProvider, current_job.Value, queue_cts.Token);    
+            }
+
+            var current_mcode_key = current_job
                 .Convert(j => j.MCodeKey);
 
             var current_mcode = Flux.MCodes.AvaiableMCodes.Connect()
@@ -736,7 +754,7 @@ namespace Flux.ViewModels
             _PrintingEvaluation = Observable.CombineLatest(
                 current_job,
                 current_mcode,
-                current_partprogram,
+                current_recovery,
                 PrintingEvaluation.Create)
                 .DistinctUntilChanged()
                 .ToProperty(this, v => v.PrintingEvaluation);
@@ -929,9 +947,9 @@ namespace Flux.ViewModels
                 case FLUX_ProcessStatus.IDLE:
                     if (current_vm.HasValue && current_vm.Value is IOperationViewModel)
                         return FLUX_ProcessStatus.WAIT;
-                    if (printing_eval.HasRecovery)
+                    if (printing_eval.Recovery.HasValue)
                         return FLUX_ProcessStatus.WAIT;
-                    if (printing_eval.CurrentMCode.HasValue)
+                    if (printing_eval.MCode.HasValue)
                         return FLUX_ProcessStatus.WAIT;
                     return FLUX_ProcessStatus.IDLE;
 
@@ -959,17 +977,20 @@ namespace Flux.ViewModels
         }
 
         // Progress and extrusion
-        private PrintProgress GetPrintProgress(PrintingEvaluation evaluation, Optional<ParamacroProgress> progress)
+        private PrintProgress GetPrintProgress(PrintingEvaluation evaluation, Optional<MCodeProgress> progress)
         {
-            var current_mcode = evaluation.CurrentMCode;
+            var current_mcode = evaluation.MCode;
             if (!current_mcode.HasValue)
                 return new PrintProgress(0, TimeSpan.Zero);
 
             var duration = current_mcode.Value.Duration;
 
-            var current_job = evaluation.CurrentJob;
+            var current_job = evaluation.FluxJob;
             if (!current_job.HasValue)
                 return new PrintProgress(0, duration);
+
+            if (evaluation.Recovery.HasValue)
+                progress = new MCodeProgress(current_job.Value.MCodeKey, evaluation.Recovery.Value.BlockNumber);
 
             if (!progress.HasValue)
                 return new PrintProgress(0, duration);
@@ -978,8 +999,7 @@ namespace Flux.ViewModels
             var remaining_ticks = ((double)duration.Ticks / 100) * (100 - percentage);
             var print_progress = new PrintProgress(percentage, new TimeSpan((long)remaining_ticks));
 
-            var paramacro_name = progress.Value.Paramacro;
-            if (!paramacro_name.Contains($"{current_job.Value.MCodeKey}"))
+            if (progress.Value.MCodeKey != current_job.Value.MCodeKey)
             {
                 if (PrintProgress.Percentage == 0)
                     return print_progress;

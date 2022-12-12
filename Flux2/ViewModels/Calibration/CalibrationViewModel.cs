@@ -84,7 +84,7 @@ namespace Flux.ViewModels
                 .Transform(f => (IFluxOffsetViewModel)new OffsetViewModel(this, f))
                 .DisposeMany()
                 .AsObservableCache()
-                .DisposeWith(Disposables); ;
+                .DisposeWith(Disposables);
 
             var can_safe_start = Flux.StatusProvider
                  .WhenAnyValue(s => s.StatusEvaluation)
@@ -93,14 +93,14 @@ namespace Flux.ViewModels
             var no_error_probe = Offsets.Connect()
                 .TrueForAny(p => p.WhenAnyValue(o => o.ProbeState), s => s != FluxProbeState.ERROR_PROBE);
 
-            var no_partprogram = Flux.StatusProvider
+            var no_job = Flux.StatusProvider
                 .WhenAnyValue(s => s.PrintingEvaluation)
-                .Select(p => !p.CurrentPartProgram.HasValue);
+                .Select(p => !p.FluxJob.HasValue);
 
             var can_probe = Observable.CombineLatest(
                 can_safe_start,
                 no_error_probe,
-                no_partprogram,
+                no_job,
                 (s, p, pp) => s && p && pp);
 
             var is_idle = Flux.StatusProvider

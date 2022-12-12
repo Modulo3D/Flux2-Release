@@ -326,7 +326,6 @@ namespace Flux.ViewModels
                             Flux.MCodes.OperatorUSB = new OperatorUSB()
                             {
                                 AdvancedSettings = true,
-                                RemoteOperation = true,
                                 RewriteNFC = true
                             };
                         }

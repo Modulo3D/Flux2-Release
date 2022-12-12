@@ -85,14 +85,14 @@ namespace Flux.ViewModels
                     return (Func<IFluxMCodeQueueViewModel, bool>)filter_queue_func;
                     bool filter_queue_func(IFluxMCodeQueueViewModel queue)
                     {
-                        return p > -1 && queue.Job.QueuePosition >= p;
+                        return p > -1 && queue.FluxJob.QueuePosition >= p;
                     }
                 });
 
             QueuedMCodes = Flux.StatusProvider
                .WhenAnyValue(s => s.JobQueue)
                .Select(CreateMCodeQueue)
-               .AsObservableChangeSet(kvp => kvp.Job.QueuePosition)
+               .AsObservableChangeSet(kvp => kvp.FluxJob.QueuePosition)
                .Filter(filter_queue)
                .DisposeMany()
                .AsObservableCache();
@@ -340,22 +340,9 @@ namespace Flux.ViewModels
                 mcode_file.Delete();
                 AvaiableMCodes.Remove(file);
 
-                var job_queue = await GetJobQueueAsync();
-                if (!job_queue.HasValue)
+                using var delete_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                if (!await Flux.ConnectionProvider.DeleteAsync(c => c.StoragePath, $"{file.MCodeKey}", delete_cts.Token))
                     return false;
-
-                foreach (var job_partprograms in job_queue.Value)
-                {
-                    foreach (var mcode_partprogram in job_partprograms.Value.PartPrograms)
-                    {
-                        if (!mcode_partprogram.MCodeKey.Equals(file.Analyzer.MCode.MCodeKey))
-                            continue;
-
-                        using var delete_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                        if (!await Flux.ConnectionProvider.DeleteAsync(c => c.StoragePath, $"{mcode_partprogram}", delete_cts.Token))
-                            return false;
-                    }
-                }
 
                 Flux.Messages.LogMessage(FileResponse.FILE_DELETED, file);
                 return true;
@@ -383,7 +370,11 @@ namespace Flux.ViewModels
         {
             var connection_provider = Flux.ConnectionProvider;
 
-            var queue_preview = await connection_provider.ReadVariableAsync(c => c.JOB_QUEUE);
+            var queue_pos = await connection_provider.ReadVariableAsync(c => c.QUEUE_POS);
+            if (!queue_pos.HasValue)
+                return default;
+
+            var queue_preview = await connection_provider.ReadVariableAsync(c => c.QUEUE);
             if (!queue_preview.HasValue)
             {
                 Console.WriteLine("Impossibile leggere lo stato della coda");
@@ -391,16 +382,9 @@ namespace Flux.ViewModels
             }
 
             using var queue_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            var queue = await queue_preview.Value.GetJobQueueAsync(connection_provider, queue_cts.Token);
-            if (!queue.HasValue)
-            {
-                Console.WriteLine("Impossibile leggere il job");
-                return default;
-            }
-
-            return queue;
+            return await queue_preview.Value.GetJobQueueAsync(connection_provider, queue_pos.Value, queue_cts.Token);
         }
-        public async Task<bool> GenerateQueueAsync(IEnumerable<Job> queue)
+        public async Task<bool> GenerateQueueAsync(IEnumerable<FluxJob> queue)
         {
             var connection_provider = Flux.ConnectionProvider;
 
@@ -468,9 +452,9 @@ namespace Flux.ViewModels
                 if (!queue.HasValue)
                     return false;
 
-                var jobs = queue.Value.Select(j => j.Value.Job)
+                var jobs = queue.Value.Select(j => j.Value)
                     .SkipLast((queue.Value.Count + 1) - queue_size)
-                    .Append(Job.CreateNew(mcode.MCodeKey, queue_size));
+                    .Append(FluxJob.CreateNew(mcode.MCodeKey, queue_size));
 
                 if (!await GenerateQueueAsync(jobs))
                     return false;
@@ -493,17 +477,17 @@ namespace Flux.ViewModels
             if (!queue.HasValue)
                 return false;
 
-            if (!queue.Value.TryGetValue(mcode.Job.QueuePosition, out var job))
+            if (!queue.Value.TryGetValue(mcode.FluxJob.QueuePosition, out var job))
                 return false;
 
-            if (!mcode.Job.Equals(job.Job))
+            if (!mcode.FluxJob.Equals(job))
                 return false;
 
             if (queue.Value.Keys.Count <= 0)
                 return false;
 
-            var jobs = queue.Value.Values.Select(j => j.Job)
-                .Where(j => j.QueuePosition != mcode.Job.QueuePosition);
+            var jobs = queue.Value.Values
+                .Where(j => j.QueuePosition != mcode.FluxJob.QueuePosition);
 
             if (!await GenerateQueueAsync(jobs))
                 return false;
@@ -516,7 +500,7 @@ namespace Flux.ViewModels
             if (!queue.HasValue)
                 return false;
 
-            var current_index = mcode.Job.QueuePosition;
+            var current_index = mcode.FluxJob.QueuePosition;
             var other_index = move(current_index);
 
             if (other_index < 0 || other_index > queue.Value.Count)
@@ -533,10 +517,10 @@ namespace Flux.ViewModels
             if (!other_job.HasValue)
                 return false;
 
-            var new_current_job = current_job.Value.Job with { QueuePosition = other_index };
-            var new_other_job = other_job.Value.Job with { QueuePosition = current_index };
+            var new_current_job = current_job.Value with { QueuePosition = other_index };
+            var new_other_job = other_job.Value with { QueuePosition = current_index };
 
-            var jobs = queue.Value.Values.Select(j => j.Job)
+            var jobs = queue.Value.Values
                 .Select(j =>
                 {
                     if (j.QueuePosition == current_index)
@@ -556,7 +540,7 @@ namespace Flux.ViewModels
             if (!job_queue.HasValue)
                 yield break;
             foreach (var job in job_queue.Value.Values)
-                yield return new MCodeQueueViewModel(this, job.Job);
+                yield return new MCodeQueueViewModel(this, job);
         }
     }
 }

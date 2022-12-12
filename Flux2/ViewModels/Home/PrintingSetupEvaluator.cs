@@ -128,7 +128,7 @@ namespace Flux.ViewModels
 
                 var job_key = job_queue.Value
                     .Lookup(queue_position.Value)
-                    .Convert(j => j.Job.JobKey);
+                    .Convert(j => j.JobKey);
 
                 if (!job_key.HasValue)
                     return default;
@@ -407,14 +407,12 @@ namespace Flux.ViewModels
 
         private bool ColdNozzle(PrintingEvaluation evaluation, Optional<FLUX_Temp> plc_temp)
         {
-            var tool_index = evaluation.CurrentPartProgram
-                .Convert(pp => pp.Recovery)
+            var tool_index = evaluation.Recovery
                 .Convert(r => r.ToolIndex);
             if (!tool_index.HasValue)
                 return false;
 
-            var temperature = evaluation.CurrentPartProgram
-                .Convert(pp => pp.Recovery)
+            var temperature = evaluation.Recovery
                 .Convert(pp => pp.ToolTemperatures)
                 .Convert(tt => tt.LookupOptional(tool_index));
             if (!temperature.HasValue)
@@ -433,14 +431,12 @@ namespace Flux.ViewModels
         }
         private Optional<double> TargetTemp(PrintingEvaluation evaluation)
         {
-            var tool_index = evaluation.CurrentPartProgram
-                .Convert(pp => pp.Recovery)
+            var tool_index = evaluation.Recovery
                 .Convert(pp => pp.ToolIndex);
             if (!tool_index.HasValue)
                 return default;
 
-            var temperature = evaluation.CurrentPartProgram
-                .Convert(pp => pp.Recovery)
+            var temperature = evaluation.Recovery
                 .Convert(pp => pp.ToolTemperatures)
                 .Convert(tt => tt.LookupOptional(tool_index));
             if (!temperature.HasValue)
@@ -485,12 +481,12 @@ namespace Flux.ViewModels
                 if (queue_pos.Value < 0)
                     return feeder_report_queue;
 
-                foreach (var job_partprograms in job_queue.Value.Values)
+                foreach (var job in job_queue.Value.Values)
                 {
-                    if (job_partprograms.Job.QueuePosition < queue_pos.Value)
+                    if (job.QueuePosition < queue_pos.Value)
                         continue;
 
-                    var mcode_analyzer = mcode_analyzers.Lookup(job_partprograms.Job.MCodeKey);
+                    var mcode_analyzer = mcode_analyzers.Lookup(job.MCodeKey);
                     if (!mcode_analyzer.HasValue)
                         continue;
 
@@ -498,7 +494,7 @@ namespace Flux.ViewModels
                     if (!feeder_report.HasValue)
                         continue;
 
-                    feeder_report_queue.Add(job_partprograms.Job.JobKey, feeder_report.Value);
+                    feeder_report_queue.Add(job.JobKey, feeder_report.Value);
                 }
                 return feeder_report_queue;
             }

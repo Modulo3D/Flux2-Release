@@ -174,7 +174,7 @@ namespace Flux.ViewModels
             AddModelReader(fast, "tools", "f", m => m.Tools, RRF_RequestPriority.Medium);
             AddModelReader(fast, "sensors", "f", m => m.Sensors, RRF_RequestPriority.Medium);
             AddModelReader(fast, "global", "v", m => m.Global, RRF_RequestPriority.Medium);
-            AddModelReader(fast, "job", "v", m => m.Job, RRF_RequestPriority.Medium);
+            AddModelReader(fast, "job", "v", m => m.FluxJob, RRF_RequestPriority.Medium);
             AddModelReader(medium, "inputs", "f", m => m.Inputs, RRF_RequestPriority.Medium);
             AddModelReader(medium, "move", "v", m => m.Move, RRF_RequestPriority.Medium);
             AddModelReader(medium, "heat", "f", m => m.Heat, RRF_RequestPriority.Medium);

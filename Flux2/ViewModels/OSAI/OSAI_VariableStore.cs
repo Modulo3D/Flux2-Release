@@ -22,8 +22,6 @@ namespace Flux.ViewModels
         public IFLUX_Variable<OSAI_BootPhase, Unit> BOOT_PHASE { get; set; }
         public IFLUX_Variable<bool, bool> AUX_ON { get; set; }
 
-        public IFLUX_Array<string, string> EXTR_KEY { get; set; }
-        public IFLUX_Variable<string, string> CUR_JOB { get; set; }
         public IFLUX_Array<double, double> HOME_OFFSET { get; set; }
         public IFLUX_Variable<double, double> Y_SAFE_MAX { get; set; }
         public IFLUX_Array<double, double> PURGE_POSITION { get; set; }
@@ -35,8 +33,8 @@ namespace Flux.ViewModels
         {
             MoveTransform = new FLUX_AxisMoveTransform(m =>
             {
-                var x = m.AxisMove.Lookup('X');
-                var y = m.AxisMove.Lookup('Y');
+                var x = m.AxisMove.Dictionary.Lookup('X');
+                var y = m.AxisMove.Dictionary.Lookup('Y');
 
                 if (x.HasValue != y.HasValue)
                     return default;
@@ -46,8 +44,8 @@ namespace Flux.ViewModels
                     var core_x = x.Value + y.Value;
                     var core_y = x.Value - y.Value;
 
-                    m.AxisMove['X'] = core_x;
-                    m.AxisMove['Y'] = core_y;
+                    m = m with { AxisMove = m.AxisMove.Dictionary.SetItem('X', core_x) };
+                    m = m with { AxisMove = m.AxisMove.Dictionary.SetItem('Y', core_y) };
                 }
 
                 return m;
@@ -84,7 +82,7 @@ namespace Flux.ViewModels
                 model.CreateArray(c => c.Z_PROBE_OFFSET, 4, "!Z_PRB_OF_T", OSAI_ReadPriority.LOW);
 
 
-                model.CreateVariable(c => c.JOB_QUEUE, OSAI_ReadPriority.HIGH, GetJobQueuePreviewAsync);
+                model.CreateVariable(c => c.QUEUE, OSAI_ReadPriority.HIGH, GetJobQueuePreviewAsync);
                 model.CreateVariable(c => c.BOOT_PHASE, OSAI_ReadPriority.ULTRAHIGH, GetBootPhaseAsync);
                 model.CreateVariable(c => c.PROCESS_STATUS, OSAI_ReadPriority.ULTRAHIGH, GetProcessStatusAsync);
                 model.CreateVariable(c => c.MCODE_EVENT, OSAI_ReadPriority.HIGH, GetMCodeEventsAsync);
@@ -178,7 +176,7 @@ namespace Flux.ViewModels
             }
         }
 
-        private static async Task<ValueResult<JobQueuePreview>> GetJobQueuePreviewAsync(OSAI_ConnectionProvider connection_provider)
+        private static async Task<ValueResult<FluxJobQueuePreview>> GetJobQueuePreviewAsync(OSAI_ConnectionProvider connection_provider)
         {
             var connection = connection_provider.Connection;
             using var queue_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
@@ -208,7 +206,7 @@ namespace Flux.ViewModels
 
             return queue_files.Value.GetMCodeEvents();
         }
-        private static async Task<ValueResult<ParamacroProgress>> GetProgressAsync(OSAI_ConnectionProvider connection_provider)
+        private static async Task<ValueResult<MCodeProgress>> GetProgressAsync(OSAI_ConnectionProvider connection_provider)
         {
             var client = connection_provider.Connection.Client;
             if (!client.HasValue)
@@ -231,8 +229,11 @@ namespace Flux.ViewModels
                 get_blk_num_response.Body.ErrNum))
                 return default;
 
+            if (!MCodeKey.TryParse(get_pp_response.Main, out var mcode_key))
+                return default;
+
             var block_number = new BlockNumber(get_blk_num_response.Body.GetBlkNum.MainActBlk, BlockType.Line);
-            return new ParamacroProgress(get_pp_response.Main, block_number);
+            return new MCodeProgress(mcode_key, block_number);
         }
 
         private static async Task<ValueResult<OSAI_BootPhase>> GetBootPhaseAsync(OSAI_ConnectionProvider connection_provider)

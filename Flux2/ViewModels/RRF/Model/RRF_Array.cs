@@ -36,6 +36,7 @@ namespace Flux.ViewModels
         public TData DefaultValue { get; }
         public override string Group => "Global";
         public string LoadVariableMacro => $"load_{Variable}_{Unit.Address}.g";
+        public override string ToString() => $"global.{Variable.ToLower()}_{Unit.Address}";
 
         public RRF_ArrayVariableGlobalModel(
             RRF_ConnectionProvider connection_provider,

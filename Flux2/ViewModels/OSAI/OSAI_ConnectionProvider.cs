@@ -3,6 +3,7 @@ using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -155,14 +156,11 @@ namespace Flux.ViewModels
                 Flux.Messages.LogException(this, ex);
             }
         }
-        public override Optional<FLUX_MCodeRecovery> GetMCodeRecoveryFromSource(MCodeKey mcode, Optional<string> value)
+        public override Optional<FluxJobRecovery> GetFluxJobRecoveryFromSource(MCodeKey mcode, string source)
         {
             try
             {
-                if (!value.HasValue)
-                    return default;
-
-                using var string_reader = new StringReader(value.Value);
+                using var string_reader = new StringReader(source);
 
                 // block nr
                 var block_number = new BlockNumber(ulong.Parse(string_reader.ReadLine()), BlockType.Line);
@@ -198,29 +196,29 @@ namespace Flux.ViewModels
                         CultureInfo.InvariantCulture));
 
                 // pos
-                var moves = new Dictionary<char, double>();
-                moves.Add('X', double.Parse(string_reader.ReadLine(),
-                    NumberStyles.Float,
-                    CultureInfo.InvariantCulture));
-
-                moves.Add('Y', double.Parse(string_reader.ReadLine(),
-                    NumberStyles.Float,
-                    CultureInfo.InvariantCulture));
-
-                moves.Add('Z', double.Parse(string_reader.ReadLine(),
-                    NumberStyles.Float,
-                    CultureInfo.InvariantCulture));
-
-                moves.Add('A', double.Parse(string_reader.ReadLine(),
-                    NumberStyles.Float,
-                    CultureInfo.InvariantCulture));
+                var moves = ImmutableDictionary<char, double>.Empty
+                    .AddRange(new KeyValuePair<char, double>[] 
+                    {
+                        new ('X', double.Parse(string_reader.ReadLine(),
+                            NumberStyles.Float,
+                            CultureInfo.InvariantCulture)),
+                        new ('Y', double.Parse(string_reader.ReadLine(),
+                            NumberStyles.Float,
+                            CultureInfo.InvariantCulture)),
+                        new ('Z', double.Parse(string_reader.ReadLine(),
+                            NumberStyles.Float,
+                            CultureInfo.InvariantCulture)),
+                        new ('A', double.Parse(string_reader.ReadLine(),
+                            NumberStyles.Float,
+                            CultureInfo.InvariantCulture)),
+                    });
 
                 // feedrate
                 var feedrate = double.Parse(string_reader.ReadLine(),
                     NumberStyles.Float,
                     CultureInfo.InvariantCulture);
 
-                return new FLUX_MCodeRecovery()
+                return new FluxJobRecovery()
                 {
                     MCodeKey = mcode,
                     AxisMove = new FLUX_AxisMove()

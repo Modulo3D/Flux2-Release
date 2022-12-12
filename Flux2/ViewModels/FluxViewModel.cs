@@ -395,7 +395,7 @@ namespace Flux.ViewModels
 
             string wait()
             {
-                if (printing_evaluation.HasRecovery)
+                if (printing_evaluation.Recovery.HasValue)
                     return "IN PAUSA";
                 return "ATTESA OPERATORE";
             }

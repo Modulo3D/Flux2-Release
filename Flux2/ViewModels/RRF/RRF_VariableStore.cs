@@ -12,13 +12,13 @@ namespace Flux.ViewModels
     public abstract class RRF_VariableStoreBase : FLUX_VariableStore<RRF_VariableStoreBase, RRF_ConnectionProvider>
     {
         public IFLUX_Variable<bool, bool> ITERATOR { get; set; }
-        public IFLUX_Variable<bool, bool> INITIALIZED_VARIABLES { get; set; }
+        public IFLUX_Variable<bool, bool> INIT_VARS { get; set; }
 
         public RRF_GlobalModelBuilder.RRF_InnerGlobalModelBuilder Global { get; }
         public RRF_ModelBuilder.RRF_InnerModelBuilder<FLUX_FileList> Queue { get; }
         public RRF_ModelBuilder.RRF_InnerModelBuilder<FLUX_FileList> JobEvents { get; }
         public RRF_ModelBuilder.RRF_InnerModelBuilder<FLUX_FileList> Extrusions { get; }
-        public RRF_ModelBuilder.RRF_InnerModelBuilder<RRF_ObjectModelJob> Job { get; }
+        public RRF_ModelBuilder.RRF_InnerModelBuilder<RRF_ObjectModelJob> FluxJob { get; }
         public RRF_ModelBuilder.RRF_InnerModelBuilder<RRF_ObjectModelHeat> Heat { get; }
         public RRF_ModelBuilder.RRF_InnerModelBuilder<RRF_ObjectModelMove> Move { get; }
         public RRF_ModelBuilder.RRF_InnerModelBuilder<RRF_ObjectModelState> State { get; }
@@ -58,7 +58,7 @@ namespace Flux.ViewModels
                 var read_timeout = TimeSpan.FromSeconds(5);
 
                 Global = RRF_GlobalModelBuilder.CreateModel(this);
-                Job = RRF_ModelBuilder.CreateModel(this, m => m.Job, read_timeout);
+                FluxJob = RRF_ModelBuilder.CreateModel(this, m => m.FluxJob, read_timeout);
                 Heat = RRF_ModelBuilder.CreateModel(this, m => m.Heat, read_timeout);
                 Move = RRF_ModelBuilder.CreateModel(this, m => m.Move, read_timeout);
                 Queue = RRF_ModelBuilder.CreateModel(this, m => m.Queue, read_timeout);
@@ -83,11 +83,12 @@ namespace Flux.ViewModels
 
                 Endstops.CreateArray(c => c.AXIS_ENDSTOP, (c, e) => e.Triggered, (c, e, u) => Task.FromResult(true));
 
-                Queue.CreateVariable(c => c.JOB_QUEUE, (c, m) => m.GetJobQueuePreview());
-                Extrusions.CreateVariable(c => c.EXTRUSIONS, (c, m) => m.GetExtrusionSetQueue());
-                Job.CreateVariable(c => c.PROGRESS, (c, m) => m.GetParamacroProgress());
-                JobEvents.CreateVariable(c => c.MCODE_EVENT, (c, m) => m.GetMCodeEvents());
                 Tools.CreateVariable(c => c.TOOL_NUM, (c, t) => (ushort)t.Count);
+                Queue.CreateVariable(c => c.QUEUE, (c, m) => m.GetJobQueuePreview());
+                Queue.CreateVariable(c => c.RECOVERY, (c, m) => m.GetJobRecoveryPreview());
+                FluxJob.CreateVariable(c => c.PROGRESS, (c, m) => m.GetParamacroProgress());
+                JobEvents.CreateVariable(c => c.MCODE_EVENT, (c, m) => m.GetMCodeEvents());
+                Extrusions.CreateVariable(c => c.EXTRUSIONS, (c, m) => m.GetExtrusionSetQueue());
 
                 State.CreateVariable(c => c.TOOL_CUR, (c, s) => s.CurrentTool.Convert(t => ArrayIndex.FromArrayBase(t, this)));
                 State.CreateVariable(c => c.PROCESS_STATUS, (c, m) => m.GetProcessStatus());
@@ -95,12 +96,16 @@ namespace Flux.ViewModels
 
                 Move.CreateVariable(c => c.IS_HOMED, (c, m) => m.IsHomed());
 
+                Global.CreateVariable(c => c.CUR_JOB, false, "");
+                Global.CreateArray(c => c.EXTR_MM, false, 0, max_extruders);
+                Global.CreateArray(c => c.EXTR_KEY, false, "", max_extruders);
+
                 Global.CreateVariable(c => c.DEBUG, false, false);
                 Global.CreateVariable(c => c.ITERATOR, false, true);
+                Global.CreateVariable(c => c.INIT_VARS, false, false);
                 Global.CreateVariable(c => c.RUN_DAEMON, false, true);
                 Global.CreateVariable(c => c.KEEP_TOOL, false, false);
                 Global.CreateVariable(c => c.KEEP_CHAMBER, true, false);
-                Global.CreateVariable(c => c.INITIALIZED_VARIABLES, false, false);
                 Global.CreateVariable(c => c.QUEUE_POS, false, new QueuePosition(-1), v => new QueuePosition((short)Convert.ChangeType(v, typeof(short))));
 
                 Global.CreateArray(c => c.X_USER_OFFSET, false, 0.0, max_extruders);

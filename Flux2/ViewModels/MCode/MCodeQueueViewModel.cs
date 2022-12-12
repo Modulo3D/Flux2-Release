@@ -24,7 +24,7 @@ namespace Flux.ViewModels
         public Optional<string> MCodeName => _MCodeName.Value;
 
         [RemoteOutput(false, typeof(ToStringConverter))]
-        public Job Job { get; }
+        public FluxJob FluxJob { get; }
 
         private readonly ObservableAsPropertyHelper<short> _FileNumber;
         [RemoteOutput(true)]
@@ -47,9 +47,9 @@ namespace Flux.ViewModels
         [RemoteOutput(true, typeof(DateTimeConverter<RelativeDateTimeFormat>))]
         public DateTime EndTime => _EndTime.Value;
 
-        public MCodeQueueViewModel(MCodesViewModel mcodes, Job job) : base($"{typeof(MCodeQueueViewModel).GetRemoteControlName()}??{job.QueuePosition}")
+        public MCodeQueueViewModel(MCodesViewModel mcodes, FluxJob job) : base($"{typeof(MCodeQueueViewModel).GetRemoteControlName()}??{job.QueuePosition}")
         {
-            Job = job;
+            FluxJob = job;
             MCodes = mcodes;
 
             var queue_pos = MCodes.Flux.ConnectionProvider
@@ -127,19 +127,19 @@ namespace Flux.ViewModels
         {
             if (is_idle)
                 return true;
-            return Job.QueuePosition > queue_position;
+            return FluxJob.QueuePosition > queue_position;
         }
         private bool CanMoveUpQueue(bool is_idle, QueuePosition queue_position)
         {
             if (is_idle)
-                return Job.QueuePosition > 0;
-            return Job.QueuePosition > queue_position + 1;
+                return FluxJob.QueuePosition > 0;
+            return FluxJob.QueuePosition > queue_position + 1;
         }
         private bool CanMoveDownQueue(bool is_idle, QueuePosition queue_position, QueuePosition last_queue_pos)
         {
             if (is_idle)
-                return Job.QueuePosition < last_queue_pos;
-            return Job.QueuePosition > queue_position && Job.QueuePosition < last_queue_pos;
+                return FluxJob.QueuePosition < last_queue_pos;
+            return FluxJob.QueuePosition > queue_position && FluxJob.QueuePosition < last_queue_pos;
         }
 
         private DateTime FindEndTime(DateTime start_time, QueuePosition queue_pos, PrintProgress progress, Dictionary<QueuePosition, MCodeAnalyzer> mcode_analyzers)
@@ -147,7 +147,7 @@ namespace Flux.ViewModels
             try
             {
                 return start_time + mcode_analyzers
-                    .Where(kvp => kvp.Key <= Job.QueuePosition)
+                    .Where(kvp => kvp.Key <= FluxJob.QueuePosition)
                     .Aggregate(TimeSpan.Zero, (acc, kvp) => acc + find_duration(kvp));
 
                 TimeSpan find_duration(KeyValuePair<QueuePosition, MCodeAnalyzer> kvp)

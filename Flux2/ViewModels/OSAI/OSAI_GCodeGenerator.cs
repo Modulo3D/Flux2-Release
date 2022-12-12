@@ -1,10 +1,30 @@
 ﻿using Modulo3DNet;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
 namespace Flux.ViewModels
 {
+    public class OSAI_GCodeLocalVariable<T> : FLUX_GCodeLocalVariable<T>
+    {
+        public override GCodeString Read => Name;
+        public override Func<string, GCodeString> Write => v => $"{Name} = {(typeof(T) == typeof(string) && !$"{v}".Contains('"') ? $"\"{v}\"" : $"{v}")}";
+        public override Func<Union<IFLUX_GCodeVariable<T>, T>, GCodeString> Declare => v => $"{Name} = {(!v.IsType1 && typeof(T) == typeof(string) && !$"{v.Item2}".Contains('"') ? $"\"{v}\"" : v)}";
+        public OSAI_GCodeLocalVariable(string name) : base(name)
+        {
+        }
+    }
+    public class OSAI_GCodeLocalArray<T> : FLUX_GCodeLocalArray<T>
+    {
+        public OSAI_GCodeLocalArray(IEnumerable<string> variables) : base(variables)
+        {
+        }
+        protected override IFLUX_GCodeLocalVariable<T> CreateVariable(string variable_name)
+        {
+            return new OSAI_GCodeLocalVariable<T>(variable_name);
+        }
+    }
     public class OSAI_GCodeGenerator : FLUX_GCodeGenerator<OSAI_Connection>
     {
         public OSAI_GCodeGenerator(OSAI_Connection connection) : base(connection)
@@ -12,19 +32,18 @@ namespace Flux.ViewModels
         }
 
         // FILE
-        public override GCodeString LogEvent<T>(Job job, T @event)
+        public override GCodeString LogEvent<T>(FluxJob job, T @event)
         {
             if (job.QueuePosition < 0)
                 return default;
-
             var _event_path = Connection.CombinePaths(Connection.JobEventPath, $"{job.MCodeKey};{job.JobKey}");
             return GCodeString.Create(
-                // save event
+            // save event
                 ReadDateTime(out var date_time),
                 DeclareLocalVariable(0, _event_path, out var event_path),
-                AppendFile(event_path, $"{@event.ToEnumString()};", date_time));
+                AppendFile((object)event_path, $"{@event.ToEnumString()};", (object)date_time));
         }
-        public override GCodeString DeleteFile(GCodeVariable<string> path)
+        public override GCodeString DeleteFile(IFLUX_GCodeVariable<string> path)
         {
             return $"(DEL, ?{path})";
         }
@@ -50,15 +69,15 @@ namespace Flux.ViewModels
                 source.Select(line => $"(WRT, 1, \"{line}\")").ToArray(),
                 "(CLO, 1)");
         }
-        public override GCodeString LogExtrusion(Job job, ExtrusionKey e, GCodeVariable<double> v)
+        public override GCodeString LogExtrusion(FluxJob job, ExtrusionKey e, IFLUX_GCodeVariable<double> v)
         {
             throw new NotImplementedException();
         }
-        public override GCodeString RenameFile(GCodeVariable<string> old_path, GCodeVariable<string> new_path)
+        public override GCodeString RenameFile(IFLUX_GCodeVariable<string> old_path, IFLUX_GCodeVariable<string> new_path)
         {
             return $"(REN, ?{old_path}, ?{new_path})";
         }
-        public GCodeString AppendFile(Union<(string folder, string name), GCodeVariable<string>> path, params Union<string, GCodeVariable<string>>[] source)
+        public GCodeString AppendFile(Union<(string folder, string name), object> path, params Union<GCodeString, object>[] source)
         {
             return new GCodeString(append_file());
 
@@ -73,7 +92,7 @@ namespace Flux.ViewModels
                 yield return "(CLO, 1)";
             }
         }
-        public GCodeString CreateFile(Union<(string folder, string name), GCodeVariable<string>> path, params Union<GCodeString, GCodeVariable<string>>[] source)
+        public GCodeString CreateFile(Union<(string folder, string name), object> path, params Union<GCodeString, object>[] source)
         {
             return new GCodeString(append_file());
 
@@ -90,26 +109,16 @@ namespace Flux.ViewModels
         }
 
         // VARIABLE
-        public override GCodeString DeclareGlobalVariable<T>(string variable_name, out GCodeVariable<T> variable)
-        {
-            throw new NotImplementedException();
-        }
-        public GCodeString DeclareLocalVariable(uint address, Union<GCodeVariable<double>, double> value, out GCodeVariable<double> variable)
+        public GCodeString DeclareLocalVariable(uint address, Union<IFLUX_GCodeVariable<double>, double> value, out IFLUX_GCodeLocalVariable<double> variable)
         {
             return DeclareLocalVariable($"E{address}", value, out variable);
         }
-        public override GCodeString DeclareLocalVariable<T>(string variable_name, Union<GCodeVariable<T>, T> value, out GCodeVariable<T> gcode_variable)
+        public override GCodeString DeclareLocalVariable<T>(string variable_name, Union<IFLUX_GCodeVariable<T>, T> value, out IFLUX_GCodeLocalVariable<T> gcode_variable)
         {
-            gcode_variable = new GCodeVariable<T>()
-            {
-                Name = variable_name,
-                Read = variable_name,
-                Write = v => $"{variable_name} = {(typeof(T) == typeof(string) && !$"{v}".Contains('"') ? $"\"{v}\"" : $"{v}")}",
-                Declare = $"{variable_name} = {(!value.IsType1 && typeof(T) == typeof(string) && !$"{value.Item2}".Contains('"') ? $"\"{value}\"" : value)}",
-            };
-            return gcode_variable.Declare;
+            gcode_variable = new OSAI_GCodeLocalVariable<T>(variable_name);
+            return gcode_variable.Declare(value);
         }
-        public GCodeString DeclareLocalVariable(Union<uint, (uint index, uint lenght)> address, Union<GCodeVariable<string>, string> value, out GCodeVariable<string> variable)
+        public GCodeString DeclareLocalVariable(Union<uint, (uint index, uint lenght)> address, Union<IFLUX_GCodeVariable<string>, string> value, out IFLUX_GCodeLocalVariable<string> variable)
         {
             var variable_name = address.Item switch
             {
@@ -123,23 +132,15 @@ namespace Flux.ViewModels
 
             return DeclareLocalVariable(variable_name, value, out variable);
         }
-        public GCodeString DeclareGlobalVariable(uint address, Func<OSAI_VariableStore, IFLUX_Variable<string, string>> get_variable, out GCodeVariable<string> gcode_variable)
+        
+        // ARRAY
+        public override GCodeString DeclareLocalArray<T>(string[] variable_names, Union<IFLUX_GCodeVariable<T>, T> value, out IFLUX_GCodeLocalArray<T> gcode_array)
         {
-            return DeclareGlobalVariable(OSAI_VARCODE.LS_CODE, address, get_variable, out gcode_variable);
+            gcode_array = new OSAI_GCodeLocalArray<T>(variable_names);
+            return gcode_array.Foreach((v, i) => v.Declare(value));
         }
-        public GCodeString DeclareGlobalVariable(uint address, Func<OSAI_VariableStore, IFLUX_Variable<double, double>> get_variable, out GCodeVariable<double> gcode_variable)
-        {
-            return DeclareGlobalVariable(OSAI_VARCODE.E_CODE, address, get_variable, out gcode_variable);
-        }
-        public GCodeString DeclareGlobalVariable(uint address, uint lenght, Func<OSAI_VariableStore, IFLUX_Variable<string, string>> get_variable, out GCodeVariable<string> gcode_variable)
-        {
-            return DeclareGlobalVariable(OSAI_VARCODE.SC_CODE, (address, lenght), get_variable, out gcode_variable);
-        }
-        public GCodeString DeclareGlobalVariable(uint address, Func<OSAI_VariableStore, IFLUX_Variable<QueuePosition, QueuePosition>> get_variable, out GCodeVariable<QueuePosition> gcode_variable)
-        {
-            return DeclareGlobalVariable(OSAI_VARCODE.E_CODE, address, get_variable, out gcode_variable);
-        }
-        public GCodeString DeclareGlobalVariable<T>(OSAI_VARCODE varcode, Union<uint, (uint index, uint lenght)> address, IOSAI_AddressVariable address_variable, out GCodeVariable<T> gcode_variable)
+      
+        /*public GCodeString DeclareGlobalVariable<T>(OSAI_VARCODE varcode, Union<uint, (uint index, uint lenght)> address, IOSAI_AddressVariable address_variable, out GCodeVariable<T> gcode_variable)
         {
             var variable_name = (varcode, address.Item) switch
             {
@@ -226,28 +227,6 @@ namespace Flux.ViewModels
                 throw new ArgumentException();
             return DeclareGlobalVariable(varcode, address, address_variable, out gcode_variable);
         }
-
-        // ARRAY
-        public override GCodeString DeclareGlobalArray<T>(string[] array_name, out GCodeArray<T> array)
-        {
-            throw new NotImplementedException();
-        }
-        public override GCodeString DeclareLocalArray<T>(string[] array_name, Union<GCodeVariable<T>, T> value, out GCodeArray<T> gcode_array)
-        {
-            gcode_array = new GCodeArray<T>()
-            {
-                Variables = array_name.Select(n =>
-                {
-                    DeclareLocalVariable(n, value, out var variable);
-                    return variable;
-                }).ToArray(),
-            };
-            return gcode_array.Foreach((v, i) => v.Declare);
-        }
-        public GCodeString DeclareGlobalArray(uint address, Func<OSAI_VariableStore, IFLUX_Array<string, string>> get_variable, out GCodeArray<string> gcode_variable)
-        {
-            return DeclareGlobalArray(OSAI_VARCODE.LS_CODE, address, get_variable, out gcode_variable);
-        }
         public GCodeString DeclareGlobalArray(uint address, Func<OSAI_VariableStore, IFLUX_Array<double, double>> get_variable, out GCodeArray<double> gcode_variable)
         {
             return DeclareGlobalArray(OSAI_VARCODE.E_CODE, address, get_variable, out gcode_variable);
@@ -269,9 +248,10 @@ namespace Flux.ViewModels
 
             return gcode_array.Foreach((v, i) => v.Declare);
         }
+        */
 
         // MACRO
-        public override GCodeString ExecuteParamacro(GCodeVariable<string> path)
+        public override GCodeString ExecuteParamacro(IFLUX_GCodeVariable<string> path)
         {
             return $"(CLS, ?{path})";
         }
@@ -281,14 +261,14 @@ namespace Flux.ViewModels
         }
 
         // STRING
-        public GCodeString ReadDateTime(out GCodeVariable<string> date_time)
+        public GCodeString ReadDateTime(out IFLUX_GCodeLocalVariable<string> date_time)
         {
             DeclareLocalVariable((0, 22), "", out date_time);
             return GCodeString.Create(
                 $"(GDT, D2, T0, SC0.10, SC11.11)",
                 "SC10.1 = \";\"");
         }
-        public GCodeString ToString<T>(GCodeVariable<T> variable, uint address, out GCodeVariable<string> str_variable)
+        public GCodeString ToString<T>(IFLUX_GCodeVariable<T> variable, uint address, out IFLUX_GCodeLocalVariable<string> str_variable)
         {
             str_variable = default;
             if (typeof(T) == typeof(string))
@@ -297,7 +277,7 @@ namespace Flux.ViewModels
             DeclareLocalVariable(address, "", out str_variable);
             return $"(N2S, \"%d\", {variable}, {str_variable})";
         }
-        public GCodeString AppendString(GCodeVariable<string> var, params Union<GCodeString, GCodeVariable<string>>[] strings)
+        public GCodeString AppendString(IFLUX_GCodeVariable<string> var, params Union<GCodeString, IFLUX_GCodeVariable<string>>[] strings)
         {
             return new GCodeString(append_string());
 
@@ -313,6 +293,15 @@ namespace Flux.ViewModels
                         yield return __string;
                 }
             }
+        }
+
+        public override GCodeString GetGlobalArray<TRData, TWData>(Func<IFLUX_VariableStore, IFLUX_Array<TRData, TWData>> get_array, out IFLUX_GCodeGlobalArray<TRData, TWData> array)
+        {
+            throw new NotImplementedException();
+        }
+        public override GCodeString GetGlobalVariable<TRData, TWData>(Func<IFLUX_VariableStore, IFLUX_Variable<TRData, TWData>> get_var, out IFLUX_GCodeGlobalVariable<TRData, TWData> variable)
+        {
+            throw new NotImplementedException();
         }
     }
 }
