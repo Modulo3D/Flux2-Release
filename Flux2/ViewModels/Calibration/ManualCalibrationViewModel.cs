@@ -312,8 +312,11 @@ namespace Flux.ViewModels
                             bed_height = z_bed_height.Value;
                         }
 
-                        var z_unit = Flux.ConnectionProvider.GetArrayUnit(m => m.AXIS_POSITION, "Z");
-                        var z = await Flux.ConnectionProvider.ReadVariableAsync(m => m.AXIS_POSITION, z_unit);
+                        var axis_position = await Flux.ConnectionProvider.ReadVariableAsync(m => m.AXIS_POSITION);
+                        if (!axis_position.HasValue)
+                            return;
+
+                        var z = axis_position.Value.Axes.Dictionary.Lookup('Z');
                         if (!z.HasValue)
                             return;
 
@@ -323,9 +326,11 @@ namespace Flux.ViewModels
                 })
                 .DisposeWith(Disposables);
 
+            var move_transform = Flux.ConnectionProvider.VariableStoreBase.MoveTransform;
+
             _AxisPosition = Flux.ConnectionProvider.ObserveVariable(m => m.AXIS_POSITION)
-                .Convert(c => c.QueryWhenChanged(p => string.Join(" ", p.KeyValues.Select(v => $"{v.Key}{v.Value:0.00}"))))
-                .ObservableOr(() => "")
+                .Convert(c => move_transform.TransformPosition(c, false))
+                .ConvertOr(c => c.GetAxisPosition(), () => "")
                 .ToProperty(this, v => v.AxisPosition);
 
             var can_safe_stop = Flux.StatusProvider

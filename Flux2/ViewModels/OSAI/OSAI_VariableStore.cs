@@ -2,7 +2,9 @@
 using Modulo3DNet;
 using OSAI;
 using System;
+using System.IO;
 using System.Reactive;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -15,7 +17,7 @@ namespace Flux.ViewModels
         public override bool HasPrintUnloader => false;
         public override bool CanMeshProbePlate => false;
         public override bool ParkToolAfterOperation => false;
-        public override FLUX_AxisMoveTransform MoveTransform { get; }
+        public override FLUX_AxisTransform MoveTransform { get; }
 
         public IFLUX_Variable<OSAI_ProcessMode, OSAI_ProcessMode> PROCESS_MODE { get; set; }
         public IFLUX_Variable<Unit, OSAI_BootMode> BOOT_MODE { get; set; }
@@ -31,21 +33,39 @@ namespace Flux.ViewModels
 
         public OSAI_VariableStore(OSAI_ConnectionProvider connection_provider) : base(connection_provider)
         {
-            MoveTransform = new FLUX_AxisMoveTransform(m =>
+            MoveTransform = new FLUX_AxisTransform((m, r) =>
             {
-                var x = m.AxisMove.Dictionary.Lookup('X');
-                var y = m.AxisMove.Dictionary.Lookup('Y');
+                var x = m.Axes.Dictionary.Lookup('X');
+                var y = m.Axes.Dictionary.Lookup('Y');
 
-                if (x.HasValue != y.HasValue)
+                if (!r && x.HasValue != y.HasValue)
                     return default;
 
-                if (x.HasValue && y.HasValue)
+                if (x.HasValue || y.HasValue)
                 {
-                    var core_x = x.Value + y.Value;
-                    var core_y = x.Value - y.Value;
+                    var core_x = x.ValueOr(() => 0) + y.ValueOr(() => 0);
+                    var core_y = x.ValueOr(() => 0) - y.ValueOr(() => 0);
 
-                    m = m with { AxisMove = m.AxisMove.Dictionary.SetItem('X', core_x) };
-                    m = m with { AxisMove = m.AxisMove.Dictionary.SetItem('Y', core_y) };
+                    m = m with { Axes = m.Axes.Dictionary.SetItem('X', core_x) };
+                    m = m with { Axes = m.Axes.Dictionary.SetItem('Y', core_y) };
+                }
+
+                return m;
+            }, (m, r) =>
+            {
+                var core_x = m.Axes.Dictionary.Lookup('X');
+                var core_y = m.Axes.Dictionary.Lookup('Y');
+
+                if (!r && core_x.HasValue != core_y.HasValue)
+                    return default;
+
+                if (core_x.HasValue || core_y.HasValue)
+                {
+                    var x = (core_x.ValueOr(() => 0) + core_y.ValueOr(() => 0)) / 2;
+                    var y = (core_x.ValueOr(() => 0) - core_y.ValueOr(() => 0)) / 2;
+
+                    m = m with { Axes = m.Axes.Dictionary.SetItem('X', x) };
+                    m = m with { Axes = m.Axes.Dictionary.SetItem('Y', y) };
                 }
 
                 return m;
@@ -72,7 +92,6 @@ namespace Flux.ViewModels
                 model.CreateVariable(c => c.Z_BED_HEIGHT, "!Z_PLATE_H", OSAI_ReadPriority.ULTRALOW);
                 model.CreateVariable(c => c.IN_CHANGE, "!IN_CHANGE", OSAI_ReadPriority.HIGH);
 
-                //model.CreateArray(c    => c.EXTRUSIONS,     4, "!EXTR",        OSAI_ReadPriority.MEDIUM); 
                 model.CreateArray(c => c.X_USER_OFFSET, 4, "!X_USR_OF_T", OSAI_ReadPriority.LOW);
                 model.CreateArray(c => c.Y_USER_OFFSET, 4, "!Y_USR_OF_T", OSAI_ReadPriority.LOW);
                 model.CreateArray(c => c.Z_USER_OFFSET, 4, "!Z_USR_OF_T", OSAI_ReadPriority.LOW);
@@ -82,8 +101,12 @@ namespace Flux.ViewModels
                 model.CreateArray(c => c.Z_PROBE_OFFSET, 4, "!Z_PRB_OF_T", OSAI_ReadPriority.LOW);
 
 
+                model.CreateVariable(c => c.AXIS_POSITION, OSAI_ReadPriority.HIGH, GetAxisPositionAsync);
+                
                 model.CreateVariable(c => c.QUEUE, OSAI_ReadPriority.HIGH, GetJobQueuePreviewAsync);
+                model.CreateVariable(c => c.STORAGE, OSAI_ReadPriority.MEDIUM, GetMCodeStorageAsync);
                 model.CreateVariable(c => c.BOOT_PHASE, OSAI_ReadPriority.ULTRAHIGH, GetBootPhaseAsync);
+                model.CreateVariable(c => c.RECOVERY, OSAI_ReadPriority.MEDIUM, GetJobRecoveryPreviewAsync);
                 model.CreateVariable(c => c.PROCESS_STATUS, OSAI_ReadPriority.ULTRAHIGH, GetProcessStatusAsync);
                 model.CreateVariable(c => c.MCODE_EVENT, OSAI_ReadPriority.HIGH, GetMCodeEventsAsync);
                 model.CreateVariable(c => c.EXTRUSIONS, OSAI_ReadPriority.HIGH, GetExtrusionSetQueueAsync);
@@ -170,12 +193,42 @@ namespace Flux.ViewModels
                 model.CreateArray(c => c.RAISE_MAGAZINE_PISTON, 4, (OSAI_VARCODE.MW_CODE, 10760));
                 model.CreateArray(c => c.LOWER_MAGAZINE_PISTON, 4, (OSAI_VARCODE.MW_CODE, 10761));
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                Console.WriteLine(ex.ToString());
                 Environment.Exit(0);
             }
         }
 
+        private static async Task<ValueResult<FLUX_AxisPosition>> GetAxisPositionAsync(OSAI_ConnectionProvider connection_provider)
+        {
+            var connection = connection_provider.Connection;
+            var axis_position = await connection.GetAxesPositionAsync(OSAI_AxisPositionSelect.Absolute);
+            if (!axis_position.HasValue)
+                return default;
+
+            return axis_position;
+        }
+        private static async Task<ValueResult<FluxJobRecoveryPreview>> GetJobRecoveryPreviewAsync(OSAI_ConnectionProvider connection_provider)
+        {
+            var connection = connection_provider.Connection;
+            using var queue_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var queue_files = await connection.ListFilesAsync(c => c.QueuePath, queue_ctk.Token);
+            if (!queue_files.HasValue)
+                return default;
+
+            return queue_files.Value.GetJobRecoveryPreview();
+        }
+        private static async Task<ValueResult<MCodeStorage>> GetMCodeStorageAsync(OSAI_ConnectionProvider connection_provider)
+        {
+            var connection = connection_provider.Connection;
+            using var queue_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var queue_files = await connection.ListFilesAsync(c => c.StoragePath, queue_ctk.Token);
+            if (!queue_files.HasValue)
+                return default;
+
+            return queue_files.Value.GetMCodeStorage();
+        }
         private static async Task<ValueResult<FluxJobQueuePreview>> GetJobQueuePreviewAsync(OSAI_ConnectionProvider connection_provider)
         {
             var connection = connection_provider.Connection;
@@ -214,7 +267,6 @@ namespace Flux.ViewModels
 
             var get_pp_request = new GetActivePartProgramRequest(OSAI_Connection.ProcessNumber);
             var get_pp_response = await client.Value.GetActivePartProgramAsync(get_pp_request);
-
             if (!OSAI_Connection.ProcessResponse(
                 get_pp_response.retval,
                 get_pp_response.ErrClass,
@@ -222,17 +274,19 @@ namespace Flux.ViewModels
                 return default;
 
             var get_blk_num_response = await client.Value.GetBlkNumAsync(OSAI_Connection.ProcessNumber);
-
             if (!OSAI_Connection.ProcessResponse(
                 get_blk_num_response.Body.retval,
                 get_blk_num_response.Body.ErrClass,
                 get_blk_num_response.Body.ErrNum))
                 return default;
 
-            if (!MCodeKey.TryParse(get_pp_response.Main, out var mcode_key))
-                return default;
+            var filename = Path.GetFileNameWithoutExtension(get_pp_response.Main);
+            if (!MCodeKey.TryParse(filename, out var mcode_key))
+                return default(MCodeProgress);
 
-            var block_number = new BlockNumber(get_blk_num_response.Body.GetBlkNum.MainActBlk, BlockType.Line);
+            var block_nr = get_blk_num_response.Body.GetBlkNum.MainActBlk;
+            var block_number = new BlockNumber(block_nr, BlockType.Line);
+            
             return new MCodeProgress(mcode_key, block_number);
         }
 

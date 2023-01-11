@@ -13,6 +13,14 @@ namespace Flux.ViewModels
 {
     public class SettingsViewModel : FluxRoutableNavBarViewModel<SettingsViewModel>
     {
+        private string _PrinterGuid = "";
+        [RemoteOutput(true)]
+        public string PrinterGuid
+        {
+            get => _PrinterGuid;
+            set => this.RaiseAndSetIfChanged(ref _PrinterGuid, value);
+        }
+
         [RemoteInput]
         public OptionalSelectableCache<Printer, int> Printers { get; }
 
@@ -69,6 +77,9 @@ namespace Flux.ViewModels
 
         [RemoteCommand]
         public ReactiveCommand<Unit, Unit> SaveSettingsCommand { get; }
+        
+        [RemoteCommand]
+        public ReactiveCommand<Unit, Unit> GenerateGuidCommand { get; }
 
         public SettingsViewModel(FluxViewModel flux) : base(flux)
         {
@@ -85,6 +96,10 @@ namespace Flux.ViewModels
 
             var user_settings = Flux.SettingsProvider.UserSettings.Local;
             var core_settings = Flux.SettingsProvider.CoreSettings.Local;
+
+            core_settings.WhenAnyValue(s => s.PrinterGuid)
+                .Select(g => g.ToString())
+                .BindTo(this, v => v.PrinterGuid);
 
             core_settings.WhenAnyValue(s => s.PrinterID)
                 .BindTo(this, v => v.Printers.SelectedKey);
@@ -111,9 +126,10 @@ namespace Flux.ViewModels
                 .BindTo(this, v => v.StandbyMinutes);
 
             SaveSettingsCommand = ReactiveCommand.Create(SaveSettings);
+            GenerateGuidCommand = ReactiveCommand.Create(GenerateGuid);
         }
 
-        public void SaveSettings()
+        private void SaveSettings()
         {
             try
             {
@@ -128,6 +144,7 @@ namespace Flux.ViewModels
                 user_settings.StandbyMinutes = StandbyMinutes;
                 core_settings.PrinterID = Printers.SelectedKey;
                 core_settings.HostID = HostAddress.SelectedKey;
+                core_settings.PrinterGuid = Guid.Parse(PrinterGuid);
 
                 if (!Flux.SettingsProvider.PersistLocalSettings())
                     return;
@@ -136,6 +153,11 @@ namespace Flux.ViewModels
             {
                 Flux.Messages.LogException(this, ex);
             }
+        }
+
+        private void GenerateGuid()
+        {
+            PrinterGuid = Guid.NewGuid().ToString();
         }
 
         private IEnumerable<Optional<Printer>> FindPrinters(Optional<ILocalDatabase> database)

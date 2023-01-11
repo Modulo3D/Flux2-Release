@@ -109,9 +109,6 @@ namespace Flux.ViewModels
             try
             {
                 var externalDevices = DriveInfo.GetDrives();
-                foreach (var externalDevice in externalDevices)
-                    Console.WriteLine(externalDevice.VolumeLabel);
-
                 var removableDrive = externalDevices.FirstOrOptional(d =>
                     d.VolumeLabel.ToLower().Contains("modulo"));
 

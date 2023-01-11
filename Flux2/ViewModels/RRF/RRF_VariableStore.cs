@@ -3,6 +3,7 @@ using DynamicData.Kernel;
 using Modulo3DNet;
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -16,6 +17,7 @@ namespace Flux.ViewModels
 
         public RRF_GlobalModelBuilder.RRF_InnerGlobalModelBuilder Global { get; }
         public RRF_ModelBuilder.RRF_InnerModelBuilder<FLUX_FileList> Queue { get; }
+        public RRF_ModelBuilder.RRF_InnerModelBuilder<FLUX_FileList> Storage { get; }
         public RRF_ModelBuilder.RRF_InnerModelBuilder<FLUX_FileList> JobEvents { get; }
         public RRF_ModelBuilder.RRF_InnerModelBuilder<FLUX_FileList> Extrusions { get; }
         public RRF_ModelBuilder.RRF_InnerModelBuilder<RRF_ObjectModelJob> FluxJob { get; }
@@ -47,11 +49,11 @@ namespace Flux.ViewModels
         public override ushort ArrayBase => 0;
         public override char FeederAxis => 'E';
         public override bool ParkToolAfterOperation => true;
-        public override FLUX_AxisMoveTransform MoveTransform { get; }
+        public override FLUX_AxisTransform MoveTransform { get; }
 
         public RRF_VariableStoreBase(RRF_ConnectionProvider connection_provider, ushort max_extruders) : base(connection_provider)
         {
-            MoveTransform = new FLUX_AxisMoveTransform(m => m);
+            MoveTransform = new FLUX_AxisTransform((m, r) => m, (m, r) => m);
 
             try
             {
@@ -65,6 +67,7 @@ namespace Flux.ViewModels
                 State = RRF_ModelBuilder.CreateModel(this, m => m.State, read_timeout);
                 Tools = RRF_ModelBuilder.CreateModel(this, m => m.Tools, read_timeout);
                 Inputs = RRF_ModelBuilder.CreateModel(this, m => m.Inputs, read_timeout);
+                Storage = RRF_ModelBuilder.CreateModel(this, m => m.Storage, read_timeout);
                 Sensors = RRF_ModelBuilder.CreateModel(this, m => m.Sensors, read_timeout);
                 JobEvents = RRF_ModelBuilder.CreateModel(this, m => m.JobEvents, read_timeout);
                 Extrusions = RRF_ModelBuilder.CreateModel(this, m => m.Extrusions, read_timeout);
@@ -78,13 +81,14 @@ namespace Flux.ViewModels
                 Endstops = Sensors.CreateArray(s => s.Endstops, EndstopsUnits);
                 Filaments = Sensors.CreateArray(m => m.FilamentMonitors, FilamentUnits);
 
-                Axes.CreateArray(c => c.AXIS_POSITION, (c, a) => a.MachinePosition);
+                Axes.CreateVariable(c => c.AXIS_POSITION, (c, a) => a.GetAxisPosition());
                 Axes.CreateArray(c => c.ENABLE_DRIVERS, (c, m) => m.IsEnabledDriver(), EnableDriverAsync);
 
                 Endstops.CreateArray(c => c.AXIS_ENDSTOP, (c, e) => e.Triggered, (c, e, u) => Task.FromResult(true));
 
                 Tools.CreateVariable(c => c.TOOL_NUM, (c, t) => (ushort)t.Count);
                 Queue.CreateVariable(c => c.QUEUE, (c, m) => m.GetJobQueuePreview());
+                Storage.CreateVariable(c => c.STORAGE, (c, m) => m.GetMCodeStorage());
                 Queue.CreateVariable(c => c.RECOVERY, (c, m) => m.GetJobRecoveryPreview());
                 FluxJob.CreateVariable(c => c.PROGRESS, (c, m) => m.GetParamacroProgress());
                 JobEvents.CreateVariable(c => c.MCODE_EVENT, (c, m) => m.GetMCodeEvents());
@@ -97,7 +101,6 @@ namespace Flux.ViewModels
                 Move.CreateVariable(c => c.IS_HOMED, (c, m) => m.IsHomed());
 
                 Global.CreateVariable(c => c.CUR_JOB, false, "");
-                Global.CreateArray(c => c.EXTR_MM, false, 0, max_extruders);
                 Global.CreateArray(c => c.EXTR_KEY, false, "", max_extruders);
 
                 Global.CreateVariable(c => c.DEBUG, false, false);

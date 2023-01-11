@@ -7,7 +7,14 @@ using System.Reactive.Linq;
 
 namespace Flux.ViewModels
 {
-    public abstract class OSAI_Array<TVariable, TAddress, TRData, TWData> : FLUX_Array<TRData, TWData>
+    public interface IOSAI_Array : IFLUX_Array
+    { 
+    }
+    public interface IOSAI_Array<TRData, TWData> : IOSAI_Array, IFLUX_Array<TRData, TWData>
+    { 
+    }
+
+    public abstract class OSAI_Array<TVariable, TAddress, TRData, TWData> : FLUX_Array<TRData, TWData>, IOSAI_Array<TRData, TWData>
         where TVariable : IFLUX_Variable<TRData, TWData>
         where TAddress : IOSAI_Address<TAddress>
     {

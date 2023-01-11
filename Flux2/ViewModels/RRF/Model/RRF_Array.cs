@@ -9,7 +9,14 @@ using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
-    public class RRF_ArrayObjectModel<TModel, TRData, TWData> : FLUX_Array<TRData, TWData>
+    public interface IRRF_Array : IFLUX_Array
+    {
+    }
+    public interface IRRF_Array<TRData, TWData> : IRRF_Array, IFLUX_Array<TRData, TWData>
+    {
+    }
+
+    public class RRF_ArrayObjectModel<TModel, TRData, TWData> : FLUX_Array<TRData, TWData>, IRRF_Array<TRData, TWData>
     {
         public override string Group => "ObjectModel";
         public RRF_ArrayObjectModel(
@@ -29,7 +36,7 @@ namespace Flux.ViewModels
         }
     }
 
-    public class RRF_ArrayVariableGlobalModel<TData> : FLUX_ObservableVariable<RRF_ConnectionProvider, TData, TData>, IRRF_VariableGlobalModel
+    public class RRF_ArrayVariableGlobalModel<TData> : FLUX_ObservableVariable<RRF_ConnectionProvider, TData, TData>, IRRF_Variable<TData, TData>
     {
         public bool Stored { get; }
         public string Variable { get; }
@@ -129,7 +136,7 @@ namespace Flux.ViewModels
         }
     }
 
-    public class RRF_ArrayGlobalModel<TData> : FLUX_Array<TData, TData>
+    public class RRF_ArrayGlobalModel<TData> : FLUX_Array<TData, TData>, IRRF_Array<TData, TData>
     {
         public override string Group => "Global";
 

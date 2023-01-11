@@ -3,6 +3,7 @@ using Modulo3DNet;
 using OSAI;
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -11,6 +12,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 
 namespace Flux.ViewModels
 {
@@ -773,42 +775,87 @@ namespace Flux.ViewModels
         }
         public override InnerQueueGCodes GenerateInnerQueueGCodes(FluxJob job)
         {
-            var gcode = new OSAI_GCodeGenerator(this);
-
-            var end = gcode.LogEvent(job, FluxEventType.End);
-            var pause = gcode.LogEvent(job, FluxEventType.Pause);
-            var cancel = gcode.LogEvent(job, FluxEventType.Cancel);
-            var resume = gcode.LogEvent(job, FluxEventType.Resume);
-            var end_filament = gcode.LogEvent(job, FluxEventType.EndFilament);
-
-            var begin = GCodeString.Create(
-                gcode.GetGlobalVariable(c => c.CUR_JOB, out var cur_job),
-                gcode.GetGlobalArray(c => c.EXTR_KEY, out var extr_key),
-                gcode.GetGlobalArray(c => c.EXTR_MM, out var extr_mm),
-
-                cur_job.Write($"{job.JobKey}"),
-                extr_mm.Foreach((var, i) => var.Write("0")),
-                extr_key.Foreach((v, i) => extrusion_key(i, k => v.Write($"{k}"))),
-                gcode.LogEvent(job, FluxEventType.Begin));
-
-            return new InnerQueueGCodes()
+            try
             {
-                End = end,
-                Begin = begin,
-                Pause = pause,
-                Cancel = cancel,
-                Resume = resume,
-                EndFilament = end_filament,
-            };
+                var extruder_count = Flux.SettingsProvider.ExtrudersCount;
+                if (!extruder_count.HasValue)
+                    return default;
 
-            Optional<GCodeString> extrusion_key(int position, Func<ExtrusionKey, GCodeString> func)
+                var start = GCodeString.Create(
+                    GetStartPartProgramGCode(StoragePath, $"{job.MCodeKey}", new BlockNumber(0, BlockType.None)));
+
+                var end = log_event(FluxEventType.End);
+                var pause = log_event(FluxEventType.Pause);
+                var cancel = log_event(FluxEventType.Cancel);
+                var resume = log_event(FluxEventType.Resume);
+                var end_filament = log_event(FluxEventType.EndFilament);
+
+                var begin = GCodeString.Create(
+
+                    // write job
+                    $"LS0 = \"{job.JobKey}\"",
+                    "M4001[7, 0, 0, 0]",
+
+                    // write extr key
+                    Enumerable.Range(0, extruder_count.Value.machine_extruders * extruder_count.Value.mixing_extruders)
+                        .Select(e =>
+                        {
+                            var extr_key = extrusion_key(e);
+                            if (!extr_key.HasValue)
+                                return default;
+                            return GCodeString.Create(
+                                $"LS0 = \"{extr_key.Value}\"",
+                                $"M4001[7, 3 + {e}, 0, 0]");
+                        })
+                        .ToArray(),
+
+                    log_event(FluxEventType.Begin));
+
+                return new InnerQueueGCodes()
+                {
+                    End = end,
+                    Start = start,
+                    Begin = begin,
+                    Pause = pause,
+                    Cancel = cancel,
+                    Resume = resume,
+                    EndFilament = end_filament,
+                };
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex);
+                return default;
+            }
+
+            Optional<ExtrusionKey> extrusion_key(int position)
             {
                 return Flux.Feeders.Feeders.Lookup((ushort)position)
                     .Convert(f => f.SelectedMaterial)
-                    .Convert(m => m.ExtrusionKey)
-                    .Convert(k => func(k));
+                    .Convert(m => m.ExtrusionKey);
+            }
+
+            GCodeString log_event(FluxEventType event_type)
+            {
+                if (job.QueuePosition < 0)
+                    return default;
+
+                return GCodeString.Create(
+
+                    // get event path
+                    $"LS0 = \"{CombinePaths(JobEventPath, $"{job.MCodeKey};{job.JobKey}")}\"",
+
+                    // get current date
+                    $"(GDT, D2, T0, SC0.10, SC11.11)", 
+                    "SC10.1 = \";\"",
+
+                    // append file
+                    $"(OPN, 1, ?LS0, A, A)",
+                    $"(WRT, 1, \"{event_type.ToEnumString()};\", SC0.22)",
+                    "(CLO, 1)");
             }
         }
+
         public override Task<bool> InitializeVariablesAsync(CancellationToken ct)
         {
             return Task.FromResult(true);
@@ -832,6 +879,30 @@ namespace Flux.ViewModels
         }
 
         // BASIC OPERATIONS
+        public async Task<ValueResult<FLUX_AxisPosition>> GetAxesPositionAsync(OSAI_AxisPositionSelect select)
+        {
+            try
+            {
+                if (!Client.HasValue)
+                    return default;
+
+                var axes_pos_request = new GetAxesPositionRequest(ProcessNumber, 0, (ushort)select, AxisNum);
+                var axes_pos_response = await Client.Value.GetAxesPositionAsync(axes_pos_request);
+
+                if (!ProcessResponse(
+                    axes_pos_response.retval,
+                    axes_pos_response.ErrClass,
+                    axes_pos_response.ErrNum))
+                    return default;
+
+                return (FLUX_AxisPosition)axes_pos_response.IntPos.ToImmutableDictionary(p => (char)p.AxisName, p => p.position);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine(ex);
+                return default;
+            }
+        }
         public async Task<bool> AxesRefAsync(params char[] axes)
         {
             try
@@ -1019,6 +1090,24 @@ namespace Flux.ViewModels
                 if (!Client.HasValue)
                     return false;
 
+                // upload a paramacro
+                if (is_paramacro)
+                {
+                    var path_name = CombinePaths(folder, filename);
+                    var gcode = GCodeString.Create(start, source, end, Environment.NewLine).ToString();
+                    var put_file_request = new PutFileRequest(gcode, (uint)gcode.Length, path_name);
+                    var put_file_response = await Client.Value.PutFileAsync(put_file_request);
+
+                    if (!ProcessResponse(
+                        put_file_response.retval,
+                        put_file_response.ErrClass,
+                        put_file_response.ErrNum))
+                        return false;
+
+                    return true;
+                }
+
+                // upload a partprogram
                 using var delete_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 var remove_file_response = await DeleteAsync(folder, "file_upload.tmp", delete_cts.Token);
                 if (!remove_file_response)
@@ -1104,10 +1193,7 @@ namespace Flux.ViewModels
                     {
                         foreach (var line in source)
                         {
-                            if (is_paramacro)
-                                yield return line;
-                            else
-                                yield return $"N{block_number++} {line}";
+                            yield return $"N{block_number++} {line}";
 
                             if (!source_blocks.HasValue)
                                 continue;
@@ -1393,9 +1479,13 @@ namespace Flux.ViewModels
         {
             return $"(CLS, MACRO\\change_tool, {position.GetArrayBaseIndex()})";
         }
-        public override GCodeString GetMovementGCodeInner(FLUX_AxisMove axis_move)
+        public override GCodeString GetMovementGCode(FLUX_AxisMove axis_move, FLUX_AxisTransform transform)
         {
-            return $"G1 {axis_move.GetAxisPosition(m => m.Relative ? ">>" : "")} {axis_move.GetFeedrate('F')}";
+            var inverse_transform_move = transform.InverseTransformMove(axis_move);
+            if (!inverse_transform_move.HasValue)
+                return default;
+
+            return $"G1 {inverse_transform_move.Value.GetAxisPosition(m => m.Relative ? ">>" : "")} {axis_move.GetFeedrate('F')}";
         }
         public override GCodeString GetCancelLoadFilamentGCode(ArrayIndex position)
         {
@@ -1405,9 +1495,13 @@ namespace Flux.ViewModels
         {
             return new[] { $"M4104 [{position.GetArrayBaseIndex()}, 0, 0]" };
         }
-        public override GCodeString GetResetPositionGCodeInner(FLUX_AxisMove axis_move)
+        public override GCodeString GetResetPositionGCode(FLUX_AxisPosition axis_position, FLUX_AxisTransform transform)
         {
-            return $"G92 {axis_move.GetAxisPosition()}";
+            var inverse_transform_position = transform.InverseTransformPosition(axis_position, false);
+            if (!inverse_transform_position.HasValue)
+                return default;
+
+            return $"G92 {inverse_transform_position.Value.GetAxisPosition()}";
         }
         public override GCodeString GetExecuteMacroGCode(string folder, string filename)
         {

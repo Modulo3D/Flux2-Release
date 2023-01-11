@@ -37,13 +37,22 @@ namespace Flux.ViewModels
             Flux = flux;
         }
 
+        public override async Task<bool> ResetClampAsync()
+        {
+            using var put_reset_clamp_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var wait_reset_clamp_cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            return await ExecuteParamacroAsync(c => new[]
+            {
+                "G28 C0",
+                "T-1 P0"
+            }, put_reset_clamp_cts.Token, true, wait_reset_clamp_cts.Token);
+        }
         public override Optional<DateTime> ParseDateTime(string date_time_str)
         {
             if (!DateTime.TryParse(date_time_str, out var date_time))
                 return default;
             return date_time;
         }
-
         protected override async Task RollConnectionAsync(CancellationToken ct)
         {
             try
@@ -101,18 +110,6 @@ namespace Flux.ViewModels
                 Flux.Messages.LogException(this, ex);
             }
         }
-
-        public override async Task<bool> ResetClampAsync()
-        {
-            using var put_reset_clamp_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            using var wait_reset_clamp_cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            return await ExecuteParamacroAsync(c => new[]
-            {
-                "G28 C0",
-                "T-1 P0"
-            }, put_reset_clamp_cts.Token, true, wait_reset_clamp_cts.Token);
-        }
-
         public override Optional<FluxJobRecovery> GetFluxJobRecoveryFromSource(MCodeKey mcode, string source)
         {
             try
@@ -184,23 +181,21 @@ namespace Flux.ViewModels
                 if (!e_pos.HasValue)
                     return default;
 
-                var axis_move = new FLUX_AxisMove()
-                {
-                    AxisMove = ImmutableDictionary<char, double>.Empty.AddRange(new KeyValuePair<char, double>[]
+                var axis_position = ImmutableDictionary<char, double>.Empty
+                    .AddRange(new KeyValuePair<char, double>[]
                     {
                         new('X', xy_pos.Value.x_pos.Value),
                         new('Y', xy_pos.Value.y_pos.Value),
                         new('Z', z_pos.Value),
                         new('E', e_pos.Value),
-                    })
-                };
+                    });
 
                 return new FluxJobRecovery()
                 {
                     MCodeKey = mcode,
-                    AxisMove = axis_move,
                     Feedrate = feedrate.Value,
                     ToolIndex = tool_index.Value,
+                    AxisPosition = axis_position,
                     PlateTemperatures = plates_temp,
                     BlockNumber = block_number.Value,
                     ChamberTemperatures = chamber_temp,
@@ -211,6 +206,10 @@ namespace Flux.ViewModels
             {
                 return default;
             }
+        }
+        protected override (GCodeString start_compare, GCodeString end_compare) CompareQueuePosGCode(int queue_pos)
+        {
+            return ($"{(queue_pos == 0 ? "if" : "elif")} global.queue_pos = {queue_pos}", default);
         }
     }
 }

@@ -180,6 +180,7 @@ namespace Flux.ViewModels
             AddModelReader(medium, "heat", "f", m => m.Heat, RRF_RequestPriority.Medium);
 
             AddFileSytemReader(slow, c => c.QueuePath, m => m.Queue, RRF_RequestPriority.Immediate);
+            AddFileSytemReader(slow, c => c.StoragePath, m => m.Storage, RRF_RequestPriority.Immediate);
             AddFileSytemReader(job, c => c.JobEventPath, m => m.JobEvents, RRF_RequestPriority.Immediate);
             AddFileSytemReader(extrusion, c => c.ExtrusionEventPath, m => m.Extrusions, RRF_RequestPriority.Immediate);
 

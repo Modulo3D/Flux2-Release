@@ -5,10 +5,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Xml.Linq;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace Flux.ViewModels
 {
-    public class RRF_GCodeLocalVariable<T> : FLUX_GCodeLocalVariable<T>
+    /*public class RRF_GCodeLocalVariable<T> : FLUX_GCodeLocalVariable<T>
     {
         public override GCodeString Read => $"var.{Name}";
         public override Func<string, GCodeString> Write => v => $"set var.{Name} = {(typeof(T) == typeof(string) && !$"{v}".Contains('"') ? $"\"{v}\"" : $"{v}")}";
@@ -18,12 +19,12 @@ namespace Flux.ViewModels
         {
         }
     }
-    public class RRF_GCodeGlobalVariable<TRData, TWData> : FLUX_GCodeGlobalVariable<TRData, TWData>
+    public class RRF_GCodeGlobalVariable<TData> : FLUX_GCodeGlobalVariable<IRRF_Variable<TData, TData>, TData>
     {
         public override GCodeString Read => $"{Variable}";
-        public override Func<string, GCodeString> Write => v => $"set {Variable} = {(typeof(TRData) == typeof(string) && !$"{v}".Contains('"') ? $"\"{v}\"" : $"{v}")}"; 
+        public override Func<string, GCodeString> Write => v => $"set {Variable} = {(typeof(TData) == typeof(string) && !$"{v}".Contains('"') ? $"\"{v}\"" : $"{v}")}"; 
         public override string ToString() => Read.ToString();
-        public RRF_GCodeGlobalVariable(IFLUX_Variable<TRData, TWData> variable) : base(variable)
+        public RRF_GCodeGlobalVariable(IRRF_Variable<TData, TData> variable) : base(variable)
         {
         }
     }
@@ -37,14 +38,14 @@ namespace Flux.ViewModels
             return new RRF_GCodeLocalVariable<T>(variable_name);
         }
     }
-    public class RRF_GCodeGlobalArray<TRData, TWData> : FLUX_GCodeGlobalArray<TRData, TWData>
+    public class RRF_GCodeGlobalArray<TData> : FLUX_GCodeGlobalArray<IRRF_Array<TData, TData>, IRRF_Variable<TData, TData>, TData>
     {
-        public RRF_GCodeGlobalArray(IFLUX_Array<TRData, TWData> variables) : base(variables)
+        public RRF_GCodeGlobalArray(IRRF_Array<TData, TData> variables) : base(variables)
         {
         }
-        protected override IFLUX_GCodeGlobalVariable<TRData, TWData> CreateVariable(IFLUX_Variable<TRData, TWData> variable)
+        protected override IFLUX_GCodeGlobalVariable<TData> CreateVariable(IRRF_Variable<TData, TData> variable)
         {
-            return new RRF_GCodeGlobalVariable<TRData, TWData>(variable);
+            return new RRF_GCodeGlobalVariable<TData>(variable);
         }
     }
 
@@ -156,16 +157,16 @@ namespace Flux.ViewModels
             return AppendFile(Connection.ExtrusionEventPath, $"{e}", $"\"{job.JobKey};\"^{{{v}}}");
         }
 
-        public override GCodeString GetGlobalArray<TRData, TWData>(Func<IFLUX_VariableStore, IFLUX_Array<TRData, TWData>> get_array, out IFLUX_GCodeGlobalArray<TRData, TWData> array)
+        public override GCodeString GetGlobalArray<TData>(Func<IFLUX_VariableStore, IFLUX_Array<TData, TData>> get_array, out IFLUX_GCodeGlobalArray<TData> array)
         {
-            array = new RRF_GCodeGlobalArray<TRData, TWData>(Connection.GetArray(get_array));
+            array = new RRF_GCodeGlobalArray<TData>((IRRF_Array<TData, TData>)Connection.GetArray(get_array));
             return default;
         }
 
-        public override GCodeString GetGlobalVariable<TRData, TWData>(Func<IFLUX_VariableStore, IFLUX_Variable<TRData, TWData>> get_var, out IFLUX_GCodeGlobalVariable<TRData, TWData> variable)
+        public override GCodeString GetGlobalVariable<TData>(Func<IFLUX_VariableStore, IFLUX_Variable<TData, TData>> get_var, out IFLUX_GCodeGlobalVariable<TData> variable)
         {
-            variable = new RRF_GCodeGlobalVariable<TRData, TWData>(Connection.GetVariable(get_var));
+            variable = new RRF_GCodeGlobalVariable<TData>((IRRF_Variable<TData, TData>)Connection.GetVariable(get_var));
             return default;
         }
-    }
+    }*/
 }

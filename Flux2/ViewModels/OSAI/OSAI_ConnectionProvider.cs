@@ -156,6 +156,10 @@ namespace Flux.ViewModels
                 Flux.Messages.LogException(this, ex);
             }
         }
+        protected override (GCodeString start_compare, GCodeString end_compare) CompareQueuePosGCode(int queue_pos)
+        {
+            return ($"(IF, !QUEUE_POS = {queue_pos})", "(ENDIF)");
+        }
         public override Optional<FluxJobRecovery> GetFluxJobRecoveryFromSource(MCodeKey mcode, string source)
         {
             try
@@ -196,7 +200,7 @@ namespace Flux.ViewModels
                         CultureInfo.InvariantCulture));
 
                 // pos
-                var moves = ImmutableDictionary<char, double>.Empty
+                var position = ImmutableDictionary<char, double>.Empty
                     .AddRange(new KeyValuePair<char, double>[] 
                     {
                         new ('X', double.Parse(string_reader.ReadLine(),
@@ -221,14 +225,9 @@ namespace Flux.ViewModels
                 return new FluxJobRecovery()
                 {
                     MCodeKey = mcode,
-                    AxisMove = new FLUX_AxisMove()
-                    {
-                        Relative = false,
-                        AxisMove = moves,
-                        Feedrate = 10000
-                    },
                     Feedrate = feedrate,
                     ToolIndex = tool_index,
+                    AxisPosition = position,
                     BlockNumber = block_number,
                     ToolTemperatures = tool_temperatures,
                     PlateTemperatures = plate_temperatures,

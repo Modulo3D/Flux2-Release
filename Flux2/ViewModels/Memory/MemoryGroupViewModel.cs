@@ -1,4 +1,5 @@
 ﻿using DynamicData;
+using DynamicData.Kernel;
 using DynamicData.PLinq;
 using Modulo3DNet;
 using ReactiveUI;
@@ -28,13 +29,16 @@ namespace Flux.ViewModels
                 innerList.Clear();
                 foreach (var var_base in group)
                 {
+                    var variable_store = flux.ConnectionProvider.VariableStoreBase;
+                    var attributes = variable_store.Attributes.Lookup(var_base.Name);
+
                     switch (var_base)
                     {
                         case IFLUX_Array array:
-                            innerList.AddOrUpdate(new MemoryArrayViewModel(Flux, array));
+                            innerList.AddOrUpdate(new MemoryArrayViewModel(Flux, array, attributes));
                             break;
                         case IFLUX_Variable variable:
-                            innerList.AddOrUpdate(new MemoryVariableViewModel(Flux, variable));
+                            innerList.AddOrUpdate(new MemoryVariableViewModel(Flux, variable, attributes));
                             break;
                     }
                 }

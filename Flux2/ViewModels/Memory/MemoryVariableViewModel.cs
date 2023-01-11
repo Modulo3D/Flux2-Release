@@ -2,7 +2,9 @@
 using Modulo3DNet;
 using ReactiveUI;
 using System;
+using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Reactive;
 using System.Threading.Tasks;
 
@@ -32,18 +34,50 @@ namespace Flux.ViewModels
         [RemoteCommand]
         public Optional<ReactiveCommand<Unit, Unit>> SetValueCommand { get; }
 
+        [RemoteCommand]
+        public Optional<ReactiveCommand<Unit, Unit>> SetPositionCommand { get; }
+
         private readonly ObservableAsPropertyHelper<Optional<object>> _Value;
         [RemoteOutput(true, typeof(MemoryConverter))]
         public Optional<object> Value => _Value.Value;
 
-        public MemoryVariableViewModel(FluxViewModel flux, IFLUX_Variable variable) : base($"{typeof(MemoryVariableViewModel).GetRemoteControlName()}??{variable.Name}{variable.Unit}")
+        public MemoryVariableViewModel(FluxViewModel flux, IFLUX_Variable variable, Optional<List<FLUX_VariableAttribute>> attributes) : base($"{typeof(MemoryVariableViewModel).GetRemoteControlName()}??{variable.Name}{variable.Unit}")
         {
             Flux = flux;
             Variable = variable;
             SetValueCommand = ReactiveCommand.CreateFromTask(SetValueAsync);
 
+            if (variable == flux.ConnectionProvider.VariableStoreBase.X_MAGAZINE_POS.Value.Variables.Items.FirstOrDefault())
+            {
+                int i = 0;
+            }
+
+            if(attributes.HasValue)
+            {
+                var position_attribute = attributes.Value.FirstOrOptional(a => a is FLUX_VariablePositionAttribute);
+                if(position_attribute.HasValue)
+                    SetPositionCommand = ReactiveCommand.CreateFromTask(() => SetPositionAsync((FLUX_VariablePositionAttribute)position_attribute.Value));
+            }
+
             _Value = Variable.IValueChanged
                 .ToProperty(this, v => v.Value);
+        }
+
+        private async Task SetPositionAsync(FLUX_VariablePositionAttribute position_attribute)
+        {
+            if (Variable is not IFLUX_Variable<double, double> @double)
+                return;
+
+            var axis_position = await Flux.ConnectionProvider.ReadVariableAsync(c => c.AXIS_POSITION);
+            if (!axis_position.HasValue)
+                return;
+
+            var variable_position = axis_position.Value.Axes.Dictionary.Lookup(position_attribute.Axis);
+            if(!variable_position.HasValue) 
+                return;
+
+            var position = double.Round(variable_position.Value, 2);
+            await @double.WriteAsync(position);
         }
 
         private async Task SetValueAsync()

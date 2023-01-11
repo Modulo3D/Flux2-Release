@@ -16,6 +16,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 
 namespace Flux.ViewModels
 {
@@ -176,7 +177,7 @@ namespace Flux.ViewModels
         }
         public override async Task<bool> InitializeVariablesAsync(CancellationToken ct)
         {
-            var missing_variables = await FindMissingVariables(ct);
+            var missing_variables = await FindMissingGlobalVariables(ct);
             if (!missing_variables.result)
                 return false;
 
@@ -201,7 +202,7 @@ namespace Flux.ViewModels
             }
 
             var written_file = await GetFileAsync(GlobalPath, "init_vars.g", ct);
-            var variables = VariableStore.Variables.Values
+            var global_variables = VariableStore.Variables.Values
                .SelectMany(v => v switch
                {
                    IFLUX_Array array => array.Variables.Items,
@@ -211,7 +212,7 @@ namespace Flux.ViewModels
                .Where(v => v is IRRF_VariableGlobalModel global)
                .Select(v => (IRRF_VariableGlobalModel)v);
 
-            var source_variables = new GCodeString(variables
+            var source_variables = new GCodeString(global_variables
                 .Select(v => GetExecuteMacroGCode(GlobalPath, v.LoadVariableMacro)));
 
             using var sha256 = SHA256.Create();
@@ -262,7 +263,7 @@ namespace Flux.ViewModels
                 return false;
             }
         }
-        private async Task<(bool result, List<IRRF_VariableGlobalModel> variables)> FindMissingVariables(CancellationToken ct)
+        private async Task<(bool result, List<IRRF_VariableGlobalModel> variables)> FindMissingGlobalVariables(CancellationToken ct)
         {
             var variables = VariableStore.Variables.Values
                 .SelectMany(v => v switch
@@ -271,8 +272,8 @@ namespace Flux.ViewModels
                     IFLUX_Variable variable => new[] { variable },
                     _ => throw new NotImplementedException()
                 })
-                .Where(v => v is IRRF_VariableGlobalModel global)
-                .Select(v => (IRRF_VariableGlobalModel)v);
+                .Where(v => v is IRRF_Variable global)
+                .Select(v => (IRRF_Variable)v);
 
             var files = await ListFilesAsync(GlobalPath, ct);
             if (!files.HasValue)
@@ -299,38 +300,33 @@ namespace Flux.ViewModels
         }
         public override InnerQueueGCodes GenerateInnerQueueGCodes(FluxJob job)
         {
-            var gcode = new RRF_GCodeGenerator(this);
+            //TODO 
 
-            var base_motor = VariableStore.ExtrudersUnits.Values.FirstOrOptional(_ => true);
+            /*var base_motor = VariableStore.ExtrudersUnits.Values.FirstOrOptional(_ => true);
             if (!base_motor.HasValue)
                 return default;
 
             var start = GCodeString.Create(
                 GetStartPartProgramGCode(StoragePath, $"{job.MCodeKey}", new BlockNumber(0, BlockType.None)));
 
-            var end = gcode.LogEvent(job, FluxEventType.End);
-
-            var cancel = gcode.LogEvent(job, FluxEventType.Cancel);
+            var end     = log_event(FluxEventType.End);
+            var cancel  = log_event(FluxEventType.Cancel);
 
             var begin = GCodeString.Create(
-                gcode.GetGlobalVariable(c => c.CUR_JOB, out var cur_job),
-                gcode.GetGlobalArray(c => c.EXTR_KEY, out var extr_key),
-                gcode.GetGlobalArray(c => c.EXTR_MM, out var extr_mm),
-
                 cur_job.Write($"{job.JobKey}"),
                 extr_mm.Foreach((var, i) => var.Write("0")),
                 extr_key.Foreach((v, i) => extrusion_key(i, k => v.Write($"{k}"))),
-                gcode.LogEvent(job, FluxEventType.Begin));
+                log_event(FluxEventType.Begin));
 
-            var resume = gcode.LogEvent(job, FluxEventType.Resume);
+            var resume = log_event(FluxEventType.Resume);
 
             var end_filament = GCodeString.Create(
-                gcode.LogEvent(job, FluxEventType.EndFilament),
-                gcode.RenameFile($"\"0:/{SystemPath}/resurrect.g\"", $"\"0:/{QueuePath}/{job.MCodeKey}.recovery\""));
+                log_event(FluxEventType.EndFilament),
+                rename_file($"\"0:/{SystemPath}/resurrect.g\"", $"\"0:/{QueuePath}/{job.MCodeKey}.recovery\""));
 
             var pause = GCodeString.Create(
-                gcode.LogEvent(job, FluxEventType.Pause),
-                gcode.RenameFile($"\"0:/{SystemPath}/resurrect.g\"", $"\"0:/{QueuePath}/{job.MCodeKey}.recovery\""));
+                log_event(FluxEventType.Pause),
+                rename_file($"\"0:/{SystemPath}/resurrect.g\"", $"\"0:/{QueuePath}/{job.MCodeKey}.recovery\""));
 
             var spin = GCodeString.Create(
                 gcode.DeclareLocalVariable<double>(0.0, out var extrusion_diff),
@@ -359,7 +355,9 @@ namespace Flux.ViewModels
                 Cancel = cancel,
                 Resume = resume,
                 EndFilament = end_filament,
-            };
+            };*/
+
+            return default;
 
             Optional<GCodeString> extrusion_key(int position, Func<ExtrusionKey, GCodeString> func)
             {
@@ -367,6 +365,18 @@ namespace Flux.ViewModels
                     .Convert(f => f.SelectedMaterial)
                     .Convert(m => m.ExtrusionKey)
                     .Convert(k => func(k));
+            }
+
+            GCodeString log_event(FluxEventType event_type)
+            {
+                if (job.QueuePosition < 0)
+                    return default;
+                return $"echo >>\"0:/{CombinePaths(JobEventPath, $"{job.MCodeKey};{job.JobKey}")}\" {$"\"{event_type.ToEnumString()};\"^{{state.time}}"}";
+            }
+
+            GCodeString rename_file(string old_path, string new_path)
+            {
+                return $"M471 S{old_path} T{new_path} D1";
             }
         }
 
@@ -801,11 +811,15 @@ namespace Flux.ViewModels
         {
             return $"T{position.GetArrayBaseIndex()}";
         }
-        public override GCodeString GetMovementGCodeInner(FLUX_AxisMove axis_move)
+        public override GCodeString GetMovementGCode(FLUX_AxisMove axis_move, FLUX_AxisTransform transform)
         {
+            var inverse_transform_move = transform.InverseTransformMove(axis_move);
+            if (!inverse_transform_move.HasValue)
+                return default;
+
             return GCodeString.Create(
                 axis_move.Relative ? new[] { "M120", "G91" } : default,
-                $"G1 {axis_move.GetAxisPosition()} {axis_move.GetFeedrate('F')}",
+                $"G1 {inverse_transform_move.Value.GetAxisPosition()} {axis_move.GetFeedrate('F')}",
                 axis_move.Relative ? new[] { "G90", "M121" } : default);
         }
         public override GCodeString GetCancelLoadFilamentGCode(ArrayIndex position)
@@ -824,9 +838,13 @@ namespace Flux.ViewModels
                 "T-1"
             };
         }
-        public override GCodeString GetResetPositionGCodeInner(FLUX_AxisMove axis_move)
+        public override GCodeString GetResetPositionGCode(FLUX_AxisPosition axis_position, FLUX_AxisTransform transform)
         {
-            return $"G92 {axis_move.GetAxisPosition()}";
+            var inverse_transform_position = transform.InverseTransformPosition(axis_position, false);
+            if (!inverse_transform_position.HasValue)
+                return default;
+
+            return $"G92 {inverse_transform_position.Value.GetAxisPosition()}";
         }
         public override GCodeString GetExecuteMacroGCode(string folder, string filename)
         {

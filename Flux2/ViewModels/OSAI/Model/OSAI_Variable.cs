@@ -17,28 +17,41 @@ namespace Flux.ViewModels
         ULTRALOW,
         ULTRAHIGH,
     }
-    public interface IOSAI_AddressVariable
+
+    public interface IOSAI_Variable : IFLUX_Variable
+    {
+        Optional<string> Alias { get; }
+    }
+    public interface IOSAI_Variable<TRData, TWData> : IOSAI_Variable, IFLUX_Variable<TRData, TWData>
+    {
+    }
+    public interface IOSAI_AddressVariable : IOSAI_Variable
     {
         IOSAI_Address Address { get; }
+    }
+    public interface IOSAI_AddressVariable<TRData, TWData> : IOSAI_AddressVariable, IOSAI_Variable<TRData, TWData>
+    {
     }
     public interface IOSAI_ObservableVariable : IOSAI_AddressVariable
     {
     }
-    public interface IOSAI_AsyncVariable : IFLUX_AsyncVariable
+    public interface IOSAI_ObservableVariable<TRData, TWData> : IOSAI_ObservableVariable, IOSAI_AddressVariable<TRData, TWData>
+    {
+    }
+    public interface IOSAI_AsyncVariable : IOSAI_Variable, IFLUX_AsyncVariable
     {
         OSAI_ReadPriority Priority { get; }
     }
+    public interface IOSAI_AsyncVariable<TRData, TWData> : IOSAI_AsyncVariable, IFLUX_AsyncVariable<TRData, TWData>
+    {
+    }
 
-    public interface IOSAI_ObservableVariable<TRData, TWData> : IOSAI_ObservableVariable
-    {
-    }
-    public interface IOSAI_AsyncVariable<TRData, TWData> : IOSAI_AsyncVariable
-    {
-    }
 
     public class OSAI_AsyncVariable<TRData, TWData> : FLUX_AsyncVariable<OSAI_ConnectionProvider, TRData, TWData>, IOSAI_AsyncVariable<TRData, TWData>
     {
+        public Optional<string> Alias { get; }
         public OSAI_ReadPriority Priority { get; }
+
         public OSAI_AsyncVariable(
             OSAI_ConnectionProvider connection_provider,
             string name,
@@ -52,6 +65,7 @@ namespace Flux.ViewModels
     }
     public class OSAI_ObservableVariable<TRData, TWData> : FLUX_ObservableVariable<OSAI_ConnectionProvider, TRData, TWData>, IOSAI_ObservableVariable<TRData, TWData>
     {
+        public Optional<string> Alias { get; }
         public IOSAI_Address Address { get; }
         public override string Group { get; }
         public OSAI_ObservableVariable(

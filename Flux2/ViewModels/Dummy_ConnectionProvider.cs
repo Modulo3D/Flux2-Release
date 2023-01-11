@@ -3,6 +3,7 @@ using Modulo3DNet;
 using System;
 using System.IO;
 using System.Linq.Expressions;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -35,6 +36,11 @@ namespace Flux.ViewModels
         {
             throw new NotImplementedException();
         }
+
+        protected override (GCodeString start_compare, GCodeString end_compare) CompareQueuePosGCode(int queue_pos)
+        {
+            throw new NotImplementedException();
+        }
     }
 
     public class Dummy_Array<TRData, TWData> : FLUX_Array<TRData, TWData>
@@ -64,7 +70,6 @@ namespace Flux.ViewModels
     public class Dummy_VariableStore : FLUX_VariableStore<Dummy_VariableStore, Dummy_ConnectionProvider>
     {
         public override bool HasPrintUnloader => throw new NotImplementedException();
-        public override FLUX_AxisMoveTransform MoveTransform => throw new NotImplementedException();
         public Dummy_VariableStore(Dummy_ConnectionProvider connection_provider) : base(connection_provider)
         {
             CreateDummy(s => s.AXIS_ENDSTOP);
@@ -95,6 +100,8 @@ namespace Flux.ViewModels
         public override bool ParkToolAfterOperation => throw new NotImplementedException();
 
         public override char FeederAxis => throw new NotImplementedException();
+
+        public override FLUX_AxisTransform MoveTransform => throw new NotImplementedException();
 
         private void CreateDummy<TRData, TWData>(Expression<Func<Dummy_VariableStore, IFLUX_Array<TRData, TWData>>> array_expression)
         {
@@ -323,22 +330,22 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override GCodeString GetMovementGCodeInner(FLUX_AxisMove axis_move)
-        {
-            throw new NotImplementedException();
-        }
-
-        public override GCodeString GetResetPositionGCodeInner(FLUX_AxisMove axis_move)
-        {
-            throw new NotImplementedException();
-        }
-
         public override Task<bool> InitializeVariablesAsync(CancellationToken ct)
         {
             throw new NotImplementedException();
         }
 
         public override InnerQueueGCodes GenerateInnerQueueGCodes(FluxJob job)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override GCodeString GetMovementGCode(FLUX_AxisMove axis_move, FLUX_AxisTransform transform)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override GCodeString GetResetPositionGCode(FLUX_AxisPosition axis_position, FLUX_AxisTransform transform)
         {
             throw new NotImplementedException();
         }

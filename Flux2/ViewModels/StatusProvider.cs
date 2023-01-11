@@ -824,10 +824,16 @@ namespace Flux.ViewModels
 
             var progress = Flux.ConnectionProvider
                 .ObserveVariable(c => c.PROGRESS)
+                .ValueOrDefault()
+                .DistinctUntilChanged();
+
+            var storage = Flux.ConnectionProvider
+                .ObserveVariable(c => c.STORAGE)
                 .DistinctUntilChanged();
 
             _PrintProgress = Observable.CombineLatest(
                 this.WhenAnyValue(v => v.PrintingEvaluation),
+                storage,
                 progress,
                 GetPrintProgress)
                 .DistinctUntilChanged()
@@ -977,7 +983,7 @@ namespace Flux.ViewModels
         }
 
         // Progress and extrusion
-        private PrintProgress GetPrintProgress(PrintingEvaluation evaluation, Optional<MCodeProgress> progress)
+        private PrintProgress GetPrintProgress(PrintingEvaluation evaluation, Optional<MCodeStorage> storage, MCodeProgress progress)
         {
             var current_mcode = evaluation.MCode;
             if (!current_mcode.HasValue)
@@ -985,30 +991,23 @@ namespace Flux.ViewModels
 
             var duration = current_mcode.Value.Duration;
 
-            var current_job = evaluation.FluxJob;
-            if (!current_job.HasValue)
-                return new PrintProgress(0, duration);
-
             if (evaluation.Recovery.HasValue)
-                progress = new MCodeProgress(current_job.Value.MCodeKey, evaluation.Recovery.Value.BlockNumber);
+                progress = new MCodeProgress(evaluation.Recovery.Value);
 
-            if (!progress.HasValue)
+            if (progress == default)
                 return new PrintProgress(0, duration);
 
-            var percentage = progress.Value.GetPercentage(current_mcode.Value.BlockCount).ValueOr(() => 0);
-            var remaining_ticks = ((double)duration.Ticks / 100) * (100 - percentage);
-            var print_progress = new PrintProgress(percentage, new TimeSpan((long)remaining_ticks));
+            if (!storage.HasValue)
+                return new PrintProgress(0, duration);
 
-            if (progress.Value.MCodeKey != current_job.Value.MCodeKey)
-            {
-                if (PrintProgress.Percentage == 0)
-                    return print_progress;
-
+            var percentage = progress.GetPercentage(evaluation, storage.Value);
+            if (!percentage.HasValue)
                 return PrintProgress;
-            }
 
-            return print_progress;
+            var remaining_ticks = ((double)duration.Ticks / 100) * (100 - percentage.Value);
+            return new PrintProgress(percentage.Value, new TimeSpan((long)remaining_ticks));
         }
+
         private IEnumerable<FeederEvaluator> CreateFeederEvaluator(IQuery<IFluxFeederViewModel, ushort> query)
         {
             foreach (var feeder in query.Items)

@@ -2,11 +2,13 @@
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace Flux.ViewModels
 {
-    public class OSAI_GCodeLocalVariable<T> : FLUX_GCodeLocalVariable<T>
+    /*public class OSAI_GCodeLocalVariable<T> : FLUX_GCodeLocalVariable<T>
     {
         public override GCodeString Read => Name;
         public override Func<string, GCodeString> Write => v => $"{Name} = {(typeof(T) == typeof(string) && !$"{v}".Contains('"') ? $"\"{v}\"" : $"{v}")}";
@@ -25,6 +27,39 @@ namespace Flux.ViewModels
             return new OSAI_GCodeLocalVariable<T>(variable_name);
         }
     }
+    public interface IOSAI_GCodeGlobalVariable : IFLUX_GCodeGlobalVariable
+    {
+    }
+    public interface IOSAI_GCodeGlobalVariable<TData> : IOSAI_GCodeGlobalVariable, IFLUX_GCodeGlobalVariable<TData>
+    {
+    }
+    public class OSAI_GCodeGlobalVariable<TData> : FLUX_GCodeGlobalVariable<IOSAI_Variable<TData, TData>, TData>, IOSAI_GCodeGlobalVariable<TData>
+    {
+        public OSAI_GCodeGlobalVariable(IOSAI_Variable<TData, TData> variable) : base(variable)
+        { 
+        }
+
+        public override GCodeString Read => Variable.Alias;
+        public override Func<string, GCodeString> Write => v => $"{Variable.Alias} = {v}";
+    }
+    public interface IOSAI_GCodeGlobalArray : IFLUX_GCodeGlobalArray
+    {
+    }
+    public interface IOSAI_GCodeGlobalArray<TData> : IOSAI_GCodeGlobalArray, IFLUX_GCodeGlobalArray<TData>
+    {
+    }
+    public class OSAI_GCodeGlobalArray<TData> : FLUX_GCodeGlobalArray<IOSAI_Array<TData, TData>, IOSAI_Variable<TData, TData>, TData>, IOSAI_GCodeGlobalArray<TData>
+    {
+        public OSAI_GCodeGlobalArray(IOSAI_Array<TData, TData> array) : base(array)
+        {
+        }
+
+        protected override IFLUX_GCodeGlobalVariable<TData> CreateVariable(IOSAI_Variable<TData, TData> variable)
+        {
+            return new OSAI_GCodeGlobalVariable<TData>(variable);
+        }
+    }
+
     public class OSAI_GCodeGenerator : FLUX_GCodeGenerator<OSAI_Connection>
     {
         public OSAI_GCodeGenerator(OSAI_Connection connection) : base(connection)
@@ -139,116 +174,6 @@ namespace Flux.ViewModels
             gcode_array = new OSAI_GCodeLocalArray<T>(variable_names);
             return gcode_array.Foreach((v, i) => v.Declare(value));
         }
-      
-        /*public GCodeString DeclareGlobalVariable<T>(OSAI_VARCODE varcode, Union<uint, (uint index, uint lenght)> address, IOSAI_AddressVariable address_variable, out GCodeVariable<T> gcode_variable)
-        {
-            var variable_name = (varcode, address.Item) switch
-            {
-                (OSAI_VARCODE.E_CODE, uint index) => $"E{index}",
-                (OSAI_VARCODE.LS_CODE, uint index) => $"LS{address}",
-                (OSAI_VARCODE.SC_CODE, (uint index, uint lenght)) => $"SC{address}.{lenght}",
-                _ => default
-            };
-
-            if (string.IsNullOrEmpty(variable_name))
-                throw new ArgumentException();
-
-            var update = address_variable.Address switch
-            {
-                OSAI_IndexAddress index_address => index_address.VarCode switch
-                {
-                    OSAI_VARCODE.GD_CODE => $"M4000[0, {index_address.Index}, 0, {address}]",
-                    OSAI_VARCODE.MW_CODE => $"M4000[1, {index_address.Index}, 0, {address}]",
-                    OSAI_VARCODE.MD_CODE => $"M4000[3, {index_address.Index}, 0, {address}]",
-                    OSAI_VARCODE.GW_CODE => $"M4000[4, {index_address.Index}, 0, {address}]",
-                    OSAI_VARCODE.L_CODE => $"M4000[6, {index_address.Index}, 0, {address}]",
-                    OSAI_VARCODE.AA_CODE => $"M4000[7, {index_address.Index}, 0, {address}]",
-                    _ => default
-                },
-                OSAI_BitIndexAddress bit_index_address => bit_index_address.VarCode switch
-                {
-                    OSAI_VARCODE.MW_CODE => $"M4000[2, {bit_index_address.Index}, {bit_index_address.BitIndex}, {address}]",
-                    OSAI_VARCODE.GW_CODE => $"M4000[5, {bit_index_address.Index}, {bit_index_address.BitIndex}, {address}]",
-                    _ => default
-                },
-                OSAI_NamedAddress named_address => $"{variable_name} = {named_address.Name}({named_address.Index})",
-                _ => default
-            };
-
-            if (string.IsNullOrEmpty(update))
-                throw new ArgumentException();
-
-            GCodeString write(string v)
-            {
-                var write = address_variable.Address switch
-                {
-                    OSAI_IndexAddress index_address => index_address.VarCode switch
-                    {
-                        OSAI_VARCODE.GD_CODE => $"M4001[0, {address_variable.Address.Index}, 0, {address}]",
-                        OSAI_VARCODE.MW_CODE => $"M4001[1, {address_variable.Address.Index}, 0, {address}]",
-                        OSAI_VARCODE.MD_CODE => $"M4001[3, {address_variable.Address.Index}, 0, {address}]",
-                        OSAI_VARCODE.GW_CODE => $"M4001[4, {address_variable.Address.Index}, 0, {address}]",
-                        OSAI_VARCODE.L_CODE => $"M4001[6, {address_variable.Address.Index}, 0, {address}]",
-                        OSAI_VARCODE.AA_CODE => $"M4001[7, {address_variable.Address.Index}, 0, {address}]",
-                        _ => default
-                    },
-                    OSAI_BitIndexAddress bit_index_address => bit_index_address.VarCode switch
-                    {
-                        OSAI_VARCODE.MW_CODE => $"M4000[2, {bit_index_address.Index}, {bit_index_address.BitIndex}, {address}]",
-                        OSAI_VARCODE.GW_CODE => $"M4000[5, {bit_index_address.Index}, {bit_index_address.BitIndex}, {address}]",
-                        _ => default
-                    },
-                    OSAI_NamedAddress named_address => $"{variable_name} = {named_address.Name}({named_address.Index})",
-                    _ => default
-
-                };
-
-                if (string.IsNullOrEmpty(write))
-                    throw new ArgumentException();
-
-                return GCodeString.Create($"{variable_name} = {(typeof(T) == typeof(string) && !$"{v}".Contains('"') ? $"\"{v}\"" : $"{v}")}", write);
-            }
-
-            gcode_variable = new GCodeVariable<T>()
-            {
-                Declare = default,
-                Write = write,
-                Update = update,
-                Name = variable_name,
-                Read = variable_name,
-            };
-
-            return gcode_variable.Declare;
-        }
-        public GCodeString DeclareGlobalVariable<TRData, TWData>(OSAI_VARCODE varcode, Union<uint, (uint index, uint lenght)> address, Func<OSAI_VariableStore, IFLUX_Variable<TRData, TWData>> get_variable, out GCodeVariable<TRData> gcode_variable)
-        {
-            var variable = Connection.GetVariable(get_variable);
-            if (variable is not IOSAI_AddressVariable address_variable)
-                throw new ArgumentException();
-            return DeclareGlobalVariable(varcode, address, address_variable, out gcode_variable);
-        }
-        public GCodeString DeclareGlobalArray(uint address, Func<OSAI_VariableStore, IFLUX_Array<double, double>> get_variable, out GCodeArray<double> gcode_variable)
-        {
-            return DeclareGlobalArray(OSAI_VARCODE.E_CODE, address, get_variable, out gcode_variable);
-        }
-        public GCodeString DeclareGlobalArray<TRData, TWData>(OSAI_VARCODE varcode, uint address, Func<OSAI_VariableStore, IFLUX_Array<TRData, TWData>> get_array, out GCodeArray<TRData> gcode_array)
-        {
-            var array = Connection.GetArray(get_array);
-
-            gcode_array = new GCodeArray<TRData>()
-            {
-                Variables = array.Variables.Items.Select((variable, i) =>
-                {
-                    if (variable is not IOSAI_AddressVariable address_variable)
-                        throw new ArgumentException();
-                    DeclareGlobalVariable<TRData>(varcode, (uint)(address + i), address_variable, out var gcode_variable);
-                    return gcode_variable;
-                }).ToArray()
-            };
-
-            return gcode_array.Foreach((v, i) => v.Declare);
-        }
-        */
 
         // MACRO
         public override GCodeString ExecuteParamacro(IFLUX_GCodeVariable<string> path)
@@ -277,7 +202,7 @@ namespace Flux.ViewModels
             DeclareLocalVariable(address, "", out str_variable);
             return $"(N2S, \"%d\", {variable}, {str_variable})";
         }
-        public GCodeString AppendString(IFLUX_GCodeVariable<string> var, params Union<GCodeString, IFLUX_GCodeVariable<string>>[] strings)
+        public static GCodeString AppendString(IFLUX_GCodeVariable<string> var, params Union<GCodeString, IFLUX_GCodeVariable<string>>[] strings)
         {
             return new GCodeString(append_string());
 
@@ -295,13 +220,16 @@ namespace Flux.ViewModels
             }
         }
 
-        public override GCodeString GetGlobalArray<TRData, TWData>(Func<IFLUX_VariableStore, IFLUX_Array<TRData, TWData>> get_array, out IFLUX_GCodeGlobalArray<TRData, TWData> array)
+        public override GCodeString GetGlobalArray<TData>(Func<IFLUX_VariableStore, IFLUX_Array<TData, TData>> get_array, out IFLUX_GCodeGlobalArray<TData> array)
         {
-            throw new NotImplementedException();
+            array = new OSAI_GCodeGlobalArray<TData>((IOSAI_Array<TData, TData>)get_array(Connection.VariableStore));
+            return default;
         }
-        public override GCodeString GetGlobalVariable<TRData, TWData>(Func<IFLUX_VariableStore, IFLUX_Variable<TRData, TWData>> get_var, out IFLUX_GCodeGlobalVariable<TRData, TWData> variable)
+
+        public override GCodeString GetGlobalVariable<TData>(Func<IFLUX_VariableStore, IFLUX_Variable<TData, TData>> get_var, out IFLUX_GCodeGlobalVariable<TData> variable)
         {
-            throw new NotImplementedException();
+            variable = new OSAI_GCodeGlobalVariable<TData>((IOSAI_Variable<TData, TData>)get_var(Connection.VariableStore));
+            return default;
         }
-    }
+    }*/
 }

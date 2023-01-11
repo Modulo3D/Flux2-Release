@@ -5,6 +5,7 @@ using Newtonsoft.Json.Linq;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.IO;
 using System.Text;
 
@@ -1225,7 +1226,14 @@ namespace Flux.ViewModels
 
     public static class RRF_DataUtils
     {
-        public static Optional<MCodeProgress> GetParamacroProgress(this RRF_ObjectModelJob job)
+        public static Optional<FLUX_AxisPosition> GetAxisPosition(this List<RRF_ObjectModelAxis> axis)
+        {
+            return (FLUX_AxisPosition)axis.ToImmutableDictionary(
+                p => p.Letter.ConvertOr(l => l[0], () => ' '),
+                p => p.MachinePosition.ValueOr(() => 0.0));
+        }
+
+        public static MCodeProgress GetParamacroProgress(this RRF_ObjectModelJob job)
         {
             try
             {
@@ -1237,16 +1245,16 @@ namespace Flux.ViewModels
                 if (!file_name.HasValue)
                     return default;
 
-                var filename = Path.GetFileNameWithoutExtension(file_name.Value);
-                if (!MCodeKey.TryParse(filename, out var mcode_key))
-                    return default;
-
                 var file_size = file.Value.Size;
                 if (!file_size.HasValue)
                     return default;
                 
                 var file_position = job.FilePosition;
                 if (!file_position.HasValue)
+                    return default;
+
+                var filename = Path.GetFileNameWithoutExtension(file_name.Value);
+                if (!MCodeKey.TryParse(filename, out var mcode_key))
                     return default;
 
                 var percentage = (double)file_position.Value / file_size.Value * 100.0;

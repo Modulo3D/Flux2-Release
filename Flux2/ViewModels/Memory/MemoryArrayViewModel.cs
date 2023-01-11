@@ -1,7 +1,9 @@
 ﻿using DynamicData;
+using DynamicData.Kernel;
 using Modulo3DNet;
 using ReactiveUI;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Linq;
@@ -50,11 +52,11 @@ namespace Flux.ViewModels
         [RemoteOutput(false)]
         public override string VariableName => Array.Name;
 
-        public MemoryArrayViewModel(FluxViewModel flux, IFLUX_Array plc_array) : base(flux, plc_array.Name)
+        public MemoryArrayViewModel(FluxViewModel flux, IFLUX_Array plc_array, Optional<List<FLUX_VariableAttribute>> attributes) : base(flux, plc_array.Name)
         {
             Array = plc_array;
             Variables = Array.Variables.Connect()
-                .Transform(v => new MemoryVariableViewModel(Flux, v))
+                .Transform(v => new MemoryVariableViewModel(Flux, v, attributes))
                 .Filter(this.WhenAnyValue(v => v.IsToggled).Select(t =>
                 {
                     bool filter(MemoryVariableViewModel v) => t;

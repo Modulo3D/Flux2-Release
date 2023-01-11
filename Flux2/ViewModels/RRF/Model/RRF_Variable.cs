@@ -9,7 +9,23 @@ using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
-    public class RRF_VariableObjectModel<TModel, TRData, TWData> : FLUX_ObservableVariable<RRF_ConnectionProvider, TRData, TWData>
+    public interface IRRF_Variable : IFLUX_Variable
+    {
+    }
+    public interface IRRF_Variable<TRData, TWData> : IRRF_Variable, IFLUX_Variable<TRData, TWData>
+    {
+    }
+    public interface IRRF_VariableGlobalModel : IRRF_Variable
+    {
+        bool Stored { get; }
+        string Variable { get; }
+        string LoadVariableMacro { get; }
+        Task<bool> CreateVariableAsync(CancellationToken ct);
+    }
+    public interface IRRF_VariableGlobalModel<TRData, TWData> : IRRF_VariableGlobalModel, IRRF_Variable<TRData, TWData>
+    {
+    }
+    public class RRF_VariableObjectModel<TModel, TRData, TWData> : FLUX_ObservableVariable<RRF_ConnectionProvider, TRData, TWData>, IRRF_Variable<TRData, TWData>
     {
         public override string Group => "ObjectModel";
 
@@ -83,16 +99,7 @@ namespace Flux.ViewModels
             return await get_data(model.Value);
         }
     }
-
-    public interface IRRF_VariableGlobalModel : IFLUX_Variable
-    {
-        bool Stored { get; }
-        string Variable { get; }
-        string LoadVariableMacro { get; }
-        Task<bool> CreateVariableAsync(CancellationToken ct);
-    }
-
-    public class RRF_VariableGlobalModel<TData> : FLUX_ObservableVariable<RRF_ConnectionProvider, TData, TData>, IRRF_VariableGlobalModel
+    public class RRF_VariableGlobalModel<TData> : FLUX_ObservableVariable<RRF_ConnectionProvider, TData, TData>, IRRF_VariableGlobalModel<TData, TData>
     {
         public bool Stored { get; }
         public string Variable { get; }
