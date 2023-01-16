@@ -110,7 +110,7 @@ namespace Flux.ViewModels
                 Flux.Messages.LogException(this, ex);
             }
         }
-        public override Optional<FluxJobRecovery> GetFluxJobRecoveryFromSource(MCodeKey mcode, string source)
+        public override Optional<FluxJobRecovery> GetFluxJobRecoveryFromSource(FluxJob current_job, string source)
         {
             try
             {
@@ -192,7 +192,7 @@ namespace Flux.ViewModels
 
                 return new FluxJobRecovery()
                 {
-                    MCodeKey = mcode,
+                    FluxJob = current_job,
                     Feedrate = feedrate.Value,
                     ToolIndex = tool_index.Value,
                     AxisPosition = axis_position,

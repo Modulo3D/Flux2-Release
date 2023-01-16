@@ -200,7 +200,7 @@ namespace Flux.ViewModels
             var cur_weight = cur_weight_option.Value;
 
             var tag = new NFCMaterial(material.Value, max_weight, cur_weight, last_printer_guid, last_loaded);
-            return new NFCReading<NFCMaterial>(tag, virtual_card_id);
+            return new NFCReading<NFCMaterial>(virtual_card_id, tag);
         }
 
         private async Task<ValueResult<Tool>> FindNewToolAsync(ushort position, Optional<NFCToolNozzle> last_tag)
@@ -309,7 +309,7 @@ namespace Flux.ViewModels
             var last_printer_guid = last_tag.ConvertOr(t => t.PrinterGuid, () => Guid.Empty);
 
             var tag = new NFCToolNozzle(tool.Value, nozzle.nozzle, nozzle.max_weight, nozzle.cur_weight, last_printer_guid, last_loaded, last_break_temp);
-            return new NFCReading<NFCToolNozzle>(tag, virtual_card_id);
+            return new NFCReading<NFCToolNozzle>(virtual_card_id, tag);
         }
 
         IObservable<IChangeSet<NFCSlot<NFCMaterial>, ushort>> INFCStorageProvider<NFCMaterial>.GetNFCSlots() => ToolMaterials.Connect().Transform(m => m.NFCSlot);

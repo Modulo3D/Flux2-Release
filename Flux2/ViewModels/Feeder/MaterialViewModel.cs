@@ -146,17 +146,19 @@ namespace Flux.ViewModels
             });
         }
 
-        public bool SetMaterialLoaded(Optional<bool> material_loaded)
+        public NFCTagRW SetMaterialLoaded(Optional<bool> material_loaded)
         {
+            var core_setting = Flux.SettingsProvider.CoreSettings.Local;
+
             if (!material_loaded.HasValue)
                 return default;
             if (!NFCSlot.Nfc.Tag.HasValue)
                 return default;
 
             if (material_loaded.Value)
-                return NFCSlot.StoreTag(t => t.SetLoaded(Feeder.Position));
+                return NFCSlot.StoreTag(t => t.SetLoaded(core_setting.PrinterGuid, Feeder.Position));
             else
-                return NFCSlot.StoreTag(t => t.SetLoaded(default));
+                return NFCSlot.StoreTag(t => t.SetLoaded(core_setting.PrinterGuid, default));
         }
         public override void Initialize()
         {
@@ -218,62 +220,81 @@ namespace Flux.ViewModels
             LoadPurgeMaterialCommand = ReactiveCommand.CreateFromTask(LoadPurgeAsync, material.Select(m => m.can_load || m.can_purge))
                 .DisposeWith(Disposables);
 
-            Observable.CombineLatest(
-                NFCSlot.WhenAnyValue(m => m.Nfc),
-                this.WhenAnyValue(v => v.FilamentPresenceBeforeGear),
-                (nfc, material_inserted) => (nfc, material_inserted))
-                .SubscribeOn(RxApp.MainThreadScheduler)
-                .Subscribe(t =>
-                {
-                    if (!t.material_inserted.HasValue)
-                        return;
-                    if (t.material_inserted.Value)
-                        return;
-
-                    NFCSlot.StoreTag(t => t.SetInserted(default));
-                    NFCSlot.StoreTag(t => t.SetLoaded(default));
-                });
-
-            Observable.CombineLatest(
-                NFCSlot.WhenAnyValue(m => m.Nfc),
-                this.WhenAnyValue(v => v.FilamentPresenceAfterGear),
-                (nfc, material_preloaded) => (nfc, material_preloaded))
-                .SubscribeOn(RxApp.MainThreadScheduler)
-                .Subscribe(t =>
-                {
-                    if (!t.material_preloaded.HasValue)
-                        return;
-                    if (!t.material_preloaded.Value)
-                        return;
-                    NFCSlot.StoreTag(t => t.SetInserted(Feeder.Position));
-                });
-
-
             var other_filament_after_gear = Feeder.Materials.Connect()
                 .Filter(m => m.Position != Position)
                 .TrueForAny(m => m.WhenAnyValue(m => m.FilamentPresenceAfterGear), f => f.ValueOr(() => false))
                 .StartWith(false);
 
+            // extract filament if before gear is open
+            Observable.CombineLatest(
+                NFCSlot.WhenAnyValue(m => m.Nfc),
+                this.WhenAnyValue(v => v.FilamentPresenceBeforeGear),
+                (nfc, before_gear) => (nfc, before_gear))
+                .SubscribeOn(RxApp.MainThreadScheduler)
+                .Subscribe(t =>
+                {
+                    var core_setting = Flux.SettingsProvider.CoreSettings.Local;
+                    if (!t.before_gear.HasValue)
+                        return;
+                    if (t.before_gear.Value)
+                        return;
+                    NFCSlot.StoreTag(t => t.SetInserted(core_setting.PrinterGuid, default));
+                });
+
+            // insert filament if it's the only one after gear and on after gear is closed
             Observable.CombineLatest(
                 other_filament_after_gear,
                 NFCSlot.WhenAnyValue(m => m.Nfc),
                 this.WhenAnyValue(v => v.FilamentPresenceAfterGear),
-                this.WhenAnyValue(v => v.FilamentPresenceOnHead),
-                (other_loaded, nfc, material_preloaded, material_loaded) => (other_loaded, nfc, material_preloaded, material_loaded))
+                (other_after_gear, nfc, after_gear) => (other_after_gear, nfc, after_gear))
                 .SubscribeOn(RxApp.MainThreadScheduler)
                 .Subscribe(t =>
                 {
-                    if (t.other_loaded)
+                    if (t.other_after_gear)
                         return;
-                    if (!t.material_preloaded.HasValue)
+                    if (!t.after_gear.HasValue)
                         return;
-                    if (!t.material_loaded.HasValue)
+                    if (!t.after_gear.Value)
                         return;
-                    if (!t.material_preloaded.Value)
+
+                    var core_setting = Flux.SettingsProvider.CoreSettings.Local;
+                    NFCSlot.StoreTag(t => t.SetInserted(core_setting.PrinterGuid, Feeder.Position));
+                });
+
+            // unload filament if on head is open
+            Observable.CombineLatest(
+               NFCSlot.WhenAnyValue(m => m.Nfc),
+               this.WhenAnyValue(v => v.FilamentPresenceOnHead),
+               (nfc, on_head) => (nfc, on_head))
+               .SubscribeOn(RxApp.MainThreadScheduler)
+               .Subscribe(t =>
+               {
+                   var core_setting = Flux.SettingsProvider.CoreSettings.Local;
+                   if (!t.on_head.HasValue)
+                       return;
+                   if (t.on_head.Value)
+                       return;
+                   NFCSlot.StoreTag(t => t.SetLoaded(core_setting.PrinterGuid, default));
+               });
+
+            // load filament if it's the only one after gear and on head is closed
+            Observable.CombineLatest(
+                other_filament_after_gear,
+                NFCSlot.WhenAnyValue(m => m.Nfc),
+                this.WhenAnyValue(v => v.FilamentPresenceOnHead),
+                (other_after_gear, nfc, on_head) => (other_after_gear, nfc, on_head))
+                .SubscribeOn(RxApp.MainThreadScheduler)
+                .Subscribe(t =>
+                {
+                    if (t.other_after_gear)
                         return;
-                    if (!t.material_loaded.Value)
+                    if (!t.on_head.HasValue)
                         return;
-                    NFCSlot.StoreTag(t => t.SetLoaded(Feeder.Position));
+                    if (!t.on_head.Value)
+                        return;
+
+                    var core_setting = Flux.SettingsProvider.CoreSettings.Local;
+                    NFCSlot.StoreTag(t => t.SetLoaded(core_setting.PrinterGuid, Feeder.Position));
                 })
                 .DisposeWith(Disposables);
         }

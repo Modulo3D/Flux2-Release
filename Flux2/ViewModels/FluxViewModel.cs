@@ -493,12 +493,16 @@ namespace Flux.ViewModels
                 return dialog;
             });
         }
-        public async Task<bool> ShowNFCDialog(Optional<INFCHandle> handle, Func<Optional<INFCHandle>, Task<bool>> func)
+
+        public async Task<ValueResult<(TResult, NFCTagRW)>> ShowNFCDialog<TResult>(INFCHandle handle, Func<INFCHandle, INFCRWViewModel, Task<(TResult, NFCTagRW)>> func, Func<TResult, NFCTagRW, bool> success, int millisecond_delay = 200)
         {
             var reading = true;
 
             using var dialog = new ContentDialog(this, "Lettura tag in corso...",
                 can_cancel: Observable.Return(true).ToOptional());
+            
+            var card_info = new NFCRWViewModel();
+            dialog.AddContent(card_info);
 
             var dialog_result = Task.Run(async () =>
             {
@@ -509,48 +513,284 @@ namespace Flux.ViewModels
 
             var reading_result = Task.Run(async () =>
             {
-                bool success = false;
+                (TResult data, NFCTagRW rw) result = (default, NFCTagRW.None);
                 do
                 {
-                    success = await func(handle);
-                    if (!success)
-                        await Task.Delay(1000);
+                    result = await func(handle, card_info);
+                    if (!success(result.data, result.rw))
+                        await Task.Delay(millisecond_delay);
                 }
-                while (!success && reading);
+                while (!success(result.data, result.rw) && reading);
 
                 dialog.ShowAsyncSource.TrySetResult(ContentDialogResult.None);
-                return success;
+                return result;
             });
 
-            var result = await Task.WhenAll(dialog_result, reading_result);
-            return result[1];
+            await Task.WhenAll(dialog_result, reading_result);
+            return await reading_result;
+        }
+        public async Task<ValueResult<(TResult, NFCTagRW)>> ShowNFCDialog<TResult>(INFCHandle handle, Func<INFCHandle, INFCRWViewModel, (TResult, NFCTagRW)> func, Func<TResult, NFCTagRW, bool> success, int millisecond_delay = 200)
+        {
+            var reading = true;
+
+            using var dialog = new ContentDialog(this, "Lettura tag in corso...",
+                can_cancel: Observable.Return(true).ToOptional());
+
+            var card_info = new NFCRWViewModel();
+            dialog.AddContent(card_info);
+
+            var dialog_result = Task.Run(async () =>
+            {
+                var result = await dialog.ShowAsync();
+                reading = false;
+                return result == ContentDialogResult.Primary;
+            });
+
+            var reading_result = Task.Run(async () =>
+            {
+                (TResult data, NFCTagRW rw) result = (default, NFCTagRW.None);
+                do
+                {
+                    result = func(handle, card_info);
+                    if (!success(result.data, result.rw))
+                        await Task.Delay(millisecond_delay);
+                }
+                while (!success(result.data, result.rw) && reading);
+
+                dialog.ShowAsyncSource.TrySetResult(ContentDialogResult.None);
+                return result;
+            });
+
+            await Task.WhenAll(dialog_result, reading_result);
+            return await reading_result;
         }
 
+        public async Task<ValueResult<(TResult, NFCTagRW)>> UseReader<TResult>(Func<Optional<INFCHandle>, Task<(TResult, NFCTagRW)>> func, Func<TResult, NFCTagRW, bool> success)
+        {
+            var task = await NFCReader.OpenAsync(log_result);
+            if (task.HasValue && success(task.Value.Item1, task.Value.Item2))
+                return task.Value;
 
-        public async Task<bool> UseReader(IFluxTagViewModel tag, Func<Optional<INFCHandle>, INFCSlot, Task<bool>> func)
+            return default;
+
+            async Task<ValueResult<(TResult, NFCTagRW)>> log_result(INFCHandle handle)
+            {
+                var result = await ShowNFCDialog(handle, (h, card_info) => func(h.ToOptional()), success);
+                var light = result.HasValue && success(result.Value.Item1, result.Value.Item2) ? LightSignalMode.LongGreen : LightSignalMode.LongRed;
+                var beep = result.HasValue && success(result.Value.Item1, result.Value.Item2) ? BeepSignalMode.TripletMelody : BeepSignalMode.Short;
+                handle.ReaderUISignal(light, beep);
+                return result;
+            }
+        }
+        public async Task<ValueResult<(TResult, NFCTagRW)>> UseReader<TResult>(IFluxTagViewModel tag, Func<Optional<INFCHandle>, INFCSlot, Optional<INFCRWViewModel>, Task<(TResult, NFCTagRW)>> func, Func<TResult, NFCTagRW, bool> success)
         {
             var reading = tag.NFCSlot.Nfc;
             if (!reading.IsVirtualTag.ValueOr(() => false))
             {
-                var task = await NFCReader.OpenAsync(h => log_result(h.ToOptional()));
-                if (task.HasValue && task.Value)
-                    return true;
+                var task = await NFCReader.OpenAsync(log_result);
+                if (task.HasValue && success(task.Value.Item1, task.Value.Item2))
+                    return task.Value;
             }
 
-            return await func(default, tag.NFCSlot);
+            return await func(default, tag.NFCSlot, default);
 
-            async Task<bool> log_result(Optional<INFCHandle> handle)
+            async Task<ValueResult<(TResult, NFCTagRW)>> log_result(INFCHandle handle)
             {
-                var reading = await ShowNFCDialog(handle, h => func(h, tag.NFCSlot));
+                var result = await ShowNFCDialog(handle, (h, card_info) => func(h.ToOptional(), tag.NFCSlot, card_info.ToOptional()), success);
+                var light = result.HasValue && success(result.Value.Item1, result.Value.Item2) ? LightSignalMode.LongGreen : LightSignalMode.LongRed;
+                var beep = result.HasValue && success(result.Value.Item1, result.Value.Item2) ? BeepSignalMode.TripletMelody : BeepSignalMode.Short;
+                handle.ReaderUISignal(light, beep);
+                return result;
+            }
+        }
 
-                if (handle.HasValue)
+        public async Task<ValueResult<(TResult, NFCTagRW)>> UseReader<TResult>(Func<Optional<INFCHandle>, (TResult, NFCTagRW)> func, Func<TResult, NFCTagRW, bool> success)
+        {
+            var task = await NFCReader.OpenAsync(log_result);
+            if (task.HasValue && success(task.Value.Item1, task.Value.Item2))
+                return task.Value;
+
+            return default;
+
+            async Task<ValueResult<(TResult, NFCTagRW)>> log_result(INFCHandle handle)
+            {
+                var result = await ShowNFCDialog(handle, (h, card_info) => func(h.ToOptional()), success);
+                var light = result.HasValue && success(result.Value.Item1, result.Value.Item2) ? LightSignalMode.LongGreen : LightSignalMode.LongRed;
+                var beep = result.HasValue && success(result.Value.Item1, result.Value.Item2) ? BeepSignalMode.TripletMelody : BeepSignalMode.Short;
+                handle.ReaderUISignal(light, beep);
+                return result;
+            }
+        }
+        public async Task<ValueResult<(TResult, NFCTagRW)>> UseReader<TResult>(IFluxTagViewModel tag, Func<Optional<INFCHandle>, INFCSlot, Optional<INFCRWViewModel>, (TResult, NFCTagRW)> func, Func<TResult, NFCTagRW, bool> success)
+        {
+            var reading = tag.NFCSlot.Nfc;
+            if (!reading.IsVirtualTag.ValueOr(() => false))
+            {
+                var task = await NFCReader.OpenAsync(log_result);
+                if (task.HasValue && success(task.Value.Item1, task.Value.Item2))
+                    return task.Value;
+            }
+
+            return func(default, tag.NFCSlot, default);
+
+            async Task<ValueResult<(TResult, NFCTagRW)>> log_result(INFCHandle handle)
+            {
+                var result = await ShowNFCDialog(handle, (h, card_info) => func(h.ToOptional(), tag.NFCSlot, card_info.ToOptional()), success);
+                var light = result.HasValue && success(result.Value.Item1, result.Value.Item2) ? LightSignalMode.LongGreen : LightSignalMode.LongRed;
+                var beep = result.HasValue && success(result.Value.Item1, result.Value.Item2) ? BeepSignalMode.TripletMelody : BeepSignalMode.Short;
+                handle.ReaderUISignal(light, beep);
+                return result;
+            }
+        }
+
+        // -------
+
+        public async Task<ValueResult<NFCTagRW>> ShowNFCDialog(INFCHandle handle, Func<INFCHandle, INFCRWViewModel, Task<NFCTagRW>> func, Func<NFCTagRW, bool> success, int millisecond_delay = 200)
+        {
+            var reading = true;
+
+            using var dialog = new ContentDialog(this, "Lettura tag in corso...",
+                can_cancel: Observable.Return(true).ToOptional());
+
+            var card_info = new NFCRWViewModel();
+            dialog.AddContent(card_info);
+
+            var dialog_result = Task.Run(async () =>
+            {
+                var result = await dialog.ShowAsync();
+                reading = false;
+                return result == ContentDialogResult.Primary;
+            });
+
+            var reading_result = Task.Run(async () =>
+            {
+                NFCTagRW result = NFCTagRW.None;
+                do
                 {
-                    var light = reading ? LightSignalMode.LongGreen : LightSignalMode.LongRed;
-                    var beep = reading ? BeepSignalMode.TripletMelody : BeepSignalMode.Short;
-                    handle.Value.ReaderUISignal(light, beep);
+                    result = await func(handle, card_info);
+                    if (!success(result))
+                        await Task.Delay(millisecond_delay);
                 }
+                while (!success(result) && reading);
 
-                return reading;
+                dialog.ShowAsyncSource.TrySetResult(ContentDialogResult.None);
+                return result;
+            });
+
+            await Task.WhenAll(dialog_result, reading_result);
+            return await reading_result;
+        }
+        public async Task<ValueResult<NFCTagRW>> ShowNFCDialog(INFCHandle handle, Func<INFCHandle, INFCRWViewModel, NFCTagRW> func, Func<NFCTagRW, bool> success, int millisecond_delay = 200)
+        {
+            var reading = true;
+
+            using var dialog = new ContentDialog(this, "Lettura tag in corso...",
+                can_cancel: Observable.Return(true).ToOptional());
+
+            var card_info = new NFCRWViewModel();
+            dialog.AddContent(card_info);
+
+            var dialog_result = Task.Run(async () =>
+            {
+                var result = await dialog.ShowAsync();
+                reading = false;
+                return result == ContentDialogResult.Primary;
+            });
+
+            var reading_result = Task.Run(async () =>
+            {
+                NFCTagRW result = NFCTagRW.None;
+                do
+                {
+                    result = func(handle, card_info);
+                    if (!success(result))
+                        await Task.Delay(millisecond_delay);
+                }
+                while (!success(result) && reading);
+
+                dialog.ShowAsyncSource.TrySetResult(ContentDialogResult.None);
+                return result;
+            });
+
+            await Task.WhenAll(dialog_result, reading_result);
+            return await reading_result;
+        }
+
+        public async Task<ValueResult<NFCTagRW>> UseReader(Func<Optional<INFCHandle>, Task<NFCTagRW>> func, Func<NFCTagRW, bool> success)
+        {
+            var task = await NFCReader.OpenAsync(log_result);
+            if (task.HasValue && success(task.Value))
+                return task.Value;
+
+            return default;
+
+            async Task<ValueResult<NFCTagRW>> log_result(INFCHandle handle)
+            {
+                var result = await ShowNFCDialog(handle, (h, card_info) => func(h.ToOptional()), success);
+                var light = result.HasValue && success(result.Value) ? LightSignalMode.LongGreen : LightSignalMode.LongRed;
+                var beep = result.HasValue && success(result.Value) ? BeepSignalMode.TripletMelody : BeepSignalMode.Short;
+                handle.ReaderUISignal(light, beep);
+                return result;
+            }
+        }
+        public async Task<ValueResult<NFCTagRW>> UseReader(IFluxTagViewModel tag, Func<Optional<INFCHandle>, INFCSlot, Optional<INFCRWViewModel>, Task<NFCTagRW>> func, Func<NFCTagRW, bool> success)
+        {
+            var reading = tag.NFCSlot.Nfc;
+            if (!reading.IsVirtualTag.ValueOr(() => false))
+            {
+                var task = await NFCReader.OpenAsync(log_result);
+                if (task.HasValue && success(task.Value))
+                    return task.Value;
+            }
+
+            return await func(default, tag.NFCSlot, default);
+
+            async Task<ValueResult<NFCTagRW>> log_result(INFCHandle handle)
+            {
+                var result = await ShowNFCDialog(handle, (h, card_info) => func(h.ToOptional(), tag.NFCSlot, card_info.ToOptional()), success);
+                var light = result.HasValue && success(result.Value) ? LightSignalMode.LongGreen : LightSignalMode.LongRed;
+                var beep = result.HasValue && success(result.Value) ? BeepSignalMode.TripletMelody : BeepSignalMode.Short;
+                handle.ReaderUISignal(light, beep);
+                return result;
+            }
+        }
+
+        public async Task<ValueResult<NFCTagRW>> UseReader(Func<Optional<INFCHandle>, NFCTagRW> func, Func<NFCTagRW, bool> success)
+        {
+            var task = await NFCReader.OpenAsync(log_result);
+            if (task.HasValue && success(task.Value))
+                return task.Value;
+
+            return default;
+
+            async Task<ValueResult<NFCTagRW>> log_result(INFCHandle handle)
+            {
+                var result = await ShowNFCDialog(handle, (h, card_info) => func(h.ToOptional()), success);
+                var light = result.HasValue && success(result.Value) ? LightSignalMode.LongGreen : LightSignalMode.LongRed;
+                var beep = result.HasValue && success(result.Value) ? BeepSignalMode.TripletMelody : BeepSignalMode.Short;
+                handle.ReaderUISignal(light, beep);
+                return result;
+            }
+        }
+        public async Task<ValueResult<NFCTagRW>> UseReader(IFluxTagViewModel tag, Func<Optional<INFCHandle>, INFCSlot, Optional<INFCRWViewModel>, NFCTagRW> func, Func<NFCTagRW, bool> success)
+        {
+            var reading = tag.NFCSlot.Nfc;
+            if (!reading.IsVirtualTag.ValueOr(() => false))
+            {
+                var task = await NFCReader.OpenAsync(log_result);
+                if (task.HasValue && success(task.Value))
+                    return task.Value;
+            }
+
+            return func(default, tag.NFCSlot, default);
+
+            async Task<ValueResult<NFCTagRW>> log_result(INFCHandle handle)
+            {
+                var result = await ShowNFCDialog(handle, (h, card_info) => func(h.ToOptional(), tag.NFCSlot, card_info.ToOptional()), success);
+                var light = result.HasValue && success(result.Value) ? LightSignalMode.LongGreen : LightSignalMode.LongRed;
+                var beep = result.HasValue && success(result.Value) ? BeepSignalMode.TripletMelody : BeepSignalMode.Short;
+                handle.ReaderUISignal(light, beep);
+                return result;
             }
         }
     }

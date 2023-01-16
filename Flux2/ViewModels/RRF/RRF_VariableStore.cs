@@ -163,6 +163,7 @@ namespace Flux.ViewModels
     {
         public override bool CanMeshProbePlate => true;
         public override bool HasPrintUnloader => false;
+        public override bool CanProbeMagazine => true;
 
         public override VariableUnits ExtrudersUnits => new(("T", 4));
 
@@ -237,6 +238,7 @@ namespace Flux.ViewModels
     {
         public override bool CanMeshProbePlate => false;
         public override bool HasPrintUnloader => false;
+        public override bool CanProbeMagazine => false;
 
         public override VariableUnits ExtrudersUnits => new(("T", 2));
         public override VariableUnits AxesUnits => new("X", "Y", "Z", "U", "V");

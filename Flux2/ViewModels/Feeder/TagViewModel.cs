@@ -72,7 +72,7 @@ namespace Flux.ViewModels
                 .Convert(k => new CardId(k));
 
             var storage = get_tag_storage(feeders);
-            NFCSlot = new NFCSlot<TNFCTag>(storage, position, virtual_card_id);
+            NFCSlot = new NFCSlot<TNFCTag>(feeder.Flux, storage, position, virtual_card_id);
 
             _Document = Observable.CombineLatest(
                 Flux.DatabaseProvider.WhenAnyValue(v => v.Database),
@@ -89,7 +89,7 @@ namespace Flux.ViewModels
                 .ToProperty(this, vm => vm.Document)
                 .DisposeWith(Disposables);
 
-            UpdateTagCommand = ReactiveCommand.CreateFromTask(async () => { await Flux.UseReader(this, (h, s) => s.UpdateTagAsync(h)); },
+            UpdateTagCommand = ReactiveCommand.CreateFromTask(async () => { await Flux.UseReader(this, (h, s, c) => s.UpdateTagAsync(h, c), r => r == NFCTagRW.Success); },
                 Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation).Select(s => s.CanSafeCycle))
                 .DisposeWith(Disposables);
 
@@ -133,7 +133,7 @@ namespace Flux.ViewModels
                         return true;
                     })
                     .Where(has_pause => has_pause)
-                    .Subscribe(_ => Flux.ConnectionProvider.PausePrintAsync(true, true))
+                    .Subscribe(_ => Flux.ConnectionProvider.PausePrintAsync(true))
                     .DisposeWith(Disposables);
             }
         }

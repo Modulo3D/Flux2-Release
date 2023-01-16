@@ -35,6 +35,9 @@ namespace Flux.ViewModels
         public Optional<ReactiveCommand<Unit, Unit>> SetValueCommand { get; }
 
         [RemoteCommand]
+        public Optional<ReactiveCommand<Unit, Unit>> ToggleValueCommand { get; }
+
+        [RemoteCommand]
         public Optional<ReactiveCommand<Unit, Unit>> SetPositionCommand { get; }
 
         private readonly ObservableAsPropertyHelper<Optional<object>> _Value;
@@ -45,11 +48,37 @@ namespace Flux.ViewModels
         {
             Flux = flux;
             Variable = variable;
-            SetValueCommand = ReactiveCommand.CreateFromTask(SetValueAsync);
 
-            if (variable == flux.ConnectionProvider.VariableStoreBase.X_MAGAZINE_POS.Value.Variables.Items.FirstOrDefault())
+            if (!variable.ReadOnly)
             {
-                int i = 0;
+                switch (Variable)
+                {
+                    case IFLUX_Variable<bool, bool> @bool:
+                        SetValueCommand = ReactiveCommand.CreateFromTask(() => SetValueAsync(@bool,
+                            b => b ? "1" : "0", s => int.Parse(s) == 1));
+                        ToggleValueCommand = ReactiveCommand.CreateFromTask(() => ToggleValueAsync(@bool));
+                        break;
+
+                    case IFLUX_Variable<double, double> @double:
+                        SetValueCommand = ReactiveCommand.CreateFromTask(() => SetValueAsync(@double,
+                            d => $"{d:0.##}".Replace(",", "."), s => double.Parse(s, NumberStyles.Float, CultureInfo.InvariantCulture)));
+                        break;
+
+                    case IFLUX_Variable<short, short> @short:
+                        SetValueCommand = ReactiveCommand.CreateFromTask(() => SetValueAsync(@short,
+                            s => $"{s}", s => short.Parse(s)));
+                        break;
+
+                    case IFLUX_Variable<ushort, ushort> @ushort:
+                        SetValueCommand = ReactiveCommand.CreateFromTask(() => SetValueAsync(@ushort,
+                            s => $"{s}", s => ushort.Parse(s)));
+                        break;
+
+                    case IFLUX_Variable<string, string> @string:
+                        SetValueCommand = ReactiveCommand.CreateFromTask(() => SetValueAsync(@string,
+                            s => s, s => s));
+                        break;
+                }
             }
 
             if(attributes.HasValue)
@@ -72,7 +101,12 @@ namespace Flux.ViewModels
             if (!axis_position.HasValue)
                 return;
 
-            var variable_position = axis_position.Value.Axes.Dictionary.Lookup(position_attribute.Axis);
+            var variable_store = Flux.ConnectionProvider.VariableStoreBase;
+            var transformed_position = variable_store.MoveTransform.InverseTransformPosition(axis_position.Value, false);
+            if (!transformed_position.HasValue)
+                return;
+
+            var variable_position = transformed_position.Value.Axes.Dictionary.Lookup(position_attribute.Axis);
             if(!variable_position.HasValue) 
                 return;
 
@@ -80,69 +114,43 @@ namespace Flux.ViewModels
             await @double.WriteAsync(position);
         }
 
-        private async Task SetValueAsync()
+        private async Task ToggleValueAsync(IFLUX_Variable<bool, bool> variable)
         {
-            switch (Variable)
+            try
             {
-                case IFLUX_Variable<bool, bool> @bool:
-                    var start_value = (uint)@bool.Value.ConvertOr(b => b ? BoolSelection.True : BoolSelection.False, () => BoolSelection.False);
-                    var cb_bool_value = ComboOption.Create("cbValue", "VALORE?", Enum.GetValues<BoolSelection>(), b => (uint)b, start_value);
+                Optional<bool> value = await variable.ReadAsync();
+                if (!value.HasValue)
+                    return;
 
-                    var bool_result = await Flux.ShowSelectionAsync(
-                        VariableName, new[] { cb_bool_value });
+                await variable.WriteAsync(!value.Value);
+            }
+            catch (Exception ex)
+            {
+            }
+        }
 
-                    if (bool_result == ContentDialogResult.Primary &&
-                        cb_bool_value.Value.HasValue)
-                        await @bool.WriteAsync(cb_bool_value.Value.Value == BoolSelection.True);
-                    break;
+        private async Task SetValueAsync<TData>(IFLUX_Variable<TData, TData> variable, Func<TData, string> get_str, Func<string, Optional<TData>> get_value)
+        {
+            try
+            {
+                Optional<TData> value = await variable.ReadAsync();
 
-                case IFLUX_Variable<double, double> @double:
-                    var tb_double_value = new TextBox("tbValue", "VALORE?", $"{@double.Value.ValueOr(() => 0):0.###}".Replace(",", "."));
+                var tb_value = new TextBox("tbValue", "VALORE?", get_str(value.ValueOrDefault()));
 
-                    var double_result = await Flux.ShowSelectionAsync(
-                        VariableName, new[] { tb_double_value });
+                var result = await Flux.ShowSelectionAsync(
+                    VariableName, new[] { tb_value });
 
-                    if (double_result == ContentDialogResult.Primary &&
-                        double.TryParse(
-                            tb_double_value.Value,
-                            NumberStyles.Float,
-                            CultureInfo.InvariantCulture,
-                            out var double_value))
-                        await @double.WriteAsync(double_value);
-                    break;
+                if (result != ContentDialogResult.Primary)
+                    return;
 
-                case IFLUX_Variable<short, short> @short:
-                    var tb_short_value = new TextBox("tbValue", "VALORE?", @short.Value.ValueOr(() => (short)0).ToString());
+                value = get_value(tb_value.Value);
+                if (!value.HasValue)
+                    return;
 
-                    var short_result = await Flux.ShowSelectionAsync(
-                        VariableName, new[] { tb_short_value });
-
-                    if (short_result == ContentDialogResult.Primary &&
-                        short.TryParse(tb_short_value.Value, out var short_value))
-                        await @short.WriteAsync(short_value);
-                    break;
-
-                case IFLUX_Variable<ushort, ushort> word:
-                    var tb_word_value = new TextBox("tbValue", "VALORE?", word.Value.ValueOr(() => (ushort)0).ToString());
-
-                    var word_result = await Flux.ShowSelectionAsync(
-                        VariableName, new[] { tb_word_value });
-
-                    if (word_result == ContentDialogResult.Primary &&
-                        ushort.TryParse(tb_word_value.Value, out var word_value))
-                        await word.WriteAsync(word_value);
-                    break;
-
-
-                case IFLUX_Variable<string, string> @string:
-                    var tb_string_value = new TextBox("tbValue", "VALORE?", @string.Value.ValueOr(() => ""));
-
-                    var string_result = await Flux.ShowSelectionAsync(
-                        VariableName, new[] { tb_string_value });
-
-                    if (string_result == ContentDialogResult.Primary)
-                        await @string.WriteAsync(tb_string_value.Value);
-                    break;
+                await variable.WriteAsync(value.Value);
+            }
+            catch (Exception ex)
+            { 
             }
         }
     }

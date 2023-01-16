@@ -19,6 +19,7 @@
     <None Remove="COMuFCoder-x86_64.dll" />
     <None Remove="libeay32.dll" />
     <None Remove="libuFCoder-armhf.so" />
+    <None Remove="libuFCoder-x86_64.so" />
     <None Remove="uFCoder-x86_64.dll" />
     <None Remove="uwp-serial-x86_64.dll" />
   </ItemGroup>
@@ -33,10 +34,10 @@
     <Content Include="libuFCoder-armhf.so">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
-    <Content Include="uFCoder-x86_64.dll">
+    <Content Include="libuFCoder-x86_64.so">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
-    <Content Include="uwp-serial-x86_64.dll">
+    <Content Include="uFCoder-x86_64.dll">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

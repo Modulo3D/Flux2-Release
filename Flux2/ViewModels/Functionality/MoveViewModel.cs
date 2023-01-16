@@ -75,7 +75,7 @@ namespace Flux.ViewModels
                 .ConvertOr(c => c.GetAxisPosition(), () => "")
                 .ToProperty(this, v => v.AxisPosition);
 
-            ShowRoutinesCommand = ReactiveCommand.Create(() => { Flux.Navigator.NavigateModal(Flux.Functionality); });
+            ShowRoutinesCommand = ReactiveCommand.Create(() => { Flux.Navigator.NavigateModal(Flux.Functionality.Routines); });
 
             var can_move = Flux.StatusProvider
                 .WhenAnyValue(s => s.StatusEvaluation)

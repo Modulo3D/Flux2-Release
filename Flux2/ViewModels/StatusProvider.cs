@@ -172,7 +172,7 @@ namespace Flux.ViewModels
                     _LockClosedConditions = new SourceCache<IConditionViewModel, string>(c => c.ConditionName);
 
                     var is_idle = Flux.ConnectionProvider
-                        .ObserveVariable(m => m.PROCESS_STATUS)
+                       .ObserveVariable(m => m.PROCESS_STATUS)
                        .Convert(data => data == FLUX_ProcessStatus.IDLE)
                        .ValueOr(() => false);
 
@@ -832,6 +832,7 @@ namespace Flux.ViewModels
                 .DistinctUntilChanged();
 
             _PrintProgress = Observable.CombineLatest(
+                this.WhenAnyValue(v => v.StatusEvaluation),
                 this.WhenAnyValue(v => v.PrintingEvaluation),
                 storage,
                 progress,
@@ -983,16 +984,18 @@ namespace Flux.ViewModels
         }
 
         // Progress and extrusion
-        private PrintProgress GetPrintProgress(PrintingEvaluation evaluation, Optional<MCodeStorage> storage, MCodeProgress progress)
+        private PrintProgress GetPrintProgress(StatusEvaluation status, PrintingEvaluation printing, Optional<MCodeStorage> storage, MCodeProgress progress)
         {
-            var current_mcode = evaluation.MCode;
+            var current_mcode = printing.MCode;
             if (!current_mcode.HasValue)
                 return new PrintProgress(0, TimeSpan.Zero);
 
             var duration = current_mcode.Value.Duration;
+            if (status.IsIdle && !printing.Recovery.HasValue)
+                return new PrintProgress(0, duration);
 
-            if (evaluation.Recovery.HasValue)
-                progress = new MCodeProgress(evaluation.Recovery.Value);
+            if (printing.Recovery.HasValue)
+                progress = new MCodeProgress(printing.Recovery.Value);
 
             if (progress == default)
                 return new PrintProgress(0, duration);
@@ -1000,7 +1003,7 @@ namespace Flux.ViewModels
             if (!storage.HasValue)
                 return new PrintProgress(0, duration);
 
-            var percentage = progress.GetPercentage(evaluation, storage.Value);
+            var percentage = progress.GetPercentage(printing, storage.Value);
             if (!percentage.HasValue)
                 return PrintProgress;
 

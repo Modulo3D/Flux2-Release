@@ -128,7 +128,7 @@ namespace Flux.ViewModels
                     if (!extrusion.Value.HasValue)
                         continue;
                     var total_weight = extrusion.Value.Value.Aggregate(0.0, (w, kvp) => w + kvp.Value.WeightG);
-                    flux.Logger.LogInformation(new EventId(0, $"job_event"), $"{extrusion.Key}:{total_weight:0.00}");
+                    flux.Logger.LogInformation(new EventId(0, $"job_event"), $"{extrusion.Key}:{total_weight:0.##}".Replace(",", "."));
                 }
             });
         }

@@ -49,12 +49,12 @@ namespace Flux.ViewModels
         public override IObservable<Optional<string>> GetCurrentValue(FeederEvaluator eval)
         {
             return eval.ToolNozzle.WhenAnyValue(e => e.CurrentWeight)
-                .Convert(w => $"{w:0.##}g");
+                .Convert(w => $"{w:0.##}g".Replace(",", "."));
         }
         public override IObservable<Optional<string>> GetExpectedValue(FeederEvaluator eval)
         {
             return eval.ToolNozzle.WhenAnyValue(e => e.ExpectedWeight)
-                .Convert(w => $"{w:0.##}g");
+                .Convert(w => $"{w:0.##}g".Replace(",", "."));
         }
     }
 

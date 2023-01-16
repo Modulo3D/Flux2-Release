@@ -15,6 +15,7 @@ namespace Flux.ViewModels
         public override ushort ArrayBase => 1;
         public override char FeederAxis => 'A';
         public override bool HasPrintUnloader => false;
+        public override bool CanProbeMagazine => false;
         public override bool CanMeshProbePlate => false;
         public override bool ParkToolAfterOperation => false;
         public override FLUX_AxisTransform MoveTransform { get; }

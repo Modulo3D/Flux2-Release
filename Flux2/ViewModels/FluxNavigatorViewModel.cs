@@ -116,6 +116,14 @@ namespace Flux.ViewModels
         {
             Navigate(new NavModalViewModel<TFluxRoutableViewModel>(Flux, route, navigate_back, show_navbar), false);
         }
+        public void NavigateModal<TFluxRoutableViewModel>(
+            Lazy<TFluxRoutableViewModel> lazy_route,
+            OptionalObservable<bool> navigate_back = default,
+            OptionalObservable<bool> show_navbar = default)
+            where TFluxRoutableViewModel : IFluxRoutableViewModel
+        {
+            Navigate(new NavModalViewModel<TFluxRoutableViewModel>(Flux, lazy_route.Value, navigate_back, show_navbar), false);
+        }
 
         public void NavigateBack()
         {

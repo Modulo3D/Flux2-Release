@@ -298,11 +298,11 @@ namespace Flux.ViewModels
 
             return (true, missing_variables);
         }
-        public override InnerQueueGCodes GenerateInnerQueueGCodes(FluxJob job)
+        /*public override InnerQueueGCodes GenerateInnerQueueGCodes(FluxJob job)
         {
             //TODO 
 
-            /*var base_motor = VariableStore.ExtrudersUnits.Values.FirstOrOptional(_ => true);
+            var base_motor = VariableStore.ExtrudersUnits.Values.FirstOrOptional(_ => true);
             if (!base_motor.HasValue)
                 return default;
 
@@ -355,7 +355,7 @@ namespace Flux.ViewModels
                 Cancel = cancel,
                 Resume = resume,
                 EndFilament = end_filament,
-            };*/
+            };
 
             return default;
 
@@ -378,7 +378,7 @@ namespace Flux.ViewModels
             {
                 return $"M471 S{old_path} T{new_path} D1";
             }
-        }
+        }*/
 
         // CONNECTION
         public override Task<bool> CloseAsync()
@@ -446,14 +446,14 @@ namespace Flux.ViewModels
                 GetExecuteMacroGCode(MacroPath, "end_print")
             }, put_reset_cts.Token);
         }
-        public override async Task<bool> PauseAsync(bool end_filament)
+        public override async Task<bool> PauseAsync()
         {
             using var put_reset_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             return await PostGCodeAsync(new[]
             {
                 "M108", "M25",
                 "set global.iterator = false", "M0",
-                GetExecuteMacroGCode(InnerQueuePath, end_filament ? "end_filament.g" : "pause.g")
+                GetExecuteMacroGCode(InnerQueuePath, "pause.g")
             }, put_reset_cts.Token);
         }
         public override async Task<bool> ExecuteParamacroAsync(GCodeString paramacro, CancellationToken put_ct, bool can_cancel = false)
@@ -883,8 +883,10 @@ namespace Flux.ViewModels
         {
             return $"{(wait ? "M191" : "M141")} P{position.GetArrayBaseIndex()} S{temperature}";
         }
-        public override GCodeString GetStartPartProgramGCode(string folder, string filename, BlockNumber start_block)
+        public override GCodeString GetStartPartProgramGCode(string folder, string filename, Optional<FluxJobRecovery> recovery)
         {
+            var start_block = recovery.ConvertOr(r => r.BlockNumber, () => new BlockNumber(0, BlockType.None));
+
             return new[]
             {
                 $"M23 0:/{CombinePaths(folder, filename)}",
@@ -906,6 +908,26 @@ namespace Flux.ViewModels
                 .Select(i => i == selected_extruder ? "1" : "0");
 
             return $"M567 P{machine_extruder.GetArrayBaseIndex()} E1:{string.Join(":", mixing)}";
+        }
+
+        public override GCodeString GetWriteCurrentJobGCode(Optional<JobKey> job_key)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override GCodeString GetLogEventGCode(FluxJob job, FluxEventType event_type)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override GCodeString GetWriteExtrusionKeyGCode(ushort position, Optional<ExtrusionKey> extr_key)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override GCodeString GetDeleteFileGCode(string folder, string filename)
+        {
+            throw new NotImplementedException();
         }
     }
 }

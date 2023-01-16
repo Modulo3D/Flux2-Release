@@ -160,7 +160,7 @@ namespace Flux.ViewModels
         {
             return ($"(IF, !QUEUE_POS = {queue_pos})", "(ENDIF)");
         }
-        public override Optional<FluxJobRecovery> GetFluxJobRecoveryFromSource(MCodeKey mcode, string source)
+        public override Optional<FluxJobRecovery> GetFluxJobRecoveryFromSource(FluxJob current_job, string source)
         {
             try
             {
@@ -224,8 +224,8 @@ namespace Flux.ViewModels
 
                 return new FluxJobRecovery()
                 {
-                    MCodeKey = mcode,
                     Feedrate = feedrate,
+                    FluxJob = current_job,
                     ToolIndex = tool_index,
                     AxisPosition = position,
                     BlockNumber = block_number,

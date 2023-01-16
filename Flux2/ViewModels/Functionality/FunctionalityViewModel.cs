@@ -10,9 +10,16 @@ using System.Threading.Tasks;
 namespace Flux.ViewModels
 {
     public class NFCInnerViewModel : NavPanelViewModel<NFCInnerViewModel>
-    {
+    {      
+        //private ObservableAsPropertyHelper<string> _SerializedTag;
+        //public string SerializedTag => _SerializedTag.Value;
+
         public NFCInnerViewModel(FluxViewModel flux, string name, IFluxTagViewModel tag_vm, ushort load_position) : base(flux, $"{name.ToCamelCase()}??{tag_vm.Position + 1}")
         {
+            /*_SerializedTag = tag_vm.NFCSlot.WhenAnyValue(s => s.Nfc)
+                .Select(nfc => JsonUtils.Serialize(nfc))
+                .ToProperty(this, v => v.SerializedTag);*/
+
             var can_lock = Observable.CombineLatest(
                 is_unlocked_tag(),
                 is_unloaded_tag(),
@@ -39,19 +46,25 @@ namespace Flux.ViewModels
 
             void load_tag()
             {
-                tag_vm.NFCSlot.StoreTag(t => t.SetLoaded(load_position));
+                var core_setting = Flux.SettingsProvider.CoreSettings.Local;
+                var result = tag_vm.NFCSlot.StoreTag(t => t.SetLoaded(core_setting.PrinterGuid, load_position));
+                Console.WriteLine(result);
             }
             void unload_tag()
             {
-                tag_vm.NFCSlot.StoreTag(t => t.SetLoaded(default));
+                var core_setting = Flux.SettingsProvider.CoreSettings.Local;
+                var result = tag_vm.NFCSlot.StoreTag(t => t.SetLoaded(core_setting.PrinterGuid, default));
+                Console.WriteLine(result);
             }
             async Task lock_tag_async()
             {
-                await Flux.UseReader(tag_vm, (h, m) => m.LockTagAsync(h));
+                var result = await Flux.UseReader(tag_vm, (h, m, c) => m.LockTagAsync(h, c), r => r == NFCTagRW.Success);
+                Console.WriteLine(result);
             }
             async Task unlock_tag_async()
             {
-                await Flux.UseReader(tag_vm, (h, m) => m.UnlockTagAsync(h));
+                var result = await Flux.UseReader(tag_vm, (h, m, c) => m.UnlockTagAsync(h, c), r => r == NFCTagRW.Success);
+                Console.WriteLine(result);
             }
             IObservable<bool> is_locked_tag()
             {
@@ -84,9 +97,19 @@ namespace Flux.ViewModels
     public class NFCInnerViewModel<TTagViewModel> : NavPanelViewModel<NFCInnerViewModel<TTagViewModel>>
         where TTagViewModel : IFluxTagViewModel
     {
+        //private ObservableAsPropertyHelper<Optional<string>> _SerializedTag;
+        //public Optional<string> SerializedTag => _SerializedTag.Value;
+
         public NFCInnerViewModel(FluxViewModel flux, string name, IObservableCache<TTagViewModel, ushort> tag_cache, ushort tag_position, ushort load_position) : base(flux, $"{name.ToCamelCase()}??{tag_position + 1}")
         {
             var tag_vm = tag_cache.Lookup(tag_position);
+
+            /*_SerializedTag = tag_vm
+                .Convert(vm => vm.NFCSlot)
+                .ConvertToObservable(slot => slot.WhenAnyValue(s => s.Nfc))
+                .ConvertToObservable(nfc => JsonUtils.Serialize(nfc))
+                .ObservableOrOptional()
+                .ToProperty(this, v => v.SerializedTag);*/
 
             var can_lock = Observable.CombineLatest(
                 is_unlocked_tag(),
@@ -102,9 +125,8 @@ namespace Flux.ViewModels
 
             var can_load = Observable.CombineLatest(
                 is_locked_tag(),
-                has_loaded_tag(),
                 is_unloaded_tag(),
-                (lk, lo, un) => lk && !lo && un).ToOptional();
+                (lk, un) => lk && un).ToOptional();
             AddCommand($"load{name}Tag??{tag_position + 1}", load_tag, can_load);
 
             var can_unload = Observable.CombineLatest(
@@ -116,26 +138,32 @@ namespace Flux.ViewModels
             void load_tag()
             {
                 if (!tag_vm.HasValue)
-                    return;
-                tag_vm.Value.NFCSlot.StoreTag(t => t.SetLoaded(load_position));
+                    return; 
+                var core_setting = Flux.SettingsProvider.CoreSettings.Local;
+                var result = tag_vm.Value.NFCSlot.StoreTag(t => t.SetLoaded(core_setting.PrinterGuid, load_position));
+                Console.WriteLine(result);
             }
             void unload_tag()
             {
                 if (!tag_vm.HasValue)
                     return;
-                tag_vm.Value.NFCSlot.StoreTag(t => t.SetLoaded(default));
+                var core_setting = Flux.SettingsProvider.CoreSettings.Local;
+                var result = tag_vm.Value.NFCSlot.StoreTag(t => t.SetLoaded(core_setting.PrinterGuid, default)); 
+                Console.WriteLine(result);
             }
             async Task lock_tag_async()
             {
                 if (!tag_vm.HasValue)
                     return;
-                await Flux.UseReader(tag_vm.Value, (h, m) => m.LockTagAsync(h));
+                var result = await Flux.UseReader(tag_vm.Value, (h, m, c) => m.LockTagAsync(h, c), r => r == NFCTagRW.Success);
+                Console.WriteLine(result);
             }
             async Task unlock_tag_async()
             {
                 if (!tag_vm.HasValue)
                     return;
-                await Flux.UseReader(tag_vm.Value, (h, m) => m.UnlockTagAsync(h));
+                var result = await Flux.UseReader(tag_vm.Value, (h, m, c) => m.UnlockTagAsync(h, c), r => r == NFCTagRW.Success);
+                Console.WriteLine(result);
             }
             IObservable<bool> is_loaded_tag()
             {
@@ -144,11 +172,6 @@ namespace Flux.ViewModels
                     .ConvertMany(t => t.NFCSlot.WhenAnyValue(t => t.Nfc))
                     .Convert(nfc => nfc.Tag.Convert(t => t.Loaded.HasValue && t.Loaded.Value == load_position))
                     .ValueOr(() => false);
-            }
-            IObservable<bool> has_loaded_tag()
-            {
-                return tag_cache.Connect()
-                    .TrueForAny(f => f.NFCSlot.WhenAnyValue(f => f.Nfc), nfc => nfc.Tag.ConvertOr(t => t.Loaded.HasValue, () => false));
             }
             IObservable<bool> is_locked_tag()
             {
@@ -170,10 +193,10 @@ namespace Flux.ViewModels
             IObservable<bool> is_unloaded_tag()
             {
                 return tag_cache.Connect()
-                       .WatchOptional(tag_position)
-                       .ConvertMany(t => t.NFCSlot.WhenAnyValue(t => t.Nfc))
-                       .Convert(nfc => nfc.Tag.Convert(t => !t.Loaded.HasValue))
-                       .ValueOr(() => false);
+                    .WatchOptional(tag_position)
+                    .ConvertMany(t => t.NFCSlot.WhenAnyValue(t => t.Nfc))
+                    .Convert(nfc => nfc.Tag.Convert(t => !t.Loaded.HasValue))
+                    .ValueOr(() => false);
             }
         }
     }
@@ -367,6 +390,8 @@ namespace Flux.ViewModels
     {
         public RoutinesViewModel(FluxViewModel flux) : base(flux)
         {
+            var variable_store = Flux.ConnectionProvider.VariableStoreBase;
+
             var status = Flux.StatusProvider
                 .WhenAnyValue(s => s.StatusEvaluation);
             var IS_HOME = status
@@ -402,7 +427,7 @@ namespace Flux.ViewModels
                 {
                     Clear();
 
-                    if (Flux.ConnectionProvider.VariableStoreBase.CanMeshProbePlate)
+                    if (variable_store.CanMeshProbePlate)
                         AddModal(() => new HeightmapViewModel(Flux));
 
                     AddCommand(
@@ -431,7 +456,6 @@ namespace Flux.ViewModels
                         Flux.ConnectionProvider.ParkToolAsync,
                         can_execute: IS_IEHS);
 
-                    var variable_store = Flux.ConnectionProvider.VariableStoreBase;
                     if (extruders.HasValue)
                     {
                         for (var extruder = ArrayIndex.FromZeroBase(0, variable_store); extruder.GetZeroBaseIndex() < extruders.Value.machine_extruders; extruder++)
@@ -446,7 +470,7 @@ namespace Flux.ViewModels
 
                     if (extruders.HasValue)
                     {
-                        if (Flux.ConnectionProvider.VariableStoreBase.HasToolChange)
+                        if (variable_store.HasToolChange && variable_store.CanProbeMagazine)
                         {
                             for (var extruder = ArrayIndex.FromZeroBase(0, variable_store); extruder.GetZeroBaseIndex() < extruders.Value.machine_extruders; extruder++)
                             {
@@ -465,7 +489,10 @@ namespace Flux.ViewModels
 
     public class FunctionalityViewModel : NavPanelViewModel<FunctionalityViewModel>
     {
+        public Lazy<ManageViewModel> Manage { get; private set; }
         public Lazy<MagazineViewModel> Magazine { get; private set; }
+        public Lazy<RoutinesViewModel> Routines { get; private set; }
+        public Lazy<SettingsViewModel> Settings { get; private set; }
         public FunctionalityViewModel(FluxViewModel flux) : base(flux)
         {
             Magazine = new Lazy<MagazineViewModel>(() => new MagazineViewModel(flux));
@@ -475,9 +502,9 @@ namespace Flux.ViewModels
                 .Select(o => o.ConvertOr(o => o.AdvancedSettings, () => false))
                 .ToOptional();
 
-            AddModal(() => new ManageViewModel(Flux));
-            AddModal(() => new SettingsViewModel(Flux));
-            AddModal(() => new RoutinesViewModel(Flux));
+            Manage = AddModal(() => new ManageViewModel(flux));
+            Routines = AddModal(() => new RoutinesViewModel(flux));
+            Settings = AddModal(() => new SettingsViewModel(flux));
         }
     }
 }

@@ -28,7 +28,7 @@ namespace Flux.ViewModels
         public override Task<bool> ResetClampAsync() => Task.FromResult(false);
         protected override Task RollConnectionAsync(CancellationToken ct) => Task.CompletedTask;
 
-        public override Optional<FluxJobRecovery> GetFluxJobRecoveryFromSource(MCodeKey mcode, string source)
+        public override Optional<FluxJobRecovery> GetFluxJobRecoveryFromSource(FluxJob current_job, string source)
         {
             throw new NotImplementedException();
         }
@@ -93,13 +93,11 @@ namespace Flux.ViewModels
             CreateDummy(s => s.TEMP_TOOL);
         }
 
-        public override ushort ArrayBase => throw new NotImplementedException();
-
-        public override bool CanMeshProbePlate => throw new NotImplementedException();
-
-        public override bool ParkToolAfterOperation => throw new NotImplementedException();
-
         public override char FeederAxis => throw new NotImplementedException();
+        public override ushort ArrayBase => throw new NotImplementedException();
+        public override bool CanProbeMagazine => throw new NotImplementedException();
+        public override bool CanMeshProbePlate => throw new NotImplementedException();
+        public override bool ParkToolAfterOperation => throw new NotImplementedException();
 
         public override FLUX_AxisTransform MoveTransform => throw new NotImplementedException();
 
@@ -285,7 +283,7 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override Task<bool> PauseAsync(bool end_filament)
+        public override Task<bool> PauseAsync()
         {
             throw new NotImplementedException();
         }
@@ -325,17 +323,12 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override GCodeString GetStartPartProgramGCode(string folder, string filename, BlockNumber start_block)
+        public override GCodeString GetStartPartProgramGCode(string folder, string filename, Optional<FluxJobRecovery> recovery)
         {
             throw new NotImplementedException();
         }
 
         public override Task<bool> InitializeVariablesAsync(CancellationToken ct)
-        {
-            throw new NotImplementedException();
-        }
-
-        public override InnerQueueGCodes GenerateInnerQueueGCodes(FluxJob job)
         {
             throw new NotImplementedException();
         }
@@ -346,6 +339,26 @@ namespace Flux.ViewModels
         }
 
         public override GCodeString GetResetPositionGCode(FLUX_AxisPosition axis_position, FLUX_AxisTransform transform)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override GCodeString GetWriteCurrentJobGCode(Optional<JobKey> job_key)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override GCodeString GetLogEventGCode(FluxJob job, FluxEventType event_type)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override GCodeString GetWriteExtrusionKeyGCode(ushort position, Optional<ExtrusionKey> extr_key)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override GCodeString GetDeleteFileGCode(string folder, string filename)
         {
             throw new NotImplementedException();
         }

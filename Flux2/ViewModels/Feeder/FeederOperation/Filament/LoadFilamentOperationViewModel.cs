@@ -82,7 +82,7 @@ namespace Flux.ViewModels
                         var update_nfc = state.Create("nFC", UpdateNFCAsync, can_update_nfc);
 
                         if (!value.material.HasValue)
-                            return state.Create(EConditionState.Warning, "LEGGI UN MATERIALE", update_nfc);
+                            return state.Create(EConditionState.Disabled, "LEGGI UN MATERIALE", update_nfc);
 
                         if (!value.tool_material.Compatible.ValueOr(() => false))
                             return state.Create(EConditionState.Error, $"{value.material} NON COMPATIBILE");
@@ -94,9 +94,9 @@ namespace Flux.ViewModels
                     }), new FilamentOperationConditionAttribute());
         }
 
-        public override async Task<bool> UpdateNFCAsync()
+        public override async Task<NFCTagRW> UpdateNFCAsync()
         {
-            return await Flux.UseReader(Material, (h, m) => m.LockTagAsync(h));
+            return await Flux.UseReader(Material, (h, m, c) => m.LockTagAsync(h, c), r => r == NFCTagRW.Success);
         }
         protected override Task<bool> CancelOperationAsync()
         {

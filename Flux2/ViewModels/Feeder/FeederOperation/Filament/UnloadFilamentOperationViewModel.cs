@@ -29,8 +29,9 @@ namespace Flux.ViewModels
 
             if (Material.Odometer.CurrentValue.HasValue)
             {
+                var core_setting = Flux.SettingsProvider.CoreSettings.Local;
                 if (Material.Odometer.CurrentValue.Value <= 0)
-                    Material.NFCSlot.StoreTag(m => m.SetCurWeight(default));
+                    Material.NFCSlot.StoreTag(m => m.SetCurWeight(core_setting.PrinterGuid, default));
             }
 
             if (!Flux.ConnectionProvider.HasVariable(c => c.FILAMENT_ON_HEAD))
@@ -55,10 +56,10 @@ namespace Flux.ViewModels
                     {
                         var update_nfc = state.Create("nFC", UpdateNFCAsync);
 
-                        if (!value.state.Loaded && value.state.Locked)
+                        if (!value.state.Loaded && !value.state.Inserted && value.state.Locked)
                             return state.Create(EConditionState.Warning, "SBLOCCA IL MATERIALE", update_nfc);
 
-                        if (!value.state.Loaded && !value.state.Locked)
+                        if (!value.state.Loaded && !value.state.Inserted && !value.state.Locked)
                             return state.Create(EConditionState.Disabled, $"MATERIALE SCARICATO");
 
                         if (!value.material.HasValue)
@@ -70,10 +71,10 @@ namespace Flux.ViewModels
                         return new ConditionState(EConditionState.Stable, $"{value.material} PRONTO ALLO SCARICAMENTO");
                     }), new FilamentOperationConditionAttribute());
         }
-        public override async Task<bool> UpdateNFCAsync()
+        public override async Task<NFCTagRW> UpdateNFCAsync()
         {
-            var result = await Flux.UseReader(Material, (h, m) => m.UnlockTagAsync(h));
-            if (result)
+            var result = await Flux.UseReader(Material, (h, m, c) => m.UnlockTagAsync(h, c), r => r == NFCTagRW.Success);
+            if (result == NFCTagRW.Success)
                 Flux.Navigator.NavigateBack();
             return result;
         }

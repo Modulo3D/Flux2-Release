@@ -248,9 +248,9 @@ namespace Flux.ViewModels
                 return default;
 
             var datas = data.Value.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
-
-            var target = datas.Length > 0 ? double.Parse($"{datas[0]:0.00}", NumberStyles.Float, CultureInfo.InvariantCulture) : 0;
-            var current = datas.Length > 1 ? double.Parse($"{datas[1]:0.00}", NumberStyles.Float, CultureInfo.InvariantCulture) : 0;
+            var target = datas.Length > 0 ? double.Parse(datas[0], NumberStyles.Float, CultureInfo.InvariantCulture) : 0;
+            var current = datas.Length > 1 ? double.Parse(datas[1], NumberStyles.Float, CultureInfo.InvariantCulture) : 0;
+            
             return new FLUX_Temp(current, target);
         }
 

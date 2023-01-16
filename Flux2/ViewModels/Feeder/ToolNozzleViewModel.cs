@@ -85,9 +85,10 @@ namespace Flux.ViewModels
                 .DisposeWith(Disposables);
         }
 
-        public bool SetLastBreakTemp(GCodeFilamentOperation filament_settings)
+        public NFCTagRW SetLastBreakTemp(GCodeFilamentOperation filament_settings)
         {
-            return NFCSlot.StoreTag(c => c.SetLastBreakTemp(filament_settings.CurBreakTemp));
+            var core_setting = Flux.SettingsProvider.CoreSettings.Local;
+            return NFCSlot.StoreTag(c => c.SetLastBreakTemp(core_setting.PrinterGuid, filament_settings.CurBreakTemp));
         }
         public override void Initialize()
         {

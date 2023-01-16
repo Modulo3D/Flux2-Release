@@ -8,6 +8,8 @@ using System.Linq;
 using System.Net;
 using System.Reactive;
 using System.Reactive.Linq;
+using System.Threading.Tasks;
+using System.Windows.Markup;
 
 namespace Flux.ViewModels
 {
@@ -26,6 +28,12 @@ namespace Flux.ViewModels
 
         [RemoteInput]
         public SelectableCache<IPAddress, string> HostAddress { get; }
+
+        [RemoteInput]
+        public SelectableCache<string, string> NFCFormats { get; }
+
+        [RemoteInput]
+        public SelectableCache<INFCTag, string> NFCTagType { get; }
 
         private Optional<string> _PlcAddress = "";
         [RemoteInput]
@@ -81,6 +89,9 @@ namespace Flux.ViewModels
         [RemoteCommand]
         public ReactiveCommand<Unit, Unit> GenerateGuidCommand { get; }
 
+        [RemoteCommand]
+        public ReactiveCommand<Unit, Unit> TestNFCCommand { get; }
+
         public SettingsViewModel(FluxViewModel flux) : base(flux)
         {
             var database_changed = flux.DatabaseProvider.WhenAnyValue(v => v.Database);
@@ -91,8 +102,19 @@ namespace Flux.ViewModels
 
             var host_address_cache = Flux.SettingsProvider.HostAddressCache
                 .Connect();
-
             HostAddress = SelectableCache.Create(host_address_cache);
+            
+            var nfc_format_cache = NFCFormat.Formats.Values.Select(f => f.FormatName)
+                .AsObservableChangeSet(f => f);
+            NFCFormats = SelectableCache.Create(nfc_format_cache);
+
+            var nfc_tag_type_cache = new INFCTag[] 
+                {
+                    default(NFCMaterial),
+                    default(NFCToolNozzle),
+                }
+                .AsObservableChangeSet(f => f.GetType().Name);
+            NFCTagType = SelectableCache.Create(nfc_tag_type_cache);
 
             var user_settings = Flux.SettingsProvider.UserSettings.Local;
             var core_settings = Flux.SettingsProvider.CoreSettings.Local;
@@ -106,6 +128,9 @@ namespace Flux.ViewModels
 
             core_settings.WhenAnyValue(s => s.HostID)
                 .BindTo(this, v => v.HostAddress.SelectedKey);
+
+            core_settings.WhenAnyValue(s => s.NFCFormat)
+                .BindTo(this, v => v.NFCFormats.SelectedKey);
 
             core_settings.WhenAnyValue(s => s.PLCAddress)
                 .BindTo(this, v => v.PlcAddress);
@@ -127,6 +152,38 @@ namespace Flux.ViewModels
 
             SaveSettingsCommand = ReactiveCommand.Create(SaveSettings);
             GenerateGuidCommand = ReactiveCommand.Create(GenerateGuid);
+
+            var can_test_nfc = Observable.CombineLatest(
+                NFCFormats.SelectedKeyChanged,
+                NFCTagType.SelectedKeyChanged,
+                (format, tag) => format.HasValue && tag.HasValue);
+
+            TestNFCCommand = ReactiveCommand.CreateFromTask(TestNFCAsync, can_test_nfc);
+        }
+
+        private async Task TestNFCAsync()
+        {
+            var core_settings = Flux.SettingsProvider.CoreSettings.Local;
+            var nfc_format = NFCFormat.Formats.LookupOptional(core_settings.NFCFormat);
+            if (!nfc_format.HasValue)
+                return;
+
+            var nfc_tag = await Flux.UseReader(h =>
+            {
+                if (!h.HasValue)
+                    return (Optional<INFCTag>.None, NFCTagRW.ReaderNotFound);
+
+                var tag = NFCTagType.SelectedValue.ValueOr(() => default) switch
+                {
+                    NFCMaterial m => h.Value.ReadTag<NFCMaterial>(nfc_format.Value).tag.Cast<NFCMaterial, INFCTag>(),
+                    NFCToolNozzle tn => h.Value.ReadTag<NFCToolNozzle>(nfc_format.Value).tag.Cast<NFCToolNozzle, INFCTag>(),
+                    _ => default
+                };
+
+                return (tag, NFCTagRW.Success);
+            }, (tag, rw) => tag.HasValue);
+
+            Flux.Messages.LogMessage($"LETTURA TAG {NFCTagType.SelectedKey}", JsonUtils.Serialize(nfc_tag), MessageLevel.INFO, 0);
         }
 
         private void SaveSettings()
@@ -144,6 +201,7 @@ namespace Flux.ViewModels
                 user_settings.StandbyMinutes = StandbyMinutes;
                 core_settings.PrinterID = Printers.SelectedKey;
                 core_settings.HostID = HostAddress.SelectedKey;
+                core_settings.NFCFormat = NFCFormats.SelectedKey;
                 core_settings.PrinterGuid = Guid.Parse(PrinterGuid);
 
                 if (!Flux.SettingsProvider.PersistLocalSettings())
