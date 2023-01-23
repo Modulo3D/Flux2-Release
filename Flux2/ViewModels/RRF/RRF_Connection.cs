@@ -215,18 +215,19 @@ namespace Flux.ViewModels
             var source_variables = new GCodeString(global_variables
                 .Select(v => GetExecuteMacroGCode(GlobalPath, v.LoadVariableMacro)));
 
-            using var sha256 = SHA256.Create();
-            var source_hash = sha256.ComputeHash(string.Join("", source_variables)).ToHex();
-
-            var written_hash = written_file.Convert(w => sha256.ComputeHash(string.Join("", w.SplitLines())).ToHex());
-
+            var source_hash = SHA256.HashData(Encoding.UTF8.GetBytes(string.Join("", source_variables))).ToHex();
+            var written_hash = written_file.Convert(w => SHA256.HashData(Encoding.UTF8.GetBytes(string.Join("", w.SplitLines()))).ToHex());
             if (!written_hash.HasValue || written_hash != source_hash)
+            {
                 if (!await PutFileAsync(GlobalPath, "init_vars.g", true, ct, source_variables))
                     return false;
 
+                await WriteVariableAsync(c => c.INIT_VARS, false);
+            }
+
             var init_vars = await ReadVariableAsync(c => c.INIT_VARS);
             if (!init_vars.HasValue || !init_vars.Value)
-            { 
+            {
                 var init_vars_gcode = GCodeString.Create(
                     GetExecuteMacroGCode(GlobalPath, "init_vars.g"),
                     "set global.init_vars = true");
@@ -298,87 +299,6 @@ namespace Flux.ViewModels
 
             return (true, missing_variables);
         }
-        /*public override InnerQueueGCodes GenerateInnerQueueGCodes(FluxJob job)
-        {
-            //TODO 
-
-            var base_motor = VariableStore.ExtrudersUnits.Values.FirstOrOptional(_ => true);
-            if (!base_motor.HasValue)
-                return default;
-
-            var start = GCodeString.Create(
-                GetStartPartProgramGCode(StoragePath, $"{job.MCodeKey}", new BlockNumber(0, BlockType.None)));
-
-            var end     = log_event(FluxEventType.End);
-            var cancel  = log_event(FluxEventType.Cancel);
-
-            var begin = GCodeString.Create(
-                cur_job.Write($"{job.JobKey}"),
-                extr_mm.Foreach((var, i) => var.Write("0")),
-                extr_key.Foreach((v, i) => extrusion_key(i, k => v.Write($"{k}"))),
-                log_event(FluxEventType.Begin));
-
-            var resume = log_event(FluxEventType.Resume);
-
-            var end_filament = GCodeString.Create(
-                log_event(FluxEventType.EndFilament),
-                rename_file($"\"0:/{SystemPath}/resurrect.g\"", $"\"0:/{QueuePath}/{job.MCodeKey}.recovery\""));
-
-            var pause = GCodeString.Create(
-                log_event(FluxEventType.Pause),
-                rename_file($"\"0:/{SystemPath}/resurrect.g\"", $"\"0:/{QueuePath}/{job.MCodeKey}.recovery\""));
-
-            var spin = GCodeString.Create(
-                gcode.DeclareLocalVariable<double>(0.0, out var extrusion_diff),
-                gcode.DeclareLocalVariable<double>(0.0, out var extrusion_pos),
-
-                extr_mm.Foreach((e, i) =>
-                {
-                    return extrusion_key(i, k => new[]
-                    {
-                        $"; extrusion {i}",
-                        extrusion_pos.Write($"move.extruders[{i + base_motor.Value.Address}].position"),
-                        extrusion_diff.Write($"{extrusion_pos} - {e}"),
-                        $"if {extrusion_diff} > 0",
-                            e.Write($"{extrusion_pos}").Pad(4),
-                            gcode.LogExtrusion(job, k, extrusion_diff).Pad(4),
-                    });
-                }));
-
-            return new InnerQueueGCodes()
-            {
-                End = end,
-                Spin = spin,
-                Start = start,
-                Begin = begin,
-                Pause = pause,
-                Cancel = cancel,
-                Resume = resume,
-                EndFilament = end_filament,
-            };
-
-            return default;
-
-            Optional<GCodeString> extrusion_key(int position, Func<ExtrusionKey, GCodeString> func)
-            {
-                return Flux.Feeders.Feeders.Lookup((ushort)position)
-                    .Convert(f => f.SelectedMaterial)
-                    .Convert(m => m.ExtrusionKey)
-                    .Convert(k => func(k));
-            }
-
-            GCodeString log_event(FluxEventType event_type)
-            {
-                if (job.QueuePosition < 0)
-                    return default;
-                return $"echo >>\"0:/{CombinePaths(JobEventPath, $"{job.MCodeKey};{job.JobKey}")}\" {$"\"{event_type.ToEnumString()};\"^{{state.time}}"}";
-            }
-
-            GCodeString rename_file(string old_path, string new_path)
-            {
-                return $"M471 S{old_path} T{new_path} D1";
-            }
-        }*/
 
         // CONNECTION
         public override Task<bool> CloseAsync()
@@ -910,24 +830,60 @@ namespace Flux.ViewModels
             return $"M567 P{machine_extruder.GetArrayBaseIndex()} E1:{string.Join(":", mixing)}";
         }
 
+
+        public override GCodeString GetLogExtrusionGCode(ArrayIndex position, Optional<ExtrusionKey> extr_key, FluxJob job)
+        {
+            if (!extr_key.HasValue)
+                return default;
+
+            var extr_mm_array_unit = GetArrayUnit(c => c.EXTR_MM, position);
+            var extr_mm_var = GetVariable(c => c.EXTR_MM, extr_mm_array_unit);
+            if (!extr_mm_var.HasValue)
+                return default;
+            
+            var extr_key_array_unit = GetArrayUnit(c => c.EXTR_KEY, position);
+            var extr_key_var = GetVariable(c => c.EXTR_KEY, extr_key_array_unit);
+            if (!extr_key_var.HasValue)
+                return default;
+
+            var extrusion_path = CombinePaths(ExtrusionEventPath, $"{extr_key.Value}");
+            
+            return GCodeString.Create(
+                $"if {extr_key_var} != \"\"",
+                $"  var extrusion_pos = 0",
+                $"  var extrusion_diff = 0",
+                $"  set var.extrusion_pos = move.extruders[{position.GetArrayBaseIndex()}].position",
+                $"  set var.extrusion_diff = var.extrusion_pos - {extr_mm_var}",
+                $"  if var.extrusion_diff > 0",
+                $"    set {extr_mm_var} = var.extrusion_pos",
+                $"    echo >>\"0:/{extrusion_path}\" \"{job.JobKey};\"^{{var.extrusion_diff}}");
+        }
         public override GCodeString GetWriteCurrentJobGCode(Optional<JobKey> job_key)
         {
-            throw new NotImplementedException();
+            var job_key_str = job_key.ConvertOr(k => k.ToString(), () => "");
+            return $"set {VariableStore.CUR_JOB} = \"{job_key_str}\"";
         }
-
-        public override GCodeString GetLogEventGCode(FluxJob job, FluxEventType event_type)
-        {
-            throw new NotImplementedException();
-        }
-
-        public override GCodeString GetWriteExtrusionKeyGCode(ushort position, Optional<ExtrusionKey> extr_key)
-        {
-            throw new NotImplementedException();
-        }
-
         public override GCodeString GetDeleteFileGCode(string folder, string filename)
         {
-            throw new NotImplementedException();
+            var file_path = CombinePaths(folder, filename);
+            return $"M30 0:/{file_path}";
+        }
+        public override GCodeString GetLogEventGCode(FluxJob job, FluxEventType event_type)
+        {
+            var event_path = CombinePaths(JobEventPath, $"{job.MCodeKey};{job.JobKey}");
+            var event_type_str = event_type.ToEnumString();
+
+            return $"echo >>\"0:/{event_path}\" \"{event_type_str};\"^{{state.time}}";
+        }
+        public override GCodeString GetWriteExtrusionKeyGCode(ArrayIndex position, Optional<ExtrusionKey> extr_key)
+        {
+            var array_unit = GetArrayUnit(c => c.EXTR_KEY, position);
+            var extr_key_var = GetVariable(c => c.EXTR_KEY, array_unit);
+            if (!extr_key_var.HasValue)
+                return default;
+
+            var extr_key_str = extr_key.ConvertOr(k => k.ToString(), () => "");
+            return $"set {extr_key_var.Value} = \"{extr_key_str}\"";
         }
     }
 }

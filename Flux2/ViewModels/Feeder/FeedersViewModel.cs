@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
@@ -156,16 +157,15 @@ namespace Flux.ViewModels
             if (!printer.HasValue)
                 return default;
 
-            var documents = CompositeQuery.Create(database.Value,
-                    db => _ => db.Find(printer.Value, Tool.SchemaInstance), db => db.GetTarget,
-                    db => t => db.Find(t, Nozzle.SchemaInstance), db => db.GetTarget,
-                    db => n => db.Find(n, ToolMaterial.SchemaInstance), db => db.GetTarget,
-                    db => tm => db.Find(Material.SchemaInstance, tm), db => db.GetSource)
-                    .Execute()
-                    .Convert<Material>();
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var documents = await CompositeQuery.Create(database.Value,
+                    db => (_, ct) => db.FindAsync(printer.Value, Tool.SchemaInstance, ct), db => db.GetTargetAsync,
+                    db => (t, ct) => db.FindAsync(t, Nozzle.SchemaInstance, ct), db => db.GetTargetAsync,
+                    db => (n, ct) => db.FindAsync(n, ToolMaterial.SchemaInstance, ct), db => db.GetTargetAsync,
+                    db => (tm, ct) => db.FindAsync(Material.SchemaInstance, tm, ct), db => db.GetSourceAsync)
+                    .ExecuteAsync<Material>(cts.Token);
 
-            var materials = documents.Documents
-                .Distinct()
+            var materials = documents.Distinct()
                 .OrderBy(d => d[d => d.MaterialType, ""])
                 .ThenBy(d => d.Name)
                 .AsObservableChangeSet(m => m.Id)
@@ -213,13 +213,12 @@ namespace Flux.ViewModels
             if (!printer.HasValue)
                 return default;
 
-            var tool_documents = CompositeQuery.Create(database.Value,
-               db => _ => db.Find(printer.Value, Tool.SchemaInstance), db => db.GetTarget)
-               .Execute()
-               .Convert<Tool>();
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var tool_documents = await CompositeQuery.Create(database.Value,
+               db => (_, ct) => db.FindAsync(printer.Value, Tool.SchemaInstance, ct), db => db.GetTargetAsync)
+               .ExecuteAsync<Tool>(cts.Token);
 
-            var tools = tool_documents.Documents
-                .OrderBy(d => d.Name)
+            var tools = tool_documents.OrderBy(d => d.Name)
                 .AsObservableChangeSet(t => t.Id)
                 .AsObservableCache();
 
@@ -245,16 +244,15 @@ namespace Flux.ViewModels
             if (!database.HasValue)
                 return default;
 
-            var nozzle_documents = CompositeQuery.Create(database.Value,
-               db => _ => db.Find(tool, Nozzle.SchemaInstance), db => db.GetTarget)
-               .Execute()
-               .Convert<Nozzle>();
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var nozzle_documents = await CompositeQuery.Create(database.Value,
+               db => (_, ct) => db.FindAsync(tool, Nozzle.SchemaInstance, ct), db => db.GetTargetAsync)
+               .ExecuteAsync<Nozzle>(cts.Token);
 
             if (!nozzle_documents.HasDocuments)
                 return default;
 
-            var nozzles = nozzle_documents.Documents
-                .OrderBy(d => d.Name)
+            var nozzles = nozzle_documents.OrderBy(d => d.Name)
                 .AsObservableChangeSet(n => n.Id)
                 .AsObservableCache();
 

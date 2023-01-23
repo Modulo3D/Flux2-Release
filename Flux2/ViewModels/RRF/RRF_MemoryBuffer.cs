@@ -103,7 +103,7 @@ namespace Flux.ViewModels
                 var first = file_list.ConvertOr(f => f.Next, () => 0);
                 var request = new RRF_Request<FLUX_FileList>($"rr_filelist?dir={Resource}&first={first}", HttpMethod.Get, priority, ct, MemoryBuffer.RequestTimeout);
                 var response = await connection.ExecuteAsync(request);
-
+                    
                 file_list = response.Content;
                 if (!file_list.HasValue)
                     break;

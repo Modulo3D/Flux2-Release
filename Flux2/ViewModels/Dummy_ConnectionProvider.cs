@@ -352,13 +352,19 @@ namespace Flux.ViewModels
         {
             throw new NotImplementedException();
         }
+        
 
-        public override GCodeString GetWriteExtrusionKeyGCode(ushort position, Optional<ExtrusionKey> extr_key)
+        public override GCodeString GetDeleteFileGCode(string folder, string filename)
         {
             throw new NotImplementedException();
         }
 
-        public override GCodeString GetDeleteFileGCode(string folder, string filename)
+        public override GCodeString GetWriteExtrusionKeyGCode(ArrayIndex position, Optional<ExtrusionKey> extr_key)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override GCodeString GetLogExtrusionGCode(ArrayIndex position, Optional<ExtrusionKey> extr_key, FluxJob job)
         {
             throw new NotImplementedException();
         }

@@ -94,13 +94,18 @@ namespace Flux.ViewModels
         }
     }
 
-    public class NFCInnerViewModel<TTagViewModel> : NavPanelViewModel<NFCInnerViewModel<TTagViewModel>>
-        where TTagViewModel : IFluxTagViewModel
+    public class NFCInnerViewModel<TTagViewModel, TNFCTag> : NavPanelViewModel<NFCInnerViewModel<TTagViewModel, TNFCTag>>
+        where TTagViewModel : IFluxTagViewModel<TNFCTag>
+        where TNFCTag : INFCOdometerTag<TNFCTag>
     {
         //private ObservableAsPropertyHelper<Optional<string>> _SerializedTag;
         //public Optional<string> SerializedTag => _SerializedTag.Value;
 
-        public NFCInnerViewModel(FluxViewModel flux, string name, IObservableCache<TTagViewModel, ushort> tag_cache, ushort tag_position, ushort load_position) : base(flux, $"{name.ToCamelCase()}??{tag_position + 1}")
+        public NFCInnerViewModel(FluxViewModel flux, string name, 
+            IObservableCache<TTagViewModel, ushort> tag_cache, 
+            ushort tag_position, ushort load_position,
+            Func<Guid, ushort, INFCSlot<TNFCTag>, NFCTagRW> load_tag, 
+            Func<Guid, ushort, INFCSlot<TNFCTag>, NFCTagRW> unload_tag) : base(flux, $"{name.ToCamelCase()}??{tag_position + 1}")
         {
             var tag_vm = tag_cache.Lookup(tag_position);
 
@@ -127,29 +132,31 @@ namespace Flux.ViewModels
                 is_locked_tag(),
                 is_unloaded_tag(),
                 (lk, un) => lk && un).ToOptional();
-            AddCommand($"load{name}Tag??{tag_position + 1}", load_tag, can_load);
+            AddCommand($"load{name}Tag??{tag_position + 1}", inner_load_tag, can_load);
 
             var can_unload = Observable.CombineLatest(
                 is_locked_tag(),
                 is_loaded_tag(),
                 (l, lo) => l && lo).ToOptional();
-            AddCommand($"unload{name}Tag??{tag_position + 1}", unload_tag, can_unload);
+            AddCommand($"unload{name}Tag??{tag_position + 1}", inner_unload_tag, can_unload);
 
-            void load_tag()
+            void inner_load_tag()
             {
                 if (!tag_vm.HasValue)
                     return; 
                 var core_setting = Flux.SettingsProvider.CoreSettings.Local;
-                var result = tag_vm.Value.NFCSlot.StoreTag(t => t.SetLoaded(core_setting.PrinterGuid, load_position));
-                Console.WriteLine(result);
+
+                Console.WriteLine(load_tag(core_setting.PrinterGuid, load_position, tag_vm.Value.NFCSlot));
+                Console.WriteLine(tag_vm.Value.NFCSlot.StoreTag(t => t.SetLoaded(core_setting.PrinterGuid, load_position)));
             }
-            void unload_tag()
+            void inner_unload_tag()
             {
                 if (!tag_vm.HasValue)
                     return;
                 var core_setting = Flux.SettingsProvider.CoreSettings.Local;
-                var result = tag_vm.Value.NFCSlot.StoreTag(t => t.SetLoaded(core_setting.PrinterGuid, default)); 
-                Console.WriteLine(result);
+
+                Console.WriteLine(unload_tag(core_setting.PrinterGuid, load_position, tag_vm.Value.NFCSlot));
+                Console.WriteLine(tag_vm.Value.NFCSlot.StoreTag(t => t.SetLoaded(core_setting.PrinterGuid, default)));
             }
             async Task lock_tag_async()
             {
@@ -221,7 +228,10 @@ namespace Flux.ViewModels
                             AddModal(new NFCInnerViewModel(flux, "Tool", feeder.Value.ToolNozzle, current_machine_e));
 
                             foreach (var material in feeder.Value.Materials.Keys)
-                                AddModal(new NFCInnerViewModel<IFluxMaterialViewModel>(flux, "Material", feeder.Value.Materials, material, current_machine_e));
+                                AddModal(new NFCInnerViewModel<IFluxMaterialViewModel, NFCMaterial>(
+                                    flux, "Material", feeder.Value.Materials, material, current_machine_e,
+                                    (g, e, s) => s.StoreTag(t => t.SetInserted(g, e)),
+                                    (g, e, s) => s.StoreTag(t => t.SetInserted(g, default))));
                         }
                     }
                 });
@@ -361,7 +371,7 @@ namespace Flux.ViewModels
             AddCommand("resetPrinter", Flux.ConnectionProvider.StartConnection, visible: advanced_mode);
             AddCommand("vacuumPump", m => m.ENABLE_VACUUM, can_execute: IS_IDLE, visible: advanced_mode);
             AddCommand("openClamp", m => m.OPEN_HEAD_CLAMP, can_execute: IS_IDLE, visible: advanced_mode);
-            AddCommand("reloadDatabase", () => Flux.DatabaseProvider.Initialize(), visible: advanced_mode);
+            AddCommand("reloadDatabase", () => Flux.DatabaseProvider.InitializeAsync(), visible: advanced_mode);
             AddCommand("swFilamentSensor", Flux.SettingsProvider.UserSettings, s => s.PauseOnEmptyOdometer, visible: advanced_mode);
 
             AddModal(() => new MemoryViewModel(Flux), visible: advanced_mode);
@@ -503,8 +513,8 @@ namespace Flux.ViewModels
                 .ToOptional();
 
             Manage = AddModal(() => new ManageViewModel(flux));
-            Routines = AddModal(() => new RoutinesViewModel(flux));
             Settings = AddModal(() => new SettingsViewModel(flux));
+            Routines = AddModal(() => new RoutinesViewModel(flux));
         }
     }
 }

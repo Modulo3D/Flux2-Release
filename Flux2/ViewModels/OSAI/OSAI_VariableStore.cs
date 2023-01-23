@@ -234,6 +234,7 @@ namespace Flux.ViewModels
         {
             var connection = connection_provider.Connection;
             using var queue_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
             var queue_files = await connection.ListFilesAsync(c => c.QueuePath, queue_ctk.Token);
             if (!queue_files.HasValue)
                 return default;

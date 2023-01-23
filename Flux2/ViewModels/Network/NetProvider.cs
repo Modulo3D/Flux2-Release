@@ -354,7 +354,7 @@ namespace Flux.ViewModels
                     await Flux.DatabaseProvider.Database.Value.AccessLocalDatabaseAsync(db => receive_database_async(parser.Files[0].Data, db.Filename));
                 }
 
-                Flux.DatabaseProvider.Initialize();
+                Flux.DatabaseProvider.InitializeAsync();
 
                 return true;
             }

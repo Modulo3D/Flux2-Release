@@ -102,6 +102,7 @@ namespace Flux.ViewModels
 
                 Global.CreateVariable(c => c.CUR_JOB, false, "");
                 Global.CreateArray(c => c.EXTR_KEY, false, "", max_extruders);
+                Global.CreateArray(c => c.EXTR_MM, false, 0.0, max_extruders);
 
                 Global.CreateVariable(c => c.DEBUG, false, false);
                 Global.CreateVariable(c => c.ITERATOR, false, true);

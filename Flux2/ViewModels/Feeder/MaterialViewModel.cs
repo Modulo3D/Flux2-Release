@@ -76,7 +76,7 @@ namespace Flux.ViewModels
 
         public MaterialViewModel(FeedersViewModel feeders, FeederViewModel feeder, ushort position) : base(feeders, feeder, position, s => s.NFCMaterials, (db, m) =>
         {
-            return m.GetDocument<Material>(db, m => m.MaterialGuid);
+            return m.GetDocumentAsync<Material>(db, m => m.MaterialGuid);
         }, t => t.MaterialGuid, watch_odometer_for_pause: true)
         {
             _ExtrusionKey = Observable.CombineLatest(
@@ -146,20 +146,6 @@ namespace Flux.ViewModels
             });
         }
 
-        public NFCTagRW SetMaterialLoaded(Optional<bool> material_loaded)
-        {
-            var core_setting = Flux.SettingsProvider.CoreSettings.Local;
-
-            if (!material_loaded.HasValue)
-                return default;
-            if (!NFCSlot.Nfc.Tag.HasValue)
-                return default;
-
-            if (material_loaded.Value)
-                return NFCSlot.StoreTag(t => t.SetLoaded(core_setting.PrinterGuid, Feeder.Position));
-            else
-                return NFCSlot.StoreTag(t => t.SetLoaded(core_setting.PrinterGuid, default));
-        }
         public override void Initialize()
         {
             base.Initialize();
@@ -171,32 +157,18 @@ namespace Flux.ViewModels
             var tool_nozzle = Feeder.ToolNozzle
                 .WhenAnyValue(t => t.State);
 
-            var is_selected = Feeder.WhenAnyValue(f => f.SelectedMaterial)
-                .Convert(m => m == this)
-                .ValueOr(() => false);
-
-            _MaterialBrush = Observable.CombineLatest(
-                is_selected,
-                tool_nozzle,
-                this.WhenAnyValue(v => v.State),
-                ToolMaterial.WhenAnyValue(v => v.State),
-                (s, tn, m, tm) =>
+            _MaterialBrush = this.WhenAnyValue(v => v.State)
+                .Select(s => 
                 {
-                    if (m.IsNotLoaded())
+                    if (!s.Known)
                         return FluxColors.Empty;
-                    if (!tn.Inserted)
+                    if (!s.Inserted)
                         return FluxColors.Empty;
-                    if (!tn.IsLoaded())
+                    if (!s.Loaded)
                         return FluxColors.Inactive;
-                    if (!m.Known)
-                        return FluxColors.Error;
-                    if (tm.Compatible.HasValue && !tm.Compatible.Value)
-                        return FluxColors.Error;
-                    if (!m.Inserted)
-                        return FluxColors.Empty;
-                    if (!m.Locked)
+                    if (!s.Locked)
                         return FluxColors.Warning;
-                    if (!s)
+                    if (!s.Selected)
                         return FluxColors.Active;
                     return FluxColors.Selected;
                 })
@@ -325,8 +297,12 @@ namespace Flux.ViewModels
                 tag_printer_guid,
                 (p_guid, t_guid) => t_guid.ConvertOr(t => t == p_guid, () => false));
 
-            return Observable.CombineLatest(inserted, known, locked, loaded,
-                 (inserted, known, locked, loaded) => new MaterialState(inserted, known, locked, loaded));
+            var selected = Feeder.WhenAnyValue(f => f.SelectedMaterial)
+                .Convert(m => m == this)
+                .ValueOr(() => false);
+
+            return Observable.CombineLatest(inserted, known, locked, loaded, selected,
+                 (inserted, known, locked, loaded, selected) => new MaterialState(inserted, known, locked, loaded, selected));
         }
         private static bool CanLoadMaterial(bool can_cycle, ToolNozzleState tool_nozzle, MaterialState material, Optional<ToolMaterialState> tool_material)
         {

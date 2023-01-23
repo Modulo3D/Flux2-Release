@@ -5,6 +5,8 @@ using ReactiveUI;
 using System;
 using System.IO;
 using System.ServiceModel;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
@@ -24,24 +26,28 @@ namespace Flux.ViewModels
             Flux = main;
         }
 
-        public bool Initialize(Action<ILocalDatabase> initialize_callback = default)
+        public async Task<bool> InitializeAsync(Func<ILocalDatabase, Task> initialize_callback = default)
         {
             try
             {
                 if (Database.HasValue)
                     Database.Value.Dispose();
+                
+                //var service = new DeLoreanClient("http://localhost:5004/DeLorean/");
+                var service = new DeLoreanClient("http://deloreanservice.azurewebsites.net/delorean");
 
-                var delorean_uri = "http://deloreanservice.azurewebsites.net/delorean.svc/delorean";
-                using var client = new BasicHttpClient<IDelorean>(delorean_uri);
-                var channel = client.CreateChannel();
-                var response = channel.GetProfile(DatabaseVisibility.Public);
-                ((IClientChannel)channel).Close();
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+                var response = await service.GetProfileAsync(cts.Token);
 
                 if (response.Length > 0)
                 {
                     if (Files.Database.Exists)
                         Files.Database.Delete();
-                    File.WriteAllBytes(Files.Database.FullName, response);
+
+                    var bytes = Convert.FromBase64String(response);
+                    bytes = await bytes.UnzipAsync();
+
+                    File.WriteAllBytes(Files.Database.FullName, bytes);
                 }
             }
             catch (Exception ex)
@@ -60,9 +66,9 @@ namespace Flux.ViewModels
                     };
 
                     database = new LocalDatabase(connection);
-                    database.Initialize(Modulo3DNet.Database.RegisterCuraSlicerDatabase);
+                    Modulo3DNet.Database.RegisterCuraSlicerDatabase(database);
 
-                    initialize_callback?.Invoke(database);
+                    await initialize_callback?.Invoke(database);
                     Database = database.ToOptional();
 
                     return true;

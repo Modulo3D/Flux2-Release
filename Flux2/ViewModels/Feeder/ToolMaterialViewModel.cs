@@ -5,6 +5,8 @@ using System;
 using System.Linq;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
@@ -40,7 +42,8 @@ namespace Flux.ViewModels
                 Material.WhenAnyValue(v => v.Document),
                 ToolNozzle.WhenAnyValue(v => v.Document),
                 Flux.DatabaseProvider.WhenAnyValue(v => v.Database),
-                FindToolMaterial)
+                FindToolMaterialAsync)
+                .SelectMany(o => Observable.FromAsync(() => o))
                 .ToProperty(this, v => v.Document)
                 .DisposeWith(Disposables);
 
@@ -48,7 +51,8 @@ namespace Flux.ViewModels
                 Material.WhenAnyValue(v => v.Document),
                 ToolNozzle.WhenAnyValue(v => v.Document),
                 Flux.DatabaseProvider.WhenAnyValue(v => v.Database),
-                FindToolMaterialState)
+                FindToolMaterialStateAsync)
+                .SelectMany(o => Observable.FromAsync(() => o))
                 .ToProperty(this, v => v.State)
                 .DisposeWith(Disposables);
 
@@ -63,7 +67,7 @@ namespace Flux.ViewModels
                 .DisposeWith(Disposables);
         }
 
-        private ToolMaterialState FindToolMaterialState(Optional<Material> material, (Optional<Tool> tool, Optional<Nozzle> nozzle) tool_nozzle, Optional<ILocalDatabase> database)
+        private async Task<ToolMaterialState> FindToolMaterialStateAsync(Optional<Material> material, (Optional<Tool> tool, Optional<Nozzle> nozzle) tool_nozzle, Optional<ILocalDatabase> database)
         {
             if (!database.HasValue)
                 return new ToolMaterialState(default);
@@ -77,17 +81,17 @@ namespace Flux.ViewModels
             if (!tool_nozzle.nozzle.HasValue)
                 return new ToolMaterialState(default);
 
-            var toolmaterials = CompositeQuery.Create(database.Value,
-                db => _ => db.Find(material.Value, ToolMaterial.SchemaInstance), db => db.GetTarget,
-                db => tm => db.Find(tool_nozzle.nozzle.Value, tm), db => db.GetTarget)
-                .Execute()
-                .Convert<ToolMaterial>();
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var toolmaterials = await CompositeQuery.Create(database.Value,
+                db => (_, ct) => db.FindAsync(material.Value, ToolMaterial.SchemaInstance, ct), db => db.GetTargetAsync,
+                db => (tm, ct) => db.FindAsync(tool_nozzle.nozzle.Value, tm, ct), db => db.GetTargetAsync)
+                .ExecuteAsync<ToolMaterial>(cts.Token);
 
-            var tool_material = toolmaterials.Documents.FirstOrDefault().ToOptional();
+            var tool_material = toolmaterials.FirstOrDefault().ToOptional();
             return new ToolMaterialState(tool_material.HasValue);
         }
 
-        public static Optional<ToolMaterial> FindToolMaterial(Optional<Material> material, (Optional<Tool> tool, Optional<Nozzle> nozzle) tool_nozzle, Optional<ILocalDatabase> database)
+        public static async Task<Optional<ToolMaterial>> FindToolMaterialAsync(Optional<Material> material, (Optional<Tool> tool, Optional<Nozzle> nozzle) tool_nozzle, Optional<ILocalDatabase> database)
         {
             if (!database.HasValue)
                 return default;
@@ -101,13 +105,13 @@ namespace Flux.ViewModels
             if (!tool_nozzle.nozzle.HasValue)
                 return default;
 
-            var toolmaterials = CompositeQuery.Create(database.Value,
-                db => _ => db.Find(material.Value, ToolMaterial.SchemaInstance), db => db.GetTarget,
-                db => tm => db.Find(tool_nozzle.nozzle.Value, tm), db => db.GetTarget)
-                .Execute()
-                .Convert<ToolMaterial>();
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var toolmaterials = await CompositeQuery.Create(database.Value,
+                db => (_, ct) => db.FindAsync(material.Value, ToolMaterial.SchemaInstance, ct), db => db.GetTargetAsync,
+                db => (tm, ct) => db.FindAsync(tool_nozzle.nozzle.Value, tm, ct), db => db.GetTargetAsync)
+                .ExecuteAsync<ToolMaterial>(cts.Token);
 
-            return toolmaterials.Documents.FirstOrDefault().ToOptional();
+            return toolmaterials.FirstOrDefault().ToOptional();
         }
 
         public void Dispose()

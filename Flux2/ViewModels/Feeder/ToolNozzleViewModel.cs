@@ -42,10 +42,10 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public override Optional<string> DocumentLabel => _DocumentLabel.Value;
 
-        public ToolNozzleViewModel(FeedersViewModel feeders, FeederViewModel feeder) : base(feeders, feeder, feeder.Position, s => s.NFCToolNozzles, (db, tn) =>
+        public ToolNozzleViewModel(FeedersViewModel feeders, FeederViewModel feeder) : base(feeders, feeder, feeder.Position, s => s.NFCToolNozzles, async (db, tn) =>
         {
-            return (tn.GetDocument<Tool>(db, tn => tn.ToolGuid),
-                tn.GetDocument<Nozzle>(db, tn => tn.NozzleGuid));
+            return (await tn.GetDocumentAsync<Tool>(db, tn => tn.ToolGuid),
+                await tn.GetDocumentAsync<Nozzle>(db, tn => tn.NozzleGuid));
         }, t => t.ToolGuid, watch_odometer_for_pause: false)
         {
             var variable_store = Flux.ConnectionProvider.VariableStoreBase;
@@ -85,11 +85,6 @@ namespace Flux.ViewModels
                 .DisposeWith(Disposables);
         }
 
-        public NFCTagRW SetLastBreakTemp(GCodeFilamentOperation filament_settings)
-        {
-            var core_setting = Flux.SettingsProvider.CoreSettings.Local;
-            return NFCSlot.StoreTag(c => c.SetLastBreakTemp(core_setting.PrinterGuid, filament_settings.CurBreakTemp));
-        }
         public override void Initialize()
         {
             base.Initialize();

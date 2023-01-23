@@ -8,6 +8,8 @@ using System.Linq;
 using System.Reactive;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
@@ -73,8 +75,9 @@ namespace Flux.ViewModels
             Materials = Observable.CombineLatest(
                 Flux.DatabaseProvider.WhenAnyValue(v => v.Database),
                 this.WhenAnyValue(v => v.Analyzer),
-                (db, a) => FindDocuments<Material>(db, a, r => r.MaterialId))
-                .AsObservableChangeSet(t => t.position)
+                (db, a) => FindDocumentsAsync<Material>(db, a, r => r.MaterialId))
+                .Select(o => o.ToObservable()).Switch()
+                .ToObservableChangeSet(t => t.position)
                 .Transform(t => t.document)
                 .AsObservableCache()
                 .DisposeWith(Disposables);
@@ -82,8 +85,9 @@ namespace Flux.ViewModels
             Nozzles = Observable.CombineLatest(
                 Flux.DatabaseProvider.WhenAnyValue(v => v.Database),
                 this.WhenAnyValue(v => v.Analyzer),
-                (db, a) => FindDocuments<Nozzle>(db, a, r => r.NozzleId))
-                .AsObservableChangeSet(t => t.position)
+                (db, a) => FindDocumentsAsync<Nozzle>(db, a, r => r.NozzleId))
+                .Select(o => o.ToObservable()).Switch()
+                .ToObservableChangeSet(t => t.position)
                 .Transform(t => t.document)
                 .AsObservableCache()
                 .DisposeWith(Disposables);
@@ -147,14 +151,16 @@ namespace Flux.ViewModels
                 {
                     return Analyzer.MCode.FeederReports
                         .Select(f => get_material(f.Value))
+                        .Select(m => m.Result)
                         .Where(m => m.material.HasValue)
                         .Select(m => ExtrusionG.CreateTotalExtrusion(default, m.feeder, m.material.Value))
                         .Select(e => e.WeightG);
 
-                    (FeederReport feeder, Optional<Material> material) get_material(FeederReport feeder)
+                    async Task<(FeederReport feeder, Optional<Material> material)> get_material(FeederReport feeder)
                     {
-                        var result = db.Value.FindById<Material>(feeder.MaterialId);
-                        return (feeder, result.Documents.FirstOrOptional(m => m != null));
+                        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                        var result = await db.Value.FindByIdAsync<Material>(feeder.MaterialId, cts.Token);
+                        return (feeder, result.FirstOrOptional(m => m != null));
                     }
                 });
 
@@ -162,6 +168,7 @@ namespace Flux.ViewModels
             AddOutput("quality", Analyzer.MCode.PrintQuality);
             AddOutput("quantities", quanitites, typeof(EnumerableConverter<WeightConverter, double>));
             AddOutput("infoToggled", this.WhenAnyValue(v => v.ShowInfo));
+            AddOutput("pos", Nozzles.Connect().QueryWhenChanged(f => f.Keys));
             AddOutput("nozzles", Nozzles.Connect().QueryWhenChanged(f => f.Items.Select(i => i.Name)));
             AddOutput("materials", Materials.Connect().QueryWhenChanged(f => f.Items.Select(i => i.Name)));
             AddOutput("duration", Analyzer.MCode.Duration, typeof(TimeSpanConverter));
@@ -195,7 +202,7 @@ namespace Flux.ViewModels
 
             return (ushort)index;
         }
-        private static IEnumerable<(TDocument document, ushort position)> FindDocuments<TDocument>(Optional<ILocalDatabase> database, Optional<MCodeAnalyzer> analyzer, Func<FeederReport, int> get_id)
+        private static async IAsyncEnumerable<(TDocument document, ushort position)> FindDocumentsAsync<TDocument>(Optional<ILocalDatabase> database, Optional<MCodeAnalyzer> analyzer, Func<FeederReport, int> get_id)
             where TDocument : IDocument, new()
         {
             if (!database.HasValue)
@@ -204,9 +211,10 @@ namespace Flux.ViewModels
                 yield break;
             foreach (var feeder in analyzer.Value.MCode.FeederReports)
             {
-                var result = database.Value.FindById<TDocument>(get_id(feeder.Value));
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                var result = await database.Value.FindByIdAsync<TDocument>(get_id(feeder.Value), cts.Token);
                 if (result.HasDocuments)
-                    yield return (result.Documents.FirstOrDefault(), feeder.Key);
+                    yield return (result.FirstOrDefault(), feeder.Key);
             }
         }
     }

@@ -6,6 +6,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reactive.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
@@ -66,7 +68,8 @@ namespace Flux.ViewModels
                 queue_pos,
                 db_changed,
                 report_queue,
-                GetExpectedDocumentQueue)
+                GetExpectedDocumentQueueAsync)
+                .SelectMany(o => Observable.FromAsync(() => o))
                 .ToProperty(this, v => v.ExpectedDocumentQueue);
 
             _CurrentDocument = this.WhenAnyValue(v => v.TagViewModel)
@@ -109,7 +112,7 @@ namespace Flux.ViewModels
         public abstract Optional<TDocument> GetCurrentDocument(TTagDocument tag_document);
         public abstract bool GetInvalid(Optional<TTagDocument> document, Optional<TState> state, Optional<FeederReportQueue> report);
 
-        private Optional<DocumentQueue<TDocument>> GetExpectedDocumentQueue(
+        private async Task<Optional<DocumentQueue<TDocument>>> GetExpectedDocumentQueueAsync(
             Optional<JobQueue> job_queue,
             Optional<QueuePosition> queue_position,
             Optional<ILocalDatabase> database,
@@ -126,13 +129,6 @@ namespace Flux.ViewModels
                 if (queue_position.Value < 0)
                     return default;
 
-                var job_key = job_queue.Value
-                    .Lookup(queue_position.Value)
-                    .Convert(j => j.JobKey);
-
-                if (!job_key.HasValue)
-                    return default;
-
                 if (!database.HasValue)
                     return default;
                 if (!feeder_queue.HasValue)
@@ -141,15 +137,22 @@ namespace Flux.ViewModels
                 var document_queue = new DocumentQueue<TDocument>();
                 foreach (var feeder_report in feeder_queue.Value)
                 {
-                    if (!feeder_report.Key.Equals(job_key.Value))
+                    var job = job_queue.Value
+                        .Lookup(queue_position.Value);
+                    if (!job.HasValue)
+                        continue;
+
+                    if (job.Value.QueuePosition < queue_position.Value)
                         continue;
 
                     var document_id = GetDocumentId(feeder_report.Value);
-                    var result = database.Value.FindById<TDocument>(document_id);
+
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    var result = await database.Value.FindByIdAsync<TDocument>(document_id, cts.Token);
                     if (!result.HasDocuments)
                         continue;
 
-                    document_queue.Add(feeder_report.Key, result.Documents.First());
+                    document_queue.Add(feeder_report.Key, result.First());
                 }
                 return document_queue;
             }
@@ -336,40 +339,8 @@ namespace Flux.ViewModels
                     .ConvertMany(m => m.NFCSlot.WhenAnyValue(m => m.Nfc)),
                 Flux.Feeders.OdometerManager
                     .WhenAnyValue(c => c.ExtrusionSetQueue),
-                (db, feeder_report_queue, tool_nozzle, material, extrusions) =>
-                {
-                    if (!db.HasValue)
-                        return default;
-
-                    if (!feeder_report_queue.HasValue)
-                        return default;
-
-                    var material_document = material.Convert(m => m.Tag).Convert(t => t.GetDocument<Material>(db.Value, tn => tn.MaterialGuid));
-                    if (!material_document.HasValue)
-                        return default;
-
-                    if (!extrusions.HasValue)
-                        return default;
-
-                    var total_extrusion_queue = new ExtrusionQueue<ExtrusionG>();
-                    foreach (var feeder_report in feeder_report_queue.Value)
-                        total_extrusion_queue.Add(feeder_report.Key, ExtrusionG.CreateTotalExtrusion(feeder_report.Key, feeder_report.Value, material_document.Value));
-
-                    var extrusion_key = ExtrusionKey.Create(tool_nozzle, material);
-                    var extrusion_queue_mm = extrusions.Value.LookupOptional(extrusion_key);
-                    if (!extrusion_queue_mm.HasValue)
-                        return total_extrusion_queue;
-
-                    var extrusion_queue_g = new ExtrusionQueue<ExtrusionG>();
-                    foreach (var extrusion in extrusion_queue_mm.Value)
-                        extrusion_queue_g.Add(extrusion.Key, ExtrusionG.CreateExtrusion(material_document.Value, extrusion.Value));
-
-                    foreach (var extrusion in extrusion_queue_g)
-                        if (total_extrusion_queue.ContainsKey(extrusion.Key))
-                            total_extrusion_queue[extrusion.Key] -= extrusion.Value;
-
-                    return total_extrusion_queue.ToOptional();
-                })
+                GetExtrusionQueue)
+                .SelectMany(o => Observable.FromAsync(() => o))
                 .ToProperty(this, v => v.ExtrusionQueue);
 
             _Offset = Flux.Calibration.Offsets.Connect()
@@ -403,6 +374,46 @@ namespace Flux.ViewModels
 
             Material.Initialize();
             ToolNozzle.Initialize();
+        }
+
+        private async Task<Optional<ExtrusionQueue<ExtrusionG>>> GetExtrusionQueue(
+            Optional<ILocalDatabase> database,
+            Optional<FeederReportQueue> feeder_report_queue,
+            NFCReading<NFCToolNozzle> tool_nozzle, 
+            Optional<NFCReading<NFCMaterial>> material,
+            Optional<ExtrusionSetQueue<ExtrusionMM>> extrusions)
+        {
+            if (!database.HasValue)
+                return default;
+
+            if (!feeder_report_queue.HasValue)
+                return default;
+
+            var material_document = await material.Convert(m => m.Tag).ConvertAsync(t => t.GetDocumentAsync<Material>(database.Value, tn => tn.MaterialGuid));
+            if (!material_document.HasValue)
+                return default;
+
+            if (!extrusions.HasValue)
+                return default;
+
+            var total_extrusion_queue = new ExtrusionQueue<ExtrusionG>();
+            foreach (var feeder_report in feeder_report_queue.Value)
+                total_extrusion_queue.Add(feeder_report.Key, ExtrusionG.CreateTotalExtrusion(feeder_report.Key, feeder_report.Value, material_document.Value));
+
+            var extrusion_key = ExtrusionKey.Create(tool_nozzle, material);
+            var extrusion_queue_mm = extrusions.Value.LookupOptional(extrusion_key);
+            if (!extrusion_queue_mm.HasValue)
+                return total_extrusion_queue;
+
+            var extrusion_queue_g = new ExtrusionQueue<ExtrusionG>();
+            foreach (var extrusion in extrusion_queue_mm.Value)
+                extrusion_queue_g.Add(extrusion.Key, ExtrusionG.CreateExtrusion(material_document.Value, extrusion.Value));
+
+            foreach (var extrusion in extrusion_queue_g)
+                if (total_extrusion_queue.ContainsKey(extrusion.Key))
+                    total_extrusion_queue[extrusion.Key] -= extrusion.Value;
+
+            return total_extrusion_queue.ToOptional();
         }
 
         private bool ColdNozzle(PrintingEvaluation evaluation, Optional<FLUX_Temp> plc_temp)

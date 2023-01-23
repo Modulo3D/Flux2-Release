@@ -10,6 +10,8 @@ using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Reactive.Linq;
 using System.Runtime.InteropServices;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
@@ -58,6 +60,7 @@ namespace Flux.ViewModels
                 Flux.DatabaseProvider.WhenAnyValue(v => v.Database),
                 CoreSettings.Local.WhenAnyValue(s => s.PrinterID),
                 FindPrinter)
+                .SelectMany(o => Observable.FromAsync(() => o))
                 .ToProperty(this, v => v.Printer);
 
             HostAddressCache = NetworkInterface.GetAllNetworkInterfaces()
@@ -114,16 +117,17 @@ namespace Flux.ViewModels
                 });
         }
 
-        private Optional<Printer> FindPrinter(Optional<ILocalDatabase> database, Optional<int> printer_id)
+        private async Task<Optional<Printer>> FindPrinter(Optional<ILocalDatabase> database, Optional<int> printer_id)
         {
             if (!database.HasValue)
                 return default;
             if (!printer_id.HasValue)
                 return default;
-            var printers = database.Value.FindById<Printer>(printer_id.Value);
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var printers = await database.Value.FindByIdAsync<Printer>(printer_id.Value, cts.Token);
             if (!printers.HasDocuments)
                 return default;
-            return printers.Documents.FirstOrDefault();
+            return printers.FirstOrDefault();
         }
 
         // GET EXTRUDERS

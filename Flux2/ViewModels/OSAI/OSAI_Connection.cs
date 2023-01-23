@@ -1436,10 +1436,13 @@ namespace Flux.ViewModels
         }
         public override GCodeString GetLogEventGCode(FluxJob job, FluxEventType event_type)
         {
+            var event_path = CombinePaths(JobEventPath, $"{job.MCodeKey};{job.JobKey}");
+            var event_type_str = event_type.ToEnumString();
+
             return GCodeString.Create(
 
                 // get event path
-                $"LS0 = \"{CombinePaths(JobEventPath, $"{job.MCodeKey};{job.JobKey}")}\"",
+                $"LS0 = \"{event_path}\"",
 
                 // get current date
                 $"(GDT, D2, T0, SC0.10, SC11.11)",
@@ -1447,7 +1450,7 @@ namespace Flux.ViewModels
 
                 // append file
                 $"(OPN, 1, ?LS0, A, A)",
-                $"(WRT, 1, \"{event_type.ToEnumString()};\", SC0.22)",
+                $"(WRT, 1, \"{event_type_str};\", SC0.22)",
                 "(CLO, 1)");
         }
         public override GCodeString GetProbeToolGCode(ArrayIndex position, double temperature)
@@ -1472,11 +1475,11 @@ namespace Flux.ViewModels
             var y_offset = (x - y) / 2;
             return new[] { $"(UTO, 0, X({x_offset}), Y({y_offset}), Z({z}))" };
         }
-        public override GCodeString GetWriteExtrusionKeyGCode(ushort position, Optional<ExtrusionKey> extr_key)
+        public override GCodeString GetWriteExtrusionKeyGCode(ArrayIndex position, Optional<ExtrusionKey> extr_key)
         {
             var extr_key_str = extr_key.ConvertOr(k => k.ToString(), () => "");
             return GCodeString.Create(
-                $"E0 = 3 + {position}",
+                $"E0 = 3 + {position.GetZeroBaseIndex()}",
                 $"LS0 = \"{extr_key_str}\"",
                 $"M4001[7, E0, 0, 0]");
         }
@@ -1517,6 +1520,11 @@ namespace Flux.ViewModels
         protected override GCodeString GetSetChamberTemperatureGCodeInner(ArrayIndex position, double temperature, bool wait)
         {
             return $"M4140 [{temperature}, {(wait ? 1 : 0)}]";
+        }
+
+        public override GCodeString GetLogExtrusionGCode(ArrayIndex position, Optional<ExtrusionKey> extr_key, FluxJob job)
+        {
+            return default;
         }
     }
 }

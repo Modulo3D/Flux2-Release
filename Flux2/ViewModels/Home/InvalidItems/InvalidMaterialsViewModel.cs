@@ -46,7 +46,8 @@ namespace Flux.ViewModels
         public override IObservable<Optional<string>> GetExpectedValue(FeederEvaluator item)
         {
             return item.WhenAnyValue(e => e.Material.ExpectedDocumentQueue)
-                .Convert(f => string.Join(Environment.NewLine, f.Values.Select(f => f.Name).Distinct()));
+                .Convert(d => d.Values.DistinctBy(f => f.Name))
+                .Convert(f => string.Join(Environment.NewLine, f.Select(f => f.Name)));
         }
     }
 

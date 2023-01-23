@@ -8,6 +8,7 @@ using System.Reactive;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
@@ -55,7 +56,7 @@ namespace Flux.ViewModels
         public TagViewModel(
             FeedersViewModel feeders, FeederViewModel feeder, ushort position,
             Func<IFluxFeedersViewModel, INFCStorage<TNFCTag>> get_tag_storage,
-            Func<ILocalDatabase, TNFCTag, TDocument> find_document,
+            Func<ILocalDatabase, TNFCTag, Task<TDocument>> find_document,
             Func<TNFCTag, Guid> check_tag, bool watch_odometer_for_pause) : base($"{typeof(TTagViewModel).GetRemoteControlName()}??{position}")
         {
             Feeder = feeder;
@@ -81,11 +82,12 @@ namespace Flux.ViewModels
                 .Select(tuple =>
                 {
                     if (!tuple.db.HasValue)
-                        return default;
+                        return Task.FromResult(default(TDocument));
                     if (!tuple.nfc.Tag.HasValue)
-                        return default;
+                        return Task.FromResult(default(TDocument));
                     return find_document(tuple.db.Value, tuple.nfc.Tag.Value);
                 })
+                .SelectMany(o => Observable.FromAsync(() => o))
                 .ToProperty(this, vm => vm.Document)
                 .DisposeWith(Disposables);
 

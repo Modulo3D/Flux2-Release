@@ -24,6 +24,7 @@ namespace Flux.ViewModels
         }
         protected override async Task<bool> ExecuteOperationAsync()
         {
+            var core_settings = Flux.SettingsProvider.CoreSettings.Local;
             var variable_store = Flux.ConnectionProvider.VariableStoreBase;
             var feeder_index = ArrayIndex.FromZeroBase(Feeder.Position, variable_store);
 
@@ -34,6 +35,8 @@ namespace Flux.ViewModels
                 if (!await Flux.IterateConfirmDialogAsync("CARICO FILO", "FILO INSERITO CORRETTAMENTE?", max_insert_iterations,
                     () => Flux.ConnectionProvider.ManualFilamentInsert(feeder_index, insert_iteration_dist, 100)))
                     return await Flux.ConnectionProvider.ManualFilamentExtract(feeder_index, max_insert_iterations, insert_iteration_dist, 500);
+
+                Material.NFCSlot.StoreTag(m => m.SetInserted(core_settings.PrinterGuid, Material.Position));
             }
 
             var filament_settings = GCodeFilamentOperation.Create(Material, park_tool: false, keep_temp: true);
@@ -44,9 +47,9 @@ namespace Flux.ViewModels
                 () => Flux.ConnectionProvider.PurgeAsync(filament_settings.Value)))
                 return false;
 
-            Feeder.ToolNozzle.SetLastBreakTemp(filament_settings.Value);
+            Feeder.ToolNozzle.NFCSlot.StoreTag(n => n.SetLastBreakTemp(core_settings.PrinterGuid, filament_settings.Value.CurBreakTemp));
             if (!Flux.ConnectionProvider.HasVariable(c => c.FILAMENT_ON_HEAD))
-                Material.SetMaterialLoaded(true);
+                Material.NFCSlot.StoreTag(m => m.SetLoaded(core_settings.PrinterGuid, Material.Position));
 
             return true;
         }

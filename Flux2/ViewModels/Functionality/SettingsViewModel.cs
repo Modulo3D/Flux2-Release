@@ -8,6 +8,7 @@ using System.Linq;
 using System.Net;
 using System.Reactive;
 using System.Reactive.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Markup;
 
@@ -96,8 +97,9 @@ namespace Flux.ViewModels
         {
             var database_changed = flux.DatabaseProvider.WhenAnyValue(v => v.Database);
 
-            var printer_cache = database_changed.Select(FindPrinters)
-                .AsObservableChangeSet(p => p.ConvertOr(p => p.Id, () => 0));
+            var printer_cache = database_changed.Select(FindPrintersAsync)
+                .Select(p => p.ToObservable()).Switch()
+                .ToObservableChangeSet(p => p.ConvertOr(p => p.Id, () => 0));
             Printers = OptionalSelectableCache.Create(printer_cache);
 
             var host_address_cache = Flux.SettingsProvider.HostAddressCache
@@ -218,13 +220,14 @@ namespace Flux.ViewModels
             PrinterGuid = Guid.NewGuid().ToString();
         }
 
-        private IEnumerable<Optional<Printer>> FindPrinters(Optional<ILocalDatabase> database)
+        private async IAsyncEnumerable<Optional<Printer>> FindPrintersAsync(Optional<ILocalDatabase> database)
         {
-            var printers = database.Convert(db => db.FindAll<Printer>());
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var printers = await database.ConvertAsync(db => db.FindAllAsync<Printer>(cts.Token));
             if (!printers.HasValue)
                 yield break;
 
-            foreach (var printer in printers.Value.Documents)
+            foreach (var printer in printers.Value)
                 yield return printer;
         }
     }

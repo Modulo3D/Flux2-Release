@@ -127,20 +127,8 @@ namespace Flux.ViewModels
             _ToolOffset = Observable.CombineLatest(
                 Flux.DatabaseProvider.WhenAnyValue(v => v.Database),
                 Feeder.ToolNozzle.NFCSlot.WhenAnyValue(v => v.Nfc),
-                (db, nfc) =>
-                {
-                    if (!db.HasValue)
-                        return Optional<ToolOffset>.None;
-                    if (!nfc.Tag.HasValue)
-                        return Optional<ToolOffset>.None;
-                    var tool = nfc.Tag.Value.GetDocument<Tool>(db.Value, tn => tn.ToolGuid);
-                    if (!tool.HasValue)
-                        return Optional<ToolOffset>.None;
-                    var x = tool.Value[t => t.ToolXOffset, 0.0];
-                    var y = tool.Value[t => t.ToolYOffset, 0.0];
-                    var z = tool.Value[t => t.ToolZOffset, 0.0];
-                    return new ToolOffset(x, y, z);
-                })
+                GetToolOffset)
+                .SelectMany(t => Observable.FromAsync(() => t))
                 .DistinctUntilChanged()
                 .ToProperty(this, v => v.ToolOffset)
                 .DisposeWith(Disposables);
@@ -148,28 +136,7 @@ namespace Flux.ViewModels
             _UserOffsetKey = Observable.CombineLatest(
                 Calibration.WhenAnyValue(v => v.GroupId),
                 Feeder.ToolNozzle.NFCSlot.WhenAnyValue(v => v.Nfc),
-                (group_id, tool_reading) =>
-                {
-                    if (!group_id.HasValue)
-                        return Optional<UserOffsetKey>.None;
-                    if (!tool_reading.CardId.HasValue)
-                        return Optional<UserOffsetKey>.None;
-                    if (!tool_reading.Tag.HasValue)
-                        return Optional<UserOffsetKey>.None;
-
-                    var tool_nfc = tool_reading.Tag.Value;
-                    var tool_card = tool_reading.CardId.Value;
-                    var relative_id = new ToolId(Feeder.Position, tool_card, tool_nfc);
-
-                    var user_offset_key = new UserOffsetKey(group_id.Value, relative_id);
-                    var user_offset_lookup = user_settings.Local.UserOffsets.Lookup(user_offset_key);
-                    if (!user_offset_lookup.HasValue)
-                    {
-                        var user_offset = new UserOffset(user_offset_key, 0, 0, 0);
-                        user_settings.Local.UserOffsets.AddOrUpdate(user_offset);
-                    }
-                    return user_offset_key;
-                })
+                GetUserOffsetKey)
                 .DistinctUntilChanged()
                 .ToProperty(this, v => v.UserOffsetKey)
                 .DisposeWith(Disposables);
@@ -180,40 +147,8 @@ namespace Flux.ViewModels
                 Flux.DatabaseProvider.WhenAnyValue(v => v.Database),
                 Feeder.ToolNozzle.NFCSlot.WhenAnyValue(v => v.Nfc),
                 material.ConvertMany(m => m.NFCSlot.WhenAnyValue(v => v.Nfc)),
-                (db, tool_reading, material_reading) =>
-                {
-                    if (!tool_reading.CardId.HasValue)
-                        return Optional<ProbeOffsetKey>.None;
-                    if (!tool_reading.Tag.HasValue)
-                        return Optional<ProbeOffsetKey>.None;
-                    if (!material_reading.HasValue)
-                        return Optional<ProbeOffsetKey>.None;
-                    if (!material_reading.Value.Tag.HasValue)
-                        return Optional<ProbeOffsetKey>.None;
-
-                    var tool_nfc = tool_reading.Tag.Value;
-                    var tool_card = tool_reading.CardId.Value;
-                    var relative_id = new ToolId(Feeder.Position, tool_card, tool_nfc);
-
-                    var probe_offset_key = new ProbeOffsetKey(relative_id, material_reading.Value.Tag.Value.MaterialGuid);
-                    var probe_offset_lookup = user_settings.Local.ProbeOffsets.Lookup(probe_offset_key);
-                    if (!probe_offset_lookup.HasValue)
-                    {
-                        if (db.HasValue)
-                        {
-                            var tool = tool_nfc.GetDocument<Tool>(db.Value, tn => tn.ToolGuid);
-                            if (tool.HasValue)
-                            {
-                                var x = tool.Value[n => n.ToolXOffset, 0.0];
-                                var y = tool.Value[n => n.ToolYOffset, 0.0];
-                                var z = tool.Value[n => n.ToolZOffset, 0.0];
-                                var probe_offset = new ProbeOffset(probe_offset_key, x, y, z);
-                                user_settings.Local.ProbeOffsets.AddOrUpdate(probe_offset);
-                            }
-                        }
-                    }
-                    return probe_offset_key;
-                })
+                GetProbeOffsetKey)
+                .SelectMany(t => Observable.FromAsync(() => t))
                 .DistinctUntilChanged()
                 .ToProperty(this, v => v.ProbeOffsetKey)
                 .DisposeWith(Disposables);
@@ -235,29 +170,7 @@ namespace Flux.ViewModels
                 this.WhenAnyValue(s => s.ProbeOffset),
                 Feeder.ToolNozzle.WhenAnyValue(f => f.State),
                 material.ConvertMany(m => m.WhenAnyValue(f => f.State)),
-                (tool_offset, probe_offset, tool_state, material_state) =>
-                {
-                    if (!tool_offset.HasValue)
-                        return FluxProbeState.ERROR_PROBE;
-
-                    if (probe_offset.HasValue && Math.Abs(probe_offset.Value.X - tool_offset.Value.X) > 5)
-                        return FluxProbeState.ERROR_PROBE;
-                    if (probe_offset.HasValue && Math.Abs(probe_offset.Value.Y - tool_offset.Value.Y) > 5)
-                        return FluxProbeState.ERROR_PROBE;
-                    if (probe_offset.HasValue && tool_offset.Value.Z - probe_offset.Value.Z > 5)
-                        return FluxProbeState.ERROR_PROBE;
-
-                    if (!tool_state.IsLoaded() ||
-                        !material_state.HasValue ||
-                        !material_state.Value.IsLoaded())
-                        return FluxProbeState.NO_PROBE;
-
-                    if (!probe_offset.HasValue ||
-                        probe_offset.Value.Z >= tool_offset.Value.Z)
-                        return FluxProbeState.INVALID_PROBE;
-
-                    return FluxProbeState.VALID_PROBE;
-                })
+                GetProbeState)
                 .DistinctUntilChanged()
                 .ToProperty(this, v => v.ProbeState)
                 .DisposeWith(Disposables);
@@ -332,19 +245,12 @@ namespace Flux.ViewModels
                 .DisposeWith(Disposables);
 
             _ProbeStateBrush = this.WhenAnyValue(v => v.ProbeState)
-                .Select(state =>
+                .Select(state => state switch
                 {
-                    switch (state)
-                    {
-                        case FluxProbeState.INVALID_PROBE:
-                            return FluxColors.Warning;
-                        case FluxProbeState.NO_PROBE:
-                            return FluxColors.Inactive;
-                        case FluxProbeState.VALID_PROBE:
-                            return FluxColors.Selected;
-                        default:
-                            return FluxColors.Error;
-                    }
+                    FluxProbeState.INVALID_PROBE => FluxColors.Warning,
+                    FluxProbeState.VALID_PROBE => FluxColors.Selected,
+                    FluxProbeState.NO_PROBE => FluxColors.Inactive,
+                    _ => FluxColors.Error,
                 })
                 .ToProperty(this, v => v.ProbeStateBrush)
                 .DisposeWith(Disposables);
@@ -369,6 +275,107 @@ namespace Flux.ViewModels
                 .ConvertOr(usb => usb.AdvancedSettings, () => false)
                 .ToProperty(this, v => v.DebugOffsets)
                 .DisposeWith(Disposables);
+        }
+
+        private static FluxProbeState GetProbeState(Optional<ToolOffset> tool_offset, Optional<ProbeOffset> probe_offset, ToolNozzleState tool_state, Optional<MaterialState> material_state)
+        {
+            if (!tool_offset.HasValue)
+                return FluxProbeState.ERROR_PROBE;
+
+            if (probe_offset.HasValue && Math.Abs(probe_offset.Value.X - tool_offset.Value.X) > 5)
+                return FluxProbeState.ERROR_PROBE;
+            if (probe_offset.HasValue && Math.Abs(probe_offset.Value.Y - tool_offset.Value.Y) > 5)
+                return FluxProbeState.ERROR_PROBE;
+            if (probe_offset.HasValue && tool_offset.Value.Z - probe_offset.Value.Z > 5)
+                return FluxProbeState.ERROR_PROBE;
+
+            if (!tool_state.IsLoaded() ||
+                !material_state.HasValue ||
+                !material_state.Value.IsLoaded())
+                return FluxProbeState.NO_PROBE;
+
+            if (!probe_offset.HasValue ||
+                probe_offset.Value.Z >= tool_offset.Value.Z)
+                return FluxProbeState.INVALID_PROBE;
+
+            return FluxProbeState.VALID_PROBE;
+        }
+
+        private async Task<Optional<ProbeOffsetKey>> GetProbeOffsetKey(Optional<ILocalDatabase> db, NFCReading<NFCToolNozzle> tool_reading, Optional<NFCReading<NFCMaterial>> material_reading)
+        {
+            var user_settings = Flux.SettingsProvider.UserSettings;
+
+            if (!tool_reading.CardId.HasValue)
+                return Optional<ProbeOffsetKey>.None;
+            if (!tool_reading.Tag.HasValue)
+                return Optional<ProbeOffsetKey>.None;
+            if (!material_reading.HasValue)
+                return Optional<ProbeOffsetKey>.None;
+            if (!material_reading.Value.Tag.HasValue)
+                return Optional<ProbeOffsetKey>.None;
+
+            var tool_nfc = tool_reading.Tag.Value;
+            var tool_card = tool_reading.CardId.Value;
+            var relative_id = new ToolId(Feeder.Position, tool_card, tool_nfc);
+
+            var probe_offset_key = new ProbeOffsetKey(relative_id, material_reading.Value.Tag.Value.MaterialGuid);
+            var probe_offset_lookup = user_settings.Local.ProbeOffsets.Lookup(probe_offset_key);
+            if (!probe_offset_lookup.HasValue)
+            {
+                if (db.HasValue)
+                {
+                    var tool = await tool_nfc.GetDocumentAsync<Tool>(db.Value, tn => tn.ToolGuid);
+                    if (tool.HasValue)
+                    {
+                        var x = tool.Value[n => n.ToolXOffset, 0.0];
+                        var y = tool.Value[n => n.ToolYOffset, 0.0];
+                        var z = tool.Value[n => n.ToolZOffset, 0.0];
+                        var probe_offset = new ProbeOffset(probe_offset_key, x, y, z);
+                        user_settings.Local.ProbeOffsets.AddOrUpdate(probe_offset);
+                    }
+                }
+            }
+            return probe_offset_key;
+        }
+
+        private Optional<UserOffsetKey> GetUserOffsetKey(Optional<ToolId> group_id, NFCReading<NFCToolNozzle> tool_reading)
+        {
+            var user_settings = Flux.SettingsProvider.UserSettings;
+
+            if (!group_id.HasValue)
+                return Optional<UserOffsetKey>.None;
+            if (!tool_reading.CardId.HasValue)
+                return Optional<UserOffsetKey>.None;
+            if (!tool_reading.Tag.HasValue)
+                return Optional<UserOffsetKey>.None;
+
+            var tool_nfc = tool_reading.Tag.Value;
+            var tool_card = tool_reading.CardId.Value;
+            var relative_id = new ToolId(Feeder.Position, tool_card, tool_nfc);
+
+            var user_offset_key = new UserOffsetKey(group_id.Value, relative_id);
+            var user_offset_lookup = user_settings.Local.UserOffsets.Lookup(user_offset_key);
+            if (!user_offset_lookup.HasValue)
+            {
+                var user_offset = new UserOffset(user_offset_key, 0, 0, 0);
+                user_settings.Local.UserOffsets.AddOrUpdate(user_offset);
+            }
+            return user_offset_key;
+        }
+
+        private static async Task<Optional<ToolOffset>> GetToolOffset(Optional<ILocalDatabase> db, NFCReading<NFCToolNozzle> nfc)
+        {
+            if (!db.HasValue)
+                return Optional<ToolOffset>.None;
+            if (!nfc.Tag.HasValue)
+                return Optional<ToolOffset>.None;
+            var tool = await nfc.Tag.Value.GetDocumentAsync<Tool>(db.Value, tn => tn.ToolGuid);
+            if (!tool.HasValue)
+                return Optional<ToolOffset>.None;
+            var x = tool.Value[t => t.ToolXOffset, 0.0];
+            var y = tool.Value[t => t.ToolYOffset, 0.0];
+            var z = tool.Value[t => t.ToolZOffset, 0.0];
+            return new ToolOffset(x, y, z);
         }
 
         private void ResetProbeOffset()
