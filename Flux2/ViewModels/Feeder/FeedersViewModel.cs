@@ -119,11 +119,7 @@ namespace Flux.ViewModels
 
         private IObservable<Optional<IFluxFeederViewModel>> FindSelectedFeeder(short selected_extruder)
         {
-            if (selected_extruder < 0)
-                return Observable.Return(Optional<IFluxFeederViewModel>.None);
-
-            return Feeders.Connect().WatchValue((ushort)selected_extruder)
-                .Select(f => Optional<IFluxFeederViewModel>.Create(f));
+            return Feeders.Connect().WatchOptional((ushort)selected_extruder);
         }
 
         private IEnumerable<IFluxFeederViewModel> CreateFeeders(Optional<(ushort machine_extruders, ushort mixing_extruders)> extruders)
@@ -172,6 +168,7 @@ namespace Flux.ViewModels
                 .AsObservableCache();
 
             var last_loaded = last_tag.Convert(t => t.Loaded);
+            var last_inserted = last_tag.Convert(t => t.Inserted);
             var last_cur_weight = last_tag.Convert(t => t.CurWeightG).ValueOr(() => 1000.0);
             var last_max_weight = last_tag.Convert(t => t.MaxWeightG).ValueOr(() => 1000.0);
             var last_printer_guid = last_tag.ConvertOr(t => t.PrinterGuid, () => Guid.Empty);
@@ -199,7 +196,7 @@ namespace Flux.ViewModels
             var max_weight = max_weight_option.Value;
             var cur_weight = cur_weight_option.Value;
 
-            var tag = new NFCMaterial(material.Value, max_weight, cur_weight, last_printer_guid, last_loaded);
+            var tag = new NFCMaterial(material.Value, max_weight, cur_weight, last_printer_guid, last_inserted, last_loaded);
             return new NFCReading<NFCMaterial>(virtual_card_id, tag);
         }
 
