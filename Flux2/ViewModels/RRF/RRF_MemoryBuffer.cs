@@ -186,8 +186,7 @@ namespace Flux.ViewModels
 
             _HasFullMemoryRead = MemoryReaderGroups.Connect()
                 .TrueForAll(f => f.WhenAnyValue(f => f.HasMemoryRead), r => r)
-                .ToProperty(this, v => v.HasFullMemoryRead)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.HasFullMemoryRead, Disposables);
         }
 
         public override void Initialize(RRF_VariableStoreBase variableStore)
@@ -245,8 +244,7 @@ namespace Flux.ViewModels
             Func<RRF_ConnectionProvider, TModel, Task<Optional<TRData>>> get_data)
         {
             return get_model(RRFObjectModel)
-                .Select(s => Observable.FromAsync(() => s.ConvertAsync(s => get_data(ConnectionProvider, s))))
-                .Merge(1)
+                .ConvertAsync(s => get_data(ConnectionProvider, s))
                 .DistinctUntilChanged();
         }
 
@@ -263,7 +261,7 @@ namespace Flux.ViewModels
         {
             return RRFObjectModel
                 .WhenAnyValue(m => m.Global)
-                .ConvertMany(s => Observable.FromAsync(() => get_data(s)))
+                .ConvertAsync(get_data)
                 .DistinctUntilChanged();
         }
     }

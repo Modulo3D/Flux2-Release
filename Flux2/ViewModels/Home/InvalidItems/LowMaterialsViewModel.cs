@@ -37,8 +37,7 @@ namespace Flux.ViewModels
 
                    return FluxColors.Warning;
                })
-               .ToProperty(this, v => v.InvalidItemBrush)
-               .DisposeWith(Disposables);
+               .ToPropertyRC(this, v => v.InvalidItemBrush, Disposables);
         }
 
         public override IObservable<Optional<string>> GetItem(FeederEvaluator eval)
@@ -77,11 +76,11 @@ namespace Flux.ViewModels
                 .Filter(line => line.Material.HasLowWeight)
                 .Transform(line => (IInvalidValueViewModel)new LowMaterialViewModel(line))
                 .Sort(EvaluationComparer)
-                .AsObservableList();
+                .AsObservableListRC(Disposables);
 
             _CanStartWithInvalidValues = Flux.StatusProvider.FeederEvaluators.Connect()
                 .TrueForAny(line => line.Material.WhenAnyValue(m => m.HasEmptyWeight), e => e)
-                .ToProperty(this, v => v.CanStartWithInvalidValues);
+                .ToPropertyRC(this, v => v.CanStartWithInvalidValues, Disposables);
 
             base.Initialize();
         }

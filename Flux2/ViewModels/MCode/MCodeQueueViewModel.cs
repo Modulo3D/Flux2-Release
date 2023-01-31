@@ -63,13 +63,11 @@ namespace Flux.ViewModels
 
             _CurrentIndex = queue_pos
                 .Select(q => q == job.QueuePosition)
-                .ToProperty(this, v => v.CurrentIndex)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.CurrentIndex, Disposables);
 
             _Storage = MCodes.AvaiableMCodes.Connect()
                 .WatchOptional(job.MCodeKey)
-                .ToProperty(this, v => v.Storage)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.Storage, Disposables);
 
             var mcode_analyzers = MCodes.QueuedMCodes.Connect()
                  .AutoRefresh(m => m.Storage)
@@ -85,20 +83,17 @@ namespace Flux.ViewModels
                 print_progress,
                 mcode_analyzers,
                 FindEndTime)
-                .ToProperty(this, v => v.EndTime)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.EndTime, Disposables);
 
             _FileNumber = this.WhenAnyValue(v => v.Storage)
                 .ConvertMany(s => s.WhenAnyValue(s => s.FileNumber))
                 .ConvertOr(n => (short)n, () => (short)-1)
-                .ToProperty(this, v => v.FileNumber)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.FileNumber, Disposables);
 
             _MCodeName = this.WhenAnyValue(v => v.Storage)
                 .Convert(s => s.Analyzer)
                 .Convert(s => s.MCode.Name)
-                .ToProperty(this, v => v.MCodeName)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.MCodeName, Disposables);
 
             var is_idle = MCodes.Flux.StatusProvider
                 .WhenAnyValue(s => s.StatusEvaluation)
@@ -118,9 +113,9 @@ namespace Flux.ViewModels
             var can_delete = Observable.CombineLatest(can_safe_cycle, queue_pos, CanDeleteQueue);
             var can_move_down = Observable.CombineLatest(is_idle, queue_pos, last_queue_pos, CanMoveDownQueue);
 
-            DeleteMCodeQueueCommand = ReactiveCommand.CreateFromTask(async () => { await MCodes.DeleteFromQueueAsync(this); }, can_delete);
-            MoveUpMCodeQueueCommand = ReactiveCommand.CreateFromTask(async () => { await MCodes.MoveInQueueAsync(this, i => (short)(i - 1)); }, can_move_up);
-            MoveDownMCodeQueueCommand = ReactiveCommand.CreateFromTask(async () => { await MCodes.MoveInQueueAsync(this, i => (short)(i + 1)); }, can_move_down);
+            DeleteMCodeQueueCommand = ReactiveCommandRC.CreateFromTask(async () => { await MCodes.DeleteFromQueueAsync(this); }, Disposables, can_delete);
+            MoveUpMCodeQueueCommand = ReactiveCommandRC.CreateFromTask(async () => { await MCodes.MoveInQueueAsync(this, i => (short)(i - 1)); }, Disposables, can_move_up);
+            MoveDownMCodeQueueCommand = ReactiveCommandRC.CreateFromTask(async () => { await MCodes.MoveInQueueAsync(this, i => (short)(i + 1)); }, Disposables, can_move_down);
         }
 
         private bool CanDeleteQueue(bool is_idle, QueuePosition queue_position)

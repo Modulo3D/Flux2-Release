@@ -49,24 +49,21 @@ namespace Flux.ViewModels
                 m => m.FILAMENT_BEFORE_GEAR,
                 before_gear_key)
                 .ObservableOrDefault()
-                .ToProperty(this, v => v.WirePresenceBeforeGear)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.WirePresenceBeforeGear, Disposables);
 
             var after_gear_key = Flux.ConnectionProvider.GetArrayUnit(m => m.FILAMENT_AFTER_GEAR, material_index);
             _WirePresenceAfterGear = Flux.ConnectionProvider.ObserveVariable(
                 m => m.FILAMENT_AFTER_GEAR,
                 after_gear_key)
                 .ObservableOrDefault()
-                .ToProperty(this, v => v.WirePresenceAfterGear)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.WirePresenceAfterGear, Disposables);
 
             var on_head_key = Flux.ConnectionProvider.GetArrayUnit(m => m.FILAMENT_ON_HEAD, feeder_index);
             _WirePresenceOnHead = Flux.ConnectionProvider.ObserveVariable(
                 m => m.FILAMENT_ON_HEAD,
                 on_head_key)
                 .ObservableOrDefault()
-                .ToProperty(this, v => v.WirePresenceOnHead)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.WirePresenceOnHead, Disposables);
         }
 
         protected override IObservable<bool> CanCancelOperation()

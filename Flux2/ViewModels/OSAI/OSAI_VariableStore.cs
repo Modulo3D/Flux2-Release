@@ -16,6 +16,7 @@ namespace Flux.ViewModels
         public override char FeederAxis => 'A';
         public override bool HasPrintUnloader => false;
         public override bool CanProbeMagazine => false;
+        public override bool HasMovementLimits => false;
         public override bool CanMeshProbePlate => false;
         public override bool ParkToolAfterOperation => false;
         public override FLUX_AxisTransform MoveTransform { get; }
@@ -112,7 +113,7 @@ namespace Flux.ViewModels
                 model.CreateVariable(c => c.MCODE_EVENT, OSAI_ReadPriority.HIGH, GetMCodeEventsAsync);
                 model.CreateVariable(c => c.EXTRUSIONS, OSAI_ReadPriority.HIGH, GetExtrusionSetQueueAsync);
                 model.CreateVariable(c => c.PROCESS_MODE, OSAI_ReadPriority.ULTRAHIGH, GetProcessModeAsync, SetProcessModeAsync);
-                model.CreateVariable(c => c.BOOT_MODE, OSAI_ReadPriority.ULTRAHIGH, _ => Task.FromResult(new ValueResult<Unit>(Unit.Default)), SetBootModeAsync);
+                model.CreateVariable(c => c.BOOT_MODE, OSAI_ReadPriority.ULTRAHIGH, _ => Task.FromResult(Optional.Some(Unit.Default)), SetBootModeAsync);
                 model.CreateVariable(c => c.PROGRESS, OSAI_ReadPriority.ULTRAHIGH, GetProgressAsync);
 
                 // GW VARIABLES                                                                                                                                                                                                                                                                              
@@ -201,7 +202,7 @@ namespace Flux.ViewModels
             }
         }
 
-        private static async Task<ValueResult<FLUX_AxisPosition>> GetAxisPositionAsync(OSAI_ConnectionProvider connection_provider)
+        private static async Task<Optional<FLUX_AxisPosition>> GetAxisPositionAsync(OSAI_ConnectionProvider connection_provider)
         {
             var connection = connection_provider.Connection;
             var axis_position = await connection.GetAxesPositionAsync(OSAI_AxisPositionSelect.Absolute);
@@ -210,7 +211,7 @@ namespace Flux.ViewModels
 
             return axis_position;
         }
-        private static async Task<ValueResult<FluxJobRecoveryPreview>> GetJobRecoveryPreviewAsync(OSAI_ConnectionProvider connection_provider)
+        private static async Task<Optional<FluxJobRecoveryPreview>> GetJobRecoveryPreviewAsync(OSAI_ConnectionProvider connection_provider)
         {
             var connection = connection_provider.Connection;
             using var queue_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
@@ -220,7 +221,7 @@ namespace Flux.ViewModels
 
             return queue_files.Value.GetJobRecoveryPreview();
         }
-        private static async Task<ValueResult<MCodeStorage>> GetMCodeStorageAsync(OSAI_ConnectionProvider connection_provider)
+        private static async Task<Optional<MCodeStorage>> GetMCodeStorageAsync(OSAI_ConnectionProvider connection_provider)
         {
             var connection = connection_provider.Connection;
             using var queue_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
@@ -230,7 +231,7 @@ namespace Flux.ViewModels
 
             return queue_files.Value.GetMCodeStorage();
         }
-        private static async Task<ValueResult<FluxJobQueuePreview>> GetJobQueuePreviewAsync(OSAI_ConnectionProvider connection_provider)
+        private static async Task<Optional<FluxJobQueuePreview>> GetJobQueuePreviewAsync(OSAI_ConnectionProvider connection_provider)
         {
             var connection = connection_provider.Connection;
             using var queue_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
@@ -241,7 +242,7 @@ namespace Flux.ViewModels
 
             return queue_files.Value.GetJobQueuePreview();
         }
-        private static async Task<ValueResult<ExtrusionSetQueuePreview<ExtrusionMM>>> GetExtrusionSetQueueAsync(OSAI_ConnectionProvider connection_provider)
+        private static async Task<Optional<ExtrusionSetQueuePreview<ExtrusionMM>>> GetExtrusionSetQueueAsync(OSAI_ConnectionProvider connection_provider)
         {
             var connection = connection_provider.Connection;
             using var queue_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
@@ -251,7 +252,7 @@ namespace Flux.ViewModels
 
             return queue_files.Value.GetExtrusionSetQueue();
         }
-        private static async Task<ValueResult<MCodeEventStoragePreview>> GetMCodeEventsAsync(OSAI_ConnectionProvider connection_provider)
+        private static async Task<Optional<MCodeEventStoragePreview>> GetMCodeEventsAsync(OSAI_ConnectionProvider connection_provider)
         {
             var connection = connection_provider.Connection;
             using var queue_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
@@ -261,7 +262,7 @@ namespace Flux.ViewModels
 
             return queue_files.Value.GetMCodeEvents();
         }
-        private static async Task<ValueResult<MCodeProgress>> GetProgressAsync(OSAI_ConnectionProvider connection_provider)
+        private static async Task<Optional<MCodeProgress>> GetProgressAsync(OSAI_ConnectionProvider connection_provider)
         {
             var client = connection_provider.Connection.Client;
             if (!client.HasValue)
@@ -292,7 +293,7 @@ namespace Flux.ViewModels
             return new MCodeProgress(mcode_key, block_number);
         }
 
-        private static async Task<ValueResult<OSAI_BootPhase>> GetBootPhaseAsync(OSAI_ConnectionProvider connection_provider)
+        private static async Task<Optional<OSAI_BootPhase>> GetBootPhaseAsync(OSAI_ConnectionProvider connection_provider)
         {
             try
             {
@@ -334,7 +335,7 @@ namespace Flux.ViewModels
             }
             catch { return false; }
         }
-        private static async Task<ValueResult<OSAI_ProcessMode>> GetProcessModeAsync(OSAI_ConnectionProvider connection_provider)
+        private static async Task<Optional<OSAI_ProcessMode>> GetProcessModeAsync(OSAI_ConnectionProvider connection_provider)
         {
             try
             {
@@ -354,7 +355,7 @@ namespace Flux.ViewModels
             }
             catch { return default; }
         }
-        private static async Task<ValueResult<FLUX_ProcessStatus>> GetProcessStatusAsync(OSAI_ConnectionProvider connection_provider)
+        private static async Task<Optional<FLUX_ProcessStatus>> GetProcessStatusAsync(OSAI_ConnectionProvider connection_provider)
         {
             try
             {

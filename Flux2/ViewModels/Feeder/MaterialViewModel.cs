@@ -83,8 +83,7 @@ namespace Flux.ViewModels
                   Feeder.ToolNozzle.NFCSlot.WhenAnyValue(t => t.Nfc),
                   NFCSlot.WhenAnyValue(m => m.Nfc),
                   (tool_nozzle, material) => Modulo3DNet.ExtrusionKey.Create(tool_nozzle, material))
-                  .ToProperty(this, v => v.ExtrusionKey)
-                  .DisposeWith(Disposables);
+                  .ToPropertyRC(this, v => v.ExtrusionKey, Disposables);
 
             var varable_store = Flux.ConnectionProvider.VariableStoreBase;
             var material_index = ArrayIndex.FromZeroBase(Position, varable_store);
@@ -95,42 +94,37 @@ namespace Flux.ViewModels
                 m => m.FILAMENT_BEFORE_GEAR,
                 before_gear_key)
                 .ObservableOrDefault()
-                .ToProperty(this, v => v.FilamentPresenceBeforeGear)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.FilamentPresenceBeforeGear, Disposables);
 
             var after_gear_key = Flux.ConnectionProvider.GetArrayUnit(m => m.FILAMENT_AFTER_GEAR, material_index);
             _WirePresenceAfterGear = Flux.ConnectionProvider.ObserveVariable(
                 m => m.FILAMENT_AFTER_GEAR,
                 after_gear_key)
                 .ObservableOrDefault()
-                .ToProperty(this, v => v.FilamentPresenceAfterGear)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.FilamentPresenceAfterGear, Disposables);
 
             var on_head_key = Flux.ConnectionProvider.GetArrayUnit(m => m.FILAMENT_ON_HEAD, feeder_index);
             _WirePresenceOnHead = Flux.ConnectionProvider.ObserveVariable(
                 m => m.FILAMENT_ON_HEAD,
                 on_head_key)
                 .ObservableOrDefault()
-                .ToProperty(this, v => v.FilamentPresenceOnHead)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.FilamentPresenceOnHead, Disposables);
 
             _DocumentLabel = this.WhenAnyValue(v => v.Document)
                 .Convert(d => d.Name)
-                .ToProperty(this, v => v.DocumentLabel)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.DocumentLabel, Disposables);
 
             _MaterialLoaded = NFCSlot.WhenAnyValue(v => v.Nfc)
                 .Select(nfc => nfc.Tag)
                 .Convert(tag => tag.Loaded)
                 .Convert(l => l == Feeder.Position)
                 .ValueOr(() => false)
-                .ToProperty(this, v => v.MaterialLoaded)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.MaterialLoaded, Disposables);
 
             var humidity_unit = Flux.ConnectionProvider.GetArrayUnit(c => c.FILAMENT_HUMIDITY, material_index);
             _Humidity = Flux.ConnectionProvider.ObserveVariable(c => c.FILAMENT_HUMIDITY, humidity_unit)
                 .ObservableOrDefault()
-                .ToProperty(this, v => v.Humidity);
+                .ToPropertyRC(this, v => v.Humidity, Disposables);
 
             LoadFilamentOperation = new Lazy<LoadFilamentOperationViewModel>(() =>
             {
@@ -151,8 +145,7 @@ namespace Flux.ViewModels
             base.Initialize();
 
             _State = FindMaterialState()
-                .ToProperty(this, v => v.State)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.State, Disposables);
 
             var tool_nozzle = Feeder.ToolNozzle
                 .WhenAnyValue(t => t.State);
@@ -172,8 +165,7 @@ namespace Flux.ViewModels
                         return FluxColors.Active;
                     return FluxColors.Selected;
                 })
-                .ToProperty(this, v => v.MaterialBrush)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.MaterialBrush, Disposables);
 
             var material = Observable.CombineLatest(
                 tool_nozzle,
@@ -187,10 +179,8 @@ namespace Flux.ViewModels
                     can_load = CanLoadMaterial(can_cycle, tool_nozzle, material, tool_material),
                 });
 
-            UnloadMaterialCommand = ReactiveCommand.CreateFromTask(UnloadAsync, material.Select(m => m.can_unload))
-                .DisposeWith(Disposables);
-            LoadPurgeMaterialCommand = ReactiveCommand.CreateFromTask(LoadPurgeAsync, material.Select(m => m.can_load || m.can_purge))
-                .DisposeWith(Disposables);
+            UnloadMaterialCommand = ReactiveCommandRC.CreateFromTask(UnloadAsync, Disposables, material.Select(m => m.can_unload));
+            LoadPurgeMaterialCommand = ReactiveCommandRC.CreateFromTask(LoadPurgeAsync, Disposables, material.Select(m => m.can_load || m.can_purge));
 
             var other_filament_after_gear = Feeder.Materials.Connect()
                 .Filter(m => m.Position != Position)
@@ -203,7 +193,7 @@ namespace Flux.ViewModels
                 this.WhenAnyValue(v => v.FilamentPresenceBeforeGear),
                 (nfc, before_gear) => (nfc, before_gear))
                 .SubscribeOn(RxApp.MainThreadScheduler)
-                .Subscribe(t =>
+                .SubscribeRC(t =>
                 {
                     var core_setting = Flux.SettingsProvider.CoreSettings.Local;
                     if (!t.before_gear.HasValue)
@@ -211,7 +201,7 @@ namespace Flux.ViewModels
                     if (t.before_gear.Value)
                         return;
                     NFCSlot.StoreTag(t => t.SetInserted(core_setting.PrinterGuid, default));
-                });
+                }, Disposables);
 
             // insert filament if it's the only one after gear and on after gear is closed
             Observable.CombineLatest(
@@ -220,7 +210,7 @@ namespace Flux.ViewModels
                 this.WhenAnyValue(v => v.FilamentPresenceAfterGear),
                 (other_after_gear, nfc, after_gear) => (other_after_gear, nfc, after_gear))
                 .SubscribeOn(RxApp.MainThreadScheduler)
-                .Subscribe(t =>
+                .SubscribeRC(t =>
                 {
                     if (t.other_after_gear)
                         return;
@@ -231,7 +221,7 @@ namespace Flux.ViewModels
 
                     var core_setting = Flux.SettingsProvider.CoreSettings.Local;
                     NFCSlot.StoreTag(t => t.SetInserted(core_setting.PrinterGuid, Feeder.Position));
-                });
+                }, Disposables);
 
             // unload filament if on head is open
             Observable.CombineLatest(
@@ -239,7 +229,7 @@ namespace Flux.ViewModels
                this.WhenAnyValue(v => v.FilamentPresenceOnHead),
                (nfc, on_head) => (nfc, on_head))
                .SubscribeOn(RxApp.MainThreadScheduler)
-               .Subscribe(t =>
+               .SubscribeRC(t =>
                {
                    var core_setting = Flux.SettingsProvider.CoreSettings.Local;
                    if (!t.on_head.HasValue)
@@ -247,7 +237,7 @@ namespace Flux.ViewModels
                    if (t.on_head.Value)
                        return;
                    NFCSlot.StoreTag(t => t.SetLoaded(core_setting.PrinterGuid, default));
-               });
+               }, Disposables);
 
             // load filament if it's the only one after gear and on head is closed
             Observable.CombineLatest(
@@ -256,7 +246,7 @@ namespace Flux.ViewModels
                 this.WhenAnyValue(v => v.FilamentPresenceOnHead),
                 (other_after_gear, nfc, on_head) => (other_after_gear, nfc, on_head))
                 .SubscribeOn(RxApp.MainThreadScheduler)
-                .Subscribe(t =>
+                .SubscribeRC(t =>
                 {
                     if (t.other_after_gear)
                         return;
@@ -267,8 +257,7 @@ namespace Flux.ViewModels
 
                     var core_setting = Flux.SettingsProvider.CoreSettings.Local;
                     NFCSlot.StoreTag(t => t.SetLoaded(core_setting.PrinterGuid, Feeder.Position));
-                })
-                .DisposeWith(Disposables);
+                }, Disposables);
         }
         private IObservable<MaterialState> FindMaterialState()
         {

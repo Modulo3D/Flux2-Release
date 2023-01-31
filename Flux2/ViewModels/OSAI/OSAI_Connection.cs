@@ -309,12 +309,12 @@ namespace Flux.ViewModels
             catch { return false; }
         }
 
-        public async Task<ValueResult<bool>> ReadBoolAsync(OSAI_BitIndexAddress address)
+        public async Task<Optional<bool>> ReadBoolAsync(OSAI_BitIndexAddress address)
         {
             try
             {
                 if (!Client.HasValue)
-                    return false;
+                    return default;
 
                 var read_request = new ReadVarWordRequest((ushort)address.VarCode, ProcessNumber, address.Index, 1);
                 var read_response = await Client.Value.ReadVarWordAsync(read_request);
@@ -329,7 +329,7 @@ namespace Flux.ViewModels
             }
             catch { return default; }
         }
-        public async Task<ValueResult<ushort>> ReadUShortAsync(OSAI_IndexAddress address)
+        public async Task<Optional<ushort>> ReadUShortAsync(OSAI_IndexAddress address)
         {
             try
             {
@@ -349,7 +349,7 @@ namespace Flux.ViewModels
             }
             catch { return default; }
         }
-        public async Task<ValueResult<short>> ReadShortAsync(OSAI_IndexAddress address)
+        public async Task<Optional<short>> ReadShortAsync(OSAI_IndexAddress address)
         {
             try
             {
@@ -369,7 +369,7 @@ namespace Flux.ViewModels
             }
             catch { return default; }
         }
-        public async Task<ValueResult<string>> ReadTextAsync(OSAI_IndexAddress address)
+        public async Task<Optional<string>> ReadTextAsync(OSAI_IndexAddress address)
         {
             try
             {
@@ -389,7 +389,7 @@ namespace Flux.ViewModels
             }
             catch { return default; }
         }
-        public async Task<ValueResult<double>> ReadDoubleAsync(OSAI_IndexAddress address)
+        public async Task<Optional<double>> ReadDoubleAsync(OSAI_IndexAddress address)
         {
             try
             {
@@ -409,7 +409,7 @@ namespace Flux.ViewModels
             }
             catch { return default; }
         }
-        public async Task<ValueResult<bool>> ReadBoolAsync(OSAI_IndexAddress address, ushort bit_index)
+        public async Task<Optional<bool>> ReadBoolAsync(OSAI_IndexAddress address, ushort bit_index)
         {
             try
             {
@@ -430,7 +430,7 @@ namespace Flux.ViewModels
             catch { return default; }
         }
 
-        public async Task<ValueResult<bool>> ReadNamedBoolAsync(OSAI_NamedAddress address)
+        public async Task<Optional<bool>> ReadNamedBoolAsync(OSAI_NamedAddress address)
         {
             try
             {
@@ -451,7 +451,7 @@ namespace Flux.ViewModels
             }
             catch { return default; }
         }
-        public async Task<ValueResult<short>> ReadNamedShortAsync(OSAI_NamedAddress address)
+        public async Task<Optional<short>> ReadNamedShortAsync(OSAI_NamedAddress address)
         {
             try
             {
@@ -472,7 +472,7 @@ namespace Flux.ViewModels
             }
             catch { return default; }
         }
-        public async Task<ValueResult<ushort>> ReadNamedUShortAsync(OSAI_NamedAddress address)
+        public async Task<Optional<ushort>> ReadNamedUShortAsync(OSAI_NamedAddress address)
         {
             try
             {
@@ -493,7 +493,7 @@ namespace Flux.ViewModels
             }
             catch { return default; }
         }
-        public async Task<ValueResult<double>> ReadNamedDoubleAsync(OSAI_NamedAddress address)
+        public async Task<Optional<double>> ReadNamedDoubleAsync(OSAI_NamedAddress address)
         {
             try
             {
@@ -514,7 +514,7 @@ namespace Flux.ViewModels
             }
             catch { return default; }
         }
-        public async Task<ValueResult<string>> ReadNamedStringAsync(OSAI_NamedAddress address, ushort lenght)
+        public async Task<Optional<string>> ReadNamedStringAsync(OSAI_NamedAddress address, ushort lenght)
         {
             try
             {
@@ -536,7 +536,7 @@ namespace Flux.ViewModels
             catch { return default; }
         }
 
-        public async Task<ValueResult<TOut>> ReadBoolAsync<TOut>(OSAI_BitIndexAddress address, Func<bool, TOut> convert_func)
+        public async Task<Optional<TOut>> ReadBoolAsync<TOut>(OSAI_BitIndexAddress address, Func<bool, TOut> convert_func)
         {
             try
             {
@@ -556,7 +556,7 @@ namespace Flux.ViewModels
             }
             catch { return default; }
         }
-        public async Task<ValueResult<TOut>> ReadUShortAsync<TOut>(OSAI_IndexAddress address, Func<ushort, TOut> convert_func)
+        public async Task<Optional<TOut>> ReadUShortAsync<TOut>(OSAI_IndexAddress address, Func<ushort, TOut> convert_func)
         {
             try
             {
@@ -576,7 +576,7 @@ namespace Flux.ViewModels
             }
             catch { return default; }
         }
-        public async Task<ValueResult<TOut>> ReadShortAsync<TOut>(OSAI_IndexAddress address, Func<short, TOut> convert_func)
+        public async Task<Optional<TOut>> ReadShortAsync<TOut>(OSAI_IndexAddress address, Func<short, TOut> convert_func)
         {
             try
             {
@@ -596,7 +596,7 @@ namespace Flux.ViewModels
             }
             catch { return default; }
         }
-        public async Task<ValueResult<TOut>> ReadTextAsync<TOut>(OSAI_IndexAddress address, Func<string, TOut> convert_func)
+        public async Task<Optional<TOut>> ReadTextAsync<TOut>(OSAI_IndexAddress address, Func<string, TOut> convert_func)
         {
             try
             {
@@ -616,7 +616,7 @@ namespace Flux.ViewModels
             }
             catch { return default; }
         }
-        public async Task<ValueResult<TOut>> ReadDoubleAsync<TOut>(OSAI_IndexAddress address, Func<double, TOut> convert_func)
+        public async Task<Optional<TOut>> ReadDoubleAsync<TOut>(OSAI_IndexAddress address, Func<double, TOut> convert_func)
         {
             try
             {
@@ -636,7 +636,7 @@ namespace Flux.ViewModels
             }
             catch { return default; }
         }
-        public async Task<ValueResult<TOut>> ReadBoolAsync<TOut>(OSAI_IndexAddress address, ushort bit_index, Func<bool, TOut> convert_func)
+        public async Task<Optional<TOut>> ReadBoolAsync<TOut>(OSAI_IndexAddress address, ushort bit_index, Func<bool, TOut> convert_func)
         {
             try
             {
@@ -657,7 +657,7 @@ namespace Flux.ViewModels
             catch { return default; }
         }
 
-        public async Task<ValueResult<TOut>> ReadNamedBoolAsync<TOut>(OSAI_NamedAddress address, Func<bool, TOut> convert_func)
+        public async Task<Optional<TOut>> ReadNamedBoolAsync<TOut>(OSAI_NamedAddress address, Func<bool, TOut> convert_func)
         {
             try
             {
@@ -678,7 +678,7 @@ namespace Flux.ViewModels
             }
             catch { return default; }
         }
-        public async Task<ValueResult<TOut>> ReadNamedShortAsync<TOut>(OSAI_NamedAddress address, Func<short, TOut> convert_func)
+        public async Task<Optional<TOut>> ReadNamedShortAsync<TOut>(OSAI_NamedAddress address, Func<short, TOut> convert_func)
         {
             try
             {
@@ -699,7 +699,7 @@ namespace Flux.ViewModels
             }
             catch { return default; }
         }
-        public async Task<ValueResult<TOut>> ReadNamedUShortAsync<TOut>(OSAI_NamedAddress address, Func<ushort, TOut> convert_func)
+        public async Task<Optional<TOut>> ReadNamedUShortAsync<TOut>(OSAI_NamedAddress address, Func<ushort, TOut> convert_func)
         {
             try
             {
@@ -720,7 +720,7 @@ namespace Flux.ViewModels
             }
             catch { return default; }
         }
-        public async Task<ValueResult<TOut>> ReadNamedDoubleAsync<TOut>(OSAI_NamedAddress address, Func<double, TOut> convert_func)
+        public async Task<Optional<TOut>> ReadNamedDoubleAsync<TOut>(OSAI_NamedAddress address, Func<double, TOut> convert_func)
         {
             try
             {
@@ -741,7 +741,7 @@ namespace Flux.ViewModels
             }
             catch { return default; }
         }
-        public async Task<ValueResult<TOut>> ReadNamedStringAsync<TOut>(OSAI_NamedAddress address, ushort lenght, Func<string, TOut> convert_func)
+        public async Task<Optional<TOut>> ReadNamedStringAsync<TOut>(OSAI_NamedAddress address, ushort lenght, Func<string, TOut> convert_func)
         {
             try
             {
@@ -784,7 +784,7 @@ namespace Flux.ViewModels
             var read_boot_phase = Observable.Timer(dueTime, sample)
                 .SelectMany(t => ReadVariableAsync(c => c.BOOT_PHASE));
 
-            return await WaitUtils.WaitForValueResultAsync(read_boot_phase,
+            return await WaitUtils.WaitForOptionalAsync(read_boot_phase,
                 throttle, phase => phase_func(phase), timeout);
         }
         public async Task<bool> WaitProcessModeAsync(Func<OSAI_ProcessMode, bool> status_func, TimeSpan dueTime, TimeSpan sample, TimeSpan throttle, TimeSpan timeout)
@@ -792,12 +792,12 @@ namespace Flux.ViewModels
             var read_boot_mode = Observable.Timer(dueTime, sample)
                 .SelectMany(t => ReadVariableAsync(c => c.PROCESS_MODE));
 
-            return await WaitUtils.WaitForValueResultAsync(read_boot_mode,
+            return await WaitUtils.WaitForOptionalAsync(read_boot_mode,
                 throttle, process => status_func(process), timeout);
         }
 
         // BASIC OPERATIONS
-        public async Task<ValueResult<FLUX_AxisPosition>> GetAxesPositionAsync(OSAI_AxisPositionSelect select)
+        public async Task<Optional<FLUX_AxisPosition>> GetAxesPositionAsync(OSAI_AxisPositionSelect select)
         {
             try
             {

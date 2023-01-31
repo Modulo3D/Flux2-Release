@@ -70,7 +70,7 @@ namespace Flux.ViewModels
 
             _IsUploading = this.WhenAnyValue(v => v.UploadPercentage)
                 .Select(p => p > 0)
-                .ToProperty(this, v => v.IsUploading);
+                .ToPropertyRC(this, v => v.IsUploading, Disposables);
 
             Materials = Observable.CombineLatest(
                 Flux.DatabaseProvider.WhenAnyValue(v => v.Database),
@@ -79,8 +79,7 @@ namespace Flux.ViewModels
                 .Select(o => o.ToObservable()).Switch()
                 .ToObservableChangeSet(t => t.position)
                 .Transform(t => t.document)
-                .AsObservableCache()
-                .DisposeWith(Disposables);
+                .AsObservableCacheRC(Disposables);
 
             Nozzles = Observable.CombineLatest(
                 Flux.DatabaseProvider.WhenAnyValue(v => v.Database),
@@ -89,13 +88,11 @@ namespace Flux.ViewModels
                 .Select(o => o.ToObservable()).Switch()
                 .ToObservableChangeSet(t => t.position)
                 .Transform(t => t.document)
-                .AsObservableCache()
-                .DisposeWith(Disposables);
+                .AsObservableCacheRC(Disposables);
 
             _FileNumber = mcodes.AvaiableMCodes.Connect()
                 .QueryWhenChanged(FindFileNumber)
-                .ToProperty(this, f => f.FileNumber)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, f => f.FileNumber, Disposables);
 
             var is_selecting_file = Flux.MCodes
                 .WhenAnyValue(f => f.IsPreparingFile)
@@ -111,8 +108,7 @@ namespace Flux.ViewModels
                 is_selecting_file,
                 in_queue,
                 (s, q) => !s && !q)
-                .ToProperty(this, v => v.CanDelete)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.CanDelete, Disposables);
 
             var is_idle = MCodes.Flux.StatusProvider
                 .WhenAnyValue(s => s.StatusEvaluation)
@@ -124,26 +120,21 @@ namespace Flux.ViewModels
                 Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS),
                 Flux.StatusProvider.WhenAnyValue(e => e.PrintingEvaluation),
                 CanSelectMCode)
-                .ToProperty(this, v => v.CanSelect)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.CanSelect, Disposables);
 
-            ToggleMCodeStorageInfoCommand = ReactiveCommand.Create(() => { ShowInfo = !ShowInfo; })
-                .DisposeWith(Disposables);
+            ToggleMCodeStorageInfoCommand = ReactiveCommandRC.Create(() => { ShowInfo = !ShowInfo; }, Disposables);
 
-            DeleteMCodeStorageCommand = ReactiveCommand.CreateFromTask(
-                async () => { await mcodes.DeleteAsync(false, this); },
-                this.WhenAnyValue(v => v.CanDelete))
-                .DisposeWith(Disposables);
+            DeleteMCodeStorageCommand = ReactiveCommandRC.CreateFromTask(
+                async () => { await mcodes.DeleteAsync(false, this); }, Disposables,
+                this.WhenAnyValue(v => v.CanDelete));
 
-            SelectMCodeStorageCommand = ReactiveCommand.CreateFromTask(
-                async () => { await mcodes.AddToQueueAsync(this); },
-                this.WhenAnyValue(v => v.CanSelect))
-                .DisposeWith(Disposables);
+            SelectMCodeStorageCommand = ReactiveCommandRC.CreateFromTask(
+                async () => { await mcodes.AddToQueueAsync(this); }, Disposables,
+                this.WhenAnyValue(v => v.CanSelect));
 
-            CancelSelectMCodeStorageCommand = ReactiveCommand.Create(
-                () => mcodes.CancelPrepareMCode(),
-                this.WhenAnyValue(v => v.IsUploading))
-                .DisposeWith(Disposables);
+            CancelSelectMCodeStorageCommand = ReactiveCommandRC.Create(
+                () => mcodes.CancelPrepareMCode(), Disposables,
+                this.WhenAnyValue(v => v.IsUploading));
 
             var quanitites = Flux.DatabaseProvider
                 .WhenAnyValue(d => d.Database)

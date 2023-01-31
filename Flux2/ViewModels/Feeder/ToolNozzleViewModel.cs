@@ -55,12 +55,10 @@ namespace Flux.ViewModels
             _NozzleTemperature = Flux.ConnectionProvider
                 .ObserveVariable(m => m.TEMP_TOOL, tool_key)
                 .ObservableOrDefault()
-                .ToProperty(this, v => v.NozzleTemperature)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.NozzleTemperature, Disposables);
 
             _State = FindToolState()
-                .ToProperty(this, v => v.State)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.State, Disposables);
 
             _ToolNozzleBrush =
                 this.WhenAnyValue(v => v.State)
@@ -76,13 +74,11 @@ namespace Flux.ViewModels
                         return FluxColors.Warning;
                     return FluxColors.Active;
                 })
-                .ToProperty(this, v => v.ToolNozzleBrush)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.ToolNozzleBrush, Disposables);
 
             _DocumentLabel = this.WhenAnyValue(v => v.Document.nozzle)
                 .Convert(d => d.Name)
-                .ToProperty(this, v => v.DocumentLabel)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.DocumentLabel, Disposables);
         }
 
         public override void Initialize()
@@ -92,8 +88,7 @@ namespace Flux.ViewModels
             _MaterialLoaded = Feeder.Materials.Connect()
                 .AutoRefresh(m => m.State)
                 .QueryWhenChanged(m => m.Items.FirstOrOptional(m => m.State.IsLoaded()))
-                .ToProperty(this, v => v.MaterialLoaded)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.MaterialLoaded, Disposables);
 
             var material = Feeder.WhenAnyValue(f => f.SelectedMaterial);
 
@@ -112,7 +107,7 @@ namespace Flux.ViewModels
                     return true;
                 });
 
-            ChangeCommand = ReactiveCommand.CreateFromTask(ChangeAsync, can_load_unload_tool);
+            ChangeCommand = ReactiveCommandRC.CreateFromTask(ChangeAsync, Disposables, can_load_unload_tool);
         }
 
         public Task ChangeAsync()

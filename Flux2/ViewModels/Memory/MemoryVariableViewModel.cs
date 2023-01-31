@@ -6,6 +6,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Reactive;
+using System.Reactive.Disposables;
+using System.Reactive.Linq;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
@@ -18,8 +20,8 @@ namespace Flux.ViewModels
 
     public interface IMemoryVariableBase : IRemoteControl
     {
-        public string VariableName { get; }
-        public IFLUX_VariableBase VariableBase { get; }
+        string VariableName { get; }
+        IFLUX_VariableBase VariableBase { get; }
     }
 
     public class MemoryVariableViewModel : RemoteControl<MemoryVariableViewModel>, IMemoryVariableBase
@@ -44,6 +46,10 @@ namespace Flux.ViewModels
         [RemoteOutput(true, typeof(MemoryConverter))]
         public Optional<object> Value => _Value.Value;
 
+        private readonly ObservableAsPropertyHelper<bool> _HasValue;
+        [RemoteOutput(true)]
+        public bool HasValue => _HasValue.Value;
+
         public MemoryVariableViewModel(FluxViewModel flux, IFLUX_Variable variable, Optional<List<FLUX_VariableAttribute>> attributes) : base($"{typeof(MemoryVariableViewModel).GetRemoteControlName()}??{variable.Name}{variable.Unit}")
         {
             Flux = flux;
@@ -54,29 +60,29 @@ namespace Flux.ViewModels
                 switch (Variable)
                 {
                     case IFLUX_Variable<bool, bool> @bool:
-                        SetValueCommand = ReactiveCommand.CreateFromTask(() => SetValueAsync(@bool,
-                            b => b ? "1" : "0", s => int.Parse(s) == 1));
-                        ToggleValueCommand = ReactiveCommand.CreateFromTask(() => ToggleValueAsync(@bool));
+                        SetValueCommand = ReactiveCommandRC.CreateFromTask(() => SetValueAsync(@bool,
+                            b => b ? "1" : "0", s => int.Parse(s) == 1), Disposables);
+                        ToggleValueCommand = ReactiveCommandRC.CreateFromTask(() => ToggleValueAsync(@bool), Disposables);
                         break;
 
                     case IFLUX_Variable<double, double> @double:
-                        SetValueCommand = ReactiveCommand.CreateFromTask(() => SetValueAsync(@double,
-                            d => $"{d:0.##}".Replace(",", "."), s => double.Parse(s, NumberStyles.Float, CultureInfo.InvariantCulture)));
+                        SetValueCommand = ReactiveCommandRC.CreateFromTask(() => SetValueAsync(@double,
+                            d => $"{d:0.##}".Replace(",", "."), s => double.Parse(s, NumberStyles.Float, CultureInfo.InvariantCulture)), Disposables);
                         break;
 
                     case IFLUX_Variable<short, short> @short:
-                        SetValueCommand = ReactiveCommand.CreateFromTask(() => SetValueAsync(@short,
-                            s => $"{s}", s => short.Parse(s)));
+                        SetValueCommand = ReactiveCommandRC.CreateFromTask(() => SetValueAsync(@short,
+                            s => $"{s}", s => short.Parse(s)), Disposables);
                         break;
 
                     case IFLUX_Variable<ushort, ushort> @ushort:
-                        SetValueCommand = ReactiveCommand.CreateFromTask(() => SetValueAsync(@ushort,
-                            s => $"{s}", s => ushort.Parse(s)));
+                        SetValueCommand = ReactiveCommandRC.CreateFromTask(() => SetValueAsync(@ushort,
+                            s => $"{s}", s => ushort.Parse(s)), Disposables);
                         break;
 
                     case IFLUX_Variable<string, string> @string:
-                        SetValueCommand = ReactiveCommand.CreateFromTask(() => SetValueAsync(@string,
-                            s => s, s => s));
+                        SetValueCommand = ReactiveCommandRC.CreateFromTask(() => SetValueAsync(@string,
+                            s => s, s => s), Disposables);
                         break;
                 }
             }
@@ -85,11 +91,15 @@ namespace Flux.ViewModels
             {
                 var position_attribute = attributes.Value.FirstOrOptional(a => a is FLUX_VariablePositionAttribute);
                 if(position_attribute.HasValue)
-                    SetPositionCommand = ReactiveCommand.CreateFromTask(() => SetPositionAsync((FLUX_VariablePositionAttribute)position_attribute.Value));
+                    SetPositionCommand = ReactiveCommandRC.CreateFromTask(() => SetPositionAsync((FLUX_VariablePositionAttribute)position_attribute.Value), Disposables);
             }
 
             _Value = Variable.IValueChanged
-                .ToProperty(this, v => v.Value);
+                .ToPropertyRC(this, v => v.Value, Disposables);
+
+            _HasValue = variable.IValueChanged
+                .Select(v => v.HasValue)
+                .ToPropertyRC(this, v => v.HasValue, Disposables);
         }
 
         private async Task SetPositionAsync(FLUX_VariablePositionAttribute position_attribute)

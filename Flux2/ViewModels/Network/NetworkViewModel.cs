@@ -1,6 +1,6 @@
 ﻿namespace Flux.ViewModels
 {
-    /*public class NetworkViewModel : ReactiveObject
+    /*public class NetworkViewModel : ReactiveObjectRC
     {
         static NetworkViewModel()
         {

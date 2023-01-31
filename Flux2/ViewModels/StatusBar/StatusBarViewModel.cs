@@ -40,7 +40,7 @@ namespace Flux.ViewModels
             StatusBarItems = StatusBarItemsSource.Connect()
                 .AutoRefresh(v => v.State)
                 .Filter(v => v.State != StatusBarState.Hidden)
-                .AsObservableCache();
+                .AsObservableCacheRC(Disposables);
 
             ShowMessagesCommand = ReactiveCommand.Create(() => { Content = Flux.Messages; });
             ShowWebcamCommand = ReactiveCommand.Create(() => { Content = Flux.Webcam; });

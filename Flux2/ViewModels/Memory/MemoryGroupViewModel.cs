@@ -5,6 +5,7 @@ using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Linq;
+using System.Reactive.Disposables;
 using System.Reactive.Linq;
 
 namespace Flux.ViewModels
@@ -49,7 +50,7 @@ namespace Flux.ViewModels
                 {
                     bool filter(IMemoryVariableBase v) => t;
                     return (Func<IMemoryVariableBase, bool>)filter;
-                })).AsObservableCache();
+                })).AsObservableCacheRC(Disposables);
         }
     }
 }

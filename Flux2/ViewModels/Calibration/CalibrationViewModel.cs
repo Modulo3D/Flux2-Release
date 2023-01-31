@@ -75,16 +75,14 @@ namespace Flux.ViewModels
                     var tool_card = f.nfc.CardId.Value;
                     return new ToolId(f.Position, tool_card, tool_nfc);
                 })
-                .ToProperty(this, v => v.GroupId)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.GroupId);
 
             Offsets = Flux.Feeders.Feeders.Connect()
                 .AutoRefresh(f => f.FeederState)
                 .Filter(f => f.FeederState != EFeederState.FEEDER_EMPTY)
                 .Transform(f => (IFluxOffsetViewModel)new OffsetViewModel(this, f))
                 .DisposeMany()
-                .AsObservableCache()
-                .DisposeWith(Disposables);
+                .AsObservableCacheRC(Disposables);
 
             var can_safe_start = Flux.StatusProvider
                  .WhenAnyValue(s => s.StatusEvaluation)
@@ -111,22 +109,17 @@ namespace Flux.ViewModels
 
             user_settings.Local
                 .WhenAnyValue(v => v.GlobalZOffset)
-                .BindTo(this, v => v.GlobalZOffset)
-                .DisposeWith(Disposables);
+                .BindToRC(this, v => v.GlobalZOffset, Disposables);
 
             this.WhenAnyValue(v => v.GlobalZOffset)
-                .BindTo(user_settings, v => v.Local.GlobalZOffset)
-                .DisposeWith(Disposables);
+                .BindToRC(user_settings, v => v.Local.GlobalZOffset, Disposables);
 
             this.WhenAnyValue(v => v.GlobalZOffset)
                 .Throttle(TimeSpan.FromSeconds(1))
-                .Subscribe(_ => user_settings.PersistLocalSettings())
-                .DisposeWith(Disposables);
+                .SubscribeRC(_ => user_settings.PersistLocalSettings(), Disposables);
 
-            IncreaseGlobalZOffsetCommand = ReactiveCommand.Create(() => { ModifyOffset(o => o + 0.01f); }, is_idle)
-                .DisposeWith(Disposables);
-            DecreaseGlobalZOffsetCommand = ReactiveCommand.Create(() => { ModifyOffset(o => o - 0.01f); }, is_idle)
-                .DisposeWith(Disposables);
+            IncreaseGlobalZOffsetCommand = ReactiveCommandRC.Create(() => { ModifyOffset(o => o + 0.01f); }, Disposables, is_idle);
+            DecreaseGlobalZOffsetCommand = ReactiveCommandRC.Create(() => { ModifyOffset(o => o - 0.01f); }, Disposables, is_idle);
 
             Observable.CombineLatest(
                 IncreaseGlobalZOffsetCommand.IsExecuting,
@@ -139,10 +132,9 @@ namespace Flux.ViewModels
                         (!t.NewValue.iz && !t.NewValue.dz);
                 })
                 .Throttle(TimeSpan.FromSeconds(1))
-                .Subscribe(_ => Flux.SettingsProvider.PersistLocalSettings())
-                .DisposeWith(Disposables);
+                .SubscribeRC(_ => Flux.SettingsProvider.PersistLocalSettings(), Disposables);
 
-            ProbeOffsetsCommand = ReactiveCommand.CreateFromTask(async () =>
+            ProbeOffsetsCommand = ReactiveCommandRC.CreateFromTask(async () =>
             {
                 var tool_z_probe_unit = Flux.ConnectionProvider.GetArrayUnit(m => m.AXIS_PROBE, "tool_z");
                 var has_tool_z_probe = Flux.ConnectionProvider.HasVariable(m => m.AXIS_PROBE, tool_z_probe_unit);
@@ -160,14 +152,12 @@ namespace Flux.ViewModels
 
                     Flux.Navigator.Navigate(ManualCalibration.Value);
                 }
-            }, can_probe)
-                .DisposeWith(Disposables);
+            }, Disposables, can_probe);
 
             var offsets = Offsets.Connect()
                 .ChangeKey(f => $"{f.Feeder.Position}")
                 .Transform(f => (IRemoteControl)f)
-                .AsObservableCache()
-                .DisposeWith(Disposables);
+                .AsObservableCacheRC(Disposables);
 
             ManualCalibration = new Lazy<ManualCalibrationViewModel>(() => new ManualCalibrationViewModel(this));
         }

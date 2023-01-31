@@ -77,7 +77,7 @@ namespace Flux.ViewModels
             return connection_provider.MemoryBuffer.ObserveModel(get_model, get_data);
         }
 
-        private static async Task<ValueResult<TRData>> read_variable(
+        private static async Task<Optional<TRData>> read_variable(
             RRF_ConnectionProvider connection_provider,
             Func<RRF_MemoryBuffer, Task<Optional<TModel>>> read_model,
             Func<TModel, Optional<TRData>> get_data)
@@ -88,7 +88,7 @@ namespace Flux.ViewModels
             return get_data(model.Value);
         }
 
-        private static async Task<ValueResult<TRData>> read_variable(
+        private static async Task<Optional<TRData>> read_variable(
             RRF_ConnectionProvider connection_provider,
             Func<RRF_MemoryBuffer, Task<Optional<TModel>>> read_model,
             Func<TModel, Task<Optional<TRData>>> get_data)
@@ -144,7 +144,7 @@ namespace Flux.ViewModels
             return connection_provider.MemoryBuffer.ObserveGlobalModel(m => get_data(m, variable, convert_data));
         }
 
-        private static async Task<ValueResult<TData>> read_variable(RRF_ConnectionProvider connection_provider, string variable, Func<object, TData> convert_data = default)
+        private static async Task<Optional<TData>> read_variable(RRF_ConnectionProvider connection_provider, string variable, Func<object, TData> convert_data = default)
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             var global = await connection_provider.MemoryBuffer.GetModelDataAsync(m => m.Global, cts.Token);

@@ -212,8 +212,7 @@ namespace Flux.ViewModels
             Messages = new SourceList<IFluxMessage>();
             Messages.Connect()
                 .DisposeMany()
-                .Subscribe()
-                .DisposeWith(Disposables);
+                .SubscribeRC(Disposables);
 
             var filter = Observable.CombineLatest(
                 Flux.ConnectionProvider.WhenAnyValue(v => v.IsConnecting),
@@ -228,7 +227,7 @@ namespace Flux.ViewModels
                 .AutoRefresh(m => m.TimeStamp)
                 .Filter(filter)
                 .Sort(Comparer<IFluxMessage>.Create((tm1, tm2) => tm1.TimeStamp.CompareTo(tm2.TimeStamp)))
-                .AsObservableList();
+                .AsObservableListRC(Disposables);
 
             _MessageCounter = SortedMessages.Connect()
                 .QueryWhenChanged(messages =>
@@ -260,9 +259,9 @@ namespace Flux.ViewModels
                         }
                     }
                     return new MessageCounter(debugCount, infoCount, warningCount, errorCount, emergCount);
-                }).ToProperty(this, v => v.MessageCounter);
+                }).ToPropertyRC(this, v => v.MessageCounter, Disposables);
 
-            ResetMessagesCommand = ReactiveCommand.Create(Messages.Clear);
+            ResetMessagesCommand = ReactiveCommandRC.Create(Messages.Clear, Disposables);
         }
 
         // LOG MESSAGES

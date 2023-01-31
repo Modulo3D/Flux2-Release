@@ -5,6 +5,7 @@ using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Linq;
+using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Text;
 using System.Threading;
@@ -12,12 +13,14 @@ using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
-    public class LoggingProvider : ReactiveObject
+    public class LoggingProvider : ReactiveObjectRC
     {
         public FluxViewModel Flux { get; }
+        public CompositeDisposable Disposables { get; }
         public LoggingProvider(FluxViewModel flux)
         {
             Flux = flux;
+            Disposables = new CompositeDisposable();
 
             // log program history
             var queue_pos = Flux.ConnectionProvider.ObserveVariable(c => c.QUEUE_POS);
@@ -45,7 +48,7 @@ namespace Flux.ViewModels
 
             var mcode_events = Flux.ConnectionProvider
                 .ObserveVariable(c => c.MCODE_EVENT)
-                .ConvertMany(events => Observable.FromAsync(() => get_events(events)))
+                .ConvertAsync(get_events)
                 .StartWithDefault();
 
             Task<Optional<MCodeEventStorage>> get_events(MCodeEventStoragePreview events)
@@ -54,7 +57,7 @@ namespace Flux.ViewModels
                 return events.GetMCodeEventStorageAsync(Flux.ConnectionProvider, storage_cts.Token);
             };
 
-            mcode_events.Subscribe(async events =>
+            mcode_events.SubscribeRC(async events =>
             {
                 if (!events.HasValue)
                     return;
@@ -115,13 +118,13 @@ namespace Flux.ViewModels
                         await Flux.ConnectionProvider.DeleteAsync(c => c.JobEventPath, $"{mcode.Key};{job.Key}", delete_cts.Token);
                     }
                 }
-            });
+            }, Disposables);
 
             var extrusions = Flux.StatusProvider.FeederEvaluators.Connect()
                 .AutoTransform(f => f.ExtrusionQueue)
                 .QueryWhenChanged();
 
-            extrusions.Subscribe(extrusions =>
+            extrusions.SubscribeRC(extrusions =>
             {
                 foreach (var extrusion in extrusions.KeyValues)
                 {
@@ -130,7 +133,7 @@ namespace Flux.ViewModels
                     var total_weight = extrusion.Value.Value.Aggregate(0.0, (w, kvp) => w + kvp.Value.WeightG);
                     flux.Logger.LogInformation(new EventId(0, $"job_event"), $"{extrusion.Key}:{total_weight:0.##}".Replace(",", "."));
                 }
-            });
+            }, Disposables);
         }
     }
 
@@ -140,7 +143,8 @@ namespace Flux.ViewModels
             this IFLUX_ConnectionProvider connection_provider,
             ILogger logger,
             Func<IFLUX_VariableStore, IFLUX_Variable<TRData, TWData>> get_variable,
-            Func<TRData, TLData> get_log)
+            Func<TRData, TLData> get_log,
+            CompositeDisposable d)
         {
             var variable = connection_provider.GetVariable(get_variable);
             var id = new EventId(0, variable.Name.ToLower().Replace(" ", "_"));
@@ -148,13 +152,14 @@ namespace Flux.ViewModels
                 .Where(v => v.HasValue)
                 .Select(v => get_log(v.Value))
                 .DistinctUntilChanged()
-                .Subscribe(v => logger.LogInformation(id, $"{v}"));
+                .SubscribeRC(v => logger.LogInformation(id, $"{v}"), d);
         }
         public static void LogVariable<TRData, TWData, TLData>(
             this IFLUX_ConnectionProvider connection_provider,
             ILogger logger,
             Func<IFLUX_VariableStore, Optional<IFLUX_Variable<TRData, TWData>>> get_variable,
-            Func<TRData, TLData> get_log)
+            Func<TRData, TLData> get_log,
+            CompositeDisposable d)
         {
             var variable = connection_provider.GetVariable(get_variable);
             if (!variable.HasValue)
@@ -165,14 +170,15 @@ namespace Flux.ViewModels
                 .Where(v => v.HasValue)
                 .Select(v => get_log(v.Value))
                 .DistinctUntilChanged()
-                .Subscribe(v => logger.LogInformation(id, $"{v}"));
+                .SubscribeRC(v => logger.LogInformation(id, $"{v}"), d);
         }
         public static void LogVariable<TRData, TWData, TLData>(
             this IFLUX_ConnectionProvider connection_provider,
             ILogger logger,
             Func<IFLUX_VariableStore, IFLUX_Array<TRData, TWData>> get_variable,
             VariableAlias alias,
-            Func<TRData, TLData> get_log)
+            Func<TRData, TLData> get_log,
+            CompositeDisposable d)
         {
             var variable = connection_provider.GetVariable(get_variable, alias);
             if (!variable.HasValue)
@@ -183,14 +189,15 @@ namespace Flux.ViewModels
                 .Where(v => v.HasValue)
                 .Select(v => get_log(v.Value))
                 .DistinctUntilChanged()
-                .Subscribe(v => logger.LogInformation(id, $"{v}"));
+                .SubscribeRC(v => logger.LogInformation(id, $"{v}"), d);
         }
         public static void LogVariable<TRData, TWData, TLData>(
             this IFLUX_ConnectionProvider connection_provider,
             ILogger logger,
             Func<IFLUX_VariableStore, Optional<IFLUX_Array<TRData, TWData>>> get_variable,
             VariableAlias alias,
-            Func<TRData, TLData> get_log)
+            Func<TRData, TLData> get_log,
+            CompositeDisposable d)
         {
             var variable = connection_provider.GetVariable(get_variable, alias);
             if (!variable.HasValue)
@@ -201,16 +208,17 @@ namespace Flux.ViewModels
                 .Where(v => v.HasValue)
                 .Select(v => get_log(v.Value))
                 .DistinctUntilChanged()
-                .Subscribe(v => logger.LogInformation(id, $"{v}"));
+                .SubscribeRC(v => logger.LogInformation(id, $"{v}"), d);
         }
 
         public static IObservable<T> LogObservable<T>(this IObservable<T> observable,
-           EventId event_id,
-           ILogger logger)
+            EventId event_id,
+            ILogger logger,
+            CompositeDisposable d)
         {
             observable
                .DistinctUntilChanged()
-               .Subscribe(v => logger.LogInformation(event_id, $"{v}"));
+               .SubscribeRC(v => logger.LogInformation(event_id, $"{v}"), d);
             return observable;
         }
     }

@@ -18,7 +18,7 @@ namespace Flux.ViewModels
         {
             /*_SerializedTag = tag_vm.NFCSlot.WhenAnyValue(s => s.Nfc)
                 .Select(nfc => JsonUtils.Serialize(nfc))
-                .ToProperty(this, v => v.SerializedTag);*/
+                .ToPropertyRC(this, v => v.SerializedTag);*/
 
             var can_lock = Observable.CombineLatest(
                 is_unlocked_tag(),
@@ -96,7 +96,7 @@ namespace Flux.ViewModels
 
     public class NFCInnerViewModel<TTagViewModel, TNFCTag> : NavPanelViewModel<NFCInnerViewModel<TTagViewModel, TNFCTag>>
         where TTagViewModel : IFluxTagViewModel<TNFCTag>
-        where TNFCTag : INFCOdometerTag<TNFCTag>
+        where TNFCTag : INFCOdometerTag<TNFCTag>, new()
     {
         //private ObservableAsPropertyHelper<Optional<string>> _SerializedTag;
         //public Optional<string> SerializedTag => _SerializedTag.Value;
@@ -114,7 +114,7 @@ namespace Flux.ViewModels
                 .ConvertToObservable(slot => slot.WhenAnyValue(s => s.Nfc))
                 .ConvertToObservable(nfc => JsonUtils.Serialize(nfc))
                 .ObservableOrOptional()
-                .ToProperty(this, v => v.SerializedTag);*/
+                .ToPropertyRC(this, v => v.SerializedTag);*/
 
             var can_lock = Observable.CombineLatest(
                 is_unlocked_tag(),
@@ -214,7 +214,7 @@ namespace Flux.ViewModels
         {
             Flux.SettingsProvider
                 .WhenAnyValue(v => v.ExtrudersCount)
-                .Subscribe(extruders =>
+                .SubscribeRC(extruders =>
                 {
                     Clear();
                     if (extruders.HasValue)
@@ -234,7 +234,7 @@ namespace Flux.ViewModels
                                     (g, e, s) => s.StoreTag(t => t.SetInserted(g, default))));
                         }
                     }
-                });
+                }, Disposables);
         }
     }
 
@@ -331,18 +331,7 @@ namespace Flux.ViewModels
             AddCommand("keepChamber", m => m.KEEP_CHAMBER);
             AddCommand("keepExtruders", m => m.KEEP_TOOL, visible: advanced_mode);
             AddCommand("runDaemon", m => m.RUN_DAEMON, visible: advanced_mode);
-
-            var user_settings = Flux.SettingsProvider.UserSettings;
-            AddCommand(
-                new ToggleButton(
-                    "deleteUsb",
-                    () =>
-                    {
-                        var delete = !user_settings.Local.DeleteFromUSB.ValueOr(() => false);
-                        user_settings.Local.DeleteFromUSB = delete;
-                        user_settings.PersistLocalSettings();
-                    },
-                    user_settings.Local.WhenAnyValue(s => s.DeleteFromUSB)));
+            AddCommand("plotReferenceCount", () => ReactiveRC.PlotReferenceCount(), visible: advanced_mode);
 
             AddCommand(
                 new ToggleButton(
@@ -362,7 +351,6 @@ namespace Flux.ViewModels
                                 RewriteNFC = true
                             };
                         }
-                        user_settings.PersistLocalSettings();
                     },
                     advanced_mode_source));
 
@@ -433,7 +421,7 @@ namespace Flux.ViewModels
 
             Flux.SettingsProvider
                 .WhenAnyValue(v => v.ExtrudersCount)
-                .Subscribe(extruders =>
+                .SubscribeRC(extruders =>
                 {
                     Clear();
 
@@ -493,7 +481,7 @@ namespace Flux.ViewModels
                             }
                         }
                     }
-                });
+                }, Disposables);
         }
     }
 

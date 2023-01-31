@@ -62,7 +62,7 @@ namespace Flux.ViewModels
                 .Filter(line => line.IsInvalidProbe)
                 .Transform(line => (IInvalidValueViewModel)new InvalidProbeViewModel(line))
                 .Sort(EvaluationComparer)
-                .AsObservableList();
+                .AsObservableListRC(Disposables);
         }
 
         public override Task ChangeItemsAsync()

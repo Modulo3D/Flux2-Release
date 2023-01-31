@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reactive;
+using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Reflection;
 using System.Threading;
@@ -73,10 +74,10 @@ namespace Flux.ViewModels
         }
     }
 
-    public class StatusProvider : ReactiveObject, IFluxStatusProvider
+    public class StatusProvider : ReactiveObjectRC, IFluxStatusProvider
     {
         public FluxViewModel Flux { get; }
-        public ConditionStateCreator StateCreator { get; }
+        public ConditionStateBuilder StateCreator { get; }
 
         private readonly ObservableAsPropertyHelper<Optional<JobQueue>> _JobQueue;
         public Optional<JobQueue> JobQueue => _JobQueue.Value;
@@ -346,8 +347,8 @@ namespace Flux.ViewModels
                         (state, value) =>
                         {
                             if (value.pressure.Kpa < value.level)
-                                return (EConditionState.Error, "ATTIVARE L'ARIA COMPRESSA");
-                            return (EConditionState.Stable, "ARIA COMPRESSA ATTIVA");
+                                return state.Create(EConditionState.Error, "ATTIVARE L'ARIA COMPRESSA");
+                            return state.Create(EConditionState.Stable, "ARIA COMPRESSA ATTIVA");
                         }, TimeSpan.FromSeconds(1));
                 }
                 return _PressureCondition;
@@ -497,8 +498,8 @@ namespace Flux.ViewModels
                         (state, debug) =>
                         {
                             if (!debug.AdvancedSettings)
-                                return EConditionState.Hidden;
-                            return EConditionState.Stable;
+                                return state.Create(EConditionState.Hidden);
+                            return state.Create(EConditionState.Stable);
                         });
                 }
                 return _DebugCondition;
@@ -518,14 +519,14 @@ namespace Flux.ViewModels
                         (state, message_counter) =>
                         {
                             if (message_counter.EmergencyMessagesCount > 0)
-                                return EConditionState.Error;
+                                return state.Create(EConditionState.Error);
                             if (message_counter.ErrorMessagesCount > 0)
-                                return EConditionState.Warning;
+                                return state.Create(EConditionState.Warning);
                             if (message_counter.WarningMessagesCount > 0)
-                                return EConditionState.Warning;
+                                return state.Create(EConditionState.Warning);
                             if (message_counter.InfoMessagesCount > 0)
-                                return EConditionState.Stable;
-                            return EConditionState.Disabled;
+                                return state.Create(EConditionState.Stable);
+                            return state.Create(EConditionState.Disabled);
                         });
                 }
                 return _MessageCondition;
@@ -549,10 +550,10 @@ namespace Flux.ViewModels
                         (state, network) =>
                         {
                             if (!network.plc)
-                                return EConditionState.Error;
+                                return state.Create(EConditionState.Error);
                             if (!network.inter)
-                                return EConditionState.Warning;
-                            return EConditionState.Stable;
+                                return state.Create(EConditionState.Warning);
+                            return state.Create(EConditionState.Stable);
                         });
                 }
                 return _NetworkCondition;
@@ -596,25 +597,28 @@ namespace Flux.ViewModels
         }
         private SourceCache<IConditionViewModel, string> _LockToggleConditions;
 
+        public CompositeDisposable Disposables { get; }
+
         public StatusProvider(FluxViewModel flux)
         {
             Flux = flux;
-            StateCreator = new ConditionStateCreator(flux);
+            Disposables = new CompositeDisposable();
+            StateCreator = new ConditionStateBuilder(flux);
 
             FeederEvaluators = Flux.Feeders.Feeders.Connect()
                 .QueryWhenChanged(CreateFeederEvaluator)
                 .AsObservableChangeSet(e => e.Feeder.Position)
-                .AsObservableCache();
+                .AsObservableCacheRC(Disposables);
 
             ExpectedMaterialsQueue = FeederEvaluators.Connect()
                 .Transform(f => f.Material, true)
                 .AutoTransform(f => f.ExpectedDocumentQueue)
-                .AsObservableCache();
+                .AsObservableCacheRC(Disposables);
 
             ExpectedNozzlesQueue = FeederEvaluators.Connect()
                 .Transform(f => f.ToolNozzle, true)
                 .AutoTransform(f => f.ExpectedDocumentQueue)
-                .AsObservableCache();
+                .AsObservableCacheRC(Disposables);
 
             var core_settings = Flux.SettingsProvider.CoreSettings.Local;
 
@@ -628,13 +632,13 @@ namespace Flux.ViewModels
 
             _JobQueue = Observable.CombineLatest(queue_preview, queue_pos, 
                 (queue_preview, queue_pos) => (queue_preview, queue_pos))
-                .SelectMany(t => Observable.FromAsync(() => get_queue(t.queue_preview, t.queue_pos)))
+                .SelectAsync(t => get_queue(t.queue_preview, t.queue_pos))
                 .StartWithDefault()
-                .ToProperty(this, v => v.JobQueue);
+                .ToPropertyRC(this, v => v.JobQueue, Disposables);
 
             var current_job = Observable.CombineLatest(queue_preview, queue_pos,
                 (queue_preview, queue_pos) => (queue_preview, queue_pos))
-                .SelectMany(t => Observable.FromAsync(() => get_current_job(t.queue_preview, t.queue_pos)))
+                .SelectMany(t => get_current_job(t.queue_preview, t.queue_pos))
                 .StartWithDefault();
 
             async Task<Optional<JobQueue>> get_queue(Optional<FluxJobQueuePreview> preview, Optional<QueuePosition> queue_pos)
@@ -667,7 +671,7 @@ namespace Flux.ViewModels
 
             var current_recovery = Observable.CombineLatest(recovery_preview, current_job,
                 (recovery_preview, current_job) => (recovery_preview, current_job))
-                .SelectMany(t => Observable.FromAsync(() => get_recovery(t.recovery_preview, t.current_job)))
+                .SelectAsync(t => get_recovery(t.recovery_preview, t.current_job))
                 .StartWithDefault();
 
             async Task<Optional<FluxJobRecovery>> get_recovery(Optional<FluxJobRecoveryPreview> recovery_preview, Optional<FluxJob> current_job)
@@ -749,7 +753,7 @@ namespace Flux.ViewModels
                 start_with_low_materials,
                 StartEvaluation.Create)
                 .DistinctUntilChanged()
-                .ToProperty(this, v => v.StartEvaluation);
+                .ToPropertyRC(this, v => v.StartEvaluation, Disposables);
 
             _PrintingEvaluation = Observable.CombineLatest(
                 current_job,
@@ -757,7 +761,7 @@ namespace Flux.ViewModels
                 current_recovery,
                 PrintingEvaluation.Create)
                 .DistinctUntilChanged()
-                .ToProperty(this, v => v.PrintingEvaluation);
+                .ToPropertyRC(this, v => v.PrintingEvaluation, Disposables);
 
             var is_homed = Flux.ConnectionProvider
                 .ObserveVariable(m => m.IS_HOMED)
@@ -820,7 +824,7 @@ namespace Flux.ViewModels
                 is_enabled_axis,
                 StatusEvaluation.Create)
                 .DistinctUntilChanged()
-                .ToProperty(this, v => v.StatusEvaluation);
+                .ToPropertyRC(this, v => v.StatusEvaluation, Disposables);
 
             var progress = Flux.ConnectionProvider
                 .ObserveVariable(c => c.PROGRESS)
@@ -838,7 +842,7 @@ namespace Flux.ViewModels
                 progress,
                 GetPrintProgress)
                 .DistinctUntilChanged()
-                .ToProperty(this, v => v.PrintProgress);
+                .ToPropertyRC(this, v => v.PrintProgress, Disposables);
 
             var database = Flux.DatabaseProvider
                 .WhenAnyValue(v => v.Database);
@@ -867,7 +871,7 @@ namespace Flux.ViewModels
                 Flux.Navigator.WhenAnyValue(nav => nav.CurrentViewModel),
                 Flux.ConnectionProvider.WhenAnyValue(c => c.IsConnecting),
                 FindFluxStatus)
-                .ToProperty(this, s => s.FluxStatus);
+                .ToPropertyRC(this, s => s.FluxStatus, Disposables);
         }
 
         public ConditionDictionary<TConditionAttribute> GetConditions<TConditionAttribute>()

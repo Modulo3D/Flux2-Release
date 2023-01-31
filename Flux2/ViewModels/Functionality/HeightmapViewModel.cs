@@ -94,13 +94,13 @@ namespace Flux.ViewModels
 
         public HeightmapViewModel(FluxViewModel flux) : base(flux)
         {
-            ProbeHeightmapCommand = ReactiveCommand.CreateFromTask(ProbeHeightmapAsync);
-            ProbeHeightmapSettingsCommand = ReactiveCommand.CreateFromTask(ProbeHeightmapSettingsAsync);
+            ProbeHeightmapCommand = ReactiveCommandRC.CreateFromTask(ProbeHeightmapAsync, Disposables);
+            ProbeHeightmapSettingsCommand = ReactiveCommandRC.CreateFromTask(ProbeHeightmapSettingsAsync, Disposables);
 
             _PlateTemperature = Flux.ConnectionProvider
                 .ObserveVariable(c => c.TEMP_PLATE, "main.plate")
                 .ObservableOrDefault()
-                .ToProperty(this, v => v.PlateTemperature);
+                .ToPropertyRC(this, v => v.PlateTemperature, Disposables);
         }
 
         private Task ProbeHeightmapSettingsAsync()

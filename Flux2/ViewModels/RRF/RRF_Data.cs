@@ -1155,7 +1155,7 @@ namespace Flux.ViewModels
         public RRF_ObjectModelGlobal(JObject model) : base(model) { }
     }
 
-    public class RRF_ObjectModel : ReactiveObject
+    public class RRF_ObjectModel : ReactiveObjectRC
     {
         //private Optional<List<RRF_ObjectModelBoard>> _Boards;
         //public Optional<List<RRF_ObjectModelBoard>> Boards { get => _Boards; set => this.RaiseAndSetIfChanged(ref _Boards, value); }

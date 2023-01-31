@@ -57,7 +57,7 @@ namespace Flux.ViewModels
             _ShowNavBar = this.WhenAnyValue(v => v.CurrentViewModel)
                 .ConvertMany(vm => vm.ShowNavBar)
                 .ValueOr(() => false)
-                .ToProperty(this, v => v.ShowNavBar);
+                .ToPropertyRC(this, v => v.ShowNavBar, Disposables);
 
             Routes.Add(home);
             Routes.Add(storage);
@@ -73,7 +73,7 @@ namespace Flux.ViewModels
 
             this.WhenAnyValue(v => v.CurrentViewModel)
                 .PairWithPreviousValue()
-                .Subscribe(async v =>
+                .SubscribeRC(async v =>
                 {
                     if (v.NewValue.HasValue)
                     {
@@ -81,8 +81,7 @@ namespace Flux.ViewModels
                         if (v.OldValue.HasValue)
                             await v.OldValue.Value.OnNavigateToAsync(v.NewValue.Value);
                     }
-                })
-                .DisposeWith(Disposables);
+                }, Disposables);
         }
 
         public void Navigate<TFluxRoutableViewModel>(TFluxRoutableViewModel route, bool reset = false)

@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reactive;
+using System.Reactive.Disposables;
 using System.Reactive.Linq;
 
 namespace Flux.ViewModels
@@ -32,7 +33,7 @@ namespace Flux.ViewModels
         public MemoryGroupBaseViewModel(FluxViewModel flux, string name) : base($"{typeof(TViewModel).GetRemoteControlName()}??{name}")
         {
             Flux = flux;
-            ToggleCommand = ReactiveCommand.Create(Toggle);
+            ToggleCommand = ReactiveCommandRC.Create(Toggle, Disposables);
         }
 
         private void Toggle()
@@ -61,7 +62,8 @@ namespace Flux.ViewModels
                 {
                     bool filter(MemoryVariableViewModel v) => t;
                     return (Func<MemoryVariableViewModel, bool>)filter;
-                })).AsObservableCache();
+                }))
+                .AsObservableCacheRC(Disposables);
         }
     }
 }

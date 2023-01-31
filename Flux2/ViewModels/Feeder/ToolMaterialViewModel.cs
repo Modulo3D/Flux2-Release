@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
-    public class ToolMaterialViewModel : ReactiveObject, IFluxToolMaterialViewModel, IDisposable
+    public class ToolMaterialViewModel : ReactiveObjectRC, IFluxToolMaterialViewModel, IDisposable
     {
         public ushort Position { get; }
         public FluxViewModel Flux { get; }
@@ -43,28 +43,24 @@ namespace Flux.ViewModels
                 ToolNozzle.WhenAnyValue(v => v.Document),
                 Flux.DatabaseProvider.WhenAnyValue(v => v.Database),
                 FindToolMaterialAsync)
-                .SelectMany(o => Observable.FromAsync(() => o))
-                .ToProperty(this, v => v.Document)
-                .DisposeWith(Disposables);
+                .SelectAsync()
+                .ToPropertyRC(this, v => v.Document, Disposables);
 
             _State = Observable.CombineLatest(
                 Material.WhenAnyValue(v => v.Document),
                 ToolNozzle.WhenAnyValue(v => v.Document),
                 Flux.DatabaseProvider.WhenAnyValue(v => v.Database),
                 FindToolMaterialStateAsync)
-                .SelectMany(o => Observable.FromAsync(() => o))
-                .ToProperty(this, v => v.State)
-                .DisposeWith(Disposables);
+                .SelectAsync()
+                .ToPropertyRC(this, v => v.State, Disposables);
 
             _ExtrusionTemp = this.WhenAnyValue(f => f.Document)
                 .Select(d => d.Convert(d => d[d => d.PrintTemperature, 0.0]))
-                .ToProperty(this, v => v.ExtrusionTemp)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.ExtrusionTemp, Disposables);
 
             _BreakTemp = this.WhenAnyValue(f => f.Document)
                 .Select(d => d.Convert(d => d[d => d.BreakTemperature, 0.0]))
-                .ToProperty(this, v => v.BreakTemp)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.BreakTemp, Disposables);
         }
 
         private async Task<ToolMaterialState> FindToolMaterialStateAsync(Optional<Material> material, (Optional<Tool> tool, Optional<Nozzle> nozzle) tool_nozzle, Optional<ILocalDatabase> database)

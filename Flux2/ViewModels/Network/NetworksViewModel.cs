@@ -24,10 +24,10 @@
             ReconnectionKind = WiFiReconnectionKind.Automatic;
 
             Networks = _Networks.Connect()
-                .AsObservableList();
+                .AsObservableListRC();
 
             Connect = ReactiveCommand.CreateFromTask<NetworkViewModel>(ConnectAsync);
-            Connect.ThrownExceptions.Subscribe(ex => { });
+            Connect.ThrownExceptions.SubscribeRC(ex => { });
 
             Task.Run(RefreshAsync);
         }

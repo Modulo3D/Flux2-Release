@@ -3,9 +3,11 @@ using DynamicData.Kernel;
 using Modulo3DNet;
 using ReactiveUI;
 using System;
+using System.Collections.Generic;
 using System.Reactive;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
@@ -22,17 +24,17 @@ namespace Flux.ViewModels
 
     public class ConditionCommand
     {
+        public Func<Task> Func { get; }
         public string ActionImage { get; }
-        public ReactiveCommand<Unit, Unit> ActionCommand { get; }
         public ConditionCommand(string action_icon, Action action, IObservable<bool> can_execute = default)
         {
             ActionImage = action_icon;
-            ActionCommand = ReactiveCommand.Create(action, can_execute);
+            Func = () => { action(); return Task.CompletedTask; };
         }
         public ConditionCommand(string action_icon, Func<Task> task, IObservable<bool> can_execute = default)
         {
             ActionImage = action_icon;
-            ActionCommand = ReactiveCommand.CreateFromTask(task, can_execute);
+            Func = task;
         }
     }
 
@@ -72,8 +74,7 @@ namespace Flux.ViewModels
             State = state;
             Message = message;
             ActionImage = command.Convert(c => c.ActionImage);
-            ActionCommand = command.Convert(c => c.ActionCommand)
-                .DisposeWith(Disposables);
+            ActionCommand = command.Convert(c => ReactiveCommandRC.CreateFromTask(c.Func, Disposables));
 
             StateBrush = state switch
             {
@@ -85,28 +86,21 @@ namespace Flux.ViewModels
                 _ => FluxColors.Error
             };
         }
-        public static implicit operator ConditionState(EConditionState value)
-        {
-            return new ConditionState(value, "");
-        }
-        public static implicit operator ConditionState((EConditionState value, string message) tuple)
-        {
-            return new ConditionState(tuple.value, tuple.message);
-        }
     }
 
-    public class ConditionStateCreator
+    public class ConditionStateBuilder
     {
-        public ConditionState Default { get; }
+        public static ConditionState Default { get; } = new ConditionState(EConditionState.Disabled, "");
+        public static Dictionary<(string file_path, int line_number), ConditionState> ConditionStates { get; } = new Dictionary<(string file_path, int line_number), ConditionState>();
+        public static Dictionary<(string file_path, int line_number), ConditionCommand> ConditionCommands { get; } = new Dictionary<(string file_path, int line_number), ConditionCommand>();
 
         public FluxViewModel Flux { get; }
-        public ConditionStateCreator(FluxViewModel flux)
+        public ConditionStateBuilder(FluxViewModel flux)
         {
             Flux = flux;
-            Default = new ConditionState(EConditionState.Disabled, "");
         }
 
-        public ConditionState Create(EConditionState value, string message, Optional<ConditionCommand> command = default)
+        public ConditionState Create(EConditionState value, string message = "", Optional<ConditionCommand> command = default, [CallerFilePath] string file_path = "", [CallerLineNumber] int line_number = 0)
         {
             return new ConditionState(value, message, command);
         }
@@ -122,7 +116,6 @@ namespace Flux.ViewModels
         {
             return new ConditionCommand(action_icon, () => execute_paramacro(Flux.ConnectionProvider), can_execute);
         }
-
         public ConditionCommand Create(string action_icon, Func<IFLUX_VariableStore, IFLUX_Variable<bool, bool>> get_variable, IObservable<bool> can_execute = null)
         {
             return new ConditionCommand(action_icon, () => Flux.ConnectionProvider.ToggleVariableAsync(get_variable), can_execute);
@@ -180,14 +173,13 @@ namespace Flux.ViewModels
 
         public string ConditionName { get; }
 
-        public ConditionViewModel(StatusProvider status_provider, string condition_name, IObservable<T> value_changed, Func<ConditionStateCreator, T, ConditionState> get_state, TimeSpan sample = default) : base($"condition??{condition_name}")
+        public ConditionViewModel(StatusProvider status_provider, string condition_name, IObservable<T> value_changed, Func<ConditionStateBuilder, T, ConditionState> get_state, TimeSpan sample = default) : base($"condition??{condition_name}")
         {
             ConditionName = condition_name;
             ValueChanged = value_changed;
 
             _Value = ValueChanged
-                .ToProperty(this, v => v.Value)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.Value, Disposables);
 
             if (sample != default)
                 value_changed = value_changed.Sample(sample);
@@ -199,10 +191,9 @@ namespace Flux.ViewModels
 
             _State = current_state
                 .DistinctUntilChanged()
-                .StartWith(new ConditionState(EConditionState.Disabled, ""))
+                .StartWith(ConditionStateBuilder.Default)
                 .DisposePrevious()
-                .ToProperty(this, e => e.State)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, e => e.State, Disposables);
 
             StateChanged = this.WhenAnyValue(v => v.State);
         }
@@ -214,14 +205,14 @@ namespace Flux.ViewModels
             StatusProvider status_provider,
             string name,
             IObservable<TIn> value_changed,
-            Func<ConditionStateCreator, TIn, ConditionState> get_state,
+            Func<ConditionStateBuilder, TIn, ConditionState> get_state,
             TimeSpan sample = default)
             => new ConditionViewModel<TIn>(status_provider, name, value_changed, get_state, sample);
         public static Optional<IConditionViewModel> Create<TIn>(
             StatusProvider status_provider,
             string name,
             OptionalObservable<TIn> value_changed,
-            Func<ConditionStateCreator, TIn, ConditionState> get_state,
+            Func<ConditionStateBuilder, TIn, ConditionState> get_state,
             TimeSpan sample = default)
             => value_changed.Convert(v => (IConditionViewModel)new ConditionViewModel<TIn>(status_provider, name, v, get_state, sample));
     }

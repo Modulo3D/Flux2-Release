@@ -58,7 +58,7 @@ namespace Flux.ViewModels
             _QueuePosition = Flux.ConnectionProvider
                 .ObserveVariable(c => c.QUEUE_POS)
                 .ValueOr(() => new QueuePosition(-1))
-                .ToProperty(this, v => v.QueuePosition);
+                .ToPropertyRC(this, v => v.QueuePosition, Disposables);
 
 
             AvaiableMCodes = new SourceCache<IFluxMCodeStorageViewModel, MCodeKey>(f => f.MCodeKey);
@@ -66,13 +66,11 @@ namespace Flux.ViewModels
             var can_delete_all = AvaiableMCodes.Connect()
                 .TrueForAll(mcode => mcode.WhenAnyValue(m => m.CanDelete), d => d);
 
-            DeleteAllCommand = ReactiveCommand.CreateFromTask(async () => { await ClearMCodeStorageAsync(); }, can_delete_all)
-                .DisposeWith(Disposables);
+            DeleteAllCommand = ReactiveCommandRC.CreateFromTask(async () => { await ClearMCodeStorageAsync(); }, Disposables, can_delete_all);
 
             this.WhenAnyValue(v => v.RemovableDrivePath)
                 .DistinctUntilChanged(folder => folder.ConvertOr(f => f.FullName, () => ""))
-                .Subscribe(drive => ExploreDrive(drive))
-                .DisposeWith(Disposables);
+                .SubscribeRC(ExploreDrive, Disposables);
         }
 
         public void Initialize()
@@ -95,13 +93,13 @@ namespace Flux.ViewModels
                .AsObservableChangeSet(kvp => kvp.FluxJob.QueuePosition)
                .Filter(filter_queue)
                .DisposeMany()
-               .AsObservableCache();
+               .AsObservableCacheRC(Disposables);
 
             Flux.StatusProvider
                 .WhenAnyValue(s => s.JobQueue)
                 .Where(q => q.HasValue)
                 .Throttle(TimeSpan.FromSeconds(1))
-                .Subscribe(async q => await Flux.ConnectionProvider.GenerateInnerQueueAsync(q.Value));
+                .SubscribeRC(async q => await Flux.ConnectionProvider.GenerateInnerQueueAsync(q.Value), Disposables);
         }
 
         public void FindDrive()
@@ -398,8 +396,7 @@ namespace Flux.ViewModels
             }
 
             var queue_pos = await Flux.ConnectionProvider
-               .ReadVariableAsync(c => c.QUEUE_POS)
-               .ToOptionalAsync();
+               .ReadVariableAsync(c => c.QUEUE_POS);
 
             if (!queue_pos.HasValue)
             {

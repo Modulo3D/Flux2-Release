@@ -121,25 +121,22 @@ namespace Flux.ViewModels
                     return new ToolId(Feeder.Position, tool_card, tool_nfc);
                 })
                 .DistinctUntilChanged()
-                .ToProperty(this, v => v.ToolId)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.ToolId);
 
             _ToolOffset = Observable.CombineLatest(
                 Flux.DatabaseProvider.WhenAnyValue(v => v.Database),
                 Feeder.ToolNozzle.NFCSlot.WhenAnyValue(v => v.Nfc),
                 GetToolOffset)
-                .SelectMany(t => Observable.FromAsync(() => t))
+                .SelectAsync()
                 .DistinctUntilChanged()
-                .ToProperty(this, v => v.ToolOffset)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.ToolOffset);
 
             _UserOffsetKey = Observable.CombineLatest(
                 Calibration.WhenAnyValue(v => v.GroupId),
                 Feeder.ToolNozzle.NFCSlot.WhenAnyValue(v => v.Nfc),
                 GetUserOffsetKey)
                 .DistinctUntilChanged()
-                .ToProperty(this, v => v.UserOffsetKey)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.UserOffsetKey);
 
             var material = Feeder.WhenAnyValue(m => m.SelectedMaterial);
 
@@ -148,22 +145,19 @@ namespace Flux.ViewModels
                 Feeder.ToolNozzle.NFCSlot.WhenAnyValue(v => v.Nfc),
                 material.ConvertMany(m => m.NFCSlot.WhenAnyValue(v => v.Nfc)),
                 GetProbeOffsetKey)
-                .SelectMany(t => Observable.FromAsync(() => t))
+                .SelectAsync()
                 .DistinctUntilChanged()
-                .ToProperty(this, v => v.ProbeOffsetKey)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.ProbeOffsetKey);
 
             _UserOffset = user_settings.Local.UserOffsets.Connect()
                 .WatchOptional(this.WhenAnyValue(v => v.UserOffsetKey))
                 .DistinctUntilChanged()
-                .ToProperty(this, v => v.UserOffset)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.UserOffset);
 
             _ProbeOffset = user_settings.Local.ProbeOffsets.Connect()
                 .WatchOptional(this.WhenAnyValue(v => v.ProbeOffsetKey))
                 .DistinctUntilChanged()
-                .ToProperty(this, v => v.ProbeOffset)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.ProbeOffset);
 
             _ProbeState = Observable.CombineLatest(
                 this.WhenAnyValue(s => s.ToolOffset),
@@ -172,34 +166,29 @@ namespace Flux.ViewModels
                 material.ConvertMany(m => m.WhenAnyValue(f => f.State)),
                 GetProbeState)
                 .DistinctUntilChanged()
-                .ToProperty(this, v => v.ProbeState)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.ProbeState);
 
             _IsOffsetRoot = this.WhenAnyValue(v => v.UserOffsetKey)
                 .Convert(o => o.RelativeTool.Position == o.GroupTool.Position)
                 .ValueOr(() => false)
                 .DistinctUntilChanged()
-                .ToProperty(this, v => v.IsOffsetRoot)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.IsOffsetRoot);
 
             Observable.CombineLatest(
                 this.WhenAnyValue(v => v.ProbeOffset),
                 this.WhenAnyValue(v => v.UserOffset),
                 (_, _) => Unit.Default)
                 .Throttle(TimeSpan.FromSeconds(1))
-                .Subscribe(_ => user_settings.PersistLocalSettings())
-                .DisposeWith(Disposables);
+                .SubscribeRC(_ => user_settings.PersistLocalSettings(), Disposables);
 
             var has_probe_offset_key = Observable.CombineLatest(
                 Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation).Select(s => s.IsIdle),
                 this.WhenAnyValue(v => v.ProbeOffsetKey),
                 (i, p) => i && p.HasValue);
 
-            ResetProbeOffsetCommand = ReactiveCommand.Create(ResetProbeOffset, has_probe_offset_key)
-                .DisposeWith(Disposables);
+            ResetProbeOffsetCommand = ReactiveCommandRC.Create(ResetProbeOffset, Disposables, has_probe_offset_key);
 
-            SetProbeOffsetCommand = ReactiveCommand.CreateFromTask(SetProbeOffsetAsync, has_probe_offset_key)
-                .DisposeWith(Disposables);
+            SetProbeOffsetCommand = ReactiveCommandRC.CreateFromTask(SetProbeOffsetAsync, Disposables, has_probe_offset_key);
 
             var userOffset = this.WhenAnyValue(v => v.UserOffset);
             var probeOffset = this.WhenAnyValue(v => v.ProbeOffset);
@@ -207,42 +196,33 @@ namespace Flux.ViewModels
             userOffset
                 .ConvertOr(o => o.X, () => 0)
                 .DistinctUntilChanged()
-                .BindTo(this, v => v.XUserOffset)
-                .DisposeWith(Disposables);
+                .BindToRC(this, v => v.XUserOffset, Disposables);
             this.WhenAnyValue(v => v.XUserOffset)
                 .DistinctUntilChanged()
-                .Subscribe(x => ModifyUserOffset(o => new UserOffset(o.Key, x, o.Y, o.Z)))
-                .DisposeWith(Disposables);
+                .SubscribeRC(x => ModifyUserOffset(o => new UserOffset(o.Key, x, o.Y, o.Z)), Disposables);
 
             userOffset
                 .ConvertOr(o => o.Y, () => 0)
-                .BindTo(this, v => v.YUserOffset)
-                .DisposeWith(Disposables);
+                .BindToRC(this, v => v.YUserOffset, Disposables);
             this.WhenAnyValue(v => v.YUserOffset)
-                .Subscribe(y => ModifyUserOffset(o => new UserOffset(o.Key, o.X, y, o.Z)))
-                .DisposeWith(Disposables);
+                .SubscribeRC(y => ModifyUserOffset(o => new UserOffset(o.Key, o.X, y, o.Z)), Disposables);
 
             userOffset.ConvertOr(o => o.Z, () => 0)
-              .BindTo(this, v => v.ZUserOffset)
-              .DisposeWith(Disposables);
+              .BindToRC(this, v => v.ZUserOffset, Disposables);
             this.WhenAnyValue(v => v.ZUserOffset)
-                .Subscribe(z => ModifyUserOffset(o => new UserOffset(o.Key, o.X, o.Y, z)))
-                .DisposeWith(Disposables);
+                .SubscribeRC(z => ModifyUserOffset(o => new UserOffset(o.Key, o.X, o.Y, z)), Disposables);
 
             _XProbeOffset = probeOffset
                 .ConvertOr(o => o.X, () => 0)
-                .ToProperty(this, v => v.XProbeOffset)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.XProbeOffset);
 
             _YProbeOffset = probeOffset
                 .ConvertOr(o => o.Y, () => 0)
-                .ToProperty(this, v => v.YProbeOffset)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.YProbeOffset);
 
             _ZProbeOffset = probeOffset
                 .ConvertOr(o => o.Z, () => 0)
-                .ToProperty(this, v => v.ZProbeOffset)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.ZProbeOffset);
 
             _ProbeStateBrush = this.WhenAnyValue(v => v.ProbeState)
                 .Select(state => state switch
@@ -252,8 +232,7 @@ namespace Flux.ViewModels
                     FluxProbeState.NO_PROBE => FluxColors.Inactive,
                     _ => FluxColors.Error,
                 })
-                .ToProperty(this, v => v.ProbeStateBrush)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.ProbeStateBrush);
 
             _FluxOffset = Observable.CombineLatest(
                 Calibration.WhenAnyValue(v => v.GlobalZOffset),
@@ -261,20 +240,17 @@ namespace Flux.ViewModels
                 this.WhenAnyValue(v => v.UserOffset),
                 GetOffset)
                 .DistinctUntilChanged()
-                .ToProperty(this, v => v.FluxOffset)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.FluxOffset);
 
             this.WhenAnyValue(v => v.FluxOffset)
                 .Where(o => o.HasValue)
                 .Throttle(TimeSpan.FromSeconds(1))
-                .Subscribe(async offset => await Flux.ConnectionProvider.SetToolOffsetsAsync(offset.Value))
-                .DisposeWith(Disposables);
+                .SubscribeRC(async offset => await Flux.ConnectionProvider.SetToolOffsetsAsync(offset.Value), Disposables);
 
             _DebugOffsets = Flux.MCodes
                 .WhenAnyValue(s => s.OperatorUSB)
                 .ConvertOr(usb => usb.AdvancedSettings, () => false)
-                .ToProperty(this, v => v.DebugOffsets)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.DebugOffsets);
         }
 
         private static FluxProbeState GetProbeState(Optional<ToolOffset> tool_offset, Optional<ProbeOffset> probe_offset, ToolNozzleState tool_state, Optional<MaterialState> material_state)

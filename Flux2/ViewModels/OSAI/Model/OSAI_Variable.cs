@@ -56,7 +56,7 @@ namespace Flux.ViewModels
             OSAI_ConnectionProvider connection_provider,
             string name,
             OSAI_ReadPriority priority,
-            Func<OSAI_ConnectionProvider, Task<ValueResult<TRData>>> read_func = null,
+            Func<OSAI_ConnectionProvider, Task<Optional<TRData>>> read_func = null,
             Func<OSAI_ConnectionProvider, TWData, Task<bool>> write_func = null, VariableUnit unit = default)
             : base(connection_provider, name, read_func, write_func, unit)
         {
@@ -73,7 +73,7 @@ namespace Flux.ViewModels
             string name,
             IOSAI_Address address,
             Func<OSAI_MemoryBuffer, IObservable<Optional<TRData>>> observe_func,
-            Func<OSAI_ConnectionProvider, Task<ValueResult<TRData>>> read_func = null,
+            Func<OSAI_ConnectionProvider, Task<Optional<TRData>>> read_func = null,
             Func<OSAI_ConnectionProvider, TWData, Task<bool>> write_func = null, VariableUnit unit = default)
             : base(connection_provider, name, c => observe_value(c, observe_func), read_func, write_func, unit)
         {
@@ -240,7 +240,7 @@ namespace Flux.ViewModels
             Group = $"{address.VarCode}";
         }
 
-        private static async Task<ValueResult<FLUX_Temp>> read_async(OSAI_ConnectionProvider connection_provider, OSAI_IndexAddress address)
+        private static async Task<Optional<FLUX_Temp>> read_async(OSAI_ConnectionProvider connection_provider, OSAI_IndexAddress address)
         {
             var connection = connection_provider.Connection;
             var data = await connection.ReadTextAsync(address);
@@ -272,7 +272,7 @@ namespace Flux.ViewModels
             string name,
             OSAI_NamedAddress address,
             OSAI_ReadPriority priority,
-            Func<OSAI_ConnectionProvider, Task<ValueResult<TRData>>> read_func = null,
+            Func<OSAI_ConnectionProvider, Task<Optional<TRData>>> read_func = null,
             Func<OSAI_ConnectionProvider, TWData, Task<bool>> write_func = null,
             VariableUnit unit = default)
             : base(connection_provider, name, priority, read_func, write_func, unit)

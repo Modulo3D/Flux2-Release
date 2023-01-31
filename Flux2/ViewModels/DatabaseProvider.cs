@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
-    public class DatabaseProvider : ReactiveObject, IFluxDatabaseProvider
+    public class DatabaseProvider : ReactiveObjectRC, IFluxDatabaseProvider
     {
         public FluxViewModel Flux { get; }
 

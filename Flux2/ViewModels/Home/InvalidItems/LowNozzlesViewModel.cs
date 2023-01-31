@@ -37,8 +37,7 @@ namespace Flux.ViewModels
 
                     return FluxColors.Warning;
                 })
-                .ToProperty(this, v => v.InvalidItemBrush)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.InvalidItemBrush, Disposables);
         }
 
         public override IObservable<Optional<string>> GetItem(FeederEvaluator eval)
@@ -75,7 +74,7 @@ namespace Flux.ViewModels
                 .Filter(line => line.ToolNozzle.HasLowWeight)
                 .Transform(line => (IInvalidValueViewModel)new LowMaterialViewModel(line))
                 .Sort(EvaluationComparer)
-                .AsObservableList();
+                .AsObservableListRC(Disposables);
         }
 
         public override Task ChangeItemsAsync()

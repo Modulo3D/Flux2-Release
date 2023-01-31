@@ -66,7 +66,7 @@ namespace Flux.ViewModels
                 .Filter(line => line.ToolNozzle.IsInvalid)
                 .Transform(line => (IInvalidItemViewModel)new InvalidToolViewModel(line))
                 .Sort(EvaluationComparer)
-                .AsObservableList();
+                .AsObservableListRC(Disposables);
         }
 
         public override Task ChangeItemsAsync()

@@ -29,7 +29,7 @@ namespace Flux.ViewModels
             });
 
             VariableGroups = VariableGroupsSource.Connect()
-                .AsObservableCache();
+                .AsObservableCacheRC(Disposables);
         }
     }
 }

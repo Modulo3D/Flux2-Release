@@ -76,13 +76,13 @@ namespace Flux.ViewModels
                     bool filter_condition((IConditionViewModel condition, TConditionAttribute condition_attribute) t) => !t.condition_attribute.FilterOnCycle || idle;
                 }))
                 .Transform(t => t.condition)
-                .AsObservableList();
+                .AsObservableListRC(Disposables);
 
             _TitleText = is_idle.Select(i => FindTitleText(i))
-                .ToProperty(this, v => v.TitleText);
+                .ToPropertyRC(this, v => v.TitleText, Disposables);
 
             _OperationText = is_idle.Select(i => FindOperationText(i))
-                .ToProperty(this, v => v.OperationText);
+                .ToPropertyRC(this, v => v.OperationText, Disposables);
 
             var can_cancel = CanCancelOperation();
 
@@ -101,14 +101,14 @@ namespace Flux.ViewModels
             var tool_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TEMP_TOOL, tool_index);
             _CurrentTemperature = Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_TOOL, tool_key)
                 .ObservableOrDefault()
-                .ToProperty(this, v => v.CurrentTemperature);
+                .ToPropertyRC(this, v => v.CurrentTemperature, Disposables);
 
             _TemperaturePercentage = this.WhenAnyValue(v => v.CurrentTemperature)
                 .ConvertOr(t => t.Percentage, () => 0)
-                .ToProperty(this, v => v.TemperaturePercentage);
+                .ToPropertyRC(this, v => v.TemperaturePercentage, Disposables);
 
-            CancelOperationCommand = ReactiveCommand.CreateFromTask(SafeCancelOperationAsync, can_cancel);
-            ExecuteOperationCommand = ReactiveCommand.CreateFromTask(SafeExecuteOperationAsync, can_execute);
+            CancelOperationCommand = ReactiveCommandRC.CreateFromTask(SafeCancelOperationAsync, Disposables, can_cancel);
+            ExecuteOperationCommand = ReactiveCommandRC.CreateFromTask(SafeExecuteOperationAsync, Disposables, can_execute);
         }
 
         public abstract Task UpdateNFCAsync();

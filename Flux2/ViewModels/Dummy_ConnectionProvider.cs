@@ -57,9 +57,9 @@ namespace Flux.ViewModels
         public Dummy_Variable() : base("", new VariableUnit(0))
         {
         }
-        public override Task<ValueResult<TRData>> ReadAsync()
+        public override Task<Optional<TRData>> ReadAsync()
         {
-            return Task.FromResult(default(ValueResult<TRData>));
+            return Task.FromResult(default(Optional<TRData>));
         }
         public override Task<bool> WriteAsync(TWData data)
         {
@@ -100,6 +100,8 @@ namespace Flux.ViewModels
         public override bool ParkToolAfterOperation => throw new NotImplementedException();
 
         public override FLUX_AxisTransform MoveTransform => throw new NotImplementedException();
+
+        public override bool HasMovementLimits => throw new NotImplementedException();
 
         private void CreateDummy<TRData, TWData>(Expression<Func<Dummy_VariableStore, IFLUX_Array<TRData, TWData>>> array_expression)
         {

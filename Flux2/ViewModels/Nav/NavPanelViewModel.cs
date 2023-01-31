@@ -24,13 +24,12 @@ namespace Flux.ViewModels
             Buttons = new SourceList<CmdButton>();
             Buttons.Connect()
                 .DisposeMany()
-                .Subscribe()
-                .DisposeWith(Disposables);
+                .SubscribeRC(Disposables);
 
             VisibleButtons = Buttons.Connect()
                 .AutoRefresh(v => v.Visible)
                 .Filter(v => v.Visible)
-                .AsObservableList();
+                .AsObservableListRC(Disposables);
         }
 
         public void AddRoute<TFluxRoutableViewModel>(

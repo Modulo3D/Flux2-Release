@@ -14,7 +14,7 @@ namespace Flux.ViewModels
 {
     public abstract class TagViewModel<TTagViewModel, TNFCTag, TDocument, TState> : RemoteControl<TTagViewModel>, IFluxTagViewModel<TNFCTag, TDocument, TState>
         where TTagViewModel : TagViewModel<TTagViewModel, TNFCTag, TDocument, TState>
-        where TNFCTag : INFCOdometerTag<TNFCTag>
+        where TNFCTag : INFCOdometerTag<TNFCTag>, new()
     {
         public ushort Position { get; }
         public FluxViewModel Flux { get; }
@@ -87,13 +87,11 @@ namespace Flux.ViewModels
                         return Task.FromResult(default(TDocument));
                     return find_document(tuple.db.Value, tuple.nfc.Tag.Value);
                 })
-                .SelectMany(o => Observable.FromAsync(() => o))
-                .ToProperty(this, vm => vm.Document)
-                .DisposeWith(Disposables);
+                .SelectAsync()
+                .ToPropertyRC(this, vm => vm.Document, Disposables);
 
-            UpdateTagCommand = ReactiveCommand.CreateFromTask(async () => { await Flux.UseReader(this, (h, s, c) => s.UpdateTagAsync(h, c), r => r == NFCTagRW.Success); },
-                Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation).Select(s => s.CanSafeCycle))
-                .DisposeWith(Disposables);
+            UpdateTagCommand = ReactiveCommandRC.CreateFromTask(async () => { await Flux.UseReader(this, (h, s, c) => s.UpdateTagAsync(h, c), r => r == NFCTagRW.Success); }, Disposables,
+                Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation).Select(s => s.CanSafeCycle));
 
             NFCSlot.RestoreBackupTag();
         }
@@ -104,16 +102,13 @@ namespace Flux.ViewModels
             Odometer = new OdometerViewModel<TNFCTag>(this, multiplier);
 
             _OdometerPercentage = Odometer.WhenAnyValue(v => v.Percentage)
-                .ToProperty(this, v => v.OdometerPercentage)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.OdometerPercentage, Disposables);
 
             _RemainingWeight = Odometer.WhenAnyValue(v => v.CurrentValue)
-                .ToProperty(this, v => v.RemainingWeight)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.RemainingWeight, Disposables);
 
             NFCSlot.UnlockingTag
-                .Subscribe(async _ => await Odometer.OdometerManager.StoreCurrentWeightsAsync())
-                .DisposeWith(Disposables);
+                .SubscribeRC(async _ => await Odometer.OdometerManager.StoreCurrentWeightsAsync(), Disposables);
 
             if (WatchOdometerForPause)
             {
@@ -135,8 +130,7 @@ namespace Flux.ViewModels
                         return true;
                     })
                     .Where(has_pause => has_pause)
-                    .Subscribe(_ => Flux.ConnectionProvider.PausePrintAsync(true))
-                    .DisposeWith(Disposables);
+                    .SubscribeRC(_ => Flux.ConnectionProvider.PausePrintAsync(true), Disposables);
             }
         }
     }

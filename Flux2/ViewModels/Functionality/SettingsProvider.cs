@@ -8,6 +8,7 @@ using System.Linq;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
+using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -15,9 +16,10 @@ using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
-    public class SettingsProvider : ReactiveObject, IFluxSettingsProvider
+    public class SettingsProvider : ReactiveObjectRC, IFluxSettingsProvider
     {
         public FluxViewModel Flux { get; }
+        public CompositeDisposable Disposables { get; }
 
         private readonly ObservableAsPropertyHelper<Optional<Printer>> _Printer;
         public Optional<Printer> Printer => _Printer.Value;
@@ -55,16 +57,16 @@ namespace Flux.ViewModels
         public SettingsProvider(FluxViewModel flux)
         {
             Flux = flux;
+            Disposables = new CompositeDisposable();
 
             _Printer = Observable.CombineLatest(
                 Flux.DatabaseProvider.WhenAnyValue(v => v.Database),
                 CoreSettings.Local.WhenAnyValue(s => s.PrinterID),
                 FindPrinter)
-                .SelectMany(o => Observable.FromAsync(() => o))
-                .ToProperty(this, v => v.Printer);
+                .SelectAsync()
+                .ToPropertyRC(this, v => v.Printer, Disposables);
 
             HostAddressCache = NetworkInterface.GetAllNetworkInterfaces()
-                .Where(nic => nic.OperationalStatus == OperationalStatus.Up)
                 .AsObservableChangeSet(nic => nic.Id)
                 .Transform(nic => nic.GetIPProperties().ToOptional())
                 .Transform(ip => ip.Convert(ip => ip.UnicastAddresses))
@@ -72,11 +74,11 @@ namespace Flux.ViewModels
                 .Transform(a => a.Convert(a => a.FirstOrOptional(a => a.AddressFamily == AddressFamily.InterNetwork)))
                 .Filter(ip => ip.HasValue)
                 .Transform(ip => ip.Value)
-                .AsObservableCache();
+                .AsObservableCacheRC(Disposables);
 
             _HostAddress = CoreSettings.Local.WhenAnyValue(s => s.HostID)
-                .Convert(id => HostAddressCache.Lookup(id))
-                .ToProperty(this, v => v.HostAddress);
+                .Convert(HostAddressCache.Lookup)
+                .ToPropertyRC(this, v => v.HostAddress, Disposables);
 
             _ExtrudersCount = this.WhenAnyValue(v => v.Printer)
                 .Convert(p =>
@@ -85,10 +87,10 @@ namespace Flux.ViewModels
                     var mixing_extruder_count = p[p => p.MixingExtruderCount, 0];
                     return (machine_extruder_count, mixing_extruder_count);
                 })
-                .ToProperty(this, v => v.ExtrudersCount);
+                .ToPropertyRC(this, v => v.ExtrudersCount, Disposables);
 
             UserSettings.Local.WhenAnyValue(s => s.StandbyMinutes)
-                .Subscribe(s =>
+                .SubscribeRC(s =>
                 {
                     try
                     {
@@ -114,7 +116,7 @@ namespace Flux.ViewModels
                     {
                         Console.WriteLine(ex.ToString());
                     }
-                });
+                }, Disposables);
         }
 
         private async Task<Optional<Printer>> FindPrinter(Optional<ILocalDatabase> database, Optional<int> printer_id)

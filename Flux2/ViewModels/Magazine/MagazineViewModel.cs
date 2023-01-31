@@ -18,7 +18,7 @@ namespace Flux.ViewModels
         {
             Magazine = Flux.Feeders.Feeders.Connect()
                 .Transform(f => new MagazineItemViewModel(Flux, f))
-                .AsObservableCache();
+                .AsObservableCacheRC(Disposables);
 
             var is_idle = Flux.StatusProvider
                 .WhenAnyValue(s => s.StatusEvaluation)

@@ -18,7 +18,7 @@ namespace Flux.ViewModels
                 .WhenAnyValue(v => v.ExtrudersCount)
                 .Select(FindTemperatures)
                 .AsObservableChangeSet(t => t.Name)
-                .AsObservableCache();
+                .AsObservableCacheRC(Disposables);
         }
 
         private IEnumerable<TemperatureViewModel> FindTemperatures(Optional<(ushort machine_extruders, ushort mixing_extruders)> extruders)

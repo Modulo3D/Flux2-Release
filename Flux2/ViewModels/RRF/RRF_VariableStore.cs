@@ -48,6 +48,7 @@ namespace Flux.ViewModels
 
         public override ushort ArrayBase => 0;
         public override char FeederAxis => 'E';
+        public override bool HasMovementLimits => true;
         public override bool ParkToolAfterOperation => true;
         public override FLUX_AxisTransform MoveTransform { get; }
 

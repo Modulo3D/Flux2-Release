@@ -123,44 +123,44 @@ namespace Flux.ViewModels
 
             core_settings.WhenAnyValue(s => s.PrinterGuid)
                 .Select(g => g.ToString())
-                .BindTo(this, v => v.PrinterGuid);
+                .BindToRC(this, v => v.PrinterGuid, Disposables);
 
             core_settings.WhenAnyValue(s => s.PrinterID)
-                .BindTo(this, v => v.Printers.SelectedKey);
+                .BindToRC(this, v => v.Printers.SelectedKey, Disposables);
 
             core_settings.WhenAnyValue(s => s.HostID)
-                .BindTo(this, v => v.HostAddress.SelectedKey);
+                .BindToRC(this, v => v.HostAddress.SelectedKey, Disposables);
 
             core_settings.WhenAnyValue(s => s.NFCFormat)
-                .BindTo(this, v => v.NFCFormats.SelectedKey);
+                .BindToRC(this, v => v.NFCFormats.SelectedKey, Disposables);
 
             core_settings.WhenAnyValue(s => s.PLCAddress)
-                .BindTo(this, v => v.PlcAddress);
+                .BindToRC(this, v => v.PlcAddress, Disposables);
 
             core_settings.WhenAnyValue(s => s.WebcamAddress)
-                .BindTo(this, v => v.WebcamAddress);
+                .BindToRC(this, v => v.WebcamAddress, Disposables);
 
             core_settings.WhenAnyValue(s => s.LoggerAddress)
-                .BindTo(this, v => v.LoggerAddress);
+                .BindToRC(this, v => v.LoggerAddress, Disposables);
 
             user_settings.WhenAnyValue(s => s.PrinterName)
-                .BindTo(this, v => v.PrinterName);
+                .BindToRC(this, v => v.PrinterName, Disposables);
 
             user_settings.WhenAnyValue(s => s.CostHour)
-                .BindTo(this, v => v.CostHour);
+                .BindToRC(this, v => v.CostHour, Disposables);
 
             user_settings.WhenAnyValue(s => s.StandbyMinutes)
-                .BindTo(this, v => v.StandbyMinutes);
+                .BindToRC(this, v => v.StandbyMinutes, Disposables);
 
-            SaveSettingsCommand = ReactiveCommand.Create(SaveSettings);
-            GenerateGuidCommand = ReactiveCommand.Create(GenerateGuid);
+            SaveSettingsCommand = ReactiveCommandRC.Create(SaveSettings, Disposables);
+            GenerateGuidCommand = ReactiveCommandRC.Create(GenerateGuid, Disposables);
 
             var can_test_nfc = Observable.CombineLatest(
                 NFCFormats.SelectedKeyChanged,
                 NFCTagType.SelectedKeyChanged,
                 (format, tag) => format.HasValue && tag.HasValue);
 
-            TestNFCCommand = ReactiveCommand.CreateFromTask(TestNFCAsync, can_test_nfc);
+            TestNFCCommand = ReactiveCommandRC.CreateFromTask(TestNFCAsync, Disposables, can_test_nfc);
         }
 
         private async Task TestNFCAsync()
