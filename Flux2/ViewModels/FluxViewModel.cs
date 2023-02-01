@@ -9,6 +9,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Reactive;
+using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Text;
 using System.Threading;
@@ -170,7 +171,7 @@ namespace Flux.ViewModels
 
             _CurrentTime = Observable.Interval(TimeSpan.FromSeconds(5))
                 .Select(_ => DateTime.Now)
-                .ToPropertyRC(this, v => v.CurrentTime, Disposables);
+                .ToPropertyRC(this, v => v.CurrentTime);
 
             DatabaseProvider = new DatabaseProvider(this);
             SettingsProvider = new SettingsProvider(this);
@@ -223,13 +224,13 @@ namespace Flux.ViewModels
                         .ObservableOrDefault()
                         .Convert(l => l ? FluxColors.Active : FluxColors.Inactive)
                         .ValueOr(() => FluxColors.Empty)
-                        .ToPropertyRC(this, v => v.LeftIconForeground, Disposables);
+                        .ToPropertyRC(this, v => v.LeftIconForeground);
 
                     _RightIconForeground = ConnectionProvider.ObserveVariable(m => m.CHAMBER_LIGHT)
                         .ObservableOrDefault()
                         .Convert(l => l ? FluxColors.Active : FluxColors.Inactive)
                         .ValueOr(() => FluxColors.Empty)
-                        .ToPropertyRC(this, v => v.RightIconForeground, Disposables);
+                        .ToPropertyRC(this, v => v.RightIconForeground);
 
                     var is_idle = StatusProvider
                         .WhenAnyValue(s => s.StatusEvaluation)
@@ -237,13 +238,13 @@ namespace Flux.ViewModels
 
                     // COMMANDS
                     if (ConnectionProvider.HasVariable(s => s.CHAMBER_LIGHT))
-                        RightButtonCommand = ReactiveCommandRC.CreateFromTask(async () => { await ConnectionProvider.ToggleVariableAsync(m => m.CHAMBER_LIGHT); }, Disposables);
+                        RightButtonCommand = ReactiveCommandRC.CreateFromTask(async () => { await ConnectionProvider.ToggleVariableAsync(m => m.CHAMBER_LIGHT); }, this);
 
                     if (ConnectionProvider.HasVariable(s => s.OPEN_LOCK, main_lock_unit))
-                        LeftButtonCommand = ReactiveCommandRC.CreateFromTask(async () => { await ConnectionProvider.ToggleVariableAsync(m => m.OPEN_LOCK, main_lock_unit); }, Disposables, is_idle);
+                        LeftButtonCommand = ReactiveCommandRC.CreateFromTask(async () => { await ConnectionProvider.ToggleVariableAsync(m => m.OPEN_LOCK, main_lock_unit); }, this, is_idle);
 
                     var status_bar_nav = new NavModalViewModel<StatusBarViewModel>(this, StatusBar);
-                    OpenStatusBarCommand = ReactiveCommandRC.Create(() => { Navigator.Navigate(status_bar_nav); }, Disposables);
+                    OpenStatusBarCommand = ReactiveCommandRC.Create(() => { Navigator.Navigate(status_bar_nav); }, this);
 
                     ConnectionProvider.Initialize();
                     StatusProvider.Initialize();
@@ -255,7 +256,7 @@ namespace Flux.ViewModels
                         StatusProvider.WhenAnyValue(v => v.PrintingEvaluation),
                         GetStatusText)
                         .Throttle(TimeSpan.FromSeconds(0.25))
-                        .ToPropertyRC(this, v => v.StatusText, Disposables);
+                        .ToPropertyRC(this, v => v.StatusText);
 
                     var offlineBrush = "#999999";
                     var idleBrush = "#00B189";
@@ -279,7 +280,7 @@ namespace Flux.ViewModels
                             };
                         })
                         .Throttle(TimeSpan.FromSeconds(0.25))
-                        .ToPropertyRC(this, v => v.StatusBrush, Disposables);
+                        .ToPropertyRC(this, v => v.StatusBrush);
                 }
                 catch (Exception ex)
                 {
@@ -303,7 +304,7 @@ namespace Flux.ViewModels
                         .OrderBy(d => d.Name)
                         .AsObservableChangeSet(m => m.Id);
 
-                    var printer_option = ComboOption.Create($"printer", "Stampante:", d => printers.AsObservableCacheRC(d));
+                    var printer_option = ComboOption.Create($"printer", "Stampante:", d => printers.AsObservableCache().DisposeWith(d));
 
                     var result = await ShowSelectionAsync(
                         "Seleziona un modello di stampante", new[] { printer_option });
@@ -360,7 +361,7 @@ namespace Flux.ViewModels
                 var route = get_route(this);
                 var dialog = new ContentDialog(f, route.Name,
                     can_cancel: Observable.Return(true).ToOptional());
-                dialog.AddContent(route, disposeOnParentDispose: false);
+                dialog.AddContent(route);
                 return dialog;
             });
         }
@@ -371,7 +372,7 @@ namespace Flux.ViewModels
                 var route = get_route(this);
                 var dialog = new ContentDialog(f, route.Value.Name,
                     can_cancel: Observable.Return(true).ToOptional());
-                dialog.AddContent(route.Value, disposeOnParentDispose: false);
+                dialog.AddContent(route.Value);
                 return dialog;
             });
         }

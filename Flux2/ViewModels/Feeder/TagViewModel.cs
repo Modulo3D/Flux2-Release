@@ -88,10 +88,13 @@ namespace Flux.ViewModels
                     return find_document(tuple.db.Value, tuple.nfc.Tag.Value);
                 })
                 .SelectAsync()
-                .ToPropertyRC(this, vm => vm.Document, Disposables);
+                .ToPropertyRC((TTagViewModel)this, vm => vm.Document);
 
-            UpdateTagCommand = ReactiveCommandRC.CreateFromTask(async () => { await Flux.UseReader(this, (h, s, c) => s.UpdateTagAsync(h, c), r => r == NFCTagRW.Success); }, Disposables,
-                Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation).Select(s => s.CanSafeCycle));
+            UpdateTagCommand = ReactiveCommandRC.CreateFromTask(async () => 
+            { 
+                await Flux.UseReader(this, (h, s, c) => 
+                    s.UpdateTagAsync(h, c), r => r == NFCTagRW.Success); 
+            }, (TTagViewModel)this, Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation).Select(s => s.CanSafeCycle));
 
             NFCSlot.RestoreBackupTag();
         }
@@ -102,13 +105,13 @@ namespace Flux.ViewModels
             Odometer = new OdometerViewModel<TNFCTag>(this, multiplier);
 
             _OdometerPercentage = Odometer.WhenAnyValue(v => v.Percentage)
-                .ToPropertyRC(this, v => v.OdometerPercentage, Disposables);
+                .ToPropertyRC((TTagViewModel)this, v => v.OdometerPercentage);
 
             _RemainingWeight = Odometer.WhenAnyValue(v => v.CurrentValue)
-                .ToPropertyRC(this, v => v.RemainingWeight, Disposables);
+                .ToPropertyRC((TTagViewModel)this, v => v.RemainingWeight);
 
             NFCSlot.UnlockingTag
-                .SubscribeRC(async _ => await Odometer.OdometerManager.StoreCurrentWeightsAsync(), Disposables);
+                .SubscribeRC(async _ => await Odometer.OdometerManager.StoreCurrentWeightsAsync(), (TTagViewModel)this);
 
             if (WatchOdometerForPause)
             {
@@ -130,7 +133,7 @@ namespace Flux.ViewModels
                         return true;
                     })
                     .Where(has_pause => has_pause)
-                    .SubscribeRC(_ => Flux.ConnectionProvider.PausePrintAsync(true), Disposables);
+                    .SubscribeRC(_ => Flux.ConnectionProvider.PausePrintAsync(true), (TTagViewModel)this);
             }
         }
     }

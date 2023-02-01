@@ -86,7 +86,7 @@ namespace Flux.ViewModels
                 .Filter(line => line.HasColdNozzle)
                 .Transform(line => (IInvalidValueViewModel)new PurgeNozzleViewModel(line))
                 .Sort(EvaluationComparer)
-                .AsObservableListRC(Disposables);
+                .AsObservableListRC(this);
         }
 
         public override Task ChangeItemsAsync()

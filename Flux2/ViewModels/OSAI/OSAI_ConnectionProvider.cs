@@ -38,7 +38,7 @@ namespace Flux.ViewModels
             Flux.MCodes.WhenAnyValue(c => c.OperatorUSB)
                 .ConvertOr(o => o.AdvancedSettings, () => false)
             .DistinctUntilChanged()
-                .SubscribeRC(debug => WriteVariableAsync(m => m.DEBUG, debug), Disposables);
+                .SubscribeRC(debug => WriteVariableAsync(m => m.DEBUG, debug), this);
         }
 
         public override async Task<bool> ResetClampAsync()

@@ -110,7 +110,7 @@ namespace Flux.ViewModels
         }
     }
 
-    public class RRF_Connection : FLUX_Connection<RRF_ConnectionProvider, RRF_VariableStoreBase, HttpClient>
+    public class RRF_Connection : FLUX_Connection<RRF_Connection, RRF_ConnectionProvider, RRF_VariableStoreBase, HttpClient>
     {
         public override string CombinePaths(params string[] paths) => string.Join("/", paths);
         public static string SystemPath => "sys";

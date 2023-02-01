@@ -100,7 +100,8 @@ namespace Flux.ViewModels
             Flux.WhenAnyValue(f => f.RemoteControlData)
                 .DistinctUntilChanged()
                 .ThrottleMax(TimeSpan.FromMilliseconds(50), TimeSpan.FromMilliseconds(200))
-                .SubscribeRC(async d => await SendRemoteControlDataAsync(d), Disposables);
+                .Subscribe(async d => await SendRemoteControlDataAsync(d))
+                .DisposeWith(Disposables);
         }
 
         protected override async Task OnMessageReceivedAsync(IWebSocketContext context, byte[] buffer, IWebSocketReceiveResult result)
@@ -179,7 +180,7 @@ namespace Flux.ViewModels
         }
     }
 
-    public class NetProvider : ReactiveObjectRC, IFluxNetProvider
+    public class NetProvider : ReactiveObjectRC<NetProvider>, IFluxNetProvider
     {
         public const int WebServerPort = 8080;
 

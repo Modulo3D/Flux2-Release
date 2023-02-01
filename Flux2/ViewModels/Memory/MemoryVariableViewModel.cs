@@ -61,28 +61,28 @@ namespace Flux.ViewModels
                 {
                     case IFLUX_Variable<bool, bool> @bool:
                         SetValueCommand = ReactiveCommandRC.CreateFromTask(() => SetValueAsync(@bool,
-                            b => b ? "1" : "0", s => int.Parse(s) == 1), Disposables);
-                        ToggleValueCommand = ReactiveCommandRC.CreateFromTask(() => ToggleValueAsync(@bool), Disposables);
+                            b => b ? "1" : "0", s => int.Parse(s) == 1), this);
+                        ToggleValueCommand = ReactiveCommandRC.CreateFromTask(() => ToggleValueAsync(@bool), this);
                         break;
 
                     case IFLUX_Variable<double, double> @double:
                         SetValueCommand = ReactiveCommandRC.CreateFromTask(() => SetValueAsync(@double,
-                            d => $"{d:0.##}".Replace(",", "."), s => double.Parse(s, NumberStyles.Float, CultureInfo.InvariantCulture)), Disposables);
+                            d => $"{d:0.##}".Replace(",", "."), s => double.Parse(s, NumberStyles.Float, CultureInfo.InvariantCulture)), this);
                         break;
 
                     case IFLUX_Variable<short, short> @short:
                         SetValueCommand = ReactiveCommandRC.CreateFromTask(() => SetValueAsync(@short,
-                            s => $"{s}", s => short.Parse(s)), Disposables);
+                            s => $"{s}", s => short.Parse(s)), this);
                         break;
 
                     case IFLUX_Variable<ushort, ushort> @ushort:
                         SetValueCommand = ReactiveCommandRC.CreateFromTask(() => SetValueAsync(@ushort,
-                            s => $"{s}", s => ushort.Parse(s)), Disposables);
+                            s => $"{s}", s => ushort.Parse(s)), this);
                         break;
 
                     case IFLUX_Variable<string, string> @string:
                         SetValueCommand = ReactiveCommandRC.CreateFromTask(() => SetValueAsync(@string,
-                            s => s, s => s), Disposables);
+                            s => s, s => s), this);
                         break;
                 }
             }
@@ -91,15 +91,15 @@ namespace Flux.ViewModels
             {
                 var position_attribute = attributes.Value.FirstOrOptional(a => a is FLUX_VariablePositionAttribute);
                 if(position_attribute.HasValue)
-                    SetPositionCommand = ReactiveCommandRC.CreateFromTask(() => SetPositionAsync((FLUX_VariablePositionAttribute)position_attribute.Value), Disposables);
+                    SetPositionCommand = ReactiveCommandRC.CreateFromTask(() => SetPositionAsync((FLUX_VariablePositionAttribute)position_attribute.Value), this);
             }
 
             _Value = Variable.IValueChanged
-                .ToPropertyRC(this, v => v.Value, Disposables);
+                .ToPropertyRC(this, v => v.Value);
 
             _HasValue = variable.IValueChanged
                 .Select(v => v.HasValue)
-                .ToPropertyRC(this, v => v.HasValue, Disposables);
+                .ToPropertyRC(this, v => v.HasValue);
         }
 
         private async Task SetPositionAsync(FLUX_VariablePositionAttribute position_attribute)

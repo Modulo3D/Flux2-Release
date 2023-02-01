@@ -21,7 +21,9 @@ namespace Flux.ViewModels
         public bool IsInvalid { get; }
     }
 
-    public abstract class TagViewModelEvaluator<TNFCTag, TTagDocument, TDocument, TState> : ReactiveObjectRC, ITagViewModelEvaluator
+    public abstract class TagViewModelEvaluator<TTagViewModelEvaluator, TNFCTag, TTagDocument, TDocument, TState> : 
+        ReactiveObjectRC<TTagViewModelEvaluator>, ITagViewModelEvaluator
+        where TTagViewModelEvaluator : TagViewModelEvaluator<TTagViewModelEvaluator, TNFCTag, TTagDocument, TDocument, TState>
         where TNFCTag : INFCOdometerTag<TNFCTag>, new()
         where TDocument : IDocument, new()
     {
@@ -50,13 +52,10 @@ namespace Flux.ViewModels
         private ObservableAsPropertyHelper<bool> _HasEmptyWeight;
         public bool HasEmptyWeight => _HasEmptyWeight.Value;
 
-        public CompositeDisposable Disposables { get; }
-
         public TagViewModelEvaluator(FluxViewModel flux, FeederEvaluator feeder_eval)
         {
             Flux = flux;
             FeederEvaluator = feeder_eval; 
-            Disposables = new CompositeDisposable();
         }
 
         public void Initialize()
@@ -74,12 +73,12 @@ namespace Flux.ViewModels
                 report_queue,
                 GetExpectedDocumentQueueAsync)
                 .SelectAsync()
-                .ToPropertyRC(this, v => v.ExpectedDocumentQueue, Disposables);
+                .ToPropertyRC((TTagViewModelEvaluator)this, v => v.ExpectedDocumentQueue);
 
             _CurrentDocument = this.WhenAnyValue(v => v.TagViewModel)
                 .ConvertMany(t => t.WhenAnyValue(t => t.Document))
                 .Convert(GetCurrentDocument)
-                .ToPropertyRC(this, v => v.CurrentDocument, Disposables);
+                .ToPropertyRC((TTagViewModelEvaluator)this, v => v.CurrentDocument);
 
             _IsInvalid = Observable.CombineLatest(
                 this.WhenAnyValue(v => v.TagViewModel)
@@ -88,28 +87,28 @@ namespace Flux.ViewModels
                     .ConvertMany(t => t.WhenAnyValue(t => t.State)),
                 report_queue,
                 GetInvalid)
-                .ToPropertyRC(this, e => e.IsInvalid, Disposables);
+                .ToPropertyRC((TTagViewModelEvaluator)this, e => e.IsInvalid);
 
             _ExpectedWeight = FeederEvaluator.WhenAnyValue(f => f.ExtrusionQueue)
                 .Convert(e => e.Values.Sum(e => e.WeightG))
-                .ToPropertyRC(this, v => v.ExpectedWeight, Disposables);
+                .ToPropertyRC((TTagViewModelEvaluator)this, v => v.ExpectedWeight);
 
             _CurrentWeight = this.WhenAnyValue(v => v.TagViewModel)
                 .ConvertMany(t => t.Odometer.WhenAnyValue(t => t.CurrentValue))
-                .ToPropertyRC(this, v => v.CurrentWeight, Disposables);
+                .ToPropertyRC((TTagViewModelEvaluator)this, v => v.CurrentWeight);
 
             _HasLowWeight = Observable.CombineLatest(
                 this.WhenAnyValue(v => v.ExpectedWeight),
                 this.WhenAnyValue(v => v.CurrentWeight),
                 report_queue,
                 LowWeight)
-                .ToPropertyRC(this, v => v.HasLowWeight, Disposables);
+                .ToPropertyRC((TTagViewModelEvaluator)this, v => v.HasLowWeight);
 
             _HasEmptyWeight = Observable.CombineLatest(
                this.WhenAnyValue(v => v.CurrentWeight),
                report_queue,
                EmptyWeight)
-               .ToPropertyRC(this, v => v.HasEmptyWeight, Disposables);
+               .ToPropertyRC((TTagViewModelEvaluator)this, v => v.HasEmptyWeight);
         }
 
         public abstract int GetDocumentId(FeederReport feeder_report);
@@ -196,7 +195,7 @@ namespace Flux.ViewModels
         }
     }
 
-    public class MaterialEvaluator : TagViewModelEvaluator<NFCMaterial, Optional<Material>, Material, MaterialState>
+    public class MaterialEvaluator : TagViewModelEvaluator<MaterialEvaluator, NFCMaterial, Optional<Material>, Material, MaterialState>
     {
         private readonly ObservableAsPropertyHelper<Optional<IFluxTagViewModel<NFCMaterial, Optional<Material>, MaterialState>>> _TagViewModel;
         public override Optional<IFluxTagViewModel<NFCMaterial, Optional<Material>, MaterialState>> TagViewModel => _TagViewModel.Value;
@@ -205,7 +204,7 @@ namespace Flux.ViewModels
         {
             _TagViewModel = FeederEvaluator.Feeder.WhenAnyValue(f => f.SelectedMaterial)
                 .Convert(m => (IFluxTagViewModel<NFCMaterial, Optional<Material>, MaterialState>)m)
-                .ToPropertyRC(this, v => v.TagViewModel, Disposables);
+                .ToPropertyRC(this, v => v.TagViewModel);
         }
         public override Optional<Material> GetCurrentDocument(Optional<Material> tag_document)
         {
@@ -237,7 +236,7 @@ namespace Flux.ViewModels
         }
     }
 
-    public class ToolNozzleEvaluator : TagViewModelEvaluator<NFCToolNozzle, (Optional<Tool> tool, Optional<Nozzle> nozzle), Nozzle, ToolNozzleState>
+    public class ToolNozzleEvaluator : TagViewModelEvaluator<ToolNozzleEvaluator, NFCToolNozzle, (Optional<Tool> tool, Optional<Nozzle> nozzle), Nozzle, ToolNozzleState>
     {
         public override Optional<IFluxTagViewModel<NFCToolNozzle, (Optional<Tool> tool, Optional<Nozzle> nozzle), ToolNozzleState>> TagViewModel =>
             ((IFluxTagViewModel<NFCToolNozzle, (Optional<Tool> tool, Optional<Nozzle> nozzle), ToolNozzleState>)FeederEvaluator.Feeder.ToolNozzle).ToOptional();
@@ -280,7 +279,7 @@ namespace Flux.ViewModels
         }
     }
 
-    public class FeederEvaluator : ReactiveObjectRC
+    public class FeederEvaluator : ReactiveObjectRC<FeederEvaluator>
     {
         private FluxViewModel Flux { get; }
         public IFluxFeederViewModel Feeder { get; }
@@ -306,13 +305,10 @@ namespace Flux.ViewModels
         private ObservableAsPropertyHelper<Optional<double>> _TargetTemperature;
         public Optional<double> TargetTemperature => _TargetTemperature.Value;
 
-        public CompositeDisposable Disposables { get; }
-
         public FeederEvaluator(FluxViewModel flux, IFluxFeederViewModel feeder)
         {
             Flux = flux;
             Feeder = feeder;
-            Disposables = new CompositeDisposable();
             Material = new MaterialEvaluator(flux, this);
             ToolNozzle = new ToolNozzleEvaluator(flux, this);
         }
@@ -336,7 +332,7 @@ namespace Flux.ViewModels
                 queue,
                 mcode_analyzers,
                 GetFeederReportQueue)
-                .ToPropertyRC(this, e => e.FeederReportQueue, Disposables);
+                .ToPropertyRC(this, e => e.FeederReportQueue);
 
             _ExtrusionQueue = Observable.CombineLatest(
                 Flux.DatabaseProvider
@@ -349,11 +345,11 @@ namespace Flux.ViewModels
                     .WhenAnyValue(c => c.ExtrusionSetQueue),
                 GetExtrusionQueue)
                 .SelectAsync()
-                .ToPropertyRC(this, v => v.ExtrusionQueue, Disposables);
+                .ToPropertyRC(this, v => v.ExtrusionQueue);
 
             _Offset = Flux.Calibration.Offsets.Connect()
                 .QueryWhenChanged(FindOffset)
-                .ToPropertyRC(this, v => v.Offset, Disposables);
+                .ToPropertyRC(this, v => v.Offset);
 
             var eval_changed = this.WhenAnyValue(e => e.FeederReportQueue);
 
@@ -365,20 +361,20 @@ namespace Flux.ViewModels
                 valid_probe,
                 eval_changed,
                 InvalidProbe)
-                .ToPropertyRC(this, e => e.IsInvalidProbe, Disposables);
+                .ToPropertyRC(this, e => e.IsInvalidProbe);
 
             var material = Feeder.WhenAnyValue(f => f.SelectedMaterial);
             var tool_material = material.Convert(m => m.ToolMaterial);
 
             _TargetTemperature = Flux.StatusProvider.WhenAnyValue(s => s.PrintingEvaluation)
                 .Select(TargetTemp)
-                .ToPropertyRC(this, v => v.TargetTemperature, Disposables);
+                .ToPropertyRC(this, v => v.TargetTemperature);
 
             _HasColdNozzle = Observable.CombineLatest(
                 Flux.StatusProvider.WhenAnyValue(s => s.PrintingEvaluation),
                 Feeder.ToolNozzle.WhenAnyValue(t => t.NozzleTemperature),
                 ColdNozzle)
-                .ToPropertyRC(this, e => e.HasColdNozzle, Disposables);
+                .ToPropertyRC(this, e => e.HasColdNozzle);
 
             Material.Initialize();
             ToolNozzle.Initialize();

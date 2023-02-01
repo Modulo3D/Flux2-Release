@@ -47,17 +47,17 @@ namespace Flux.ViewModels
                 .Select(CreateFeeders)
                 .AsObservableChangeSet(f => f.Position)
                 .DisposeMany()
-                .AsObservableCacheRC(Disposables);
+                .AsObservableCacheRC(this);
 
             ToolNozzles = Feeders.Connect()
                 .TransformMany(CreateToolNozzles, tn => tn.Position)
                 .DisposeMany()
-                .AsObservableCacheRC(Disposables);
+                .AsObservableCacheRC(this);
 
             ToolMaterials = Feeders.Connect()
                 .TransformMany(CreateToolMaterials, tn => tn.Position)
                 .DisposeMany()
-                .AsObservableCacheRC(Disposables);
+                .AsObservableCacheRC(this);
 
             var user_settings = Flux.SettingsProvider.CoreSettings;
             var lock_guid = user_settings.Local.PrinterGuid;
@@ -72,7 +72,7 @@ namespace Flux.ViewModels
 
             _HasInvalidStates = Feeders.Connect()
                 .TrueForAny(f => f.HasInvalidStateChanged, i => i)
-                .ToPropertyRC(this, f => f.HasInvalidStates, Disposables);
+                .ToPropertyRC(this, f => f.HasInvalidStates);
 
             // TODO
             Materials = Feeders.Connect()
@@ -80,19 +80,19 @@ namespace Flux.ViewModels
                 .Transform(f => f.SelectedMaterial, true)
                 .AutoRefresh(m => m.Document)
                 .Transform(f => f.Convert(f => f.Document), true)
-                .AsObservableCacheRC(Disposables);
+                .AsObservableCacheRC(this);
 
             Tools = Feeders.Connect()
                 .AutoRefresh(f => f.ToolNozzle.Document)
                 .Transform(f => f.ToolNozzle.Document, true)
                 .Transform(tn => tn.tool)
-                .AsObservableCacheRC(Disposables);
+                .AsObservableCacheRC(this);
 
             Nozzles = Feeders.Connect()
               .AutoRefresh(f => f.ToolNozzle.Document)
               .Transform(f => f.ToolNozzle.Document, true)
               .Transform(tn => tn.nozzle)
-              .AsObservableCacheRC(Disposables);
+              .AsObservableCacheRC(this);
 
             var selected_extruder = Flux.ConnectionProvider
                 .ObserveVariable(m => m.TOOL_ON_TRAILER)
@@ -100,12 +100,12 @@ namespace Flux.ViewModels
 
             _SelectedExtruder = selected_extruder
                 .ObservableOr(() => (short)-1)
-                .ToPropertyRC(this, v => v.SelectedExtruder, Disposables);
+                .ToPropertyRC(this, v => v.SelectedExtruder);
 
             _SelectedFeeder = selected_extruder
                 .ConvertToObservable(FindSelectedFeeder)
                 .ObservableOrDefault()
-                .ToPropertyRC(this, v => v.SelectedFeeder, Disposables);
+                .ToPropertyRC(this, v => v.SelectedFeeder);
         }
 
         private IObservable<Optional<IFluxFeederViewModel>> FindSelectedFeeder(short selected_extruder)
@@ -164,7 +164,7 @@ namespace Flux.ViewModels
             var last_printer_guid = last_tag.ConvertOr(t => t.PrinterGuid, () => Guid.Empty);
             var last_material_guid = last_tag.ConvertOr(t => t.MaterialGuid, () => Guid.Empty);
 
-            var material_option = ComboOption.Create("material", "MATERIALE:", d => materials.AsObservableCacheRC(d));
+            var material_option = ComboOption.Create("material", "MATERIALE:", d => materials.AsObservableCache().DisposeWith(d));
             var cur_weight_option = new NumericOption("curWeight", "PESO CORRENTE:", last_cur_weight, 50.0, converter: typeof(WeightConverter));
             var max_weight_option = new NumericOption("maxWeight", "PESO TOTALE:", last_max_weight, 50.0, value_changed: v =>
             {
@@ -210,7 +210,7 @@ namespace Flux.ViewModels
 
             var last_tool_guid = last_tag.ConvertOr(t => t.NozzleGuid, () => Guid.Empty);
 
-            var tool_option = ComboOption.Create("tool", "Utensile:", d => tools.AsObservableCacheRC(d));
+            var tool_option = ComboOption.Create("tool", "Utensile:", d => tools.AsObservableCache().DisposeWith(d));
             var tool_result = await Flux.ShowSelectionAsync(
                 $"UTENSILE N.{position + 1}", new[] { tool_option });
 
@@ -245,7 +245,7 @@ namespace Flux.ViewModels
             var last_cur_weight = last_tag.Convert(t => t.CurWeightG).ValueOr(() => 10000.0);
             var last_max_weight = last_tag.Convert(t => t.MaxWeightG).ValueOr(() => 10000.0);
 
-            var nozzle_option = ComboOption.Create("nozzle", "UGELLO:", d => nozzles.AsObservableCacheRC(d));
+            var nozzle_option = ComboOption.Create("nozzle", "UGELLO:", d => nozzles.AsObservableCache().DisposeWith(d));
             var cur_weight_option = new NumericOption("curWeight", "PESO CORRENTE:", last_cur_weight, 1000.0, converter: typeof(WeightConverter));
             var max_weight_option = new NumericOption("maxWeight", "PESO TOTALE:", last_max_weight, 1000.0, value_changed:
             v =>

@@ -76,13 +76,13 @@ namespace Flux.ViewModels
                     bool filter_condition((IConditionViewModel condition, TConditionAttribute condition_attribute) t) => !t.condition_attribute.FilterOnCycle || idle;
                 }))
                 .Transform(t => t.condition)
-                .AsObservableListRC(Disposables);
+                .AsObservableListRC(this);
 
-            _TitleText = is_idle.Select(i => FindTitleText(i))
-                .ToPropertyRC(this, v => v.TitleText, Disposables);
+            _TitleText = is_idle.Select(FindTitleText)
+                .ToPropertyRC((TViewModel)this, v => v.TitleText);
 
-            _OperationText = is_idle.Select(i => FindOperationText(i))
-                .ToPropertyRC(this, v => v.OperationText, Disposables);
+            _OperationText = is_idle.Select(FindOperationText)
+                .ToPropertyRC((TViewModel)this, v => v.OperationText);
 
             var can_cancel = CanCancelOperation();
 
@@ -101,14 +101,14 @@ namespace Flux.ViewModels
             var tool_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TEMP_TOOL, tool_index);
             _CurrentTemperature = Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_TOOL, tool_key)
                 .ObservableOrDefault()
-                .ToPropertyRC(this, v => v.CurrentTemperature, Disposables);
+                .ToPropertyRC((TViewModel)this, v => v.CurrentTemperature);
 
             _TemperaturePercentage = this.WhenAnyValue(v => v.CurrentTemperature)
                 .ConvertOr(t => t.Percentage, () => 0)
-                .ToPropertyRC(this, v => v.TemperaturePercentage, Disposables);
+                .ToPropertyRC((TViewModel)this, v => v.TemperaturePercentage);
 
-            CancelOperationCommand = ReactiveCommandRC.CreateFromTask(SafeCancelOperationAsync, Disposables, can_cancel);
-            ExecuteOperationCommand = ReactiveCommandRC.CreateFromTask(SafeExecuteOperationAsync, Disposables, can_execute);
+            CancelOperationCommand = ReactiveCommandRC.CreateFromTask(SafeCancelOperationAsync, (TViewModel)this, can_cancel);
+            ExecuteOperationCommand = ReactiveCommandRC.CreateFromTask(SafeExecuteOperationAsync, (TViewModel)this, can_execute);
         }
 
         public abstract Task UpdateNFCAsync();

@@ -41,11 +41,11 @@ namespace Flux.ViewModels
         {
             _CardBrush = this.WhenAnyValue(x => x.CardInfo)
                 .Select(v => v.HasValue ? FluxColors.Active : FluxColors.Inactive)
-                .ToPropertyRC(this, v => v.CardBrush, Disposables);
+                .ToPropertyRC(this, v => v.CardBrush);
 
             _CardId = this.WhenAnyValue(x => x.CardInfo)
                 .Convert(v => v.CardId)
-                .ToPropertyRC(this, v => v.CardId, Disposables);
+                .ToPropertyRC(this, v => v.CardId);
         }
 
         public void UpdateCardInfo(Optional<CardInfo> card_info)

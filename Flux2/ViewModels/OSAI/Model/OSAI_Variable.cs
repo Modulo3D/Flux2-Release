@@ -47,7 +47,9 @@ namespace Flux.ViewModels
     }
 
 
-    public class OSAI_AsyncVariable<TRData, TWData> : FLUX_AsyncVariable<OSAI_ConnectionProvider, TRData, TWData>, IOSAI_AsyncVariable<TRData, TWData>
+    public class OSAI_AsyncVariable<TRData, TWData> :
+        FLUX_AsyncVariable<OSAI_AsyncVariable<TRData, TWData>, OSAI_ConnectionProvider, TRData, TWData>, 
+        IOSAI_AsyncVariable<TRData, TWData>
     {
         public Optional<string> Alias { get; }
         public OSAI_ReadPriority Priority { get; }
@@ -63,7 +65,9 @@ namespace Flux.ViewModels
             Priority = priority;
         }
     }
-    public class OSAI_ObservableVariable<TRData, TWData> : FLUX_ObservableVariable<OSAI_ConnectionProvider, TRData, TWData>, IOSAI_ObservableVariable<TRData, TWData>
+    public class OSAI_ObservableVariable<TRData, TWData> : 
+        FLUX_ObservableVariable<OSAI_ObservableVariable<TRData, TWData>, OSAI_ConnectionProvider, TRData, TWData>, 
+        IOSAI_ObservableVariable<TRData, TWData>
     {
         public Optional<string> Alias { get; }
         public IOSAI_Address Address { get; }

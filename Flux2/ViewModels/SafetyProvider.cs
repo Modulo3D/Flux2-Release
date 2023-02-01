@@ -26,14 +26,17 @@ namespace Flux.ViewModels
     {
         public Func<Task> Func { get; }
         public string ActionImage { get; }
+        public IObservable<bool> CanExecute { get; }
         public ConditionCommand(string action_icon, Action action, IObservable<bool> can_execute = default)
         {
+            CanExecute= can_execute;
             ActionImage = action_icon;
             Func = () => { action(); return Task.CompletedTask; };
         }
         public ConditionCommand(string action_icon, Func<Task> task, IObservable<bool> can_execute = default)
         {
             ActionImage = action_icon;
+            CanExecute = can_execute;
             Func = task;
         }
     }
@@ -74,7 +77,7 @@ namespace Flux.ViewModels
             State = state;
             Message = message;
             ActionImage = command.Convert(c => c.ActionImage);
-            ActionCommand = command.Convert(c => ReactiveCommandRC.CreateFromTask(c.Func, Disposables));
+            ActionCommand = command.Convert(c => ReactiveCommandRC.CreateFromTask(c.Func, this, c.CanExecute));
 
             StateBrush = state switch
             {
@@ -85,6 +88,11 @@ namespace Flux.ViewModels
                 EConditionState.Disabled => FluxColors.Inactive,
                 _ => FluxColors.Error
             };
+        }
+
+        public override void Dispose()
+        {
+            base.Dispose();
         }
     }
 
@@ -179,7 +187,7 @@ namespace Flux.ViewModels
             ValueChanged = value_changed;
 
             _Value = ValueChanged
-                .ToPropertyRC(this, v => v.Value, Disposables);
+                .ToPropertyRC(this, v => v.Value);
 
             if (sample != default)
                 value_changed = value_changed.Sample(sample);
@@ -192,8 +200,10 @@ namespace Flux.ViewModels
             _State = current_state
                 .DistinctUntilChanged()
                 .StartWith(ConditionStateBuilder.Default)
-                .DisposePrevious()
-                .ToPropertyRC(this, e => e.State, Disposables);
+                .PairWithPreviousValue()
+                .Do(t => t.OldValue?.Dispose())
+                .Select(t => t.NewValue)
+                .ToPropertyRC(this, e => e.State);
 
             StateChanged = this.WhenAnyValue(v => v.State);
         }

@@ -189,7 +189,7 @@ namespace Flux.ViewModels
 
     public class MessagesViewModel : FluxRoutableViewModel<MessagesViewModel>, IMessageViewModel
     {
-        public ISourceList<IFluxMessage> Messages { get; set; }
+        public ISourceList<IFluxMessage> Messages { get; private set; }
 
         [RemoteContent(true)]
         public IObservableList<IFluxMessage> SortedMessages { get; set; }
@@ -209,10 +209,10 @@ namespace Flux.ViewModels
 
         public MessagesViewModel(FluxViewModel flux) : base(flux)
         {
-            Messages = new SourceList<IFluxMessage>();
+            SourceListRC.Create(this, v => v.Messages);
             Messages.Connect()
                 .DisposeMany()
-                .SubscribeRC(Disposables);
+                .SubscribeRC(this);
 
             var filter = Observable.CombineLatest(
                 Flux.ConnectionProvider.WhenAnyValue(v => v.IsConnecting),
@@ -227,7 +227,7 @@ namespace Flux.ViewModels
                 .AutoRefresh(m => m.TimeStamp)
                 .Filter(filter)
                 .Sort(Comparer<IFluxMessage>.Create((tm1, tm2) => tm1.TimeStamp.CompareTo(tm2.TimeStamp)))
-                .AsObservableListRC(Disposables);
+                .AsObservableListRC(this);
 
             _MessageCounter = SortedMessages.Connect()
                 .QueryWhenChanged(messages =>
@@ -259,9 +259,9 @@ namespace Flux.ViewModels
                         }
                     }
                     return new MessageCounter(debugCount, infoCount, warningCount, errorCount, emergCount);
-                }).ToPropertyRC(this, v => v.MessageCounter, Disposables);
+                }).ToPropertyRC(this, v => v.MessageCounter);
 
-            ResetMessagesCommand = ReactiveCommandRC.Create(Messages.Clear, Disposables);
+            ResetMessagesCommand = ReactiveCommandRC.Create(Messages.Clear, this);
         }
 
         // LOG MESSAGES

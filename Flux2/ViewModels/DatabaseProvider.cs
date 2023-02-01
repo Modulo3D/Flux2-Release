@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
-    public class DatabaseProvider : ReactiveObjectRC, IFluxDatabaseProvider
+    public class DatabaseProvider : ReactiveObjectRC<DatabaseProvider>, IFluxDatabaseProvider
     {
         public FluxViewModel Flux { get; }
 
@@ -24,6 +24,15 @@ namespace Flux.ViewModels
         public DatabaseProvider(FluxViewModel main)
         {
             Flux = main;
+            this.WhenAnyValue(v => v.Database)
+                .DisposePrevious()
+                .SubscribeRC(this);
+        }
+
+        public override void Dispose()
+        {
+            base.Dispose();
+            Database.IfHasValue(d => d.Dispose());
         }
 
         public async Task<bool> InitializeAsync(Func<ILocalDatabase, Task> initialize_callback = default)

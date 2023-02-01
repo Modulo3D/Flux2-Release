@@ -82,7 +82,7 @@ namespace Flux.ViewModels
                 .Filter(f => f.FeederState != EFeederState.FEEDER_EMPTY)
                 .Transform(f => (IFluxOffsetViewModel)new OffsetViewModel(this, f))
                 .DisposeMany()
-                .AsObservableCacheRC(Disposables);
+                .AsObservableCacheRC(this);
 
             var can_safe_start = Flux.StatusProvider
                  .WhenAnyValue(s => s.StatusEvaluation)
@@ -109,17 +109,17 @@ namespace Flux.ViewModels
 
             user_settings.Local
                 .WhenAnyValue(v => v.GlobalZOffset)
-                .BindToRC(this, v => v.GlobalZOffset, Disposables);
+                .BindToRC(this, v => v.GlobalZOffset, this);
 
             this.WhenAnyValue(v => v.GlobalZOffset)
-                .BindToRC(user_settings, v => v.Local.GlobalZOffset, Disposables);
+                .BindToRC(user_settings, v => v.Local.GlobalZOffset, this);
 
             this.WhenAnyValue(v => v.GlobalZOffset)
                 .Throttle(TimeSpan.FromSeconds(1))
-                .SubscribeRC(_ => user_settings.PersistLocalSettings(), Disposables);
+                .SubscribeRC(_ => user_settings.PersistLocalSettings(), this);
 
-            IncreaseGlobalZOffsetCommand = ReactiveCommandRC.Create(() => { ModifyOffset(o => o + 0.01f); }, Disposables, is_idle);
-            DecreaseGlobalZOffsetCommand = ReactiveCommandRC.Create(() => { ModifyOffset(o => o - 0.01f); }, Disposables, is_idle);
+            IncreaseGlobalZOffsetCommand = ReactiveCommandRC.Create(() => { ModifyOffset(o => o + 0.01f); }, this, is_idle);
+            DecreaseGlobalZOffsetCommand = ReactiveCommandRC.Create(() => { ModifyOffset(o => o - 0.01f); }, this, is_idle);
 
             Observable.CombineLatest(
                 IncreaseGlobalZOffsetCommand.IsExecuting,
@@ -132,7 +132,7 @@ namespace Flux.ViewModels
                         (!t.NewValue.iz && !t.NewValue.dz);
                 })
                 .Throttle(TimeSpan.FromSeconds(1))
-                .SubscribeRC(_ => Flux.SettingsProvider.PersistLocalSettings(), Disposables);
+                .SubscribeRC(_ => Flux.SettingsProvider.PersistLocalSettings(), this);
 
             ProbeOffsetsCommand = ReactiveCommandRC.CreateFromTask(async () =>
             {
@@ -152,12 +152,12 @@ namespace Flux.ViewModels
 
                     Flux.Navigator.Navigate(ManualCalibration.Value);
                 }
-            }, Disposables, can_probe);
+            }, this, can_probe);
 
             var offsets = Offsets.Connect()
                 .ChangeKey(f => $"{f.Feeder.Position}")
                 .Transform(f => (IRemoteControl)f)
-                .AsObservableCacheRC(Disposables);
+                .AsObservableCacheRC(this);
 
             ManualCalibration = new Lazy<ManualCalibrationViewModel>(() => new ManualCalibrationViewModel(this));
         }

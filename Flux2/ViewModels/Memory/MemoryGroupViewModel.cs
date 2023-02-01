@@ -16,15 +16,15 @@ namespace Flux.ViewModels
         public override string VariableName { get; }
 
         [RemoteContent(true)]
-        public IObservableCache<IMemoryVariableBase, string> Variables { get; }
+        public IObservableCache<IMemoryVariableBase, string> Variables { get; private set; }
 
-        private SourceCache<IMemoryVariableBase, string> VariableSource { get; }
+        private SourceCache<IMemoryVariableBase, string> VariableSource { get; set; }
 
         public MemoryGroupViewModel(FluxViewModel flux, IGrouping<string, IFLUX_VariableBase> group) : base(flux, group.Key)
         {
             VariableName = group.Key;
 
-            VariableSource = new SourceCache<IMemoryVariableBase, string>(vm => vm.VariableBase.Name);
+            SourceCacheRC.Create(this, v => v.VariableSource, vm => vm.VariableBase.Name);
             VariableSource.Edit(innerList =>
             {
                 innerList.Clear();
@@ -50,7 +50,7 @@ namespace Flux.ViewModels
                 {
                     bool filter(IMemoryVariableBase v) => t;
                     return (Func<IMemoryVariableBase, bool>)filter;
-                })).AsObservableCacheRC(Disposables);
+                })).AsObservableCacheRC(this);
         }
     }
 }

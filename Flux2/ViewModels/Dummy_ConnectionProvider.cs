@@ -50,7 +50,7 @@ namespace Flux.ViewModels
         {
         }
     }
-    public class Dummy_Variable<TRData, TWData> : FLUX_Variable<TRData, TWData>
+    public class Dummy_Variable<TRData, TWData> : FLUX_Variable<Dummy_Variable<TRData, TWData>, TRData, TWData>
     {
         public override bool ReadOnly => false;
         public override string Group => "";
@@ -114,7 +114,7 @@ namespace Flux.ViewModels
             array_setter.Invoke(new Dummy_Variable<TRData, TWData>());
         }
     }
-    public class Dummy_Connection : FLUX_Connection<Dummy_ConnectionProvider, Dummy_VariableStore, IDisposable>
+    public class Dummy_Connection : FLUX_Connection<Dummy_Connection, Dummy_ConnectionProvider, Dummy_VariableStore, IDisposable>
     {
         public override string RootPath => throw new NotImplementedException();
         public override string QueuePath => throw new NotImplementedException();
@@ -371,7 +371,7 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
     }
-    public class Dummy_MemoryBuffer : FLUX_MemoryBuffer<Dummy_ConnectionProvider, Dummy_VariableStore>
+    public class Dummy_MemoryBuffer : FLUX_MemoryBuffer<Dummy_MemoryBuffer, Dummy_ConnectionProvider, Dummy_VariableStore>
     {
         public override Dummy_ConnectionProvider ConnectionProvider { get; }
         public override bool HasFullMemoryRead => false;

@@ -17,8 +17,8 @@ namespace Flux.ViewModels
         {
         }
     }
-    public abstract class ChangeFilamentOperationViewModel<T> : FeederOperationViewModel<T, FilamentOperationConditionAttribute>
-        where T : ChangeFilamentOperationViewModel<T>
+    public abstract class ChangeFilamentOperationViewModel<TChangeFilamentOperationViewModel> : FeederOperationViewModel<TChangeFilamentOperationViewModel, FilamentOperationConditionAttribute>
+        where TChangeFilamentOperationViewModel : ChangeFilamentOperationViewModel<TChangeFilamentOperationViewModel>
     {
         public MaterialViewModel Material { get; }
 
@@ -49,21 +49,21 @@ namespace Flux.ViewModels
                 m => m.FILAMENT_BEFORE_GEAR,
                 before_gear_key)
                 .ObservableOrDefault()
-                .ToPropertyRC(this, v => v.WirePresenceBeforeGear, Disposables);
+                .ToPropertyRC((TChangeFilamentOperationViewModel)this, v => v.WirePresenceBeforeGear);
 
             var after_gear_key = Flux.ConnectionProvider.GetArrayUnit(m => m.FILAMENT_AFTER_GEAR, material_index);
             _WirePresenceAfterGear = Flux.ConnectionProvider.ObserveVariable(
                 m => m.FILAMENT_AFTER_GEAR,
                 after_gear_key)
                 .ObservableOrDefault()
-                .ToPropertyRC(this, v => v.WirePresenceAfterGear, Disposables);
+                .ToPropertyRC((TChangeFilamentOperationViewModel)this, v => v.WirePresenceAfterGear);
 
             var on_head_key = Flux.ConnectionProvider.GetArrayUnit(m => m.FILAMENT_ON_HEAD, feeder_index);
             _WirePresenceOnHead = Flux.ConnectionProvider.ObserveVariable(
                 m => m.FILAMENT_ON_HEAD,
                 on_head_key)
                 .ObservableOrDefault()
-                .ToPropertyRC(this, v => v.WirePresenceOnHead, Disposables);
+                .ToPropertyRC((TChangeFilamentOperationViewModel)this, v => v.WirePresenceOnHead);
         }
 
         protected override IObservable<bool> CanCancelOperation()

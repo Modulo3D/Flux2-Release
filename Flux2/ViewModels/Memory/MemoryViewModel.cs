@@ -7,14 +7,14 @@ namespace Flux.ViewModels
 {
     public class MemoryViewModel : FluxRoutableViewModel<MemoryViewModel>
     {
-        public SourceCache<MemoryGroupViewModel, string> VariableGroupsSource { get; }
+        public SourceCache<MemoryGroupViewModel, string> VariableGroupsSource { get; private set; }
 
         [RemoteContent(true)]
         public IObservableCache<MemoryGroupViewModel, string> VariableGroups { get; }
 
         public MemoryViewModel(FluxViewModel flux) : base(flux)
         {
-            VariableGroupsSource = new SourceCache<MemoryGroupViewModel, string>(vm => vm.VariableName);
+            SourceCacheRC.Create(this, v => v.VariableGroupsSource, vm => vm.VariableName);
             VariableGroupsSource.Edit(innerList =>
             {
                 var variable_store = flux.ConnectionProvider.VariableStoreBase;
@@ -29,7 +29,7 @@ namespace Flux.ViewModels
             });
 
             VariableGroups = VariableGroupsSource.Connect()
-                .AsObservableCacheRC(Disposables);
+                .AsObservableCacheRC(this);
         }
     }
 }

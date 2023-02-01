@@ -16,7 +16,7 @@ using System.Xml.Linq;
 
 namespace Flux.ViewModels
 {
-    public class OSAI_Connection : FLUX_Connection<OSAI_ConnectionProvider, OSAI_VariableStore, OPENcontrolPortTypeClient>
+    public class OSAI_Connection : FLUX_Connection<OSAI_Connection, OSAI_ConnectionProvider, OSAI_VariableStore, OPENcontrolPortTypeClient>
     {
         public const ushort AxisNum = 4;
         public const ushort ProcessNumber = 1;

@@ -83,7 +83,7 @@ namespace Flux.ViewModels
                   Feeder.ToolNozzle.NFCSlot.WhenAnyValue(t => t.Nfc),
                   NFCSlot.WhenAnyValue(m => m.Nfc),
                   (tool_nozzle, material) => Modulo3DNet.ExtrusionKey.Create(tool_nozzle, material))
-                  .ToPropertyRC(this, v => v.ExtrusionKey, Disposables);
+                  .ToPropertyRC(this, v => v.ExtrusionKey);
 
             var varable_store = Flux.ConnectionProvider.VariableStoreBase;
             var material_index = ArrayIndex.FromZeroBase(Position, varable_store);
@@ -94,37 +94,37 @@ namespace Flux.ViewModels
                 m => m.FILAMENT_BEFORE_GEAR,
                 before_gear_key)
                 .ObservableOrDefault()
-                .ToPropertyRC(this, v => v.FilamentPresenceBeforeGear, Disposables);
+                .ToPropertyRC(this, v => v.FilamentPresenceBeforeGear);
 
             var after_gear_key = Flux.ConnectionProvider.GetArrayUnit(m => m.FILAMENT_AFTER_GEAR, material_index);
             _WirePresenceAfterGear = Flux.ConnectionProvider.ObserveVariable(
                 m => m.FILAMENT_AFTER_GEAR,
                 after_gear_key)
                 .ObservableOrDefault()
-                .ToPropertyRC(this, v => v.FilamentPresenceAfterGear, Disposables);
+                .ToPropertyRC(this, v => v.FilamentPresenceAfterGear);
 
             var on_head_key = Flux.ConnectionProvider.GetArrayUnit(m => m.FILAMENT_ON_HEAD, feeder_index);
             _WirePresenceOnHead = Flux.ConnectionProvider.ObserveVariable(
                 m => m.FILAMENT_ON_HEAD,
                 on_head_key)
                 .ObservableOrDefault()
-                .ToPropertyRC(this, v => v.FilamentPresenceOnHead, Disposables);
+                .ToPropertyRC(this, v => v.FilamentPresenceOnHead);
 
             _DocumentLabel = this.WhenAnyValue(v => v.Document)
                 .Convert(d => d.Name)
-                .ToPropertyRC(this, v => v.DocumentLabel, Disposables);
+                .ToPropertyRC(this, v => v.DocumentLabel);
 
             _MaterialLoaded = NFCSlot.WhenAnyValue(v => v.Nfc)
                 .Select(nfc => nfc.Tag)
                 .Convert(tag => tag.Loaded)
                 .Convert(l => l == Feeder.Position)
                 .ValueOr(() => false)
-                .ToPropertyRC(this, v => v.MaterialLoaded, Disposables);
+                .ToPropertyRC(this, v => v.MaterialLoaded);
 
             var humidity_unit = Flux.ConnectionProvider.GetArrayUnit(c => c.FILAMENT_HUMIDITY, material_index);
             _Humidity = Flux.ConnectionProvider.ObserveVariable(c => c.FILAMENT_HUMIDITY, humidity_unit)
                 .ObservableOrDefault()
-                .ToPropertyRC(this, v => v.Humidity, Disposables);
+                .ToPropertyRC(this, v => v.Humidity);
 
             LoadFilamentOperation = new Lazy<LoadFilamentOperationViewModel>(() =>
             {
@@ -145,7 +145,7 @@ namespace Flux.ViewModels
             base.Initialize();
 
             _State = FindMaterialState()
-                .ToPropertyRC(this, v => v.State, Disposables);
+                .ToPropertyRC(this, v => v.State);
 
             var tool_nozzle = Feeder.ToolNozzle
                 .WhenAnyValue(t => t.State);
@@ -165,7 +165,7 @@ namespace Flux.ViewModels
                         return FluxColors.Active;
                     return FluxColors.Selected;
                 })
-                .ToPropertyRC(this, v => v.MaterialBrush, Disposables);
+                .ToPropertyRC(this, v => v.MaterialBrush);
 
             var material = Observable.CombineLatest(
                 tool_nozzle,
@@ -179,8 +179,8 @@ namespace Flux.ViewModels
                     can_load = CanLoadMaterial(can_cycle, tool_nozzle, material, tool_material),
                 });
 
-            UnloadMaterialCommand = ReactiveCommandRC.CreateFromTask(UnloadAsync, Disposables, material.Select(m => m.can_unload));
-            LoadPurgeMaterialCommand = ReactiveCommandRC.CreateFromTask(LoadPurgeAsync, Disposables, material.Select(m => m.can_load || m.can_purge));
+            UnloadMaterialCommand = ReactiveCommandRC.CreateFromTask(UnloadAsync, this, material.Select(m => m.can_unload));
+            LoadPurgeMaterialCommand = ReactiveCommandRC.CreateFromTask(LoadPurgeAsync, this, material.Select(m => m.can_load || m.can_purge));
 
             var other_filament_after_gear = Feeder.Materials.Connect()
                 .Filter(m => m.Position != Position)
@@ -201,7 +201,7 @@ namespace Flux.ViewModels
                     if (t.before_gear.Value)
                         return;
                     NFCSlot.StoreTag(t => t.SetInserted(core_setting.PrinterGuid, default));
-                }, Disposables);
+                }, this);
 
             // insert filament if it's the only one after gear and on after gear is closed
             Observable.CombineLatest(
@@ -221,7 +221,7 @@ namespace Flux.ViewModels
 
                     var core_setting = Flux.SettingsProvider.CoreSettings.Local;
                     NFCSlot.StoreTag(t => t.SetInserted(core_setting.PrinterGuid, Feeder.Position));
-                }, Disposables);
+                }, this);
 
             // unload filament if on head is open
             Observable.CombineLatest(
@@ -237,7 +237,7 @@ namespace Flux.ViewModels
                    if (t.on_head.Value)
                        return;
                    NFCSlot.StoreTag(t => t.SetLoaded(core_setting.PrinterGuid, default));
-               }, Disposables);
+               }, this);
 
             // load filament if it's the only one after gear and on head is closed
             Observable.CombineLatest(
@@ -257,7 +257,7 @@ namespace Flux.ViewModels
 
                     var core_setting = Flux.SettingsProvider.CoreSettings.Local;
                     NFCSlot.StoreTag(t => t.SetLoaded(core_setting.PrinterGuid, Feeder.Position));
-                }, Disposables);
+                }, this);
         }
         private IObservable<MaterialState> FindMaterialState()
         {

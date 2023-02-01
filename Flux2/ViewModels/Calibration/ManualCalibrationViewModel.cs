@@ -49,7 +49,7 @@ namespace Flux.ViewModels
                 .Convert(o => o.GetZeroBaseIndex())
                 .Convert(o => o.ToOptional(o => o >= 0))
                 .Convert(o => (ushort)o)
-                .ToPropertyRC(this, v => v.SelectedTool);
+                .ToPropertyRC((TManualCalibrationPhase)this, v => v.SelectedTool);
 
             var can_probe_plate = Flux.StatusProvider
                 .WhenAnyValue(v => v.StatusEvaluation)
@@ -81,19 +81,19 @@ namespace Flux.ViewModels
 
         public PrepareManualCalibrationViewModel(CalibrationViewModel calibration) : base(calibration)
         {
-            Conditions = new SourceList<IConditionViewModel>();
+            SourceListRC.Create(this, v => v.Conditions);
 
             _HasSafeStart = Conditions.Connect()
                 .AddKey(c => c.ConditionName)
                 .TrueForAll(line => line.StateChanged, state => state.Valid)
                 .StartWith(true)
-                .ToPropertyRC(this, e => e.HasSafeStart, Disposables);
+                .ToPropertyRC(this, e => e.HasSafeStart);
 
             var can_cancel = Flux.StatusProvider
                 .WhenAnyValue(s => s.StatusEvaluation)
                 .Select(s => s.CanSafeStop);
 
-            CancelCalibrationCommand = ReactiveCommandRC.CreateFromTask(ExitAsync, Disposables, can_cancel);
+            CancelCalibrationCommand = ReactiveCommandRC.CreateFromTask(ExitAsync, this, can_cancel);
         }
 
         public override void Initialize()
@@ -149,7 +149,7 @@ namespace Flux.ViewModels
                 can_safe_cycle,
                 (temp, offset, ne, tool, idle) => temp.HasValue && offset.HasValue && ne && idle && tool != Position);
 
-            SelectToolCommand = ReactiveCommandRC.CreateFromTask(SelectToolAsync, Disposables, can_execute);
+            SelectToolCommand = ReactiveCommandRC.CreateFromTask(SelectToolAsync, this, can_execute);
         }
         private async Task SelectToolAsync()
         {
@@ -217,9 +217,9 @@ namespace Flux.ViewModels
         public Optional<double> TemperaturePercentage => _TemperaturePercentage.Value;
 
         [RemoteContent(true)]
-        public ISourceList<CmdButton> MoveUpButtons { get; }
+        public ISourceList<CmdButton> MoveUpButtons { get; private set; }
         [RemoteContent(true)]
-        public ISourceList<CmdButton> MoveDownButtons { get; }
+        public ISourceList<CmdButton> MoveDownButtons { get; private set; }
 
         [RemoteContent(true)]
         public IObservableList<ManualCalibrationItemViewModel> ToolItems { get; }
@@ -255,13 +255,13 @@ namespace Flux.ViewModels
                 .ConvertOr(t => t.Percentage, () => 0)
                 .ToPropertyRC(this, v => v.TemperaturePercentage);
 
-            MoveUpButtons = new SourceList<CmdButton>();
+            SourceListRC.Create(this, v => v.MoveUpButtons);
             MoveUpButtons.Add(FindMoveButton(-1, false));
             MoveUpButtons.Add(FindMoveButton(-0.1, true));
             MoveUpButtons.Add(FindMoveButton(-0.01, true));
             MoveUpButtons.DisposeWith(Disposables);
 
-            MoveDownButtons = new SourceList<CmdButton>();
+            SourceListRC.Create(this, v => v.MoveDownButtons);
             MoveDownButtons.Add(FindMoveButton(1, false));
             MoveDownButtons.Add(FindMoveButton(0.1, true));
             MoveDownButtons.Add(FindMoveButton(0.01, true));
@@ -288,7 +288,7 @@ namespace Flux.ViewModels
                 .WhenAnyValue(v => v.ExtrudersCount)
                 .Select(e => FindCalibrationItems(e, not_executing))
                 .AsObservableChangeSet()
-                .AsObservableListRC(Disposables);
+                .AsObservableListRC(this);
 
             not_executing.SubscribeRC(async not_executing =>
                 {
@@ -319,7 +319,7 @@ namespace Flux.ViewModels
                         offset.Value.ModifyProbeOffset(p => new ProbeOffset(p.Key, p.X, p.Y, z.Value - bed_height - 0.3));
                         Flux.SettingsProvider.UserSettings.PersistLocalSettings();
                     }
-                }, Disposables);
+                }, this);
 
             var move_transform = Flux.ConnectionProvider.VariableStoreBase.MoveTransform;
 
@@ -337,7 +337,7 @@ namespace Flux.ViewModels
                 not_executing,
                 (ss, ne) => ss && ne);
 
-            CancelCalibrationCommand = ReactiveCommandRC.CreateFromTask(ExitAsync, Disposables, can_cancel);
+            CancelCalibrationCommand = ReactiveCommandRC.CreateFromTask(ExitAsync, this, can_cancel);
         }
 
         private CmdButton FindMoveButton(double distance, bool can_unsafe_cycle)
@@ -405,7 +405,7 @@ namespace Flux.ViewModels
 
             _ManualCalibrationPhase = PrepareManualCalibration.WhenAnyValue(v => v.HasSafeStart)
                 .Select(GetManualCalibrationViewModel)
-                .ToPropertyRC(this, h => h.ManualCalibrationPhase, Disposables);
+                .ToPropertyRC(this, h => h.ManualCalibrationPhase);
         }
 
         private IManualCalibrationPhaseViewModel GetManualCalibrationViewModel(bool safe_start)

@@ -17,12 +17,12 @@ namespace Flux.ViewModels
 
         private CmdButton(
             string name,
-            Func<CompositeDisposable, ReactiveCommand<Unit, Unit>> command,
+            Func<CmdButton, ReactiveCommand<Unit, Unit>> command,
             OptionalObservable<bool> visible = default,
             OptionalObservable<Optional<bool>> active = default)
             : base(name)
         {
-            Command = command(Disposables);
+            Command = command(this);
             _Visible = visible
                 .ObservableOr(() => true)
                 .ToPropertyRC(this, v => v.Visible);

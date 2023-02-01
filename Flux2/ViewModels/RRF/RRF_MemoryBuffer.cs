@@ -23,7 +23,7 @@ namespace Flux.ViewModels
     {
         new Task<Optional<TData>> TryScheduleAsync(RRF_RequestPriority priority, CancellationToken ct);
     }
-    public abstract class RRF_MemoryReader<TData> : FLUX_MemoryReader<RRF_MemoryBuffer, TData>, IRRF_MemoryReader<TData>
+    public abstract class RRF_MemoryReader<TData> : FLUX_MemoryReader<RRF_MemoryReader<TData>, RRF_MemoryBuffer, TData>, IRRF_MemoryReader<TData>
     {
         private RRF_RequestPriority Priority { get; }
         protected Action<Optional<TData>> Action { get; }
@@ -119,7 +119,7 @@ namespace Flux.ViewModels
         }
     }
 
-    public class RRF_MemoryReaderGroup : FLUX_MemoryReaderGroup<RRF_MemoryBuffer, RRF_ConnectionProvider, RRF_VariableStoreBase>
+    public class RRF_MemoryReaderGroup : FLUX_MemoryReaderGroup<RRF_MemoryReaderGroup, RRF_MemoryBuffer, RRF_ConnectionProvider, RRF_VariableStoreBase>
     {
         public RRF_MemoryReaderGroup(RRF_MemoryBuffer memory_buffer, TimeSpan period) : base(memory_buffer, period)
         {
@@ -138,12 +138,12 @@ namespace Flux.ViewModels
         }
     }
 
-    public class RRF_MemoryBuffer : FLUX_MemoryBuffer<RRF_ConnectionProvider, RRF_VariableStoreBase>
+    public class RRF_MemoryBuffer : FLUX_MemoryBuffer<RRF_MemoryBuffer, RRF_ConnectionProvider, RRF_VariableStoreBase>
     {
         public override RRF_ConnectionProvider ConnectionProvider { get; }
 
         public Dictionary<string, IRRF_MemoryReader> MemoryReaders { get; }
-        private SourceCache<RRF_MemoryReaderGroup, TimeSpan> MemoryReaderGroups { get; }
+        private SourceCache<RRF_MemoryReaderGroup, TimeSpan> MemoryReaderGroups { get; set; }
 
         public RRF_ObjectModel RRFObjectModel { get; }
 
@@ -168,7 +168,7 @@ namespace Flux.ViewModels
             var extrusion = TimeSpan.FromSeconds(5);
 
             MemoryReaders = new Dictionary<string, IRRF_MemoryReader>();
-            MemoryReaderGroups = new SourceCache<RRF_MemoryReaderGroup, TimeSpan>(f => f.Period);
+            SourceCacheRC.Create(this, v => v.MemoryReaderGroups, f => f.Period);
 
             AddModelReader(ultra_fast, "state", "f", m => m.State, RRF_RequestPriority.Medium);
             AddModelReader(fast, "tools", "f", m => m.Tools, RRF_RequestPriority.Medium);
@@ -186,7 +186,7 @@ namespace Flux.ViewModels
 
             _HasFullMemoryRead = MemoryReaderGroups.Connect()
                 .TrueForAll(f => f.WhenAnyValue(f => f.HasMemoryRead), r => r)
-                .ToPropertyRC(this, v => v.HasFullMemoryRead, Disposables);
+                .ToPropertyRC(this, v => v.HasFullMemoryRead);
         }
 
         public override void Initialize(RRF_VariableStoreBase variableStore)

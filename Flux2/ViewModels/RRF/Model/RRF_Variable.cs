@@ -25,7 +25,9 @@ namespace Flux.ViewModels
     public interface IRRF_VariableGlobalModel<TRData, TWData> : IRRF_VariableGlobalModel, IRRF_Variable<TRData, TWData>
     {
     }
-    public class RRF_VariableObjectModel<TModel, TRData, TWData> : FLUX_ObservableVariable<RRF_ConnectionProvider, TRData, TWData>, IRRF_Variable<TRData, TWData>
+    public class RRF_VariableObjectModel<TModel, TRData, TWData> : 
+        FLUX_ObservableVariable<RRF_VariableObjectModel<TModel, TRData, TWData>, RRF_ConnectionProvider, TRData, TWData>,
+        IRRF_Variable<TRData, TWData>
     {
         public override string Group => "ObjectModel";
 
@@ -99,7 +101,9 @@ namespace Flux.ViewModels
             return await get_data(model.Value);
         }
     }
-    public class RRF_VariableGlobalModel<TData> : FLUX_ObservableVariable<RRF_ConnectionProvider, TData, TData>, IRRF_VariableGlobalModel<TData, TData>
+    public class RRF_VariableGlobalModel<TData> : 
+        FLUX_ObservableVariable<RRF_VariableGlobalModel<TData>, RRF_ConnectionProvider, TData, TData>,
+        IRRF_VariableGlobalModel<TData, TData>
     {
         public bool Stored { get; }
         public string Variable { get; }

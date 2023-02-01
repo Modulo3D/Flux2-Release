@@ -68,7 +68,7 @@ namespace Flux.ViewModels
             // TODO
             Materials = Feeders.ToolMaterials.Connect()
                 .Filter(m => m.Feeder == this)
-                .AsObservableCacheRC(Disposables);
+                .AsObservableCacheRC(this);
 
             var selected_positions = Flux.ConnectionProvider
                 .ObserveVariable(c => c.FILAMENT_AFTER_GEAR)
@@ -79,7 +79,7 @@ namespace Flux.ViewModels
 
             _SelectedMaterial = Observable.CombineLatest(
                materials, extruders, selected_positions, FindSelectedViewModel)
-                .ToPropertyRC(this, v => v.SelectedMaterial, Disposables);
+                .ToPropertyRC(this, v => v.SelectedMaterial);
 
             foreach (var material in Materials.Items.Cast<MaterialViewModel>())
                 material.Initialize();
@@ -88,11 +88,11 @@ namespace Flux.ViewModels
 
             _FeederState = ToolNozzle.WhenAnyValue(v => v.State)
                 .Select(FindFeederState)
-                .ToPropertyRC(this, v => v.FeederState, Disposables);
+                .ToPropertyRC(this, v => v.FeederState);
 
             _HasInvalidState = this.WhenAnyValue(f => f.FeederState)
                 .Select(f => f == EFeederState.ERROR)
-                .ToPropertyRC(this, v => v.HasInvalidState, Disposables);
+                .ToPropertyRC(this, v => v.HasInvalidState);
 
             FeederStateChanged = this.WhenAnyValue(f => f.FeederState);
             HasInvalidStateChanged = this.WhenAnyValue(f => f.HasInvalidState);
@@ -106,7 +106,7 @@ namespace Flux.ViewModels
                     EFeederState.IN_CHANGE => "CAMBIO",
                     _ => "ERRORE",
                 })
-                .ToPropertyRC(this, v => v.FeederStateStr, Disposables);
+                .ToPropertyRC(this, v => v.FeederStateStr);
 
             _FeederBrush = this.WhenAnyValue(v => v.FeederState)
                 .Select(state => state switch
@@ -117,7 +117,7 @@ namespace Flux.ViewModels
                     EFeederState.IN_CHANGE => FluxColors.Idle,
                     _ => FluxColors.Error,
                 })
-                .ToPropertyRC(this, v => v.FeederBrush, Disposables);
+                .ToPropertyRC(this, v => v.FeederBrush);
 
             _ToolNozzleBrush = ToolNozzle.WhenAnyValue(v => v.State)
                 .Select(state =>
@@ -132,7 +132,7 @@ namespace Flux.ViewModels
                         return FluxColors.Inactive;
                     return FluxColors.Error;
                 })
-                .ToPropertyRC(this, v => v.ToolNozzleBrush, Disposables);
+                .ToPropertyRC(this, v => v.ToolNozzleBrush);
         }
 
         private Optional<TViewModel> FindSelectedViewModel<TViewModel>(

@@ -73,26 +73,26 @@ namespace Flux.ViewModels
                     e.printing.MCode.HasValue &&
                     e.status.CanSafeStop);
 
-            StartCommand = ReactiveCommandRC.CreateFromTask(StartPrintAsync, Disposables, canStart);
-            HoldCommand = ReactiveCommandRC.CreateFromTask(PausePrintAsync, Disposables, canHold);
-            ResetCommand = ReactiveCommandRC.CreateFromTask(CancelPrintAsync, Disposables, canStop);
+            StartCommand = ReactiveCommandRC.CreateFromTask(StartPrintAsync, this, canStart);
+            HoldCommand = ReactiveCommandRC.CreateFromTask(PausePrintAsync, this, canHold);
+            ResetCommand = ReactiveCommandRC.CreateFromTask(CancelPrintAsync, this, canStop);
 
             _SelectedMCodeName = Flux.StatusProvider
                 .WhenAnyValue(v => v.PrintingEvaluation)
                 .Select(e => e.MCode)
                 .Convert(m => m.Name)
                 .Throttle(TimeSpan.FromSeconds(0.25))
-                .ToPropertyRC(this, v => v.SelectedMCodeName, Disposables);
+                .ToPropertyRC(this, v => v.SelectedMCodeName);
 
             _PrintProgress = Flux.StatusProvider
                 .WhenAnyValue(v => v.PrintProgress)
                 .Select(p => p.Percentage)
-                .ToPropertyRC(this, v => v.PrintProgress, Disposables);
+                .ToPropertyRC(this, v => v.PrintProgress);
 
             _RemainingTime = Flux.StatusProvider
                 .WhenAnyValue(v => v.PrintProgress)
                 .Select(p => p.RemainingTime)
-                .ToPropertyRC(this, v => v.RemainingTime, Disposables);
+                .ToPropertyRC(this, v => v.RemainingTime);
 
             var current_job = Flux.StatusProvider
                 .WhenAnyValue(s => s.PrintingEvaluation)
@@ -108,7 +108,7 @@ namespace Flux.ViewModels
             _ExpectedMaterials = materials
                 .Select(i => i.Select(i => i.ConvertOr(i => i.Name, () => "---")))
                 .Throttle(TimeSpan.FromSeconds(0.25))
-                .ToPropertyRC(this, v => v.ExpectedMaterials, Disposables);
+                .ToPropertyRC(this, v => v.ExpectedMaterials);
 
             var nozzle_queue = Flux.StatusProvider.ExpectedNozzlesQueue.Connect()
                 .QueryWhenChanged();
@@ -120,7 +120,7 @@ namespace Flux.ViewModels
             _ExpectedNozzles = nozzles
                 .Select(i => i.Select(i => i.ConvertOr(i => i.Name, () => "---")))
                 .Throttle(TimeSpan.FromSeconds(0.25))
-                .ToPropertyRC(this, v => v.ExpectedNozzles, Disposables);
+                .ToPropertyRC(this, v => v.ExpectedNozzles);
         }
 
         public async Task CancelPrintAsync()

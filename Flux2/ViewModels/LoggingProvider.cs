@@ -13,14 +13,12 @@ using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
-    public class LoggingProvider : ReactiveObjectRC
+    public class LoggingProvider : ReactiveObjectRC<LoggingProvider>
     {
         public FluxViewModel Flux { get; }
-        public CompositeDisposable Disposables { get; }
         public LoggingProvider(FluxViewModel flux)
         {
             Flux = flux;
-            Disposables = new CompositeDisposable();
 
             // log program history
             var queue_pos = Flux.ConnectionProvider.ObserveVariable(c => c.QUEUE_POS);
@@ -118,7 +116,7 @@ namespace Flux.ViewModels
                         await Flux.ConnectionProvider.DeleteAsync(c => c.JobEventPath, $"{mcode.Key};{job.Key}", delete_cts.Token);
                     }
                 }
-            }, Disposables);
+            }, this);
 
             var extrusions = Flux.StatusProvider.FeederEvaluators.Connect()
                 .AutoTransform(f => f.ExtrusionQueue)
@@ -133,11 +131,11 @@ namespace Flux.ViewModels
                     var total_weight = extrusion.Value.Value.Aggregate(0.0, (w, kvp) => w + kvp.Value.WeightG);
                     flux.Logger.LogInformation(new EventId(0, $"job_event"), $"{extrusion.Key}:{total_weight:0.##}".Replace(",", "."));
                 }
-            }, Disposables);
+            }, this);
         }
     }
 
-    public static class LoggingExtentions
+    /*public static class LoggingExtentions
     {
         public static void LogVariable<TRData, TWData, TLData>(
             this IFLUX_ConnectionProvider connection_provider,
@@ -221,5 +219,5 @@ namespace Flux.ViewModels
                .SubscribeRC(v => logger.LogInformation(event_id, $"{v}"), d);
             return observable;
         }
-    }
+    }*/
 }

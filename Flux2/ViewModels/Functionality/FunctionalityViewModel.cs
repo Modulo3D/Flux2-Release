@@ -234,7 +234,7 @@ namespace Flux.ViewModels
                                     (g, e, s) => s.StoreTag(t => t.SetInserted(g, default))));
                         }
                     }
-                }, Disposables);
+                }, this);
         }
     }
 
@@ -481,7 +481,7 @@ namespace Flux.ViewModels
                             }
                         }
                     }
-                }, Disposables);
+                }, this);
         }
     }
 

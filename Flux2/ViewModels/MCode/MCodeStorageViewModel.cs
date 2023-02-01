@@ -70,7 +70,7 @@ namespace Flux.ViewModels
 
             _IsUploading = this.WhenAnyValue(v => v.UploadPercentage)
                 .Select(p => p > 0)
-                .ToPropertyRC(this, v => v.IsUploading, Disposables);
+                .ToPropertyRC(this, v => v.IsUploading);
 
             Materials = Observable.CombineLatest(
                 Flux.DatabaseProvider.WhenAnyValue(v => v.Database),
@@ -79,7 +79,7 @@ namespace Flux.ViewModels
                 .Select(o => o.ToObservable()).Switch()
                 .ToObservableChangeSet(t => t.position)
                 .Transform(t => t.document)
-                .AsObservableCacheRC(Disposables);
+                .AsObservableCacheRC(this);
 
             Nozzles = Observable.CombineLatest(
                 Flux.DatabaseProvider.WhenAnyValue(v => v.Database),
@@ -88,11 +88,11 @@ namespace Flux.ViewModels
                 .Select(o => o.ToObservable()).Switch()
                 .ToObservableChangeSet(t => t.position)
                 .Transform(t => t.document)
-                .AsObservableCacheRC(Disposables);
+                .AsObservableCacheRC(this);
 
             _FileNumber = mcodes.AvaiableMCodes.Connect()
                 .QueryWhenChanged(FindFileNumber)
-                .ToPropertyRC(this, f => f.FileNumber, Disposables);
+                .ToPropertyRC(this, f => f.FileNumber);
 
             var is_selecting_file = Flux.MCodes
                 .WhenAnyValue(f => f.IsPreparingFile)
@@ -108,7 +108,7 @@ namespace Flux.ViewModels
                 is_selecting_file,
                 in_queue,
                 (s, q) => !s && !q)
-                .ToPropertyRC(this, v => v.CanDelete, Disposables);
+                .ToPropertyRC(this, v => v.CanDelete);
 
             var is_idle = MCodes.Flux.StatusProvider
                 .WhenAnyValue(s => s.StatusEvaluation)
@@ -120,20 +120,20 @@ namespace Flux.ViewModels
                 Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS),
                 Flux.StatusProvider.WhenAnyValue(e => e.PrintingEvaluation),
                 CanSelectMCode)
-                .ToPropertyRC(this, v => v.CanSelect, Disposables);
+                .ToPropertyRC(this, v => v.CanSelect);
 
-            ToggleMCodeStorageInfoCommand = ReactiveCommandRC.Create(() => { ShowInfo = !ShowInfo; }, Disposables);
+            ToggleMCodeStorageInfoCommand = ReactiveCommandRC.Create(() => { ShowInfo = !ShowInfo; }, this);
 
             DeleteMCodeStorageCommand = ReactiveCommandRC.CreateFromTask(
-                async () => { await mcodes.DeleteAsync(false, this); }, Disposables,
+                async () => { await mcodes.DeleteAsync(false, this); }, this,
                 this.WhenAnyValue(v => v.CanDelete));
 
             SelectMCodeStorageCommand = ReactiveCommandRC.CreateFromTask(
-                async () => { await mcodes.AddToQueueAsync(this); }, Disposables,
+                async () => { await mcodes.AddToQueueAsync(this); }, this,
                 this.WhenAnyValue(v => v.CanSelect));
 
             CancelSelectMCodeStorageCommand = ReactiveCommandRC.Create(
-                () => mcodes.CancelPrepareMCode(), Disposables,
+                () => mcodes.CancelPrepareMCode(), this,
                 this.WhenAnyValue(v => v.IsUploading));
 
             var quanitites = Flux.DatabaseProvider

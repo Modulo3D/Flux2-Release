@@ -18,7 +18,7 @@ namespace Flux.ViewModels
         public bool ShowNavBar => _ShowNavBar.Value;
 
         public FluxViewModel Flux { get; }
-        public SourceList<INavButton> Routes { get; }
+        public SourceList<INavButton> Routes { get; private set; }
 
         private Optional<IFluxRoutableViewModel> _CurrentViewModel;
         [RemoteContent(true)]
@@ -44,7 +44,7 @@ namespace Flux.ViewModels
         public FluxNavigatorViewModel(FluxViewModel flux) : base("navigator")
         {
             Flux = flux;
-            Routes = new SourceList<INavButton>();
+            SourceListRC.Create(this, v => v.Routes);
             PreviousViewModels = new Stack<IFluxRoutableViewModel>();
 
             var home = new NavButton<HomeViewModel>(Flux, Flux.Home, reset: true);
@@ -57,7 +57,7 @@ namespace Flux.ViewModels
             _ShowNavBar = this.WhenAnyValue(v => v.CurrentViewModel)
                 .ConvertMany(vm => vm.ShowNavBar)
                 .ValueOr(() => false)
-                .ToPropertyRC(this, v => v.ShowNavBar, Disposables);
+                .ToPropertyRC(this, v => v.ShowNavBar);
 
             Routes.Add(home);
             Routes.Add(storage);
@@ -81,7 +81,7 @@ namespace Flux.ViewModels
                         if (v.OldValue.HasValue)
                             await v.OldValue.Value.OnNavigateToAsync(v.NewValue.Value);
                     }
-                }, Disposables);
+                }, this);
         }
 
         public void Navigate<TFluxRoutableViewModel>(TFluxRoutableViewModel route, bool reset = false)
@@ -151,8 +151,8 @@ namespace Flux.ViewModels
         }
     }
 
-    public abstract class FluxRoutableViewModel<TViewModel> : RemoteControl<TViewModel>, IFluxRoutableViewModel
-        where TViewModel : FluxRoutableViewModel<TViewModel>
+    public abstract class FluxRoutableViewModel<TFluxRoutableViewModel> : RemoteControl<TFluxRoutableViewModel>, IFluxRoutableViewModel
+        where TFluxRoutableViewModel : FluxRoutableViewModel<TFluxRoutableViewModel>
     {
         public FluxViewModel Flux { get; }
         public string UrlPathSegment { get; }

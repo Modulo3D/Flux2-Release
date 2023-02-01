@@ -20,7 +20,7 @@ namespace Flux.ViewModels
         private CancellationTokenSource PrepareMCodeCTS { get; set; }
 
         [RemoteContent(true)]
-        public ISourceCache<IFluxMCodeStorageViewModel, MCodeKey> AvaiableMCodes { get; }
+        public ISourceCache<IFluxMCodeStorageViewModel, MCodeKey> AvaiableMCodes { get; private set; }
 
         [RemoteContent(true)]
         public IObservableCache<IFluxMCodeQueueViewModel, QueuePosition> QueuedMCodes { get; private set; }
@@ -58,19 +58,19 @@ namespace Flux.ViewModels
             _QueuePosition = Flux.ConnectionProvider
                 .ObserveVariable(c => c.QUEUE_POS)
                 .ValueOr(() => new QueuePosition(-1))
-                .ToPropertyRC(this, v => v.QueuePosition, Disposables);
+                .ToPropertyRC(this, v => v.QueuePosition);
 
 
-            AvaiableMCodes = new SourceCache<IFluxMCodeStorageViewModel, MCodeKey>(f => f.MCodeKey);
+            SourceCacheRC.Create(this, v => v.AvaiableMCodes, f => f.MCodeKey);
 
             var can_delete_all = AvaiableMCodes.Connect()
                 .TrueForAll(mcode => mcode.WhenAnyValue(m => m.CanDelete), d => d);
 
-            DeleteAllCommand = ReactiveCommandRC.CreateFromTask(async () => { await ClearMCodeStorageAsync(); }, Disposables, can_delete_all);
+            DeleteAllCommand = ReactiveCommandRC.CreateFromTask(async () => { await ClearMCodeStorageAsync(); }, this, can_delete_all);
 
             this.WhenAnyValue(v => v.RemovableDrivePath)
                 .DistinctUntilChanged(folder => folder.ConvertOr(f => f.FullName, () => ""))
-                .SubscribeRC(ExploreDrive, Disposables);
+                .SubscribeRC(ExploreDrive, this);
         }
 
         public void Initialize()
@@ -93,13 +93,13 @@ namespace Flux.ViewModels
                .AsObservableChangeSet(kvp => kvp.FluxJob.QueuePosition)
                .Filter(filter_queue)
                .DisposeMany()
-               .AsObservableCacheRC(Disposables);
+               .AsObservableCacheRC(this);
 
             Flux.StatusProvider
                 .WhenAnyValue(s => s.JobQueue)
                 .Where(q => q.HasValue)
                 .Throttle(TimeSpan.FromSeconds(1))
-                .SubscribeRC(async q => await Flux.ConnectionProvider.GenerateInnerQueueAsync(q.Value), Disposables);
+                .SubscribeRC(async q => await Flux.ConnectionProvider.GenerateInnerQueueAsync(q.Value), this);
         }
 
         public void FindDrive()

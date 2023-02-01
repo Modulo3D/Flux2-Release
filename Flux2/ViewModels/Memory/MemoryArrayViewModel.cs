@@ -33,7 +33,7 @@ namespace Flux.ViewModels
         public MemoryGroupBaseViewModel(FluxViewModel flux, string name) : base($"{typeof(TViewModel).GetRemoteControlName()}??{name}")
         {
             Flux = flux;
-            ToggleCommand = ReactiveCommandRC.Create(Toggle, Disposables);
+            ToggleCommand = ReactiveCommandRC.Create(Toggle, (TViewModel)this);
         }
 
         private void Toggle()
@@ -63,7 +63,7 @@ namespace Flux.ViewModels
                     bool filter(MemoryVariableViewModel v) => t;
                     return (Func<MemoryVariableViewModel, bool>)filter;
                 }))
-                .AsObservableCacheRC(Disposables);
+                .AsObservableCacheRC(this);
         }
     }
 }

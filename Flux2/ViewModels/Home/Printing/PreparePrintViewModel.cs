@@ -18,7 +18,7 @@ namespace Flux.ViewModels
         public ISourceList<IConditionViewModel> Conditions { get; private set; }
         public PreparePrintViewModel(FluxViewModel flux) : base(flux)
         {
-            Conditions = new SourceList<IConditionViewModel>();
+            SourceListRC.Create(this, v => v.Conditions);
         }
         public override void Initialize()
         {

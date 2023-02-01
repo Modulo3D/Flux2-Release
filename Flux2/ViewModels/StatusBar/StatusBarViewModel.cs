@@ -14,7 +14,7 @@ namespace Flux.ViewModels
     }
     public class StatusBarViewModel : FluxRoutableViewModel<StatusBarViewModel>
     {
-        public SourceCache<IStatusBarItemViewModel, string> StatusBarItemsSource { get; }
+        public SourceCache<IStatusBarItemViewModel, string> StatusBarItemsSource { get; private set; }
 
         [RemoteContent(true)]
         public IObservableCache<IStatusBarItemViewModel, string> StatusBarItems { get; }
@@ -36,11 +36,11 @@ namespace Flux.ViewModels
 
         public StatusBarViewModel(FluxViewModel flux) : base(flux)
         {
-            StatusBarItemsSource = new SourceCache<IStatusBarItemViewModel, string>(v => v.Name);
+            SourceCacheRC.Create(this, v => v.StatusBarItemsSource, v => v.Name);
             StatusBarItems = StatusBarItemsSource.Connect()
                 .AutoRefresh(v => v.State)
                 .Filter(v => v.State != StatusBarState.Hidden)
-                .AsObservableCacheRC(Disposables);
+                .AsObservableCacheRC(this);
 
             ShowMessagesCommand = ReactiveCommand.Create(() => { Content = Flux.Messages; });
             ShowWebcamCommand = ReactiveCommand.Create(() => { Content = Flux.Webcam; });

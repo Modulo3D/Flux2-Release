@@ -53,11 +53,11 @@ namespace Flux.ViewModels
 
             Items.SelectedKeyChanged
                 .StartWithDefault()
-                .SubscribeRC(v => selection_changed?.Invoke(v), Disposables);
+                .SubscribeRC(v => selection_changed?.Invoke(v), this);
 
             _HasValue = Items.SelectedValueChanged
                .Select(v => v.HasValue)
-               .ToPropertyRC(this, v => v.HasValue, Disposables);
+               .ToPropertyRC(this, v => v.HasValue);
 
             AddInput("items", Items, converter: converter);
         }
@@ -71,7 +71,7 @@ namespace Flux.ViewModels
         }
         public static ComboOption<TValue, TKey> Create<TValue, TKey>(string name, string title, IEnumerable<TValue> items_source, Func<TValue, TKey> add_key, Optional<TKey> key = default, Action<Optional<TKey>> selection_changed = default, Type converter = default)
         {
-            return new ComboOption<TValue, TKey>(name, title, d => items_source.AsObservableChangeSet().AddKey(add_key).AsObservableCacheRC(d), key, selection_changed, converter: converter);
+            return new ComboOption<TValue, TKey>(name, title, d => items_source.AsObservableChangeSet().AddKey(add_key).AsObservableCache().DisposeWith(d), key, selection_changed, converter: converter);
         }
     }
 
@@ -115,11 +115,11 @@ namespace Flux.ViewModels
             AddInput("value", this.WhenAnyValue(v => v.Value), SetValue, step: step, converter: converter);
 
             this.WhenAnyValue(v => v.Value)
-                .SubscribeRC(v => value_changed?.Invoke(v), Disposables);
+                .SubscribeRC(v => value_changed?.Invoke(v), this);
 
             _HasValue = this.WhenAnyValue(v => v.Value)
                .Select(v => has_value?.Invoke(v) ?? true)
-               .ToPropertyRC(this, v => v.HasValue, Disposables);
+               .ToPropertyRC(this, v => v.HasValue);
         }
 
         private void SetValue(double value) => Value = value;
@@ -159,14 +159,14 @@ namespace Flux.ViewModels
                 if (confirm != default)
                     await confirm.Invoke();
                 ShowAsyncSource.SetResult(ContentDialogResult.Primary);
-            }, Disposables, c));
+            }, this, c));
 
             CancelCommand = can_cancel.Convert(c => ReactiveCommandRC.CreateFromTask(async () =>
             {
                 if (cancel != default)
                     await cancel.Invoke();
                 ShowAsyncSource.SetResult(ContentDialogResult.Secondary);
-            }, Disposables, c));
+            }, this, c));
 
             ShowAsyncSource = new TaskCompletionSource<ContentDialogResult>();
         }
@@ -244,7 +244,7 @@ namespace Flux.ViewModels
 
             _HasValue = this.WhenAnyValue(v => v.Value)
                .Select(v => has_value?.Invoke(v) ?? true)
-               .ToPropertyRC(this, v => v.HasValue, Disposables);
+               .ToPropertyRC(this, v => v.HasValue);
         }
     }
 

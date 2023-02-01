@@ -44,9 +44,9 @@ namespace Flux.ViewModels
             ExitFolderCommand = ReactiveCommandRC.Create(() =>
             {
                 Folder = Folder.Convert(f => f.Folder);
-            }, Disposables);
+            }, this);
 
-            CreateFSCommand = ReactiveCommandRC.CreateFromTask(CreateFSAsync, Disposables);
+            CreateFSCommand = ReactiveCommandRC.CreateFromTask(CreateFSAsync, this);
 
             var folderContent = Observable.CombineLatest(
                 UpdateFolder.StartWith(Unit.Default).ObserveOn(RxApp.MainThreadScheduler),
@@ -59,7 +59,7 @@ namespace Flux.ViewModels
 
             FileSystem = folderContent
                 .DisposeMany()
-                .AsObservableCacheRC(Disposables);
+                .AsObservableCacheRC(this);
         }
 
         public async Task CreateFSAsync()

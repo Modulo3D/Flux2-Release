@@ -50,11 +50,11 @@ namespace Flux.ViewModels
                 .WhenAnyValue(s => s.StatusEvaluation)
                 .Select(s => s.CanSafeCycle);
 
-            ShutTargetCommand = ReactiveCommandRC.CreateFromTask(async () => { await temp_var.WriteAsync(0); }, Disposables, can_safe_cycle);
-            SelectTargetCommand = ReactiveCommandRC.CreateFromTask(async () => { await temp_var.WriteAsync(TargetTemperature); }, Disposables, can_safe_cycle);
+            ShutTargetCommand = ReactiveCommandRC.CreateFromTask(async () => { await temp_var.WriteAsync(0); }, this, can_safe_cycle);
+            SelectTargetCommand = ReactiveCommandRC.CreateFromTask(async () => { await temp_var.WriteAsync(TargetTemperature); }, this, can_safe_cycle);
 
             _Temperature = temp_var.ValueChanged
-                .ToPropertyRC(this, v => v.Temperature, Disposables);
+                .ToPropertyRC(this, v => v.Temperature);
         }
     }
 }

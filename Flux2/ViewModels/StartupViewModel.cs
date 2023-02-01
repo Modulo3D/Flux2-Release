@@ -35,24 +35,24 @@ namespace Flux.ViewModels
 
             startup.Where(t => t.connecting || !t.IsHomed)
                 .ObserveOn(RxApp.MainThreadScheduler)
-                .SubscribeRC(t => Flux.Navigator?.Navigate(this), Disposables);
+                .SubscribeRC(t => Flux.Navigator?.Navigate(this), this);
 
             startup.Where(t => !t.connecting && t.IsHomed)
                 .ObserveOn(RxApp.MainThreadScheduler)
-                .SubscribeRC(_ => Flux.Navigator?.NavigateHome(), Disposables);
+                .SubscribeRC(_ => Flux.Navigator?.NavigateHome(), this);
 
             var can_home = Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation)
                 .Select(s => s.CanSafeCycle && !s.IsHomed);
 
             _ConnectionProgress = Flux.ConnectionProvider.WhenAnyValue(v => v.ConnectionProgress)
-                .ToPropertyRC(this, v => v.ConnectionProgress, Disposables);
+                .ToPropertyRC(this, v => v.ConnectionProgress);
 
-            StartupCommand = ReactiveCommandRC.CreateFromTask(StartupAsync, Disposables, can_home);
-            SettingsCommand = ReactiveCommandRC.Create(NavigateToSettingsAsync, Disposables);
-            ResetPrinterCommand = ReactiveCommandRC.Create(ResetPrinter, Disposables);
+            StartupCommand = ReactiveCommandRC.CreateFromTask(StartupAsync, this, can_home);
+            SettingsCommand = ReactiveCommandRC.Create(NavigateToSettingsAsync, this);
+            ResetPrinterCommand = ReactiveCommandRC.Create(ResetPrinter, this);
 
             if (Flux.ConnectionProvider.VariableStoreBase.HasToolChange)
-                MagazineCommand = ReactiveCommandRC.Create(NavigateToMagazineAsync, Disposables);
+                MagazineCommand = ReactiveCommandRC.Create(NavigateToMagazineAsync, this);
         }
 
         private void NavigateToSettingsAsync()

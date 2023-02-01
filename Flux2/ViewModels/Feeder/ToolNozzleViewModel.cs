@@ -55,10 +55,10 @@ namespace Flux.ViewModels
             _NozzleTemperature = Flux.ConnectionProvider
                 .ObserveVariable(m => m.TEMP_TOOL, tool_key)
                 .ObservableOrDefault()
-                .ToPropertyRC(this, v => v.NozzleTemperature, Disposables);
+                .ToPropertyRC(this, v => v.NozzleTemperature);
 
             _State = FindToolState()
-                .ToPropertyRC(this, v => v.State, Disposables);
+                .ToPropertyRC(this, v => v.State);
 
             _ToolNozzleBrush =
                 this.WhenAnyValue(v => v.State)
@@ -74,11 +74,11 @@ namespace Flux.ViewModels
                         return FluxColors.Warning;
                     return FluxColors.Active;
                 })
-                .ToPropertyRC(this, v => v.ToolNozzleBrush, Disposables);
+                .ToPropertyRC(this, v => v.ToolNozzleBrush);
 
             _DocumentLabel = this.WhenAnyValue(v => v.Document.nozzle)
                 .Convert(d => d.Name)
-                .ToPropertyRC(this, v => v.DocumentLabel, Disposables);
+                .ToPropertyRC(this, v => v.DocumentLabel);
         }
 
         public override void Initialize()
@@ -88,7 +88,7 @@ namespace Flux.ViewModels
             _MaterialLoaded = Feeder.Materials.Connect()
                 .AutoRefresh(m => m.State)
                 .QueryWhenChanged(m => m.Items.FirstOrOptional(m => m.State.IsLoaded()))
-                .ToPropertyRC(this, v => v.MaterialLoaded, Disposables);
+                .ToPropertyRC(this, v => v.MaterialLoaded);
 
             var material = Feeder.WhenAnyValue(f => f.SelectedMaterial);
 
@@ -107,7 +107,7 @@ namespace Flux.ViewModels
                     return true;
                 });
 
-            ChangeCommand = ReactiveCommandRC.CreateFromTask(ChangeAsync, Disposables, can_load_unload_tool);
+            ChangeCommand = ReactiveCommandRC.CreateFromTask(ChangeAsync, this, can_load_unload_tool);
         }
 
         public Task ChangeAsync()

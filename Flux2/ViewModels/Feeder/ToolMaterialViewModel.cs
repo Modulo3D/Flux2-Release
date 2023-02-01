@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
-    public class ToolMaterialViewModel : ReactiveObjectRC, IFluxToolMaterialViewModel, IDisposable
+    public class ToolMaterialViewModel : ReactiveObjectRC<ToolMaterialViewModel>, IFluxToolMaterialViewModel, IDisposable
     {
         public ushort Position { get; }
         public FluxViewModel Flux { get; }
@@ -29,14 +29,11 @@ namespace Flux.ViewModels
         private readonly ObservableAsPropertyHelper<ToolMaterialState> _State;
         public ToolMaterialState State => _State.Value;
 
-        public CompositeDisposable Disposables { get; }
-
         public ToolMaterialViewModel(IFluxToolNozzleViewModel tool_nozzle, MaterialViewModel material)
         {
             Material = material;
             Flux = material.Flux;
             ToolNozzle = tool_nozzle;
-            Disposables = new CompositeDisposable();
 
             _Document = Observable.CombineLatest(
                 Material.WhenAnyValue(v => v.Document),
@@ -44,7 +41,7 @@ namespace Flux.ViewModels
                 Flux.DatabaseProvider.WhenAnyValue(v => v.Database),
                 FindToolMaterialAsync)
                 .SelectAsync()
-                .ToPropertyRC(this, v => v.Document, Disposables);
+                .ToPropertyRC(this, v => v.Document);
 
             _State = Observable.CombineLatest(
                 Material.WhenAnyValue(v => v.Document),
@@ -52,15 +49,15 @@ namespace Flux.ViewModels
                 Flux.DatabaseProvider.WhenAnyValue(v => v.Database),
                 FindToolMaterialStateAsync)
                 .SelectAsync()
-                .ToPropertyRC(this, v => v.State, Disposables);
+                .ToPropertyRC(this, v => v.State);
 
             _ExtrusionTemp = this.WhenAnyValue(f => f.Document)
                 .Select(d => d.Convert(d => d[d => d.PrintTemperature, 0.0]))
-                .ToPropertyRC(this, v => v.ExtrusionTemp, Disposables);
+                .ToPropertyRC(this, v => v.ExtrusionTemp);
 
             _BreakTemp = this.WhenAnyValue(f => f.Document)
                 .Select(d => d.Convert(d => d[d => d.BreakTemperature, 0.0]))
-                .ToPropertyRC(this, v => v.BreakTemp, Disposables);
+                .ToPropertyRC(this, v => v.BreakTemp);
         }
 
         private async Task<ToolMaterialState> FindToolMaterialStateAsync(Optional<Material> material, (Optional<Tool> tool, Optional<Nozzle> nozzle) tool_nozzle, Optional<ILocalDatabase> database)
@@ -108,11 +105,6 @@ namespace Flux.ViewModels
                 .ExecuteAsync<ToolMaterial>(cts.Token);
 
             return toolmaterials.FirstOrDefault().ToOptional();
-        }
-
-        public void Dispose()
-        {
-            Disposables.Dispose();
         }
     }
 }

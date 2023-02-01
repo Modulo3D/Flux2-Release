@@ -11,25 +11,25 @@ using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
-    public class NavPanelViewModel<TViewModel> : FluxRoutableNavBarViewModel<TViewModel>
-        where TViewModel : NavPanelViewModel<TViewModel>
+    public class NavPanelViewModel<TNavPanelViewModel> : FluxRoutableNavBarViewModel<TNavPanelViewModel>
+        where TNavPanelViewModel : NavPanelViewModel<TNavPanelViewModel>
     {
-        private SourceList<CmdButton> Buttons { get; }
+        private SourceList<CmdButton> Buttons { get; set; }
 
         [RemoteContent(true)]
         public IObservableList<CmdButton> VisibleButtons { get; }
 
-        public NavPanelViewModel(FluxViewModel flux, string name = default) : base(flux, $"navPanel??{typeof(TViewModel).GetRemoteControlName()}{(string.IsNullOrEmpty(name) ? "" : $"??{name}")}")
+        public NavPanelViewModel(FluxViewModel flux, string name = default) : base(flux, $"navPanel??{typeof(TNavPanelViewModel).GetRemoteControlName()}{(string.IsNullOrEmpty(name) ? "" : $"??{name}")}")
         {
-            Buttons = new SourceList<CmdButton>();
+            SourceListRC.Create(this, v => v.Buttons);
             Buttons.Connect()
                 .DisposeMany()
-                .SubscribeRC(Disposables);
+                .SubscribeRC((TNavPanelViewModel)this);
 
             VisibleButtons = Buttons.Connect()
                 .AutoRefresh(v => v.Visible)
                 .Filter(v => v.Visible)
-                .AsObservableListRC(Disposables);
+                .AsObservableListRC(this);
         }
 
         public void AddRoute<TFluxRoutableViewModel>(

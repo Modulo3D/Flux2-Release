@@ -16,10 +16,9 @@ using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
-    public class SettingsProvider : ReactiveObjectRC, IFluxSettingsProvider
+    public class SettingsProvider : ReactiveObjectRC<SettingsProvider>, IFluxSettingsProvider
     {
         public FluxViewModel Flux { get; }
-        public CompositeDisposable Disposables { get; }
 
         private readonly ObservableAsPropertyHelper<Optional<Printer>> _Printer;
         public Optional<Printer> Printer => _Printer.Value;
@@ -57,14 +56,13 @@ namespace Flux.ViewModels
         public SettingsProvider(FluxViewModel flux)
         {
             Flux = flux;
-            Disposables = new CompositeDisposable();
 
             _Printer = Observable.CombineLatest(
                 Flux.DatabaseProvider.WhenAnyValue(v => v.Database),
                 CoreSettings.Local.WhenAnyValue(s => s.PrinterID),
                 FindPrinter)
                 .SelectAsync()
-                .ToPropertyRC(this, v => v.Printer, Disposables);
+                .ToPropertyRC(this, v => v.Printer);
 
             HostAddressCache = NetworkInterface.GetAllNetworkInterfaces()
                 .AsObservableChangeSet(nic => nic.Id)
@@ -74,11 +72,11 @@ namespace Flux.ViewModels
                 .Transform(a => a.Convert(a => a.FirstOrOptional(a => a.AddressFamily == AddressFamily.InterNetwork)))
                 .Filter(ip => ip.HasValue)
                 .Transform(ip => ip.Value)
-                .AsObservableCacheRC(Disposables);
+                .AsObservableCacheRC(this);
 
             _HostAddress = CoreSettings.Local.WhenAnyValue(s => s.HostID)
                 .Convert(HostAddressCache.Lookup)
-                .ToPropertyRC(this, v => v.HostAddress, Disposables);
+                .ToPropertyRC(this, v => v.HostAddress);
 
             _ExtrudersCount = this.WhenAnyValue(v => v.Printer)
                 .Convert(p =>
@@ -87,7 +85,7 @@ namespace Flux.ViewModels
                     var mixing_extruder_count = p[p => p.MixingExtruderCount, 0];
                     return (machine_extruder_count, mixing_extruder_count);
                 })
-                .ToPropertyRC(this, v => v.ExtrudersCount, Disposables);
+                .ToPropertyRC(this, v => v.ExtrudersCount);
 
             UserSettings.Local.WhenAnyValue(s => s.StandbyMinutes)
                 .SubscribeRC(s =>
@@ -116,7 +114,7 @@ namespace Flux.ViewModels
                     {
                         Console.WriteLine(ex.ToString());
                     }
-                }, Disposables);
+                }, this);
         }
 
         private async Task<Optional<Printer>> FindPrinter(Optional<ILocalDatabase> database, Optional<int> printer_id)

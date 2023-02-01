@@ -36,7 +36,9 @@ namespace Flux.ViewModels
         }
     }
 
-    public class RRF_ArrayVariableGlobalModel<TData> : FLUX_ObservableVariable<RRF_ConnectionProvider, TData, TData>, IRRF_Variable<TData, TData>, IRRF_VariableGlobalModel<TData, TData>
+    public class RRF_ArrayVariableGlobalModel<TData> : 
+        FLUX_ObservableVariable<RRF_ArrayVariableGlobalModel<TData>, RRF_ConnectionProvider, TData, TData>, IRRF_Variable<TData, TData>,
+        IRRF_VariableGlobalModel<TData, TData>
     {
         public bool Stored { get; }
         public string Variable { get; }

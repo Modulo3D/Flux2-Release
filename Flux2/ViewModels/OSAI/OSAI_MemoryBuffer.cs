@@ -14,7 +14,7 @@ using System.Threading.Tasks;
 namespace Flux.ViewModels
 {
 
-    public class OSAI_MemoryReader : FLUX_MemoryReader<OSAI_MemoryBuffer, Unit>
+    public class OSAI_MemoryReader : FLUX_MemoryReader<OSAI_MemoryReader, OSAI_MemoryBuffer, Unit>
     {
         public IEnumerable<IOSAI_AsyncVariable> Variables { get; }
         public OSAI_MemoryReader(OSAI_MemoryBuffer memory_buffer, string resource, IEnumerable<IOSAI_AsyncVariable> variables) : base(memory_buffer, resource)
@@ -34,7 +34,7 @@ namespace Flux.ViewModels
         }
     }
 
-    public class OSAI_MemoryReaderGroup : FLUX_MemoryReaderGroup<OSAI_MemoryBuffer, OSAI_ConnectionProvider, OSAI_VariableStore>
+    public class OSAI_MemoryReaderGroup : FLUX_MemoryReaderGroup<OSAI_MemoryReaderGroup, OSAI_MemoryBuffer, OSAI_ConnectionProvider, OSAI_VariableStore>
     {
         public OSAI_MemoryReaderGroup(OSAI_MemoryBuffer memory_buffer, TimeSpan period) : base(memory_buffer, period)
         {
@@ -45,7 +45,7 @@ namespace Flux.ViewModels
         }
     }
 
-    public class OSAI_MemoryBuffer : FLUX_MemoryBuffer<OSAI_ConnectionProvider, OSAI_VariableStore>
+    public class OSAI_MemoryBuffer : FLUX_MemoryBuffer<OSAI_MemoryBuffer, OSAI_ConnectionProvider, OSAI_VariableStore>
     {
         public override OSAI_ConnectionProvider ConnectionProvider { get; }
 
@@ -176,7 +176,7 @@ namespace Flux.ViewModels
         private ObservableAsPropertyHelper<bool> _HasFullMemoryRead;
         public override bool HasFullMemoryRead => _HasFullMemoryRead.Value;
 
-        private SourceCache<OSAI_MemoryReaderGroup, TimeSpan> MemoryReaders { get; }
+        private SourceCache<OSAI_MemoryReaderGroup, TimeSpan> MemoryReaders { get; set; }
 
         public OSAI_MemoryBuffer(OSAI_ConnectionProvider connection_provider)
         {
@@ -186,7 +186,7 @@ namespace Flux.ViewModels
             MW_BUFFER_CHANGED = this.WhenAnyValue(plc => plc.MW_BUFFER);
             L_BUFFER_CHANGED = this.WhenAnyValue(plc => plc.L_BUFFER);
 
-            MemoryReaders = new SourceCache<OSAI_MemoryReaderGroup, TimeSpan>(g => g.Period);
+            SourceCacheRC.Create(this, v => v.MemoryReaders, g => g.Period);
         }
         public override void Initialize(OSAI_VariableStore variableStore)
         {
