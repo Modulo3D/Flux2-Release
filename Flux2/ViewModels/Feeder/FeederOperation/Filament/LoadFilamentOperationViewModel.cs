@@ -16,11 +16,11 @@ namespace Flux.ViewModels
 
         protected override string FindTitleText(bool idle)
         {
-            return idle ? "ATTESA CARICAMENTO" : "CARICO FILO...";
+            return idle ? "waitLoadMaterial" : "loadingMaterial";
         }
         protected override string FindOperationText(bool idle)
         {
-            return idle ? "CARICA" : "---";
+            return idle ? "loadMaterial" : "---";
         }
         protected override async Task<bool> ExecuteOperationAsync()
         {
@@ -32,7 +32,7 @@ namespace Flux.ViewModels
             {
                 var insert_iteration_dist = 10;
                 ushort max_insert_iterations = 3;
-                if (!await Flux.IterateConfirmDialogAsync("CARICO FILO", "FILO INSERITO CORRETTAMENTE?", max_insert_iterations,
+                if (!await Flux.IterateConfirmDialogAsync("loadFilamentDialog", "isFilamentLoaded", max_insert_iterations,
                     () => Flux.ConnectionProvider.ManualFilamentInsert(feeder_index, insert_iteration_dist, 100)))
                     return await Flux.ConnectionProvider.ManualFilamentExtract(feeder_index, max_insert_iterations, insert_iteration_dist, 500);
 
@@ -43,7 +43,7 @@ namespace Flux.ViewModels
             if (!await ExecuteFilamentOperation(filament_settings, c => c.GetLoadFilamentGCode))
                 return false;
 
-            if (!await Flux.IterateConfirmDialogAsync("CARICO FILO", "FILO SPURGATO CORRETTAMENTE?", 3,
+            if (!await Flux.IterateConfirmDialogAsync("loadFilamentDialog", "isFilamentPurged", 3,
                 () => Flux.ConnectionProvider.PurgeAsync(filament_settings.Value)))
                 return false;
 
@@ -80,21 +80,19 @@ namespace Flux.ViewModels
                     (state, value) =>
                     {
                         if (value.state.Loaded)
-                            return state.Create(EConditionState.Disabled, $"{value.material} CARICATO");
-
-                        var update_nfc = state.Create("nFC", UpdateNFCAsync, can_update_nfc);
+                            return new ConditionState(EConditionState.Disabled, $"material.loaded; {value.material}");
 
                         if (!value.material.HasValue)
-                            return state.Create(EConditionState.Disabled, "LEGGI UN MATERIALE", update_nfc);
+                            return new ConditionState(EConditionState.Disabled, "material.read");
 
                         if (!value.tool_material.Compatible.ValueOr(() => false))
-                            return state.Create(EConditionState.Error, $"{value.material} NON COMPATIBILE");
+                            return new ConditionState(EConditionState.Error, $"material.incompatible; {value.material}");
 
                         if (!value.state.Locked)
-                            return state.Create(EConditionState.Warning, "BLOCCA IL MATERIALE", update_nfc);
+                            return new ConditionState(EConditionState.Warning, "material.lock");
 
-                        return new ConditionState(EConditionState.Stable, $"{value.material} PRONTO AL CARICAMENTO");
-                    }), new FilamentOperationConditionAttribute());
+                        return new ConditionState(EConditionState.Stable, $"material.readyToLoad; {value.material}");
+                    }, state => state.Create(UpdateNFCAsync, "nFC", can_update_nfc)), new FilamentOperationConditionAttribute());
         }
 
         public override async Task<NFCTagRW> UpdateNFCAsync()

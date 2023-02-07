@@ -145,7 +145,7 @@ namespace Flux.ViewModels
             {
                 Optional<TData> value = await variable.ReadAsync();
 
-                var tb_value = new TextBox("tbValue", "VALORE?", get_str(value.ValueOrDefault()));
+                var tb_value = new TextBox("tbValue", "memoryValue", get_str(value.ValueOrDefault()));
 
                 var result = await Flux.ShowSelectionAsync(
                     VariableName, new[] { tb_value });

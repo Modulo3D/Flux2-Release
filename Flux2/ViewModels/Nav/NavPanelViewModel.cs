@@ -22,10 +22,6 @@ namespace Flux.ViewModels
         public NavPanelViewModel(FluxViewModel flux, string name = default) : base(flux, $"navPanel??{typeof(TNavPanelViewModel).GetRemoteControlName()}{(string.IsNullOrEmpty(name) ? "" : $"??{name}")}")
         {
             SourceListRC.Create(this, v => v.Buttons);
-            Buttons.Connect()
-                .DisposeMany()
-                .SubscribeRC((TNavPanelViewModel)this);
-
             VisibleButtons = Buttons.Connect()
                 .AutoRefresh(v => v.Visible)
                 .Filter(v => v.Visible)

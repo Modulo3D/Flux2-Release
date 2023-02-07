@@ -332,20 +332,20 @@ namespace Flux.ViewModels
         {
             return status switch
             {
-                FLUX_ProcessStatus.IDLE => "LIBERA",
-                FLUX_ProcessStatus.ERROR => "ERRORE",
-                FLUX_ProcessStatus.EMERG => "EMERGENZA",
-                FLUX_ProcessStatus.CYCLE => "IN FUNZIONE",
-                FLUX_ProcessStatus.NONE => "ACCENSIONE...",
+                FLUX_ProcessStatus.IDLE => "status.idle",
+                FLUX_ProcessStatus.ERROR => "status.error",
+                FLUX_ProcessStatus.EMERG => "status.emerg",
+                FLUX_ProcessStatus.CYCLE => "status.cycle",
+                FLUX_ProcessStatus.NONE => "status.connecting",
                 FLUX_ProcessStatus.WAIT => wait(),
-                _ => "ONLINE",
+                _ => "status.online",
             };
 
             string wait()
             {
                 if (printing_evaluation.Recovery.HasValue)
-                    return "IN PAUSA";
-                return "ATTESA OPERATORE";
+                    return "status.paused";
+                return "status.wait";
             }
         }
 

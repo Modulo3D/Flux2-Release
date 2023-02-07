@@ -64,11 +64,11 @@ namespace Flux.ViewModels
 
         public async Task CreateFSAsync()
         {
-            var options = ComboOption.Create("type", "Tipo di documento", Enum.GetValues<FLUX_FileType>(), b => (uint)b);
-            var name = new TextBox("name", "Nome del documento", "", false);
+            var options = ComboOption.Create("type", "fsType", Enum.GetValues<FLUX_FileType>(), b => (uint)b);
+            var name = new TextBox("name", "fsName", "", false);
 
             var result = await Flux.ShowSelectionAsync(
-                "Cosa vuoi creare?", new IDialogOption[] { options, name });
+                "fsTitle", new IDialogOption[] { options, name });
 
             if (result != ContentDialogResult.Primary)
                 return;
@@ -93,10 +93,10 @@ namespace Flux.ViewModels
 
         public async Task ModifyFSAsync(IFSViewModel fs)
         {
-            var modify_option = ComboOption.Create("operations", "Operazione:", Enum.GetValues<FLUX_FileModify>(), f => (uint)f);
+            var modify_option = ComboOption.Create("operations", "fsEditType:", Enum.GetValues<FLUX_FileModify>(), f => (uint)f);
 
             var modify_dialog_result = await Flux.ShowSelectionAsync(
-                "Tipo di operazione", new[] { modify_option });
+                "fsEditTitle", new[] { modify_option });
 
             if (modify_dialog_result != ContentDialogResult.Primary)
                 return;
@@ -110,10 +110,10 @@ namespace Flux.ViewModels
             {
                 case FLUX_FileModify.Rename:
 
-                    var rename_option = new TextBox("rename", "Nome del file", fs.FSName);
+                    var rename_option = new TextBox("rename", "fsName", fs.FSName);
 
                     var rename_dialog_result = await Flux.ShowSelectionAsync(
-                        "Rinominare il file?", new[] { rename_option });
+                        "fsRenameConfirm", new[] { rename_option });
 
                     if (rename_dialog_result != ContentDialogResult.Primary)
                         return;
@@ -124,7 +124,7 @@ namespace Flux.ViewModels
                     break;
 
                 case FLUX_FileModify.Delete:
-                    var delete_dialog_result = await Flux.ShowConfirmDialogAsync("Cancellare il file?", $"Il file {fs.FSPath}/{fs.FSName} non potrà essere recuperato");
+                    var delete_dialog_result = await Flux.ShowConfirmDialogAsync("fsDeleteConfirmTitle", $"fsDeleteConfirm; {fs.FSPath}/{fs.FSName}");
                     if (delete_dialog_result != ContentDialogResult.Primary)
                         return;
 
@@ -151,7 +151,7 @@ namespace Flux.ViewModels
             var textbox = new TextBox("source", file.FSName, file_source.Value, multiline: true);
 
             var result = await Flux.ShowSelectionAsync(
-                "Modifica File", new[] { textbox });
+                "fsEdit", new[] { textbox });
 
             if (result != ContentDialogResult.Primary)
                 return;

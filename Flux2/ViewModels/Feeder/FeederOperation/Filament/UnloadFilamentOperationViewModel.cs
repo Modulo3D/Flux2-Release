@@ -15,11 +15,11 @@ namespace Flux.ViewModels
 
         protected override string FindTitleText(bool idle)
         {
-            return idle ? "ATTESA SCARICAMENTO" : "SCARICO FILO...";
+            return idle ? "waitUnloadMaterial" : "unloadingMaterial";
         }
         protected override string FindOperationText(bool idle)
         {
-            return idle ? "SCARICA" : "---";
+            return idle ? "unloadMaterial" : "---";
         }
         protected override async Task<bool> ExecuteOperationAsync()
         {
@@ -59,22 +59,20 @@ namespace Flux.ViewModels
                     (state, material, tool_material) => (state, material, tool_material)),
                     (state, value) =>
                     {
-                        var update_nfc = state.Create("nFC", UpdateNFCAsync);
-
                         if (!value.state.Loaded && !value.state.Inserted && value.state.Locked)
-                            return state.Create(EConditionState.Warning, "SBLOCCA IL MATERIALE", update_nfc);
+                            return new ConditionState(EConditionState.Warning, "material.unlock");
 
                         if (!value.state.Loaded && !value.state.Inserted && !value.state.Locked)
-                            return state.Create(EConditionState.Disabled, $"MATERIALE SCARICATO");
+                            return new ConditionState(EConditionState.Disabled, $"material.unloaded; {value.material}");
 
                         if (!value.material.HasValue)
-                            return state.Create(EConditionState.Warning, "LEGGI UN MATERIALE", update_nfc);
+                            return new ConditionState(EConditionState.Warning, "material.read");
 
                         if (!value.tool_material.Compatible.ValueOr(() => false))
-                            return state.Create(EConditionState.Error, $"{value.material} NON COMPATIBILE", update_nfc);
+                            return new ConditionState(EConditionState.Error, $"material.incompatible; {value.material}");
 
-                        return new ConditionState(EConditionState.Stable, $"{value.material} PRONTO ALLO SCARICAMENTO");
-                    }), new FilamentOperationConditionAttribute());
+                        return new ConditionState(EConditionState.Stable, $"material.readyToUnload; {value.material}");
+                    }, state => state.Create(UpdateNFCAsync, "nFC")), new FilamentOperationConditionAttribute());
         }
         public override async Task<NFCTagRW> UpdateNFCAsync()
         {

@@ -71,8 +71,8 @@ namespace Flux.ViewModels
     public class PurgeNozzlesViewModel : InvalidValuesViewModel<PurgeNozzlesViewModel>
     {
         public override bool CanStartWithInvalidValues => false;
-        public override string Title => "UTENSILI DA SPURGARE";
-        public override string ChangeName => "SPURGA";
+        public override string Title => "materialToPurge";
+        public override string ChangeName => "purgeMaterial";
 
         public PurgeNozzlesViewModel(FluxViewModel flux) : base(flux)
         {

@@ -181,13 +181,13 @@ namespace Flux.ViewModels
             {
                 if (sorted_valid_offsets.Any(o => o.ProbeState == FluxProbeState.VALID_PROBE))
                 {
-                    var result = await Flux.ShowConfirmDialogAsync("CALIBRAZIONE UTENSILI", $"VUOI RICALIBRARE TUTTI GLI UTENSILI? {Environment.NewLine}LE CALIBRAZIONI PRECEDENTI VERRANNO PERSE.");
+                    var result = await Flux.ShowConfirmDialogAsync("dialog.toolCalibration.title", $"dialog.toolCalibration.confirmCalibrationOverwrite");
                     if (result != ContentDialogResult.Primary)
                         return;
                 }
                 else
                 {
-                    var result = await Flux.ShowConfirmDialogAsync("CALIBRAZIONE UTENSILI", "VUOI CALIBRARE TUTTI GLI UTENSILI?");
+                    var result = await Flux.ShowConfirmDialogAsync("dialog.toolCalibration.title", "dialog.toolCalibration.confirmCalibration");
                     if (result != ContentDialogResult.Primary)
                         return;
                 }

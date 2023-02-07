@@ -43,8 +43,8 @@ namespace Flux.ViewModels
 
         public TemperatureViewModel(TemperaturesViewModel temperatures, IFLUX_Variable<FLUX_Temp, double> temp_var) : base($"temperature??{temp_var.Name}")
         {
-            Label = temp_var.Name;
             Flux = temperatures.Flux;
+            Label = $"temp; {temp_var.Unit.Alias}";
 
             var can_safe_cycle = Flux.StatusProvider
                 .WhenAnyValue(s => s.StatusEvaluation)

@@ -100,11 +100,11 @@ namespace Flux.ViewModels
             _FeederStateStr = this.WhenAnyValue(v => v.FeederState)
                 .Select(state => state switch
                 {
-                    EFeederState.FEEDER_SELECTED => "ATTIVA",
-                    EFeederState.FEEDER_WAIT => "ATTESA",
-                    EFeederState.FEEDER_EMPTY => "VUOTA",
-                    EFeederState.IN_CHANGE => "CAMBIO",
-                    _ => "ERRORE",
+                    EFeederState.FEEDER_SELECTED => "feederSelected",
+                    EFeederState.FEEDER_WAIT => "feederWait",
+                    EFeederState.FEEDER_EMPTY => "feederEmpty",
+                    EFeederState.IN_CHANGE => "feederInChange",
+                    _ => "feederError",
                 })
                 .ToPropertyRC(this, v => v.FeederStateStr);
 

@@ -124,7 +124,7 @@ namespace Flux.ViewModels
                     if (!control_list.HasValue)
                         return;
 
-                    control_item = control_list.Value.Element.LookupControl(control_item_path);
+                    control_item = control_list.Value.LookupControl(control_item_path);
                     if (!control_item.HasValue)
                     {
                         var sub_item_data = control_item_path.Split("??", StringSplitOptions.RemoveEmptyEntries);
@@ -132,7 +132,7 @@ namespace Flux.ViewModels
                             return;
 
                         var sub_item_path = sub_item_data[1];
-                        control_item = control_list.Value.Element.LookupControl(sub_item_path);
+                        control_item = control_list.Value.LookupControl(sub_item_path);
                         if (!control_item.HasValue)
                             return;
                     }
@@ -150,7 +150,7 @@ namespace Flux.ViewModels
                             return;
 
                         var value = input_value.Trim('\'');
-                        input.Value.Element.SetValue(value);
+                        input.Value.SetValue(value);
                     }
                     else
                     {
@@ -160,7 +160,7 @@ namespace Flux.ViewModels
                             return;
 
                         //await Task.Delay(1000);
-                        await command.Value.Element.Execute();
+                        await command.Value.Execute();
                     }
                 }
                 catch (Exception)

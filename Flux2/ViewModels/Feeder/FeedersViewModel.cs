@@ -212,7 +212,7 @@ namespace Flux.ViewModels
 
             var tool_option = ComboOption.Create("tool", "Utensile:", d => tools.AsObservableCache().DisposeWith(d));
             var tool_result = await Flux.ShowSelectionAsync(
-                $"UTENSILE N.{position + 1}", new[] { tool_option });
+                $"dialog.createTool; {position + 1}", new[] { tool_option });
 
             if (tool_result != ContentDialogResult.Primary)
                 return default;

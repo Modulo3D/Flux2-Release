@@ -24,25 +24,25 @@ namespace Flux.ViewModels
                 is_unlocked_tag(),
                 is_unloaded_tag(),
                 (l, un) => l && un).ToOptional();
-            AddCommand($"lock{name}Tag??{tag_vm.Position + 1}", lock_tag_async, can_lock);
+            AddCommand($"nfc.lockTag??{tag_vm.Position + 1}", lock_tag_async, can_lock);
 
             var can_unlock = Observable.CombineLatest(
                 is_locked_tag(),
                 is_unloaded_tag(),
                 (l, un) => l && un).ToOptional();
-            AddCommand($"unlock{name}Tag??{tag_vm.Position + 1}", unlock_tag_async, can_unlock);
+            AddCommand($"nfc.unlockTag??{tag_vm.Position + 1}", unlock_tag_async, can_unlock);
 
             var can_load = Observable.CombineLatest(
                 is_locked_tag(),
                 is_unloaded_tag(),
                 (l, un) => l && un).ToOptional();
-            AddCommand($"load{name}Tag??{tag_vm.Position + 1}", load_tag, can_load);
+            AddCommand($"nfc.loadTag??{tag_vm.Position + 1}", load_tag, can_load);
 
             var can_unload = Observable.CombineLatest(
                 is_locked_tag(),
                 is_loaded_tag(),
                 (l, lo) => l && lo).ToOptional();
-            AddCommand($"unload{name}Tag??{tag_vm.Position + 1}", unload_tag, can_unload);
+            AddCommand($"nfc.unloadTag??{tag_vm.Position + 1}", unload_tag, can_unload);
 
             void load_tag()
             {
@@ -120,25 +120,25 @@ namespace Flux.ViewModels
                 is_unlocked_tag(),
                 is_unloaded_tag(),
                 (l, un) => l && un).ToOptional();
-            AddCommand($"lock{name}Tag??{tag_position + 1}", lock_tag_async, can_lock);
+            AddCommand($"nfc.lockTag??{tag_position + 1}", lock_tag_async, can_lock);
 
             var can_unlock = Observable.CombineLatest(
                 is_locked_tag(),
                 is_unloaded_tag(),
                 (l, un) => l && un).ToOptional();
-            AddCommand($"unlock{name}Tag??{tag_position + 1}", unlock_tag_async, can_unlock);
+            AddCommand($"nfc.unlockTag??{tag_position + 1}", unlock_tag_async, can_unlock);
 
             var can_load = Observable.CombineLatest(
                 is_locked_tag(),
                 is_unloaded_tag(),
                 (lk, un) => lk && un).ToOptional();
-            AddCommand($"load{name}Tag??{tag_position + 1}", inner_load_tag, can_load);
+            AddCommand($"nfc.loadTag??{tag_position + 1}", inner_load_tag, can_load);
 
             var can_unload = Observable.CombineLatest(
                 is_locked_tag(),
                 is_loaded_tag(),
                 (l, lo) => l && lo).ToOptional();
-            AddCommand($"unload{name}Tag??{tag_position + 1}", inner_unload_tag, can_unload);
+            AddCommand($"nfc.unloadTag??{tag_position + 1}", inner_unload_tag, can_unload);
 
             void inner_load_tag()
             {
@@ -225,11 +225,11 @@ namespace Flux.ViewModels
                             var feeder = flux.Feeders.Feeders.Lookup(current_machine_e);
                             if (!feeder.HasValue)
                                 continue;
-                            AddModal(new NFCInnerViewModel(flux, "Tool", feeder.Value.ToolNozzle, current_machine_e));
+                            AddModal(new NFCInnerViewModel(flux, "tool.tool", feeder.Value.ToolNozzle, current_machine_e));
 
                             foreach (var material in feeder.Value.Materials.Keys)
                                 AddModal(new NFCInnerViewModel<IFluxMaterialViewModel, NFCMaterial>(
-                                    flux, "Material", feeder.Value.Materials, material, current_machine_e,
+                                    flux, "material.material", feeder.Value.Materials, material, current_machine_e,
                                     (g, e, s) => s.StoreTag(t => t.SetInserted(g, e)),
                                     (g, e, s) => s.StoreTag(t => t.SetInserted(g, default))));
                         }
@@ -325,17 +325,17 @@ namespace Flux.ViewModels
                 });
 
             if (Flux.ConnectionProvider.VariableStoreBase.HasVariable(c => c.DISABLE_24V))
-                AddCommand("power", ShutdownAsync, can_execute: IS_IDLE);
+                AddCommand("manage.power", ShutdownAsync, can_execute: IS_IDLE);
 
-            AddCommand("cleanPlate", CleanPlate);
-            AddCommand("keepChamber", m => m.KEEP_CHAMBER);
-            AddCommand("keepExtruders", m => m.KEEP_TOOL, visible: advanced_mode);
-            AddCommand("runDaemon", m => m.RUN_DAEMON, visible: advanced_mode);
-            AddCommand("plotReferenceCount", () => ReactiveRC.PlotReferenceCount(), visible: advanced_mode);
+            AddCommand("manage.cleanPlate", CleanPlate);
+            AddCommand("manage.keepChamber", m => m.KEEP_CHAMBER);
+            AddCommand("manage.keepExtruders", m => m.KEEP_TOOL, visible: advanced_mode);
+            AddCommand("manage.runDaemon", m => m.RUN_DAEMON, visible: advanced_mode);
+            AddCommand("manage.plotReferenceCount", () => ReactiveRC.PlotReferenceCount(), visible: advanced_mode);
 
             AddCommand(
                 new ToggleButton(
-                    "debug",
+                    "manage.debug",
                     () =>
                     {
                         var operator_usb = Flux.MCodes.OperatorUSB;
@@ -356,11 +356,11 @@ namespace Flux.ViewModels
 
 
             AddModal(Flux.Temperatures);
-            AddCommand("resetPrinter", Flux.ConnectionProvider.StartConnection, visible: advanced_mode);
-            AddCommand("vacuumPump", m => m.ENABLE_VACUUM, can_execute: IS_IDLE, visible: advanced_mode);
-            AddCommand("openClamp", m => m.OPEN_HEAD_CLAMP, can_execute: IS_IDLE, visible: advanced_mode);
-            AddCommand("reloadDatabase", () => Flux.DatabaseProvider.InitializeAsync(), visible: advanced_mode);
-            AddCommand("swFilamentSensor", Flux.SettingsProvider.UserSettings, s => s.PauseOnEmptyOdometer, visible: advanced_mode);
+            AddCommand("manage.resetPrinter", Flux.ConnectionProvider.StartConnection, visible: advanced_mode);
+            AddCommand("manage.vacuumPump", m => m.ENABLE_VACUUM, can_execute: IS_IDLE, visible: advanced_mode);
+            AddCommand("manage.openClamp", m => m.OPEN_HEAD_CLAMP, can_execute: IS_IDLE, visible: advanced_mode);
+            AddCommand("manage.reloadDatabase", () => Flux.DatabaseProvider.InitializeAsync(), visible: advanced_mode);
+            AddCommand("manage.swFilamentSensor", Flux.SettingsProvider.UserSettings, s => s.PauseOnEmptyOdometer, visible: advanced_mode);
 
             AddModal(() => new MemoryViewModel(Flux), visible: advanced_mode);
             AddModal(() => new FilesViewModel(Flux), visible: advanced_mode);
@@ -429,28 +429,28 @@ namespace Flux.ViewModels
                         AddModal(() => new HeightmapViewModel(Flux));
 
                     AddCommand(
-                        "homePrinter",
+                        "routines.homePrinter",
                         () => Flux.ConnectionProvider.HomeAsync(),
                         can_execute: IS_IEHS,
                         visible: advanced_mode);
 
                     AddCommand(
-                        "stopOperation",
+                        "routines.stopOperation",
                         async () => await Flux.ConnectionProvider.StopAsync(),
                         can_execute: Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation).Select(s => s.CanSafeStop).ToOptional());
 
                     AddCommand(
-                        "lowerPlate",
+                        "routines.lowerPlate",
                         Flux.ConnectionProvider.LowerPlateAsync,
                         can_execute: IS_IEHS);
 
                     AddCommand(
-                        "raisePlate",
+                        "routines.raisePlate",
                         Flux.ConnectionProvider.RaisePlateAsync,
                         can_execute: IS_IEHS);
 
                     AddCommand(
-                        "parkTool",
+                        "routines.parkTool",
                         Flux.ConnectionProvider.ParkToolAsync,
                         can_execute: IS_IEHS);
 
@@ -460,7 +460,7 @@ namespace Flux.ViewModels
                         {
                             var extr = extruder;
                             AddCommand(
-                                $"selectExtruder??{extr.GetZeroBaseIndex() + 1}",
+                                $"routines.selectExtruder??{extr.GetZeroBaseIndex() + 1}",
                                 () => Flux.ConnectionProvider.SelectToolAsync(extr),
                                 can_execute: IS_IEHS);
                         }
@@ -474,7 +474,7 @@ namespace Flux.ViewModels
                             {
                                 var extr = extruder;
                                 AddCommand(
-                                    $"probeMagazine??{extr.GetZeroBaseIndex() + 1}",
+                                    $"routines.probeMagazine??{extr.GetZeroBaseIndex() + 1}",
                                     () => Flux.ConnectionProvider.ProbeMagazineAsync(extr),
                                     can_execute: IS_IEHS,
                                     visible: advanced_mode);

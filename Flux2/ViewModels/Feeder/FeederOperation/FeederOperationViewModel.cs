@@ -88,7 +88,7 @@ namespace Flux.ViewModels
 
             var all_conditions_true = FilteredConditions.Connect()
                 .AddKey(c => c.ConditionName)
-                .TrueForAll(c => c.WhenAnyValue(c => c.State), state => state.Valid);
+                .TrueForAll(c => c.StateChanged, state => state.Valid);
 
             var can_execute = Observable.CombineLatest(
                 all_conditions_true,

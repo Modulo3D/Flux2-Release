@@ -135,24 +135,23 @@ namespace Flux.ViewModels
                         (state, value) =>
                         {
                             var tool_cur = value.tool_cur.GetZeroBaseIndex();
-                            var toggle_clamp = state.Create("clamp", c => c.OPEN_HEAD_CLAMP, is_idle);
 
                             if (value.in_change && value.status == FLUX_ProcessStatus.CYCLE)
-                                return state.Create(EConditionState.Idle, "");
+                                return new ConditionState(EConditionState.Idle, "");
 
                             if (value.open)
                             {
                                 if (tool_cur == -1)
-                                    return state.Create(EConditionState.Stable, "PINZA OK", toggle_clamp);
-                                return state.Create(EConditionState.Error, "PINZA APERTA CON UTENSILE SELEZIONATO");
+                                    return new ConditionState(EConditionState.Stable, "clamp.open");
+                                return new ConditionState(EConditionState.Error, "clamp.openWithTool");
                             }
                             else
                             {
                                 if (tool_cur > -1)
-                                    return state.Create(EConditionState.Stable, "PINZA OK", toggle_clamp);
-                                return state.Create(EConditionState.Error, "PINZA CHIUSA SENZA UTENSILE SELEZIONATO");
+                                    return new ConditionState(EConditionState.Stable, "clamp.closed");
+                                return new ConditionState(EConditionState.Error, "clamp.closedWithoutTool");
                             }
-                        });
+                        }, state => state.Create(c => c.OPEN_HEAD_CLAMP, "clamp", is_idle));
                 }
                 return _ClampCondition;
             }
@@ -189,18 +188,16 @@ namespace Flux.ViewModels
                         var lock_closed = ConditionViewModel.Create(this, lock_unit.Alias, current_lock,
                             (state, value) =>
                             {
-                                var toggle_lock = state.Create("lock", c => c.OPEN_LOCK, lock_unit, is_idle);
-
                                 if (!value.closed || value.open)
                                 {
                                     if (!value.is_idle)
-                                        return state.Create(EConditionState.Error, $"{lock_unit} APERTA DURANTE LA LAVORAZIONE");
+                                        return new ConditionState(EConditionState.Error, $"lock.openDuringCycle; {lock_unit}");
 
-                                    return state.Create(EConditionState.Warning, $"CHIUDERE {lock_unit}", toggle_lock);
+                                    return new ConditionState(EConditionState.Warning, $"lock.close; {lock_unit}");
                                 }
 
-                                return state.Create(EConditionState.Stable, $"{lock_unit} CHIUSO", toggle_lock);
-                            });
+                                return new ConditionState(EConditionState.Stable, $"lock.closed; {lock_unit}");
+                            }, state => state.Create(c => c.OPEN_LOCK, lock_unit, "lock", is_idle));
 
                         if (lock_closed.HasValue)
                             _LockClosedConditions.AddOrUpdate(lock_closed.Value);
@@ -250,17 +247,17 @@ namespace Flux.ViewModels
                                 var open = value.open.ValueOr(() => true);
 
                                 if (temperature.IsDisconnected)
-                                    return state.Create(EConditionState.Error, "SENSORE DELLA TEMPERATURA NON TROVATO");
+                                    return new ConditionState(EConditionState.Error, $"heater.notFound; {chamber_unit}");
 
                                 if (temperature.IsHot && (open || !closed))
-                                    return state.Create(EConditionState.Warning, $"{chamber_unit} ACCESA, FARE ATTENZIONE");
+                                    return new ConditionState(EConditionState.Warning, $"heater.hot; {chamber_unit}");
 
                                 if (temperature.IsOn.ValueOr(() => false))
-                                    return state.Create(EConditionState.Stable, $"{chamber_unit} ACCESA");
+                                    return new ConditionState(EConditionState.Stable, $"heater.on; {chamber_unit}");
 
-                                return state.Create(EConditionState.Disabled, $"{chamber_unit} SPENTA");
+                                return new ConditionState(EConditionState.Disabled, $"heater.off; {chamber_unit}");
 
-                            }, TimeSpan.FromSeconds(1));
+                            }, _ => default, TimeSpan.FromSeconds(1));
 
                         _ChamberConditions.AddOrUpdate(chamber);
                     }
@@ -309,17 +306,17 @@ namespace Flux.ViewModels
                                 var open = value.open.ValueOr(() => true);
 
                                 if (temperature.IsDisconnected)
-                                    return state.Create(EConditionState.Error, "SENSORE DELLA TEMPERATURA NON TROVATO");
+                                    return new ConditionState(EConditionState.Error, $"heater.notFound; {plate_unit}");
 
                                 if (temperature.IsHot && (open || !closed))
-                                    return state.Create(EConditionState.Warning, $"{plate_unit} ACCESA, FARE ATTENZIONE");
+                                    return new ConditionState(EConditionState.Warning, $"heater.hot; {plate_unit}");
 
                                 if (temperature.IsOn.ValueOr(() => false))
-                                    return state.Create(EConditionState.Stable, $"{plate_unit} ACCESA");
+                                    return new ConditionState(EConditionState.Stable, $"heater.on; {plate_unit}");
 
-                                return state.Create(EConditionState.Disabled, $"{plate_unit} SPENTA");
+                                return new ConditionState(EConditionState.Disabled, $"heater.off; {plate_unit}");
 
-                            }, TimeSpan.FromSeconds(1));
+                            }, _ => default, TimeSpan.FromSeconds(1));
 
                         _PlateConditions.AddOrUpdate(plate);
                     }
@@ -347,9 +344,9 @@ namespace Flux.ViewModels
                         (state, value) =>
                         {
                             if (value.pressure.Kpa < value.level)
-                                return state.Create(EConditionState.Error, "ATTIVARE L'ARIA COMPRESSA");
-                            return state.Create(EConditionState.Stable, "ARIA COMPRESSA ATTIVA");
-                        }, TimeSpan.FromSeconds(1));
+                                return new ConditionState(EConditionState.Error, "pressure.belowLevel");
+                            return new ConditionState(EConditionState.Stable, "pressure.aboveLevel");
+                        }, _ => default, TimeSpan.FromSeconds(1));
                 }
                 return _PressureCondition;
             }
@@ -380,13 +377,12 @@ namespace Flux.ViewModels
                     _VacuumCondition = ConditionViewModel.Create(this, "vacuum", vacuum,
                         (state, value) =>
                         {
-                            var toggle_vacuum = state.Create("vacuum", c => c.ENABLE_VACUUM, is_idle);
                             if (!value.enable)
-                                return state.Create(EConditionState.Disabled, "ATTIVA LA POMPA A VUOTO", toggle_vacuum);
+                                return new ConditionState(EConditionState.Disabled, "vacuum.disabled");
                             if (value.pressure.Kpa > value.level)
-                                return state.Create(EConditionState.Warning, "INSERIRE UN FOGLIO", toggle_vacuum);
-                            return state.Create(EConditionState.Stable, "FOGLIO INSERITO", toggle_vacuum);
-                        }, TimeSpan.FromSeconds(1));
+                                return new ConditionState(EConditionState.Warning, "vacuum.belowLevel");
+                            return new ConditionState(EConditionState.Stable, "vacuum.aboveLevel");
+                        }, state => state.Create(c => c.ENABLE_VACUUM, "vacuum", is_idle), TimeSpan.FromSeconds(1));
                 }
                 return _VacuumCondition;
             }
@@ -405,13 +401,13 @@ namespace Flux.ViewModels
                         .ObserveVariable(m => m.IN_CHANGE)
                         .ValueOr(() => false);
 
-                    _NotInChange = ConditionViewModel.Create(this, "notInChange", not_in_change,
+                    _NotInChange = ConditionViewModel.Create(this, "toolchanger", not_in_change,
                         (state, value) =>
                         {
                             if (value)
-                                return state.Create(EConditionState.Error, "STAMPANTE IN CHANGE");
-                            return state.Create(EConditionState.Stable, "STAMPANTE NON IN CHANGE");
-                        });
+                                return new ConditionState(EConditionState.Error, "toolchanger.inChange");
+                            return new ConditionState(EConditionState.Stable, "toolchanger.notInChange");
+                        }, _ => default);
                 }
                 return _NotInChange;
             }
@@ -429,18 +425,15 @@ namespace Flux.ViewModels
                         .ObserveVariable(m => m.Z_BED_HEIGHT)
                         .ValueOr(() => FluxViewModel.MaxZBedHeight);
 
-                    _HasZBedHeight = ConditionViewModel.Create(this, "hasZBedHeight", z_bed_height,
+                    var can_probe_plate = this.WhenAnyValue(v => v.StatusEvaluation)
+                        .Select(s => s.CanSafePrint);
+                    _HasZBedHeight = ConditionViewModel.Create(this, "zBedHeight", z_bed_height,
                         (state, value) =>
                         {
                             if (value >= FluxViewModel.MaxZBedHeight)
-                            {
-                                var can_probe_plate = this.WhenAnyValue(v => v.StatusEvaluation)
-                                    .Select(s => s.CanSafePrint);
-                                var probe_plate = state.Create("plate", c => c.ProbePlateAsync(), can_probe_plate);
-                                return state.Create(EConditionState.Warning, "TASTA IL PIATTO", probe_plate);
-                            }
-                            return state.Create(EConditionState.Stable, "PIATTO TASTATO");
-                        });
+                                return new ConditionState(EConditionState.Warning, "zBedHeight.noValue");
+                            return new ConditionState(EConditionState.Stable, "zBedHeight.hasValue");
+                        }, state => state.Create(c => c.ProbePlateAsync(), "move", can_probe_plate));
                 }
                 return _HasZBedHeight;
             }
@@ -471,11 +464,10 @@ namespace Flux.ViewModels
                         var lock_open = ConditionViewModel.Create(this, lock_unit.Alias, current_lock,
                             (state, value) =>
                             {
-                                var toggle_lock = state.Create("lock", c => c.OPEN_LOCK, lock_unit, is_idle);
                                 if (value.closed)
-                                    return state.Create(EConditionState.Error, $"APRIRE {lock_unit}", toggle_lock);
-                                return state.Create(EConditionState.Stable, $"{lock_unit} APERTO", toggle_lock);
-                            });
+                                    return new ConditionState(EConditionState.Error, $"lock.open; {lock_unit}");
+                                return new ConditionState(EConditionState.Stable, $"lock.opened; {lock_unit}");
+                            }, state => state.Create(c => c.OPEN_LOCK, lock_unit, "lock", is_idle));
 
                         if (lock_open.HasValue)
                             _LockOpenCondition.AddOrUpdate(lock_open.Value);
@@ -498,9 +490,9 @@ namespace Flux.ViewModels
                         (state, debug) =>
                         {
                             if (!debug.AdvancedSettings)
-                                return state.Create(EConditionState.Hidden);
-                            return state.Create(EConditionState.Stable);
-                        });
+                                return new ConditionState(EConditionState.Hidden, "");
+                            return new ConditionState(EConditionState.Stable, "debug");
+                        }, state => default);
                 }
                 return _DebugCondition;
             }
@@ -519,14 +511,14 @@ namespace Flux.ViewModels
                         (state, message_counter) =>
                         {
                             if (message_counter.EmergencyMessagesCount > 0)
-                                return state.Create(EConditionState.Error);
+                                return new ConditionState(EConditionState.Error, "message.emerg");
                             if (message_counter.ErrorMessagesCount > 0)
-                                return state.Create(EConditionState.Warning);
+                                return new ConditionState(EConditionState.Warning, "message.error");
                             if (message_counter.WarningMessagesCount > 0)
-                                return state.Create(EConditionState.Warning);
+                                return new ConditionState(EConditionState.Warning, "message.warning");
                             if (message_counter.InfoMessagesCount > 0)
-                                return state.Create(EConditionState.Stable);
-                            return state.Create(EConditionState.Disabled);
+                                return new ConditionState(EConditionState.Stable, "message.info");
+                            return new ConditionState(EConditionState.Disabled, "message.none");
                         });
                 }
                 return _MessageCondition;
@@ -550,10 +542,10 @@ namespace Flux.ViewModels
                         (state, network) =>
                         {
                             if (!network.plc)
-                                return state.Create(EConditionState.Error);
+                                return new ConditionState(EConditionState.Error, "network.disconnected");
                             if (!network.inter)
-                                return state.Create(EConditionState.Warning);
-                            return state.Create(EConditionState.Stable);
+                                return new ConditionState(EConditionState.Warning, "network.noInternet");
+                            return new ConditionState(EConditionState.Stable, "network.stable");
                         });
                 }
                 return _NetworkCondition;
@@ -582,11 +574,10 @@ namespace Flux.ViewModels
                             (state, value) =>
                             {
                                 // TODO
-                                var toggle_lock = state.Create("lock", c => c.OPEN_LOCK, lock_unit);
                                 if (!value.closed || value.open)
-                                    return state.Create(EConditionState.Stable, $"CHIUDI {lock_unit}", toggle_lock);
-                                return state.Create(EConditionState.Stable, $"APRI {lock_unit}", toggle_lock);
-                            });
+                                    return new ConditionState(EConditionState.Stable, $"lock.close; {lock_unit}");
+                                return new ConditionState(EConditionState.Stable, $"lock.open; {lock_unit}");
+                            }, state => state.Create(c => c.OPEN_LOCK, lock_unit, "lock"));
 
                         if (lock_toggle.HasValue)
                             _LockToggleConditions.AddOrUpdate(lock_toggle.Value);
@@ -771,10 +762,16 @@ namespace Flux.ViewModels
                 HasSafeState)
                 .StartWith(false);
 
+            var cycle_conditions = ObserveConditions<CycleConditionAttribute>()
+                .AsObservableListRC(this);
+
+            var print_conditions = ObserveConditions<PrintConditionAttribute>()
+                .AsObservableListRC(this);
+
             var can_safe_cycle = Observable.CombineLatest(
                 is_idle,
                 has_safe_state,
-                ObserveConditions<CycleConditionAttribute>(),
+                cycle_conditions.Connect().QueryWhenChanged(),
                 (idle, state, safe_cycle) => idle && state && safe_cycle.All(s => s.Valid))
                 .StartWith(false)
                 .DistinctUntilChanged();
@@ -782,12 +779,12 @@ namespace Flux.ViewModels
             var can_safe_print = Observable.CombineLatest(
                 is_idle,
                 has_safe_state,
-                ObserveConditions<PrintConditionAttribute>(),
+                print_conditions.Connect().QueryWhenChanged(),
                 (idle, state, safe_print) => idle && state && safe_print.All(s => s.Valid));
 
             var can_safe_stop = Observable.CombineLatest(
                 has_safe_state,
-                ObserveConditions<CycleConditionAttribute>(),
+                cycle_conditions.Connect().QueryWhenChanged(),
                 (state, safe_cycle) => state && safe_cycle.All(s => s.Valid))
                 .StartWith(false)
                 .DistinctUntilChanged();
@@ -795,7 +792,7 @@ namespace Flux.ViewModels
             var can_safe_hold = Observable.CombineLatest(
                 is_cycle,
                 has_safe_state,
-                ObserveConditions<CycleConditionAttribute>(),
+                cycle_conditions.Connect().QueryWhenChanged(),
                 (cycle, state, safe_cycle) => cycle && state && safe_cycle.All(s => s.Valid))
                 .StartWith(false)
                 .DistinctUntilChanged();
@@ -919,13 +916,13 @@ namespace Flux.ViewModels
             return conditions;
         }
 
-        public IObservable<IList<ConditionState>> ObserveConditions<TConditionAttribute>()
+        public IObservable<IChangeSet<ConditionState>> ObserveConditions<TConditionAttribute>()
             where TConditionAttribute : FilterConditionAttribute
         {
-            var conditions = GetConditions<TConditionAttribute>()
+            return GetConditions<TConditionAttribute>()
                 .SelectMany(c => c.Value)
-                .Select(c => c.condition.StateChanged);
-            return Observable.CombineLatest(conditions);
+                .Select(c => c.condition.StateChanged)
+                .AsObservableChangeSet();
         }
 
         private FLUX_ProcessStatus FindFluxStatus(
