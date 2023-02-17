@@ -27,6 +27,7 @@ namespace Flux.ViewModels
         RemoteText TitleText { get; }
     }
 
+    [RemoteControl(baseClass: typeof(FeederOperationViewModel<,>))]
     public abstract class FeederOperationViewModel<TViewModel, TConditionAttribute> : FluxRoutableViewModel<TViewModel>, IOperationViewModel
         where TViewModel : FeederOperationViewModel<TViewModel, TConditionAttribute>
         where TConditionAttribute : FeederOperationConditionAttribute

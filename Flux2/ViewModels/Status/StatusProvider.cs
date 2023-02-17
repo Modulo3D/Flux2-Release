@@ -221,33 +221,30 @@ namespace Flux.ViewModels
                 HasSafeState)
                 .StartWith(false);
 
-            var cycle_conditions = Flux.ConditionsProvider.ObserveConditions<CycleConditionAttribute>()
-                .AsObservableListRC(this);
-
-            var print_conditions = Flux.ConditionsProvider.ObserveConditions<PrintConditionAttribute>()
-                .AsObservableListRC(this);
+            var cycle_conditions = Flux.ConditionsProvider.ObserveConditions<CycleConditionAttribute>();
+            var print_conditions = Flux.ConditionsProvider.ObserveConditions<PrintConditionAttribute>();
 
             var can_safe_cycle = is_idle.CombineLatest(
                 has_safe_state,
-                cycle_conditions.Connect().QueryWhenChanged(),
+                cycle_conditions.QueryWhenChanged(),
                 (idle, state, safe_cycle) => idle && state && safe_cycle.All(s => s.Valid))
                 .StartWith(false)
                 .DistinctUntilChanged();
 
             var can_safe_print = is_idle.CombineLatest(
                 has_safe_state,
-                print_conditions.Connect().QueryWhenChanged(),
+                print_conditions.QueryWhenChanged(),
                 (idle, state, safe_print) => idle && state && safe_print.All(s => s.Valid));
 
             var can_safe_stop = has_safe_state.CombineLatest(
-                cycle_conditions.Connect().QueryWhenChanged(),
+                cycle_conditions.QueryWhenChanged(),
                 (state, safe_cycle) => state && safe_cycle.All(s => s.Valid))
                 .StartWith(false)
                 .DistinctUntilChanged();
 
             var can_safe_hold = is_cycle.CombineLatest(
                 has_safe_state,
-                cycle_conditions.Connect().QueryWhenChanged(),
+                cycle_conditions.QueryWhenChanged(),
                 (cycle, state, safe_cycle) => cycle && state && safe_cycle.All(s => s.Valid))
                 .StartWith(false)
                 .DistinctUntilChanged();

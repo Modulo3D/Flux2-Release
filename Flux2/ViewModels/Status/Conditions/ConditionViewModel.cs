@@ -1,4 +1,5 @@
-﻿using DynamicData.Kernel;
+﻿using DynamicData;
+using DynamicData.Kernel;
 using Modulo3DNet;
 using ReactiveUI;
 using System;
@@ -32,16 +33,16 @@ namespace Flux.ViewModels
 
         public IObservable<ConditionState> StateChanged { get; private set; }
 
-        public FluxViewModel Flux { get; }
+        public ConditionsProvider Conditions { get; }
 
-        public ConditionViewModel(FluxViewModel flux, string name) : base(name)
+        public ConditionViewModel(ConditionsProvider conditions, string name) : base(name)
         {
-            Flux = flux;
+            Conditions = conditions;
         }
 
         public void Initialize()
         { 
-            var is_idle = Flux.ConnectionProvider
+            var is_idle = Conditions.Flux.ConnectionProvider
                 .ObserveVariable(m => m.PROCESS_STATUS)
                 .Convert(data => data == FLUX_ProcessStatus.IDLE)
                 .ValueOr(() => false);
@@ -64,8 +65,8 @@ namespace Flux.ViewModels
     {
         public IFLUX_Variable<bool, bool> LockClosed { get; }
         public IFLUX_Variable<bool, bool> OpenLock { get; }
-        public LockClosedConditionViewModel(FluxViewModel flux, IFLUX_Variable<bool, bool> lock_closed, IFLUX_Variable<bool, bool> open_lock)
-            : base(flux, open_lock.Unit.Alias)
+        public LockClosedConditionViewModel(ConditionsProvider conditions, IFLUX_Variable<bool, bool> lock_closed, IFLUX_Variable<bool, bool> open_lock)
+            : base(conditions, open_lock.Unit.Alias)
         {
             OpenLock = open_lock;
             LockClosed = lock_closed;
@@ -73,7 +74,7 @@ namespace Flux.ViewModels
 
         protected override Optional<(Func<Task> action, IObservable<bool> can_execute)> GetExecuteAction(IObservable<bool> is_idle)
         {
-            var toggle_variable = async () => { await Flux.ConnectionProvider.ToggleVariableAsync(_ => OpenLock); };
+            var toggle_variable = async () => { await Conditions.Flux.ConnectionProvider.ToggleVariableAsync(_ => OpenLock); };
             return (toggle_variable, is_idle);
         }
         protected override IObservable<ConditionState> GetState(IObservable<bool> is_idle)
@@ -97,7 +98,7 @@ namespace Flux.ViewModels
     public class ClampConditionViewModel : ConditionViewModel<ClampConditionViewModel>
     {
         public IFLUX_Variable<bool, bool> OpenClamp { get; }
-        public ClampConditionViewModel(FluxViewModel flux, IFLUX_Variable<bool, bool> clamp) : base(flux, clamp.Unit.Alias)
+        public ClampConditionViewModel(ConditionsProvider conditions, IFLUX_Variable<bool, bool> clamp) : base(conditions, clamp.Unit.Alias)
         {
             OpenClamp = clamp;
         }
@@ -105,9 +106,9 @@ namespace Flux.ViewModels
         protected override IObservable<ConditionState> GetState(IObservable<bool> is_idle)
         {
             return Observable.CombineLatest(
-                Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS).ValueOr(() => FLUX_ProcessStatus.NONE),
-                Flux.ConnectionProvider.ObserveVariable(m => m.IN_CHANGE).ObservableOr(() => false),
-                Flux.ConnectionProvider.ObserveVariable(m => m.TOOL_CUR).ValueOr(() => ArrayIndex.FromZeroBase(0, Flux.ConnectionProvider.VariableStoreBase)),
+                Conditions.Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS).ValueOr(() => FLUX_ProcessStatus.NONE),
+                Conditions.Flux.ConnectionProvider.ObserveVariable(m => m.IN_CHANGE).ObservableOr(() => false),
+                Conditions.Flux.ConnectionProvider.ObserveVariable(m => m.TOOL_CUR).ValueOr(() => ArrayIndex.FromZeroBase(0, Conditions.Flux.ConnectionProvider.VariableStoreBase)),
                 OpenClamp.ValueChanged.ValueOr(() => false),
                 (status, in_change, tool_cur, open) =>
                 {
@@ -133,7 +134,7 @@ namespace Flux.ViewModels
 
         protected override Optional<(Func<Task> action, IObservable<bool> can_execute)> GetExecuteAction(IObservable<bool> is_idle)
         {
-            var toggle_variable = async () => { await Flux.ConnectionProvider.ToggleVariableAsync(_ => OpenClamp); };
+            var toggle_variable = async () => { await Conditions.Flux.ConnectionProvider.ToggleVariableAsync(_ => OpenClamp); };
             return (toggle_variable, is_idle);
         }
     }
@@ -144,8 +145,8 @@ namespace Flux.ViewModels
         IFLUX_Variable<FLUX_Temp, double> HeaterTemp { get; }
         Optional<IFLUX_Variable<bool, bool>> LockClosed { get; }
         Optional<IFLUX_Variable<bool, bool>> OpenLock { get; }
-        public HeaterConditionViewModel(FluxViewModel flux,
-            IFLUX_Variable<FLUX_Temp, double> chamber_temp) : base(flux, chamber_temp.Unit.Alias)
+        public HeaterConditionViewModel(ConditionsProvider conditions,
+            IFLUX_Variable<FLUX_Temp, double> chamber_temp) : base(conditions, chamber_temp.Unit.Alias)
         {
             HeaterTemp = chamber_temp;
 
@@ -154,8 +155,8 @@ namespace Flux.ViewModels
                 StringSplitOptions.RemoveEmptyEntries)
                 .FirstOrOptional(s => !string.IsNullOrEmpty(s));
 
-            LockClosed = Flux.ConnectionProvider.GetVariable(m => m.LOCK_CLOSED, $"{parent}.lock");
-            OpenLock = Flux.ConnectionProvider.GetVariable(m => m.OPEN_LOCK, $"{parent}.lock");
+            LockClosed = Conditions.Flux.ConnectionProvider.GetVariable(m => m.LOCK_CLOSED, $"{parent}.lock");
+            OpenLock = Conditions.Flux.ConnectionProvider.GetVariable(m => m.OPEN_LOCK, $"{parent}.lock");
         }
 
         protected override IObservable<ConditionState> GetState(IObservable<bool> is_idle)
@@ -181,17 +182,17 @@ namespace Flux.ViewModels
     }
     public class ChamberConditionViewModel : HeaterConditionViewModel<ChamberConditionViewModel>
     {
-        public ChamberConditionViewModel(FluxViewModel flux,
+        public ChamberConditionViewModel(ConditionsProvider conditions,
             IFLUX_Variable<FLUX_Temp, double> chamber_temp)
-            : base(flux, chamber_temp)
+            : base(conditions, chamber_temp)
         {
         }
     }
     public class PlateConditionViewModel : HeaterConditionViewModel<PlateConditionViewModel>
     {
-        public PlateConditionViewModel(FluxViewModel flux,
+        public PlateConditionViewModel(ConditionsProvider conditions,
             IFLUX_Variable<FLUX_Temp, double> plate_temp)
-            : base(flux, plate_temp)
+            : base(conditions, plate_temp)
         {
         }
     }
@@ -200,9 +201,9 @@ namespace Flux.ViewModels
     {
         public IFLUX_Variable<Pressure, Unit> PressurePresence { get; }
         public IFLUX_Variable<double, double> PressureLevel { get; }
-        public PressureConditionViewModel(FluxViewModel flux,
+        public PressureConditionViewModel(ConditionsProvider conditions,
             IFLUX_Variable<Pressure, Unit> pressure_presence,
-            IFLUX_Variable<double, double> pressure_level) : base(flux, "")
+            IFLUX_Variable<double, double> pressure_level) : base(conditions, "")
         {
             PressureLevel = pressure_level;
             PressurePresence = pressure_presence;
@@ -226,10 +227,10 @@ namespace Flux.ViewModels
         public IFLUX_Variable<Pressure, Unit> VacuumPresence { get; }
         public IFLUX_Variable<double, double> VacuumLevel { get; }
         public IFLUX_Variable<bool, bool> EnableVacuum { get; }
-        public VacuumConditionViewModel(FluxViewModel flux,
+        public VacuumConditionViewModel(ConditionsProvider conditions,
             IFLUX_Variable<Pressure, Unit> vacuum_presence,
             IFLUX_Variable<double, double> vacuum_level,
-            IFLUX_Variable<bool, bool> enable_vacuum) : base(flux, "")
+            IFLUX_Variable<bool, bool> enable_vacuum) : base(conditions, "")
         {
             VacuumLevel = vacuum_level;
             EnableVacuum = enable_vacuum;
@@ -253,7 +254,7 @@ namespace Flux.ViewModels
         }
         protected override Optional<(Func<Task> action, IObservable<bool> can_execute)> GetExecuteAction(IObservable<bool> is_idle)
         {
-            var toggle_variable = async () => { await Flux.ConnectionProvider.ToggleVariableAsync(_ => EnableVacuum); };
+            var toggle_variable = async () => { await Conditions.Flux.ConnectionProvider.ToggleVariableAsync(_ => EnableVacuum); };
             return (toggle_variable, is_idle);
         }
     }
@@ -261,7 +262,7 @@ namespace Flux.ViewModels
     public class NotInChangeConditionViewModel : ConditionViewModel<NotInChangeConditionViewModel>
     {
         public IFLUX_Variable<bool, bool> InChange { get; }
-        public NotInChangeConditionViewModel(FluxViewModel flux, IFLUX_Variable<bool, bool> in_change) : base(flux, "")
+        public NotInChangeConditionViewModel(ConditionsProvider conditions, IFLUX_Variable<bool, bool> in_change) : base(conditions, "")
         {
             InChange = in_change;
         }
@@ -280,7 +281,7 @@ namespace Flux.ViewModels
     public class HasZPlateHeightConditionViewModel : ConditionViewModel<HasZPlateHeightConditionViewModel>
     {
         public IFLUX_Variable<double, double> ZPlateHeight { get; }
-        public HasZPlateHeightConditionViewModel(FluxViewModel flux, IFLUX_Variable<double, double> z_plate_height) : base(flux, "")
+        public HasZPlateHeightConditionViewModel(ConditionsProvider conditions, IFLUX_Variable<double, double> z_plate_height) : base(conditions, "")
         {
             ZPlateHeight = z_plate_height;
         }
@@ -296,20 +297,51 @@ namespace Flux.ViewModels
         }
         protected override Optional<(Func<Task> action, IObservable<bool> can_execute)> GetExecuteAction(IObservable<bool> is_idle)
         {
-            var toggle_variable = async () => { await Flux.ConnectionProvider.ProbePlateAsync(); };
-            return (toggle_variable, is_idle);
+            var toggle_variable = async () => { await Conditions.Flux.ConnectionProvider.ProbePlateAsync(); };
+            var cycle_conditions = Conditions.ObserveConditions<PrintConditionAttribute>();
+            var safe_state = Conditions.Flux.ConnectionProvider.WhenAnyValue(v => v.IsConnecting).CombineLatest(
+                Conditions.Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS),
+                Conditions.Flux.Feeders.WhenAnyValue(f => f.HasInvalidStates),
+                has_safe_state)
+                .StartWith(false);
+            var can_safe_cycle = Observable.CombineLatest(
+                is_idle,
+                safe_state,
+                cycle_conditions.QueryWhenChanged(),
+                (idle, state, safe_cycle) => idle && state && safe_cycle.All(s => s.Valid))
+                .StartWith(false)
+                .DistinctUntilChanged();
+            return (toggle_variable, can_safe_cycle);
+
+            bool has_safe_state(
+                bool is_connecting,
+                Optional<FLUX_ProcessStatus> status,
+                bool has_feeder_error)
+            {
+                if (is_connecting)
+                    return false;
+                if (!status.HasValue)
+                    return false;
+                if (status.Value == FLUX_ProcessStatus.EMERG)
+                    return false;
+                if (status.Value == FLUX_ProcessStatus.ERROR)
+                    return false;
+                if (has_feeder_error)
+                    return false;
+                return true;
+            }
         }
     }
 
     public class DebugConditionViewModel : ConditionViewModel<DebugConditionViewModel>
     {
-        public DebugConditionViewModel(FluxViewModel flux) : base(flux, "")
+        public DebugConditionViewModel(ConditionsProvider conditions) : base(conditions, "")
         {
         }
 
         protected override IObservable<ConditionState> GetState(IObservable<bool> is_idle)
         {
-            return Flux.MCodes.WhenAnyValue(s => s.OperatorUSB).ValueOrDefault()
+            return Conditions.Flux.MCodes.WhenAnyValue(s => s.OperatorUSB).ValueOrDefault()
                 .Select(debug =>
                 {
                     if (!debug.AdvancedSettings)
@@ -321,13 +353,13 @@ namespace Flux.ViewModels
 
     public class MessageConditionViewModel : ConditionViewModel<MessageConditionViewModel>
     {
-        public MessageConditionViewModel(FluxViewModel flux) : base(flux, "")
+        public MessageConditionViewModel(ConditionsProvider conditions) : base(conditions, "")
         {
         }
 
         protected override IObservable<ConditionState> GetState(IObservable<bool> is_idle)
         {
-            return Flux.Messages.WhenAnyValue(v => v.MessageCounter)
+            return Conditions.Flux.Messages.WhenAnyValue(v => v.MessageCounter)
                 .Select(message_counter =>
                 {
                     if (message_counter.EmergencyMessagesCount > 0)
@@ -345,15 +377,15 @@ namespace Flux.ViewModels
 
     public class NetworkConditionViewModel : ConditionViewModel<NetworkConditionViewModel>
     {
-        public NetworkConditionViewModel(FluxViewModel flux) : base(flux, "")
+        public NetworkConditionViewModel(ConditionsProvider conditions) : base(conditions, "")
         {
         }
 
         protected override IObservable<ConditionState> GetState(IObservable<bool> is_idle)
         {
             return Observable.CombineLatest(
-                Flux.NetProvider.WhenAnyValue(v => v.PLCNetworkConnectivity),
-                Flux.NetProvider.WhenAnyValue(v => v.InterNetworkConnectivity),
+                Conditions.Flux.NetProvider.WhenAnyValue(v => v.PLCNetworkConnectivity),
+                Conditions.Flux.NetProvider.WhenAnyValue(v => v.InterNetworkConnectivity),
                 (plc, inter) =>
                 {
                     if (!plc)
@@ -368,7 +400,7 @@ namespace Flux.ViewModels
     public class LoadFilamentConditionViewModel : ConditionViewModel<LoadFilamentConditionViewModel>
     {
         public LoadFilamentOperationViewModel LoadFilament { get; }
-        public LoadFilamentConditionViewModel(LoadFilamentOperationViewModel load_filament) : base(load_filament.Flux, "")
+        public LoadFilamentConditionViewModel(LoadFilamentOperationViewModel load_filament) : base(load_filament.Flux.ConditionsProvider, "")
         {
             LoadFilament = load_filament;
         }
@@ -406,7 +438,7 @@ namespace Flux.ViewModels
     public class UnloadFilamentConditionViewModel : ConditionViewModel<UnloadFilamentConditionViewModel>
     {
         public UnloadFilamentOperationViewModel UnloadFilament { get; }
-        public UnloadFilamentConditionViewModel(UnloadFilamentOperationViewModel unload_filament) : base(unload_filament.Flux, "")
+        public UnloadFilamentConditionViewModel(UnloadFilamentOperationViewModel unload_filament) : base(unload_filament.Flux.ConditionsProvider, "")
         {
             UnloadFilament = unload_filament;
         }
