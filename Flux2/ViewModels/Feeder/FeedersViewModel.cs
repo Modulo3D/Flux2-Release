@@ -143,7 +143,7 @@ namespace Flux.ViewModels
             var printer = Flux.SettingsProvider.Printer;
             if (!printer.HasValue)
                 return default;
-
+           
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             var documents = await CompositeQuery.Create(database.Value,
                     db => (_, ct) => db.FindAsync(printer.Value, Tool.SchemaInstance, ct), db => db.GetTargetAsync,
@@ -153,44 +153,17 @@ namespace Flux.ViewModels
                     .ExecuteAsync<Material>(cts.Token);
 
             var materials = documents.Distinct()
-                .OrderBy(d => d[d => d.MaterialType, ""])
+                .OrderBy(d => d[d => d.MaterialType])
                 .ThenBy(d => d.Name)
-                .AsObservableChangeSet(m => m.Id);
+                .AsObservableChangeSet(m => m.DocumentGuid);
 
-            var last_loaded = last_tag.Convert(t => t.Loaded);
-            var last_inserted = last_tag.Convert(t => t.Inserted);
-            var last_cur_weight = last_tag.Convert(t => t.CurWeightG).ValueOr(() => 1000.0);
-            var last_max_weight = last_tag.Convert(t => t.MaxWeightG).ValueOr(() => 1000.0);
-            var last_printer_guid = last_tag.ConvertOr(t => t.PrinterGuid, () => Guid.Empty);
-            var last_material_guid = last_tag.ConvertOr(t => t.MaterialGuid, () => Guid.Empty);
-
-            var material_option = ComboOption.Create("material", "MATERIALE:", d => materials.AsObservableCache().DisposeWith(d));
-            var cur_weight_option = new NumericOption("curWeight", "PESO CORRENTE:", last_cur_weight, 50.0, converter: typeof(WeightConverter));
-            var max_weight_option = new NumericOption("maxWeight", "PESO TOTALE:", last_max_weight, 50.0, value_changed: v =>
-            {
-                cur_weight_option.Min = 0f;
-                cur_weight_option.Max = v;
-                cur_weight_option.Value = v;
-            }, converter: typeof(WeightConverter));
-
-            var result = await Flux.ShowSelectionAsync(
-                $"MATERIALE N.{position + 1}", new IDialogOption[] { material_option, max_weight_option, cur_weight_option });
-
-            if (result != ContentDialogResult.Primary)
+            var result = await Flux.ShowDialogAsync(f => new CreateMaterialDialog(f, last_tag.ValueOr(() => new NFCMaterial()), materials));
+            if (result.result != DialogResult.Primary)
                 return default;
 
-            var material = material_option.Value;
-            if (!material.HasValue)
-                return default;
-
-            var max_weight = max_weight_option.Value;
-            var cur_weight = cur_weight_option.Value;
-
-            var tag = new NFCMaterial(material.Value, max_weight, cur_weight, last_printer_guid, last_inserted, last_loaded);
-            return new NFCReading<NFCMaterial>(virtual_card_id, tag);
+            return new NFCReading<NFCMaterial>(virtual_card_id, result.data);
         }
-
-        private async Task<ValueResult<Tool>> FindNewToolAsync(ushort position, Optional<NFCToolNozzle> last_tag)
+        async Task<NFCReading<NFCToolNozzle>> INFCStorageProvider<NFCToolNozzle>.CreateTagAsync(ushort position, Optional<NFCToolNozzle> last_tag, CardId virtual_card_id)
         {
             var database = Flux.DatabaseProvider.Database;
             if (!database.HasValue)
@@ -201,97 +174,112 @@ namespace Flux.ViewModels
                 return default;
 
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            var tool_documents = await CompositeQuery.Create(database.Value,
+            var documents = await CompositeQuery.Create(database.Value,
                db => (_, ct) => db.FindAsync(printer.Value, Tool.SchemaInstance, ct), db => db.GetTargetAsync)
                .ExecuteAsync<Tool>(cts.Token);
 
-            var tools = tool_documents.OrderBy(d => d.Name)
-                .AsObservableChangeSet(t => t.Id);
+            var tools = documents.Distinct()
+              .AsObservableChangeSet(m => m.DocumentGuid);
 
-            var last_tool_guid = last_tag.ConvertOr(t => t.NozzleGuid, () => Guid.Empty);
-
-            var tool_option = ComboOption.Create("tool", "Utensile:", d => tools.AsObservableCache().DisposeWith(d));
-            var tool_result = await Flux.ShowSelectionAsync(
-                $"dialog.createTool; {position + 1}", new[] { tool_option });
-
-            if (tool_result != ContentDialogResult.Primary)
+            var result = await Flux.ShowDialogAsync(f => new CreateToolNozzleDialog(f, last_tag.ValueOr(() => new NFCToolNozzle()), tools));
+            if (result.result != DialogResult.Primary)
                 return default;
 
-            var tool = tool_option.Value;
-            if (!tool.HasValue)
-                return new ValueResult<Tool>(default);
-
-            return tool.Value;
-        }
-
-        private async Task<(ValueResult<Nozzle> nozzle, double max_weight, double cur_weight)> FindNewNozzleAsync(ushort position, Tool tool, Optional<NFCToolNozzle> last_tag)
-        {
-            var database = Flux.DatabaseProvider.Database;
-            if (!database.HasValue)
-                return default;
-
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            var nozzle_documents = await CompositeQuery.Create(database.Value,
-               db => (_, ct) => db.FindAsync(tool, Nozzle.SchemaInstance, ct), db => db.GetTargetAsync)
-               .ExecuteAsync<Nozzle>(cts.Token);
-
-            if (!nozzle_documents.HasDocuments)
-                return default;
-
-            var nozzles = nozzle_documents.OrderBy(d => d.Name)
-                .AsObservableChangeSet(n => n.Id);
-
-            var last_nozzle_guid = last_tag.ConvertOr(t => t.NozzleGuid, () => Guid.Empty);
-            var last_cur_weight = last_tag.Convert(t => t.CurWeightG).ValueOr(() => 10000.0);
-            var last_max_weight = last_tag.Convert(t => t.MaxWeightG).ValueOr(() => 10000.0);
-
-            var nozzle_option = ComboOption.Create("nozzle", "UGELLO:", d => nozzles.AsObservableCache().DisposeWith(d));
-            var cur_weight_option = new NumericOption("curWeight", "PESO CORRENTE:", last_cur_weight, 1000.0, converter: typeof(WeightConverter));
-            var max_weight_option = new NumericOption("maxWeight", "PESO TOTALE:", last_max_weight, 1000.0, value_changed:
-            v =>
-            {
-                cur_weight_option.Min = 0f;
-                cur_weight_option.Max = v;
-                cur_weight_option.Value = v;
-            }, converter: typeof(WeightConverter));
-
-            var nozzle_result = await Flux.ShowSelectionAsync(
-                $"UGELLO N.{position + 1}", new IDialogOption[] { nozzle_option, max_weight_option, cur_weight_option });
-
-            if (nozzle_result != ContentDialogResult.Primary)
-                return (default, default, default);
-
-            var nozzle = nozzle_option.Value;
-            if (!nozzle.HasValue)
-                return (new ValueResult<Nozzle>(default), default, default);
-
-            var max_weight = max_weight_option.Value;
-            var cur_weight = cur_weight_option.Value;
-
-            return (nozzle.Value, max_weight, cur_weight);
-        }
-        async Task<NFCReading<NFCToolNozzle>> INFCStorageProvider<NFCToolNozzle>.CreateTagAsync(ushort position, Optional<NFCToolNozzle> last_tag, CardId virtual_card_id)
-        {
-            var tool = await FindNewToolAsync(position, last_tag);
-            if (!tool.Result)
-                return default;
-
-            if (!tool.HasValue)
-                return default;
-
-            var nozzle = await FindNewNozzleAsync(position, tool.Value, last_tag);
-            if (!nozzle.nozzle.Result)
-                return default;
-
-            var last_loaded = last_tag.Convert(t => t.Loaded);
-            var last_break_temp = last_tag.Convert(t => t.LastBreakTemperature);
-            var last_printer_guid = last_tag.ConvertOr(t => t.PrinterGuid, () => Guid.Empty);
-
-            var tag = new NFCToolNozzle(tool.Value, nozzle.nozzle, nozzle.max_weight, nozzle.cur_weight, last_printer_guid, last_loaded, last_break_temp);
-            return new NFCReading<NFCToolNozzle>(virtual_card_id, tag);
+            return new NFCReading<NFCToolNozzle>(virtual_card_id, result.data);
         }
 
         IObservable<IChangeSet<NFCSlot<NFCMaterial>, ushort>> INFCStorageProvider<NFCMaterial>.GetNFCSlots() => ToolMaterials.Connect().Transform(m => m.NFCSlot);
         IObservable<IChangeSet<NFCSlot<NFCToolNozzle>, ushort>> INFCStorageProvider<NFCToolNozzle>.GetNFCSlots() => ToolNozzles.Connect().Transform(m => m.NFCSlot);
+    }
+
+    public abstract class CreateTagDialog<TCreateTagDialog, TNFCDocument, TTag> : InputDialog<TCreateTagDialog, TTag>
+        where TCreateTagDialog : CreateTagDialog<TCreateTagDialog, TNFCDocument, TTag>
+        where TNFCDocument : INFCDocument
+        where TTag : INFCTag
+    {
+        [RemoteInput()]
+        public SelectableCache<TNFCDocument, Guid> Documents { get; }
+
+        public CreateTagDialog(IFlux flux, TTag startValue, Func<TTag, Guid> get_selected_key, IObservable<IChangeSet<TNFCDocument, Guid>> documents) : base(flux, startValue, new RemoteText("title", true)) 
+        {
+            Documents = SelectableCache.Create(documents, get_selected_key(startValue));
+            Documents.AutoSelect = Documents.ItemsChanged.Select(n => n.Keys.FirstOrOptional(k => k != Guid.Empty)).ToOptional();
+        }
+    }
+    public abstract class CreateOdometerTagDialog<TCreateOdometerTagDialog, TNFCOdometerDocument, TNFCOdometerTag> : CreateTagDialog<TCreateOdometerTagDialog, TNFCOdometerDocument, TNFCOdometerTag>
+        where TCreateOdometerTagDialog : CreateOdometerTagDialog<TCreateOdometerTagDialog, TNFCOdometerDocument, TNFCOdometerTag>
+        where TNFCOdometerDocument : INFCDocument
+        where TNFCOdometerTag : INFCOdometerTag
+    {
+        private double _MaxWeight = 1000.0;
+        [RemoteInput(step: 50.0, min: 100, max: 20000, converter: typeof(WeightConverter))]
+        public double MaxWeight
+        {
+            get => _MaxWeight;
+            set => this.RaiseAndSetIfChanged(ref _MaxWeight, value);
+        }
+
+        private double _CurWeight = 1000.0;
+        [RemoteInput(step: 50.0, min: 0, max: 20000, converter: typeof(WeightConverter))]
+        public double CurWeight
+        {
+            get => _CurWeight;
+            set => this.RaiseAndSetIfChanged(ref _CurWeight, value);
+        }
+
+        public CreateOdometerTagDialog(IFlux flux, TNFCOdometerTag startValue, double maxWeight, Func<TNFCOdometerTag, Guid> get_selected_key, IObservable<IChangeSet<TNFCOdometerDocument, Guid>> documents) 
+            : base(flux, startValue, get_selected_key, documents)
+        {
+            MaxWeight = maxWeight;
+            CurWeight = maxWeight;
+            this.WhenAnyValue(v => v.MaxWeight)
+                .BindToRC((TCreateOdometerTagDialog)this, v => v.CurWeight);
+        }
+    }
+    public class CreateMaterialDialog : CreateOdometerTagDialog<CreateMaterialDialog, Material, NFCMaterial>
+    {
+        public CreateMaterialDialog(IFlux flux, NFCMaterial start_value, IObservable<IChangeSet<Material, Guid>> documents) : base(flux, start_value, 1000, m => m.MaterialGuid, documents)
+        {
+        }
+        public override Optional<NFCMaterial> Confirm() => StartValue.Value with
+        {
+            CurWeightG = CurWeight,
+            MaxWeightG = MaxWeight,
+            MaterialGuid = Documents.SelectedKey.ValueOrDefault()
+        };
+    }
+    public class CreateToolNozzleDialog : CreateOdometerTagDialog<CreateToolNozzleDialog, Tool, NFCToolNozzle>
+    {
+        [RemoteInput()]
+        public SelectableCache<Nozzle, Guid> Nozzles { get; }
+        public CreateToolNozzleDialog(IFlux flux, NFCToolNozzle start_value, IObservable<IChangeSet<Tool, Guid>> documents) : base(flux, start_value, 10000, m => m.ToolGuid, documents)
+        {
+            var nozzles = Observable.CombineLatest(
+                flux.DatabaseProvider.WhenAnyValue(p => p.Database),
+                Documents.SelectedValueChanged,
+                (db, tool) => (db, tool))
+                .SelectAsync(async t => 
+                {
+                    if (!t.db.HasValue)
+                        return (IEnumerable<Nozzle>)Array.Empty<Nozzle>();
+                    if (!t.tool.HasValue)
+                        return (IEnumerable<Nozzle>)Array.Empty<Nozzle>();
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    return await CompositeQuery.Create(t.db.Value,
+                       db => (_, ct) => db.FindAsync(t.tool.Value, Nozzle.SchemaInstance, ct), db => db.GetTargetAsync)
+                       .ExecuteAsync<Nozzle>(cts.Token);
+                })
+                .AsObservableChangeSet(n => n.DocumentGuid);
+
+            Nozzles = SelectableCache.Create(nozzles, start_value.NozzleGuid);
+            Nozzles.AutoSelect = Nozzles.ItemsChanged.Select(n => n.Keys.FirstOrOptional(k => k != Guid.Empty)).ToOptional();
+        }
+        public override Optional<NFCToolNozzle> Confirm() => StartValue.Value with
+        {
+            CurWeightG = CurWeight,
+            MaxWeightG = MaxWeight,
+            ToolGuid = Documents.SelectedKey.ValueOrDefault(),
+            NozzleGuid = Nozzles.SelectedKey.ValueOrDefault(),
+        };
     }
 }

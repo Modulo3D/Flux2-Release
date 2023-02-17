@@ -1,5 +1,6 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
+using Flux.ViewModels;
 using Modulo3DNet;
 using ReactiveUI;
 using System.Linq;
@@ -42,11 +43,11 @@ namespace Flux.ViewModels
                 .Filter(v => v.State != StatusBarState.Hidden)
                 .AsObservableCacheRC(this);
 
-            ShowMessagesCommand = ReactiveCommand.Create(() => { Content = Flux.Messages; });
-            ShowWebcamCommand = ReactiveCommand.Create(() => { Content = Flux.Webcam; });
+            ShowMessagesCommand = ReactiveCommandRC.Create(() => { Content = Flux.Messages; }, this);
+            ShowWebcamCommand = ReactiveCommandRC.Create(() => { Content = Flux.Webcam; }, this);
             Content = Flux.Messages;
 
-            var conditions = Flux.StatusProvider.GetConditions<StatusBarConditionAttribute>();
+            var conditions = Flux.ConditionsProvider.GetConditions<StatusBarConditionAttribute>();
             foreach (var kvp in conditions)
                 StatusBarItemsSource.AddOrUpdate(new StatusBarItemViewModel(flux, kvp.Key, kvp.Value.Select(v => v.condition)));
         }

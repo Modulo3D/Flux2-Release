@@ -29,7 +29,7 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public string StateBrush => _StateBrush.Value;
 
-        public StatusBarItemViewModel(FluxViewModel flux, string condition, IEnumerable<IConditionViewModel> conditions) : base($"{typeof(StatusBarItemViewModel).GetRemoteControlName()}??{condition}")
+        public StatusBarItemViewModel(FluxViewModel flux, string condition, IEnumerable<IConditionViewModel> conditions) : base($"{condition}")
         {
             Flux = flux;
             _Notifies = GetItemNotifies()
@@ -37,7 +37,7 @@ namespace Flux.ViewModels
                 .ToProperty(this, v => v.Notifies);
 
             _State = conditions
-                .AsObservableChangeSet(t => t.ConditionName)
+                .AsObservableChangeSet(t => t.Name)
                 .AutoTransform(c => c.State)
                 .QueryWhenChanged(s =>
                 {

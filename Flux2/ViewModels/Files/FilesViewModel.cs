@@ -64,27 +64,20 @@ namespace Flux.ViewModels
 
         public async Task CreateFSAsync()
         {
-            var options = ComboOption.Create("type", "fsType", Enum.GetValues<FLUX_FileType>(), b => (uint)b);
-            var name = new TextBox("name", "fsName", "", false);
-
-            var result = await Flux.ShowSelectionAsync(
-                "fsTitle", new IDialogOption[] { options, name });
-
-            if (result != ContentDialogResult.Primary)
+            var result = await Flux.ShowDialogAsync(f => new CreateFSDialog(f, (FLUX_FileType.Directory, "")));
+            if (result.result != DialogResult.Primary || !result.data.HasValue)
                 return;
 
-            if (!options.Value.HasValue)
-                return;
-
-            using var fs_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             var path = Folder.ConvertOr(f => f.FSFullPath, () => Flux.ConnectionProvider.CombinePaths("", ""));
-            switch (options.Value.Value)
+            
+            using var fs_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            switch (result.data.Value.file_type)
             {
                 case FLUX_FileType.File:
-                    await Flux.ConnectionProvider.PutFileAsync(path, name.Value, true, fs_cts.Token);
+                    await Flux.ConnectionProvider.PutFileAsync(path, result.data.Value.file_name, true, fs_cts.Token);
                     break;
                 case FLUX_FileType.Directory:
-                    await Flux.ConnectionProvider.CreateFolderAsync(path, name.Value, fs_cts.Token);
+                    await Flux.ConnectionProvider.CreateFolderAsync(path, result.data.Value.file_name, fs_cts.Token);
                     break;
             }
 
@@ -93,39 +86,22 @@ namespace Flux.ViewModels
 
         public async Task ModifyFSAsync(IFSViewModel fs)
         {
-            var modify_option = ComboOption.Create("operations", "fsEditType:", Enum.GetValues<FLUX_FileModify>(), f => (uint)f);
-
-            var modify_dialog_result = await Flux.ShowSelectionAsync(
-                "fsEditTitle", new[] { modify_option });
-
-            if (modify_dialog_result != ContentDialogResult.Primary)
+            var result = await Flux.ShowDialogAsync(f => new ModifyFSDialog(f, (FLUX_FileModify.Delete, fs.Name)));
+            if (result.result != DialogResult.Primary || !result.data.HasValue)
                 return;
-
-            if (!modify_option.Value.HasValue)
-                return;
-
 
             using var fs_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            switch (modify_option.Value.Value)
+            switch (result.data.Value.file_modify)
             {
                 case FLUX_FileModify.Rename:
-
-                    var rename_option = new TextBox("rename", "fsName", fs.FSName);
-
-                    var rename_dialog_result = await Flux.ShowSelectionAsync(
-                        "fsRenameConfirm", new[] { rename_option });
-
-                    if (rename_dialog_result != ContentDialogResult.Primary)
-                        return;
-
-                    var rename_result = await Flux.ConnectionProvider.RenameAsync(fs.FSPath, fs.FSName, rename_option.Value, fs_cts.Token);
+                    var rename_result = await Flux.ConnectionProvider.RenameAsync(fs.FSPath, fs.FSName, result.data.Value.file_name, fs_cts.Token);
                     if (rename_result)
                         UpdateFolder.OnNext(Unit.Default);
                     break;
 
                 case FLUX_FileModify.Delete:
-                    var delete_dialog_result = await Flux.ShowConfirmDialogAsync("fsDeleteConfirmTitle", $"fsDeleteConfirm; {fs.FSPath}/{fs.FSName}");
-                    if (delete_dialog_result != ContentDialogResult.Primary)
+                    var delete_dialog_result = await Flux.ShowDialogAsync(f => new ConfirmDialog(f, new RemoteText("fsDelete", true), new RemoteText(fs.Name, false)));
+                    if (delete_dialog_result.result != DialogResult.Primary)
                         return;
 
                     var delete_result = await Flux.ConnectionProvider.DeleteAsync(fs.FSPath, fs.FSName, fs_cts.Token);
@@ -143,7 +119,7 @@ namespace Flux.ViewModels
 
         public async Task EditFileAsync(FileViewModel file)
         {
-            using var download_cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            /*using var download_cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             var file_source = await Flux.ConnectionProvider.GetFileAsync(file.FSPath, file.FSName, download_cts.Token);
             if (!file_source.HasValue)
                 return;
@@ -153,7 +129,7 @@ namespace Flux.ViewModels
             var result = await Flux.ShowSelectionAsync(
                 "fsEdit", new[] { textbox });
 
-            if (result != ContentDialogResult.Primary)
+            if (result != DialogResult.Primary)
                 return;
 
             var source = read_source(file_source.Value)
@@ -168,7 +144,7 @@ namespace Flux.ViewModels
                 using var reader = new StringReader(textbox.Value);
                 while ((line = reader.ReadLine()) != null)
                     yield return line;
-            }
+            }*/
         }
 
         public async Task<(Optional<FolderViewModel>, Optional<FLUX_FileList>)> ListFilesAsync(Optional<FolderViewModel> folder)
@@ -198,5 +174,52 @@ namespace Flux.ViewModels
                 }
             }
         }
+    }
+    public class CreateFSDialog : InputDialog<CreateFSDialog, (FLUX_FileType file_type, string file_name)>
+    {
+        [RemoteInput()]
+        public SelectableCache<FLUX_FileType, string> FileType { get; }
+
+        private string _FSName;
+        [RemoteInput()]
+        public string FSName 
+        {
+            get => _FSName;
+            set => this.RaiseAndSetIfChanged(ref _FSName, value);
+        }
+
+        public CreateFSDialog(IFlux flux, (FLUX_FileType file_type, string file_name) startValue) : base(flux, startValue, new RemoteText("title", true))
+        {
+            var file_type = Enum.GetValues<FLUX_FileType>().AsObservableChangeSet(f => Enum.GetName(f));
+            FileType = SelectableCache.Create(file_type, Enum.GetName(startValue.file_type));
+            FSName = startValue.file_name;
+        }
+
+        public override Optional<(FLUX_FileType file_type, string file_name)> Confirm() => (FileType.SelectedValue.ValueOrDefault(), FSName);
+    }
+    public class ModifyFSDialog : InputDialog<ModifyFSDialog, (FLUX_FileModify file_modify, string file_name)>
+    {
+        [RemoteInput()]
+        public SelectableCache<FLUX_FileModify, string> FileModify { get; }
+
+        private string _FSName;
+        [RemoteInput()]
+        public string FSName
+        {
+            get => _FSName;
+            set => this.RaiseAndSetIfChanged(ref _FSName, value);
+        }
+
+        public ModifyFSDialog(IFlux flux, (FLUX_FileModify file_modify, string file_name) startValue) : base(flux, startValue, new RemoteText(startValue.file_name, false))
+        {
+            var file_modify = Enum.GetValues<FLUX_FileModify>().AsObservableChangeSet(f => Enum.GetName(f));
+            FileModify = SelectableCache.Create(file_modify, Enum.GetName(startValue.file_modify));
+            FileModify.SelectedValueChanged
+                .Where(m => m.HasValue)
+                .Where(m => m.Value == FLUX_FileModify.Delete)
+                .SubscribeRC(m => FSName = startValue.file_name, this);
+        }
+
+        public override Optional<(FLUX_FileModify file_modify, string file_name)> Confirm() => (FileModify.SelectedValue.ValueOrDefault(), FSName);
     }
 }

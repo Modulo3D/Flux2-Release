@@ -13,30 +13,23 @@ namespace Flux.ViewModels
     public interface IInvalidItemViewModel : IRemoteControl
     {
         FeederEvaluator Evaluation { get; }
-        string CurrentValueName { get; }
-        string ExpectedValueName { get; }
         Optional<string> CurrentValue { get; }
         Optional<string> ExpectedValue { get; }
     }
 
     public interface IInvalidValueViewModel : IInvalidItemViewModel
     {
-        string ItemName { get; }
         Optional<string> Item { get; }
     }
 
-    public abstract class InvalidItemViewModel<T> : RemoteControl<T>, IInvalidItemViewModel
-        where T : InvalidItemViewModel<T>
+    [RemoteControl(baseClass: typeof(InvalidItemViewModel<>))]
+    public abstract class InvalidItemViewModel<TInvalidItemViewModel> : RemoteControl<TInvalidItemViewModel>, IInvalidItemViewModel
+        where TInvalidItemViewModel : InvalidItemViewModel<TInvalidItemViewModel>
     {
         public FeederEvaluator Evaluation { get; }
 
         [RemoteOutput(false)]
         public uint Position => Evaluation.Feeder.Position;
-
-        [RemoteOutput(true)]
-        public abstract string CurrentValueName { get; }
-        [RemoteOutput(true)]
-        public abstract string ExpectedValueName { get; }
 
         private readonly ObservableAsPropertyHelper<Optional<string>> _CurrentValue;
         [RemoteOutput(true)]
@@ -49,7 +42,7 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public abstract string InvalidItemBrush { get; }
 
-        public InvalidItemViewModel(string name, FeederEvaluator eval) : base(name)
+        public InvalidItemViewModel(FeederEvaluator eval) : base($"{eval.Feeder.Position}")
         {
             Evaluation = eval;
 
@@ -66,17 +59,15 @@ namespace Flux.ViewModels
         public abstract IObservable<Optional<string>> GetExpectedValue(FeederEvaluator eval);
     }
 
+    [RemoteControl(baseClass: typeof(InvalidValueViewModel<>))]
     public abstract class InvalidValueViewModel<T> : InvalidItemViewModel<T>, IInvalidValueViewModel
         where T : InvalidValueViewModel<T>
     {
-        [RemoteOutput(true)]
-        public abstract string ItemName { get; }
-
         private readonly ObservableAsPropertyHelper<Optional<string>> _Item;
         [RemoteOutput(true)]
         public Optional<string> Item => _Item.Value;
 
-        public InvalidValueViewModel(string name, FeederEvaluator eval) : base(name, eval)
+        public InvalidValueViewModel(FeederEvaluator eval) : base(eval)
         {
             _Item = GetItem(eval)
                 .ToProperty(this, e => e.Item)
@@ -88,24 +79,18 @@ namespace Flux.ViewModels
 
     public interface IInvalidFeedersViewModel : IHomePhaseViewModel
     {
-        public abstract string Title { get; }
-        public abstract string ChangeName { get; }
         public ReactiveCommand<Unit, Unit> ChangeItemsCommand { get; }
     }
 
     public abstract class InvalidFeedersViewModel<TInvalidFederViewModel> : HomePhaseViewModel<TInvalidFederViewModel>, IInvalidFeedersViewModel
         where TInvalidFederViewModel : InvalidFeedersViewModel<TInvalidFederViewModel>
     {
-        [RemoteOutput(true)]
-        public abstract string Title { get; }
-        [RemoteOutput(true)]
-        public abstract string ChangeName { get; }
         [RemoteCommand]
         public ReactiveCommand<Unit, Unit> ChangeItemsCommand { get; }
 
-        public InvalidFeedersViewModel(FluxViewModel flux, string name = default) : base(flux, name)
+        public InvalidFeedersViewModel(FluxViewModel flux) : base(flux)
         {
-            ChangeItemsCommand = ReactiveCommand.CreateFromTask(ChangeItemsAsync);
+            ChangeItemsCommand = ReactiveCommandRC.CreateFromTask(ChangeItemsAsync, (TInvalidFederViewModel)this);
         }
 
         public abstract Task ChangeItemsAsync();
@@ -116,6 +101,7 @@ namespace Flux.ViewModels
         public IObservableList<IInvalidItemViewModel> InvalidItems { get; }
     }
 
+    [RemoteControl(baseClass: typeof(InvalidItemsViewModel<>))]
     public abstract class InvalidItemsViewModel<TInvalidItemsViewModel> : InvalidFeedersViewModel<TInvalidItemsViewModel>, IInvalidItemsViewModel
         where TInvalidItemsViewModel : InvalidItemsViewModel<TInvalidItemsViewModel>
     {
@@ -124,7 +110,7 @@ namespace Flux.ViewModels
 
         public Comparer<IInvalidItemViewModel> EvaluationComparer { get; }
 
-        public InvalidItemsViewModel(FluxViewModel flux, string name = default) : base(flux, name)
+        public InvalidItemsViewModel(FluxViewModel flux) : base(flux)
         {
             EvaluationComparer = Comparer<IInvalidItemViewModel>.Create((tm1, tm2) => tm1.Evaluation.Feeder.Position.CompareTo(tm2.Evaluation.Feeder.Position));
         }
@@ -137,6 +123,7 @@ namespace Flux.ViewModels
         bool CanStartWithInvalidValues { get; }
     }
 
+    [RemoteControl(baseClass: typeof(InvalidValuesViewModel<>))]
     public abstract class InvalidValuesViewModel<TInvalidValuesViewModel> : InvalidFeedersViewModel<TInvalidValuesViewModel>, IInvalidValuesViewModel
         where TInvalidValuesViewModel : InvalidValuesViewModel<TInvalidValuesViewModel>
     {
@@ -150,7 +137,7 @@ namespace Flux.ViewModels
 
         public Comparer<IInvalidValueViewModel> EvaluationComparer { get; }
 
-        public InvalidValuesViewModel(FluxViewModel flux, string name = default) : base(flux, name)
+        public InvalidValuesViewModel(FluxViewModel flux) : base(flux)
         {
             EvaluationComparer = Comparer<IInvalidValueViewModel>.Create((tm1, tm2) => tm1.Evaluation.Feeder.Position.CompareTo(tm2.Evaluation.Feeder.Position));
         }
@@ -158,7 +145,7 @@ namespace Flux.ViewModels
         public override void Initialize()
         {
             var can_start = this.WhenAnyValue(v => v.CanStartWithInvalidValues);
-            StartWithInvalidValuesCommand = ReactiveCommand.Create(StartWithInvalidValues, can_start);
+            StartWithInvalidValuesCommand = ReactiveCommandRC.Create(StartWithInvalidValues, (TInvalidValuesViewModel)this, can_start);
         }
 
         public abstract void StartWithInvalidValues();

@@ -30,7 +30,7 @@ namespace Flux.ViewModels
         [RemoteOutput(false)]
         public int ErrCode { get; set; }
 
-        public FluxMessage(string title, string text, MessageLevel level, DateTime timestamp, int errCode) : base($"message??{errCode}:{timestamp.Serialize()}")
+        public FluxMessage(string title, string text, MessageLevel level, DateTime timestamp, int errCode) : base($"{errCode}:{timestamp.Serialize()}")
         {
             TimeStamp = timestamp;
             ErrCode = errCode;
@@ -38,7 +38,7 @@ namespace Flux.ViewModels
             Title = title;
             Text = text;
         }
-        public FluxMessage(int errCode, SYSTEMTIMECNDEX systime, MSGTEXTarray message_text_array, MessageLevel level) : base($"message??{errCode}:{ParseTimeStamp(systime)}")
+        public FluxMessage(int errCode, SYSTEMTIMECNDEX systime, MSGTEXTarray message_text_array, MessageLevel level) : base($"{errCode}:{ParseTimeStamp(systime)}")
         {
             Level = level;
             ErrCode = errCode;

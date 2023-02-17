@@ -41,17 +41,17 @@ namespace Flux.ViewModels
         [RemoteCommand]
         public ReactiveCommand<Unit, Unit> FunctionalityCommand { get; }
 
-        public FluxNavigatorViewModel(FluxViewModel flux) : base("navigator")
+        public FluxNavigatorViewModel(FluxViewModel flux)
         {
             Flux = flux;
             SourceListRC.Create(this, v => v.Routes);
             PreviousViewModels = new Stack<IFluxRoutableViewModel>();
 
-            var home = new NavButton<HomeViewModel>(Flux, Flux.Home, reset: true);
-            var storage = new NavButton<MCodesViewModel>(Flux, Flux.MCodes, reset: true);
-            var feeders = new NavButton<FeedersViewModel>(Flux, Flux.Feeders, reset: true);
-            var calibration = new NavButton<CalibrationViewModel>(Flux, Flux.Calibration, reset: true);
-            var functionality = new NavButton<FunctionalityViewModel>(Flux, Flux.Functionality, reset: true);
+            var home = new NavButton<HomeViewModel>(flux, Flux.Home, reset: true);
+            var storage = new NavButton<MCodesViewModel>(flux, Flux.MCodes, reset: true);
+            var feeders = new NavButton<FeedersViewModel>(flux, Flux.Feeders, reset: true);
+            var calibration = new NavButton<CalibrationViewModel>(flux, Flux.Calibration, reset: true);
+            var functionality = new NavButton<FunctionalityViewModel>(flux, Flux.Functionality, reset: true);
 
 
             _ShowNavBar = this.WhenAnyValue(v => v.CurrentViewModel)
@@ -162,11 +162,11 @@ namespace Flux.ViewModels
         public FluxRoutableViewModel(
             FluxViewModel flux,
             OptionalObservable<bool> show_navbar = default,
-            Optional<string> name = default) : base(name)
+            string name = "") : base(name)
         {
             Flux = flux;
-            UrlPathSegment = this.GetRemoteControlName();
             ShowNavBar = show_navbar.ObservableOr(() => false);
+            UrlPathSegment = typeof(TFluxRoutableViewModel).GetRemoteElementClass();
         }
 
         public virtual Task OnNavigatedFromAsync(Optional<IFluxRoutableViewModel> from)
@@ -185,7 +185,7 @@ namespace Flux.ViewModels
     {
         public FluxRoutableNavBarViewModel(
             FluxViewModel flux,
-            Optional<string> name = default)
+            string name = "")
             : base(flux, OptionalObservable.Some(true), name)
         {
         }

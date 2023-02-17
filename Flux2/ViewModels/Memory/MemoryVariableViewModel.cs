@@ -50,7 +50,7 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public bool HasValue => _HasValue.Value;
 
-        public MemoryVariableViewModel(FluxViewModel flux, IFLUX_Variable variable, Optional<List<FLUX_VariableAttribute>> attributes) : base($"{typeof(MemoryVariableViewModel).GetRemoteControlName()}??{variable.Name}{variable.Unit}")
+        public MemoryVariableViewModel(FluxViewModel flux, IFLUX_Variable variable, Optional<List<FLUX_VariableAttribute>> attributes) : base($"{variable.Name}")
         {
             Flux = flux;
             Variable = variable;
@@ -144,16 +144,11 @@ namespace Flux.ViewModels
             try
             {
                 Optional<TData> value = await variable.ReadAsync();
-
-                var tb_value = new TextBox("tbValue", "memoryValue", get_str(value.ValueOrDefault()));
-
-                var result = await Flux.ShowSelectionAsync(
-                    VariableName, new[] { tb_value });
-
-                if (result != ContentDialogResult.Primary)
+                var result = await Flux.ShowDialogAsync(f => new SetVariableDialog(f, value.Convert(get_str), variable));
+                if (result.result != DialogResult.Primary || !result.data.HasValue)
                     return;
 
-                value = get_value(tb_value.Value);
+                value = get_value(result.data.Value);
                 if (!value.HasValue)
                     return;
 
@@ -163,5 +158,21 @@ namespace Flux.ViewModels
             { 
             }
         }
+    }
+
+    public class SetVariableDialog : InputDialog<SetVariableDialog, string>
+    {
+        private Optional<string> _Value;
+        [RemoteInput()]
+        public Optional<string> Value
+        {
+            get => _Value;
+            set => this.RaiseAndSetIfChanged(ref _Value, value);
+        }
+        public SetVariableDialog(IFlux flux, Optional<string> startValue, IFLUX_Variable variable) : base(flux, startValue, new RemoteText(variable.Name, false))
+        {
+            Value = startValue;
+        }
+        public override Optional<string> Confirm() => Value;
     }
 }

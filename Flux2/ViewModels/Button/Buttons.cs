@@ -1,4 +1,5 @@
 ﻿using DynamicData.Kernel;
+using EmbedIO.Routing;
 using Modulo3DNet;
 using ReactiveUI;
 using System;
@@ -74,7 +75,6 @@ namespace Flux.ViewModels
 
         public ToggleButton(
             string name,
-            FluxViewModel flux,
             IFLUX_Variable<bool, bool> @bool,
             OptionalObservable<bool> can_execute = default,
             OptionalObservable<bool> visible = default)
@@ -88,7 +88,7 @@ namespace Flux.ViewModels
         }
     }
 
-    public class NavButton<TFluxRoutableViewModel> : CmdButton, INavButton
+    public sealed class NavButton<TFluxRoutableViewModel> : CmdButton, INavButton
         where TFluxRoutableViewModel : IFluxRoutableViewModel
     {
         public IFlux Flux { get; }
@@ -99,7 +99,7 @@ namespace Flux.ViewModels
             OptionalObservable<bool> can_navigate = default,
             OptionalObservable<bool> visible = default,
             bool reset = false)
-            : base($"navButton??{route.Name}", () => flux.Navigator.Navigate(route, reset), can_navigate, visible)
+            : base(route.Name, () => flux.Navigator.Navigate(route, reset), can_navigate, visible)
         {
             Flux = flux;
         }
@@ -110,12 +110,12 @@ namespace Flux.ViewModels
             bool reset,
             OptionalObservable<bool> can_navigate = default,
             OptionalObservable<bool> visible = default) :
-            base($"navButton??{typeof(TFluxRoutableViewModel).GetRemoteControlName()}", () => flux.Navigator.Navigate(modal.Value, reset), can_navigate, visible)
+            base(typeof(TFluxRoutableViewModel).GetRemoteElementClass(), () => flux.Navigator.Navigate(modal.Value, reset), can_navigate, visible)
         {
             Flux = flux;
         }
     }
-    public class NavButtonModal<TFluxRoutableViewModel> : CmdButton, INavButton
+    public sealed class NavButtonModal<TFluxRoutableViewModel> : CmdButton, INavButton
         where TFluxRoutableViewModel : IFluxRoutableViewModel
     {
         public IFlux Flux { get; }
@@ -125,7 +125,7 @@ namespace Flux.ViewModels
             NavModalViewModel<TFluxRoutableViewModel> route,
             OptionalObservable<bool> can_navigate = default,
             OptionalObservable<bool> visible = default) :
-            base($"navButton??{route.Name}", () => flux.Navigator.Navigate(route, false), can_navigate, visible)
+            base(route.Name, () => flux.Navigator.Navigate(route, false), can_navigate, visible)
         {
             Flux = flux;
         }
@@ -135,7 +135,7 @@ namespace Flux.ViewModels
             Lazy<NavModalViewModel<TFluxRoutableViewModel>> modal,
             OptionalObservable<bool> can_navigate = default,
             OptionalObservable<bool> visible = default) :
-            base($"navButton??{typeof(TFluxRoutableViewModel).GetRemoteControlName()}", () => flux.Navigator.Navigate(modal.Value, false), can_navigate, visible)
+            base(typeof(TFluxRoutableViewModel).GetRemoteElementClass(), () => flux.Navigator.Navigate(modal.Value, false), can_navigate, visible)
         {
             Flux = flux;
         }

@@ -24,11 +24,11 @@ namespace Flux.ViewModels
                 .WhenAnyValue(s => s.StatusEvaluation)
                 .Select(s => s.IsIdle);
 
-            ResetMagazineCommand = ReactiveCommand.CreateFromTask(async () => { await Flux.ConnectionProvider.ResetMagazineAsync(); }, is_idle);
+            ResetMagazineCommand = ReactiveCommandRC.CreateFromTask(async () => { await Flux.ConnectionProvider.ResetMagazineAsync(); }, this, is_idle);
 
             var top_lock_unit = Flux.ConnectionProvider.GetArrayUnit(m => m.LOCK_CLOSED, "top");
             if (Flux.ConnectionProvider.HasVariable(m => m.LOCK_CLOSED, top_lock_unit))
-                AddCommand("toggleTopLock", ReactiveCommand.CreateFromTask(async () => { await Flux.ConnectionProvider.ToggleVariableAsync(c => c.OPEN_LOCK, top_lock_unit); }));
+                AddCommand("toggleTopLock", ReactiveCommandRC.CreateFromTask(async () => { await Flux.ConnectionProvider.ToggleVariableAsync(c => c.OPEN_LOCK, top_lock_unit); }, this));
         }
     }
 }

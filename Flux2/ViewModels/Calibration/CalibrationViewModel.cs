@@ -181,14 +181,14 @@ namespace Flux.ViewModels
             {
                 if (sorted_valid_offsets.Any(o => o.ProbeState == FluxProbeState.VALID_PROBE))
                 {
-                    var result = await Flux.ShowConfirmDialogAsync("dialog.toolCalibration.title", $"dialog.toolCalibration.confirmCalibrationOverwrite");
-                    if (result != ContentDialogResult.Primary)
+                    var result = await Flux.ShowDialogAsync(f => new ConfirmDialog(f, new RemoteText("toolCalibration", true), new RemoteText()));
+                    if (result.result != DialogResult.Primary)
                         return;
                 }
                 else
                 {
-                    var result = await Flux.ShowConfirmDialogAsync("dialog.toolCalibration.title", "dialog.toolCalibration.confirmCalibration");
-                    if (result != ContentDialogResult.Primary)
+                    var result = await Flux.ShowDialogAsync(f => new ConfirmDialog(f, new RemoteText("toolCalibrationOverride", true), new RemoteText()));
+                    if (result.result != DialogResult.Primary)
                         return;
                 }
             }

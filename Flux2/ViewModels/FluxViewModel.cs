@@ -1,5 +1,7 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
+using EmbedIO.Routing;
+using Flux.ViewModels;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Modulo3DNet;
@@ -110,6 +112,7 @@ namespace Flux.ViewModels
         public StatusBarViewModel StatusBar { get; private set; }
         public CalibrationViewModel Calibration { get; private set; }
         public FunctionalityViewModel Functionality { get; private set; }
+        public ConditionsProvider ConditionsProvider { get; private set; }
         public Lazy<TemperaturesViewModel> Temperatures { get; private set; }
         public NetProvider NetProvider { get; private set; }
         public StatsProvider StatsProvider { get; private set; }
@@ -130,9 +133,9 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public string RightIconForeground => _RightIconForeground?.Value;
 
-        private ObservableAsPropertyHelper<string> _StatusText;
+        private ObservableAsPropertyHelper<RemoteText> _StatusText;
         [RemoteOutput(true)]
-        public string StatusText => _StatusText?.Value;
+        public RemoteText StatusText => _StatusText?.Value ?? default;
 
         private ObservableAsPropertyHelper<string> _StatusBrush;
         [RemoteOutput(true)]
@@ -150,9 +153,9 @@ namespace Flux.ViewModels
         IFluxNavigatorViewModel IFlux.Navigator => Navigator;
         IFluxCalibrationViewModel IFlux.Calibration => Calibration;
 
-        private Optional<IContentDialog> _ContentDialog;
-        [RemoteContent(true, "dialog")]
-        public Optional<IContentDialog> ContentDialog
+        private Optional<IDialog> _ContentDialog;
+        [RemoteContent(true)]
+        public Optional<IDialog> Dialog
         {
             get => _ContentDialog;
             set => this.RaiseAndSetIfChanged(ref _ContentDialog, value);
@@ -160,7 +163,7 @@ namespace Flux.ViewModels
 
         public ILogger<IFlux> Logger { get; }
 
-        public FluxViewModel(ILogger<IFlux> logger) : base("flux")
+        public FluxViewModel(ILogger<IFlux> logger)
         {
             Logger = logger;
 
@@ -207,6 +210,7 @@ namespace Flux.ViewModels
 
                     Feeders = new FeedersViewModel(this);
                     MCodes = new MCodesViewModel(this);
+                    ConditionsProvider = new ConditionsProvider(this);
                     StatusProvider = new StatusProvider(this);
                     Calibration = new CalibrationViewModel(this);
                     Webcam = new WebcamViewModel(this);
@@ -287,36 +291,6 @@ namespace Flux.ViewModels
                     Console.WriteLine(ex);
                 }
             });
-
-            Task.Run(async () =>
-            {
-                await Task.Delay(5000);
-                if (ConnectionProvider is Dummy_ConnectionProvider)
-                {
-                    if (!DatabaseProvider.Database.HasValue)
-                        Environment.Exit(1);
-
-                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                    var printers_docs = await DatabaseProvider.Database.Value
-                        .FindAllAsync<Printer>(cts.Token);
-
-                    var printers = printers_docs.Distinct()
-                        .OrderBy(d => d.Name)
-                        .AsObservableChangeSet(m => m.Id);
-
-                    var printer_option = ComboOption.Create($"printer", "Stampante:", d => printers.AsObservableCache().DisposeWith(d));
-
-                    var result = await ShowSelectionAsync(
-                        "Seleziona un modello di stampante", new[] { printer_option });
-
-                    if (result != ContentDialogResult.Primary)
-                        Environment.Exit(2);
-
-                    var printer_id = printer_option.Items.SelectedKey;
-                    SettingsProvider.CoreSettings.Local.PrinterID = printer_id;
-                    SettingsProvider.CoreSettings.PersistLocalSettings();
-                }
-            });
         }
 
         public Task StopAsync(CancellationToken cancellationToken)
@@ -328,134 +302,67 @@ namespace Flux.ViewModels
         {
             return Task.CompletedTask;
         }
-        private string GetStatusText(FLUX_ProcessStatus status, PrintingEvaluation printing_evaluation)
+        private RemoteText GetStatusText(FLUX_ProcessStatus status, PrintingEvaluation printing_evaluation)
         {
             return status switch
             {
-                FLUX_ProcessStatus.IDLE => "status.idle",
-                FLUX_ProcessStatus.ERROR => "status.error",
-                FLUX_ProcessStatus.EMERG => "status.emerg",
-                FLUX_ProcessStatus.CYCLE => "status.cycle",
-                FLUX_ProcessStatus.NONE => "status.connecting",
+                FLUX_ProcessStatus.IDLE => new RemoteText("status.idle", true),
+                FLUX_ProcessStatus.ERROR => new RemoteText("status.error", true),
+                FLUX_ProcessStatus.EMERG => new RemoteText("status.emerg", true),
+                FLUX_ProcessStatus.CYCLE => new RemoteText("status.cycle", true),
+                FLUX_ProcessStatus.NONE => new RemoteText("status.connecting", true),
                 FLUX_ProcessStatus.WAIT => wait(),
-                _ => "status.online",
+                _ => new RemoteText("status.online", true),
             };
 
-            string wait()
+            RemoteText wait()
             {
                 if (printing_evaluation.Recovery.HasValue)
-                    return "status.paused";
-                return "status.wait";
+                    return new RemoteText("status.paused", true);
+                return new RemoteText("status.wait", true);
             }
         }
 
-        public async Task<ContentDialogResult> ShowContentDialogAsync(Func<IFlux, IContentDialog> get_dialog)
+        public async Task<(Optional<TDialogResult> data, DialogResult result)> ShowDialogAsync<TDialogResult>(Func<IFlux, IDialog<TDialogResult>> get_dialog)
         {
             using var dialog = get_dialog(this);
             return await dialog.ShowAsync();
         }
-        public async Task<ContentDialogResult> ShowModalDialogAsync<T>(Func<FluxViewModel, T> get_route) where T : IFluxRoutableViewModel
+        public async Task<(Optional<Unit> data, DialogResult result)> ShowModalDialogAsync<TFluxRoutableViewModel>(Func<FluxViewModel, TFluxRoutableViewModel> get_modal)
+            where TFluxRoutableViewModel : IFluxRoutableViewModel
         {
-            return await ShowContentDialogAsync(f =>
-            {
-                var route = get_route(this);
-                var dialog = new ContentDialog(f, route.Name,
-                    can_cancel: Observable.Return(true).ToOptional());
-                dialog.AddContent(route);
-                return dialog;
-            });
+            using var dialog = new ModalDialog(this, f => get_modal((FluxViewModel)f));
+            return await dialog.ShowAsync();
         }
-        public async Task<ContentDialogResult> ShowModalDialogAsync<T>(Func<FluxViewModel, Lazy<T>> get_route) where T : IFluxRoutableViewModel
+        public async Task<(Optional<Unit> data, DialogResult result)> ShowModalDialogAsync<TFluxRoutableViewModel>(Func<FluxViewModel, Lazy<TFluxRoutableViewModel>> get_modal)
+            where TFluxRoutableViewModel : IFluxRoutableViewModel
         {
-            return await ShowContentDialogAsync(f =>
-            {
-                var route = get_route(this);
-                var dialog = new ContentDialog(f, route.Value.Name,
-                    can_cancel: Observable.Return(true).ToOptional());
-                dialog.AddContent(route.Value);
-                return dialog;
-            });
+            using var dialog = new ModalDialog(this, f => get_modal((FluxViewModel)f).Value);
+            return await dialog.ShowAsync();
         }
-        public async Task<ContentDialogResult> ShowConfirmDialogAsync(string title, string content)
-        {
-            return await ShowContentDialogAsync(f =>
-            {
-                var dialog = new ContentDialog(f, title,
-                    can_cancel: Observable.Return(true).ToOptional(),
-                    can_confirm: Observable.Return(true).ToOptional());
-                dialog.AddContent(new TextBlock("content", content));
-                return dialog;
-            });
-        }
-        public async Task<bool> IterateConfirmDialogAsync(string title, string content, ushort max_iterations, Func<Task> task)
+        public async Task<bool> IterateDialogAsync<TDialogResult>(Func<IFlux, IDialog<TDialogResult>> get_dialog, ushort max_iterations, Func<Task> iteration_task)
         {
             ushort iterations = 0;
-            var result = ContentDialogResult.None;
-            while (result != ContentDialogResult.Primary && iterations < max_iterations)
+            (Optional<TDialogResult> data, DialogResult result) result = default;
+            while (result.result != DialogResult.Primary && iterations < max_iterations)
             {
                 iterations++;
-                await task();
-                result = await ShowConfirmDialogAsync(title, content);
+                await iteration_task();
+                result = await ShowDialogAsync(get_dialog);
             }
-            return result == ContentDialogResult.Primary;
-        }
-        public async Task<ContentDialogResult> ShowProgressDialogAsync(string title, Func<IContentDialog, IDialogOption<double>, Task> operation)
-        {
-            return await ShowContentDialogAsync(f =>
-            {
-                var dialog = new ContentDialog(this, title);
-
-                var progress = new ProgressBar("progress", "PROGRESSO...");
-                dialog.AddContent(progress);
-                var operation_task = Task.Run(async () =>
-                {
-                    try
-                    {
-                        await operation(dialog, progress);
-                    }
-                    catch
-                    { }
-                });
-
-                return dialog;
-            });
-        }
-        public async Task<ContentDialogResult> ShowSelectionAsync(string title, IDialogOption[] options, OptionalObservable<bool> can_confirm = default)
-        {
-            return await ShowContentDialogAsync(f =>
-            {
-                var confirm_list = options.Select(o => o.WhenAnyValue(o => o.HasValue))
-                    .Append(can_confirm.ObservableOr(() => true));
-
-                var _can_confirm = Observable.CombineLatest(confirm_list,
-                    l => l.All(l => l))
-                    .ToOptional();
-
-                var dialog = new ContentDialog(f, title,
-                    can_confirm: _can_confirm,
-                    can_cancel: Observable.Return(true).ToOptional());
-
-                dialog.AddContent("options", options);
-
-                return dialog;
-            });
+            return result.result == DialogResult.Primary;
         }
 
         public async Task<ValueResult<(TResult, NFCTagRW)>> ShowNFCDialog<TResult>(INFCHandle handle, Func<INFCHandle, INFCRWViewModel, Task<(TResult, NFCTagRW)>> func, Func<TResult, NFCTagRW, bool> success, int millisecond_delay = 200)
         {
             var reading = true;
 
-            using var dialog = new ContentDialog(this, "Lettura tag in corso...",
-                can_cancel: Observable.Return(true).ToOptional());
-            
-            var card_info = new NFCRWViewModel();
-            dialog.AddContent(card_info);
-
+            using var dialog = new ContentDialog(this, new NFCRWViewModel());
             var dialog_result = Task.Run(async () =>
             {
                 var result = await dialog.ShowAsync();
                 reading = false;
-                return result == ContentDialogResult.Primary;
+                return result.result == DialogResult.Primary;
             });
 
             var reading_result = Task.Run(async () =>
@@ -463,13 +370,13 @@ namespace Flux.ViewModels
                 (TResult data, NFCTagRW rw) result = (default, NFCTagRW.None);
                 do
                 {
-                    result = await func(handle, card_info);
+                    result = await func(handle, (NFCRWViewModel)dialog.Content);
                     if (!success(result.data, result.rw))
                         await Task.Delay(millisecond_delay);
                 }
                 while (!success(result.data, result.rw) && reading);
 
-                dialog.ShowAsyncSource.TrySetResult(ContentDialogResult.None);
+                dialog.ShowAsyncSource.TrySetResult((Unit.Default, DialogResult.Primary));
                 return result;
             });
 
@@ -480,17 +387,12 @@ namespace Flux.ViewModels
         {
             var reading = true;
 
-            using var dialog = new ContentDialog(this, "Lettura tag in corso...",
-                can_cancel: Observable.Return(true).ToOptional());
-
-            var card_info = new NFCRWViewModel();
-            dialog.AddContent(card_info);
-
+            using var dialog = new ContentDialog(this, new NFCRWViewModel());
             var dialog_result = Task.Run(async () =>
             {
                 var result = await dialog.ShowAsync();
                 reading = false;
-                return result == ContentDialogResult.Primary;
+                return result.result == DialogResult.Primary;
             });
 
             var reading_result = Task.Run(async () =>
@@ -498,13 +400,13 @@ namespace Flux.ViewModels
                 (TResult data, NFCTagRW rw) result = (default, NFCTagRW.None);
                 do
                 {
-                    result = func(handle, card_info);
+                    result = func(handle, (NFCRWViewModel)dialog.Content);
                     if (!success(result.data, result.rw))
                         await Task.Delay(millisecond_delay);
                 }
                 while (!success(result.data, result.rw) && reading);
 
-                dialog.ShowAsyncSource.TrySetResult(ContentDialogResult.None);
+                dialog.ShowAsyncSource.TrySetResult((Unit.Default, DialogResult.Primary));
                 return result;
             });
 
@@ -596,17 +498,12 @@ namespace Flux.ViewModels
         {
             var reading = true;
 
-            using var dialog = new ContentDialog(this, "Lettura tag in corso...",
-                can_cancel: Observable.Return(true).ToOptional());
-
-            var card_info = new NFCRWViewModel();
-            dialog.AddContent(card_info);
-
+            using var dialog = new ContentDialog(this, new NFCRWViewModel());
             var dialog_result = Task.Run(async () =>
             {
                 var result = await dialog.ShowAsync();
                 reading = false;
-                return result == ContentDialogResult.Primary;
+                return result.result == DialogResult.Primary;
             });
 
             var reading_result = Task.Run(async () =>
@@ -614,13 +511,13 @@ namespace Flux.ViewModels
                 NFCTagRW result = NFCTagRW.None;
                 do
                 {
-                    result = await func(handle, card_info);
+                    result = await func(handle, (NFCRWViewModel)dialog.Content);
                     if (!success(result))
                         await Task.Delay(millisecond_delay);
                 }
                 while (!success(result) && reading);
 
-                dialog.ShowAsyncSource.TrySetResult(ContentDialogResult.None);
+                dialog.ShowAsyncSource.TrySetResult((Unit.Default, DialogResult.Primary));
                 return result;
             });
 
@@ -631,17 +528,12 @@ namespace Flux.ViewModels
         {
             var reading = true;
 
-            using var dialog = new ContentDialog(this, "Lettura tag in corso...",
-                can_cancel: Observable.Return(true).ToOptional());
-
-            var card_info = new NFCRWViewModel();
-            dialog.AddContent(card_info);
-
+            using var dialog = new ContentDialog(this, new NFCRWViewModel());
             var dialog_result = Task.Run(async () =>
             {
                 var result = await dialog.ShowAsync();
                 reading = false;
-                return result == ContentDialogResult.Primary;
+                return result.result == DialogResult.Primary;
             });
 
             var reading_result = Task.Run(async () =>
@@ -649,13 +541,13 @@ namespace Flux.ViewModels
                 NFCTagRW result = NFCTagRW.None;
                 do
                 {
-                    result = func(handle, card_info);
+                    result = func(handle, (NFCRWViewModel)dialog.Content);
                     if (!success(result))
                         await Task.Delay(millisecond_delay);
                 }
                 while (!success(result) && reading);
 
-                dialog.ShowAsyncSource.TrySetResult(ContentDialogResult.None);
+                dialog.ShowAsyncSource.TrySetResult((Unit.Default, DialogResult.Primary));
                 return result;
             });
 

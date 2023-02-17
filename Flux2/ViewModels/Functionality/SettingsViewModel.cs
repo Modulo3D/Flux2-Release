@@ -100,15 +100,15 @@ namespace Flux.ViewModels
             var printer_cache = database_changed.Select(FindPrintersAsync)
                 .Select(p => p.ToObservable()).Switch()
                 .ToObservableChangeSet(p => p.ConvertOr(p => p.Id, () => 0));
-            Printers = OptionalSelectableCache.Create(printer_cache);
+            Printers = OptionalSelectableCache.Create(printer_cache, 0);
 
             var host_address_cache = Flux.SettingsProvider.HostAddressCache
                 .Connect();
-            HostAddress = SelectableCache.Create(host_address_cache);
+            HostAddress = SelectableCache.Create(host_address_cache, "");
             
             var nfc_format_cache = NFCFormat.Formats.Values.Select(f => f.FormatName)
                 .AsObservableChangeSet(f => f);
-            NFCFormats = SelectableCache.Create(nfc_format_cache);
+            NFCFormats = SelectableCache.Create(nfc_format_cache, "");
 
             var nfc_tag_type_cache = new INFCTag[] 
                 {
@@ -116,7 +116,7 @@ namespace Flux.ViewModels
                     default(NFCToolNozzle),
                 }
                 .AsObservableChangeSet(f => f.GetType().Name);
-            NFCTagType = SelectableCache.Create(nfc_tag_type_cache);
+            NFCTagType = SelectableCache.Create(nfc_tag_type_cache, "");
 
             var user_settings = Flux.SettingsProvider.UserSettings.Local;
             var core_settings = Flux.SettingsProvider.CoreSettings.Local;
@@ -156,8 +156,8 @@ namespace Flux.ViewModels
             GenerateGuidCommand = ReactiveCommandRC.Create(GenerateGuid, this);
 
             var can_test_nfc = Observable.CombineLatest(
-                NFCFormats.SelectedKeyChanged,
-                NFCTagType.SelectedKeyChanged,
+                NFCFormats.SelectedValueChanged,
+                NFCTagType.SelectedValueChanged,
                 (format, tag) => format.HasValue && tag.HasValue);
 
             TestNFCCommand = ReactiveCommandRC.CreateFromTask(TestNFCAsync, this, can_test_nfc);

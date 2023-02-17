@@ -1,5 +1,6 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
+using Flux.ViewModels;
 using Modulo3DNet;
 using ReactiveUI;
 using System;
@@ -22,8 +23,8 @@ namespace Flux.ViewModels
 
     public interface IOperationViewModel
     {
-        string OperationText { get; }
-        string TitleText { get; }
+        RemoteText OperationText { get; }
+        RemoteText TitleText { get; }
     }
 
     public abstract class FeederOperationViewModel<TViewModel, TConditionAttribute> : FluxRoutableViewModel<TViewModel>, IOperationViewModel
@@ -32,13 +33,13 @@ namespace Flux.ViewModels
     {
         public FeederViewModel Feeder { get; }
 
-        private ObservableAsPropertyHelper<string> _TitleText;
+        private ObservableAsPropertyHelper<RemoteText> _TitleText;
         [RemoteOutput(true)]
-        public string TitleText => _TitleText.Value;
+        public RemoteText TitleText => _TitleText.Value;
 
-        private ObservableAsPropertyHelper<string> _OperationText;
+        private ObservableAsPropertyHelper<RemoteText> _OperationText;
         [RemoteOutput(true)]
-        public string OperationText => _OperationText.Value;
+        public RemoteText OperationText => _OperationText.Value;
 
         [RemoteContent(true)]
         public IObservableList<IConditionViewModel> FilteredConditions { get; private set; }
@@ -87,7 +88,7 @@ namespace Flux.ViewModels
             var can_cancel = CanCancelOperation();
 
             var all_conditions_true = FilteredConditions.Connect()
-                .AddKey(c => c.ConditionName)
+                .AddKey(c => c.Name)
                 .TrueForAll(c => c.StateChanged, state => state.Valid);
 
             var can_execute = Observable.CombineLatest(
@@ -160,12 +161,12 @@ namespace Flux.ViewModels
             }
         }
 
-        protected abstract string FindTitleText(bool idle);
-        protected abstract string FindOperationText(bool idle);
+        protected abstract RemoteText FindTitleText(bool idle);
+        protected abstract RemoteText FindOperationText(bool idle);
 
         protected virtual IEnumerable<(IConditionViewModel condition, TConditionAttribute condition_attribute)> FindConditions()
         {
-            return Flux.StatusProvider.GetConditions<TConditionAttribute>().SelectMany(kvp => kvp.Value);
+            return Flux.ConditionsProvider.GetConditions<TConditionAttribute>().SelectMany(kvp => kvp.Value);
         }
     }
 }

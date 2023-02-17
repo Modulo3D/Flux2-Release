@@ -15,9 +15,9 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public string PrinterName => _PrinterName.Value;
 
-        public WelcomeViewModel(FluxViewModel flux) : base(flux, "welcome")
+        public WelcomeViewModel(FluxViewModel flux) : base(flux)
         {
-            SelectPartProgramCommand = ReactiveCommand.CreateFromTask(SelectFileAsync);
+            SelectPartProgramCommand = ReactiveCommandRC.CreateFromTask(SelectFileAsync, this);
 
             _PrinterName = Flux.SettingsProvider
                 .WhenAnyValue(s => s.Printer)

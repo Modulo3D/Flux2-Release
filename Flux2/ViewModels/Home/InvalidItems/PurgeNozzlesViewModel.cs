@@ -12,14 +12,10 @@ namespace Flux.ViewModels
 {
     public class PurgeNozzleViewModel : InvalidValueViewModel<PurgeNozzleViewModel>
     {
-        public override string ItemName => "UTENSILE";
-        public override string CurrentValueName => "TEMPERATURA CORRENTE";
-        public override string ExpectedValueName => "TEMPERATURA RICHIESTA";
-
         private readonly ObservableAsPropertyHelper<string> _InvalidItemBrush;
         public override string InvalidItemBrush => _InvalidItemBrush.Value;
 
-        public PurgeNozzleViewModel(FeederEvaluator eval) : base($"{typeof(PurgeNozzleViewModel).GetRemoteControlName()}??{eval.Feeder.Position}", eval)
+        public PurgeNozzleViewModel(FeederEvaluator eval) : base(eval)
         {
             var material = eval.Feeder.WhenAnyValue(f => f.SelectedMaterial);
             var target_temp = eval.WhenAnyValue(e => e.TargetTemperature);
@@ -71,9 +67,6 @@ namespace Flux.ViewModels
     public class PurgeNozzlesViewModel : InvalidValuesViewModel<PurgeNozzlesViewModel>
     {
         public override bool CanStartWithInvalidValues => false;
-        public override string Title => "materialToPurge";
-        public override string ChangeName => "purgeMaterial";
-
         public PurgeNozzlesViewModel(FluxViewModel flux) : base(flux)
         {
         }

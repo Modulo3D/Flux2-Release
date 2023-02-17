@@ -125,7 +125,7 @@ namespace Flux.ViewModels
         public override string ExtrusionEventPath => CombinePaths(EventPath, "extr");
 
         public FluxViewModel Flux { get; }
-        private PriorityQueueNotifierUC<RRF_RequestPriority, IRRF_Request> Requests { get; }
+        public PriorityQueueNotifierUC<RRF_RequestPriority, IRRF_Request> Requests { get; }
 
         public RRF_Connection(FluxViewModel flux, RRF_ConnectionProvider connection_provider) : base(connection_provider)
         {
@@ -189,9 +189,9 @@ namespace Flux.ViewModels
                     return false;
 
                 var files_str = string.Join(Environment.NewLine, missing_variables.variables.Select(v => v.LoadVariableMacro));
-                var create_variables_result = await Flux.ShowConfirmDialogAsync("Creare file di variabile?", files_str);
+                var create_variables_result = await Flux.ShowDialogAsync(f => new ConfirmDialog(f, new RemoteText("createVariables", true), new RemoteText(files_str, false)));
 
-                if (create_variables_result != ContentDialogResult.Primary)
+                if (create_variables_result.result != DialogResult.Primary)
                     return false;
 
                 await ConnectionProvider.DeleteAsync(c => ((RRF_Connection)c).GlobalPath, "init_vars.g", ct);
@@ -668,7 +668,7 @@ namespace Flux.ViewModels
                 var old_path = $"{folder}/{old_filename}".TrimStart('/');
                 var new_path = $"{folder}/{new_filename}".TrimStart('/');
 
-                var request = new RRF_Request<RRF_Err>($"rr_move?old=0:/{old_path}&new=0:/{new_path}", HttpMethod.Get, RRF_RequestPriority.Immediate, ct);
+                var request = new RRF_Request<RRF_Err>($"rr_move?old=0:/{old_path}&new=0:/{new_path}&deleteexisting=yes", HttpMethod.Get, RRF_RequestPriority.Immediate, ct);
                 var response = await ExecuteAsync(request);
 
                 if (!response.Ok)

@@ -192,56 +192,52 @@ namespace Flux.ViewModels
             }
             if (mcodes.Count == 0)
                 return;
-
-            await Flux.ShowProgressDialogAsync("IMPORTO FILE", async (dialog, progress) =>
+            try
             {
-                try
+                foreach (var mcode in mcodes)
                 {
-                    foreach (var mcode in mcodes)
+                    //report_file(mcode.Key.ToString());
+
+                    var file_name = Path.GetFileName(mcode.Value.FullName);
+                    var file_path = Path.Combine(mcode_directory.FullName, file_name);
+                    if (work_directory.FullName != mcode_directory.FullName)
                     {
-                        //report_file(mcode.Key.ToString());
+                        if (File.Exists(file_path))
+                            File.Delete(file_path);
 
-                        var file_name = Path.GetFileName(mcode.Value.FullName);
-                        var file_path = Path.Combine(mcode_directory.FullName, file_name);
-                        if (work_directory.FullName != mcode_directory.FullName)
-                        {
-                            if (File.Exists(file_path))
-                                File.Delete(file_path);
+                        using (var base_stream = mcode.Value.OpenRead())
+                        using (var read_stream = new ProgressStream(base_stream, report_load))
+                        using (var write_stream = File.Create(file_path))
+                            await read_stream.CopyToAsync(write_stream);
 
-                            using (var base_stream = mcode.Value.OpenRead())
-                            using (var read_stream = new ProgressStream(base_stream, report_load))
-                            using (var write_stream = File.Create(file_path))
-                                await read_stream.CopyToAsync(write_stream);
+                        if (settings.DeleteFromUSB.ValueOr(() => false))
+                            mcode.Value.Delete();
+                    }
 
-                            if (settings.DeleteFromUSB.ValueOr(() => false))
-                                mcode.Value.Delete();
-                        }
+                    var analyzer = MCodeAnalyzer.CreateFromZip(mcode.Key, Directories.MCodes);
+                    if (!analyzer.HasValue)
+                        continue;
 
-                        var analyzer = MCodeAnalyzer.CreateFromZip(mcode.Key, Directories.MCodes);
-                        if (!analyzer.HasValue)
-                            continue;
+                    AvaiableMCodes.AddOrUpdate(new MCodeStorageViewModel(this, mcode.Key, analyzer.Value));
 
-                        AvaiableMCodes.AddOrUpdate(new MCodeStorageViewModel(this, mcode.Key, analyzer.Value));
-
-                        void report_load(double percentage)
-                        {
-                            progress.Value = percentage;
-                        }
-                        /*void report_file(string name)
-                        {
-                            //RxApp.MainThreadScheduler.Schedule(() => tb.Text = name);
-                        }*/
+                    void report_load(double percentage)
+                    {
+                       // progress.Value = percentage;
+                    }
+                    void report_file(string name)
+                    {
+                        //RxApp.MainThreadScheduler.Schedule(() => tb.Text = name);
                     }
                 }
-                catch (Exception ex)
-                {
-                    Flux.Messages.LogException(this, ex);
-                }
-                finally
-                {
-                    dialog.ShowAsyncSource.SetResult(ContentDialogResult.None);
-                }
-            });
+            }
+            catch (Exception ex)
+            {
+                Flux.Messages.LogException(this, ex);
+            }
+            finally
+            {
+                //dialog.ShowAsyncSource.SetResult(DialogResult.None);
+            }
         }
 
         // STORAGE
@@ -257,8 +253,8 @@ namespace Flux.ViewModels
         }
         public async Task<bool> ClearMCodeStorageAsync()
         {
-            var result = await Flux.ShowConfirmDialogAsync("ELIMINARE TUTTI I FILE?", "NON SARA' POSSIBILE RECUPERARE I FILE");
-            if (result != ContentDialogResult.Primary)
+            var result = await Flux.ShowDialogAsync(f => new ConfirmDialog(f, new RemoteText("clearMCodes", true), new RemoteText()));
+            if (result.result != DialogResult.Primary)
                 return true;
 
             Directories.Clear(Directories.MCodes);
@@ -326,8 +322,8 @@ namespace Flux.ViewModels
                 if (!hard_delete)
                 {
                     var name = file.Analyzer.MCode.Name;
-                    var result = await Flux.ShowConfirmDialogAsync($"ELIMINARE \"{name}\"?", "NON SARA' POSSIBILE RECUPERARE IL FILE");
-                    if (result != ContentDialogResult.Primary)
+                    var result = await Flux.ShowDialogAsync(f => new ConfirmDialog(f, new RemoteText($"deleteMCode", true), new RemoteText(name, false)));
+                    if (result.result != DialogResult.Primary)
                         return true;
                 }
 

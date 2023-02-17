@@ -52,11 +52,11 @@ namespace Flux.ViewModels
                 .ToPropertyRC(this, v => v.State);
 
             _ExtrusionTemp = this.WhenAnyValue(f => f.Document)
-                .Select(d => d.Convert(d => d[d => d.PrintTemperature, 0.0]))
+                .Select(d => d.Convert(d => d[d => d.PrintTemperature]))
                 .ToPropertyRC(this, v => v.ExtrusionTemp);
 
             _BreakTemp = this.WhenAnyValue(f => f.Document)
-                .Select(d => d.Convert(d => d[d => d.BreakTemperature, 0.0]))
+                .Select(d => d.Convert(d => d[d => d.BreakTemperature]))
                 .ToPropertyRC(this, v => v.BreakTemp);
         }
 

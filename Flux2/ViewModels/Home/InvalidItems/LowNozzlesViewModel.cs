@@ -11,14 +11,10 @@ namespace Flux.ViewModels
 {
     public class LowNozzleViewModel : InvalidValueViewModel<LowNozzleViewModel>
     {
-        public override string ItemName => "UGELLO";
-        public override string CurrentValueName => "PESO RIMANENTE";
-        public override string ExpectedValueName => "PESO RICHIESTO";
-
         private readonly ObservableAsPropertyHelper<string> _InvalidItemBrush;
         public override string InvalidItemBrush => _InvalidItemBrush.Value;
 
-        public LowNozzleViewModel(FeederEvaluator eval) : base($"{typeof(LowNozzleViewModel).GetRemoteControlName()}??{eval.Feeder.Position}", eval)
+        public LowNozzleViewModel(FeederEvaluator eval) : base(eval)
         {
             _InvalidItemBrush = Observable.CombineLatest(
                 eval.ToolNozzle.WhenAnyValue(m => m.CurrentWeight),
@@ -59,10 +55,7 @@ namespace Flux.ViewModels
 
     public class LowNozzlesViewModel : InvalidValuesViewModel<LowNozzlesViewModel>
     {
-        public override string Title => "UTENSILI CONSUMATI";
-        public override string ChangeName => "CAMBIA UTENSILE";
-        public override bool CanStartWithInvalidValues => false;
-
+        public override bool CanStartWithInvalidValues => true;
         public LowNozzlesViewModel(FluxViewModel flux) : base(flux)
         {
         }

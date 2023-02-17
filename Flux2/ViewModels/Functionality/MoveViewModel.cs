@@ -22,11 +22,11 @@ namespace Flux.ViewModels
         }
 
         private readonly ObservableAsPropertyHelper<double> _MovePrinterDistance;
-        [RemoteOutput(true)]
+        [RemoteOutput(true, converter:typeof(MillimeterConverter))]
         public double MovePrinterDistance => _MovePrinterDistance.Value;
 
         private double _MovePrinterFeedrate = 1000;
-        [RemoteInput(step: 100, min: 0)]
+        [RemoteInput(step: 100, min: 0, converter:typeof(FeedrateConverter))]
         public double MovePrinterFeedrate
         {
             get => _MovePrinterFeedrate;
@@ -61,7 +61,7 @@ namespace Flux.ViewModels
         private readonly ObservableAsPropertyHelper<string> _AxisPosition;
         [RemoteOutput(true)]
         public string AxisPosition => _AxisPosition.Value;
-
+        
         public MoveViewModel(FluxViewModel flux) : base(flux)
         {
             var variable_store = Flux.ConnectionProvider.VariableStoreBase;
@@ -76,7 +76,7 @@ namespace Flux.ViewModels
                 .ConvertOr(c => c.GetAxisPosition(), () => "")
                 .ToPropertyRC(this, v => v.AxisPosition);
 
-            ShowRoutinesCommand = ReactiveCommandRC.Create(() => { Flux.Navigator.NavigateModal(Flux.Functionality.Routines); }, this);
+            ShowRoutinesCommand = ReactiveCommandRC.CreateFromTask(async () => { await Flux.ShowModalDialogAsync(f => f.Functionality.Routines); }, this);
 
             var has_limits = variable_store.HasMovementLimits;
             var can_move_xyz = Flux.StatusProvider

@@ -60,6 +60,9 @@ namespace Flux.ViewModels
                 switch (ConnectionPhase)
                 {
                     case RRF_ConnectionPhase.START_PHASE:
+                        while (Connection.Requests.TryDequeu(out var request))
+                            Console.WriteLine($"dropping request {request}");
+
                         if (await Connection.ConnectAsync())
                             ConnectionPhase = RRF_ConnectionPhase.DISCONNECTING_CLIENT;
                         break;

@@ -11,14 +11,11 @@ namespace Flux.ViewModels
 {
     public class InvalidProbeViewModel : InvalidValueViewModel<InvalidProbeViewModel>
     {
-        public override string ItemName => "CALIBRAZIONE";
-        public override string CurrentValueName => "TASTATURA CORRENTE";
-        public override string ExpectedValueName => "TASTATURA RICHIESTA";
 
         private readonly ObservableAsPropertyHelper<string> _InvalidItemBrush;
         public override string InvalidItemBrush => _InvalidItemBrush.Value;
 
-        public InvalidProbeViewModel(FeederEvaluator eval) : base($"{typeof(InvalidProbeViewModel).GetRemoteControlName()}??{eval.Feeder.Position}", eval)
+        public InvalidProbeViewModel(FeederEvaluator eval) : base(eval)
         {
             _InvalidItemBrush = eval.WhenAnyValue(e => e.Offset)
                 .ConvertMany(o => o.WhenAnyValue(o => o.ProbeStateBrush))
@@ -47,9 +44,6 @@ namespace Flux.ViewModels
     public class InvalidProbesViewModel : InvalidValuesViewModel<InvalidProbesViewModel>
     {
         public override bool CanStartWithInvalidValues => false;
-        public override string Title => "TASTATURE NON VALIDE";
-        public override string ChangeName => "ESEGUI TASTATURA";
-
         public InvalidProbesViewModel(FluxViewModel flux) : base(flux)
         {
         }

@@ -39,7 +39,7 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public Optional<ushort> SelectedTool => _SelectedTool.Value;
 
-        public ManualCalibrationPhaseViewModel(CalibrationViewModel calibration) : base()
+        public ManualCalibrationPhaseViewModel(CalibrationViewModel calibration)
         {
             Flux = calibration.Flux;
             Calibration = calibration;
@@ -84,7 +84,7 @@ namespace Flux.ViewModels
             SourceListRC.Create(this, v => v.Conditions);
 
             _HasSafeStart = Conditions.Connect()
-                .AddKey(c => c.ConditionName)
+                .AddKey(c => c.Name)
                 .TrueForAll(line => line.StateChanged, state => state.Valid)
                 .StartWith(true)
                 .ToPropertyRC(this, e => e.HasSafeStart);
@@ -98,7 +98,7 @@ namespace Flux.ViewModels
 
         public override void Initialize()
         {
-            var conditions = Flux.StatusProvider.GetConditions<ManualCalibrationConditionAttribute>();
+            var conditions = Flux.ConditionsProvider.GetConditions<ManualCalibrationConditionAttribute>();
             Conditions.AddRange(conditions.SelectMany(c => c.Value.Select(c => c.condition)));
         }
     }
@@ -115,7 +115,7 @@ namespace Flux.ViewModels
         public ReactiveCommand<Unit, Unit> SelectToolCommand { get; }
         public PerformManualCalibrationViewModel ManualCalibration { get; }
 
-        public ManualCalibrationItemViewModel(PerformManualCalibrationViewModel calibration, ushort position, IObservable<bool> not_executing) : base($"{typeof(ManualCalibrationItemViewModel).GetRemoteControlName()}??{position}")
+        public ManualCalibrationItemViewModel(PerformManualCalibrationViewModel calibration, ushort position, IObservable<bool> not_executing) : base($"{position}")
         {
             ManualCalibration = calibration;
             Position = position;
@@ -368,7 +368,7 @@ namespace Flux.ViewModels
                 })
                 .ToOptional();
 
-            return new CmdButton($"Z??{(distance > 0 ? $"+{distance:0.00mm}" : $"{distance:0.00mm}")}", () => move_tool(distance), can_execute);
+            return new CmdButton($"Z?{(distance > 0 ? $"+{distance:0.00mm}" : $"{distance:0.00mm}")}", () => move_tool(distance), can_execute);
 
             async Task move_tool(double distance)
             {

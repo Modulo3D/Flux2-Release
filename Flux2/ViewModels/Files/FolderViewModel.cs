@@ -15,13 +15,13 @@ namespace Flux.ViewModels
 
         public FolderViewModel(FilesViewModel files, Optional<FolderViewModel> folder, FLUX_File file) : base(files, folder, file)
         {
-            OpenFolderCommand = ReactiveCommand.Create(() =>
+            OpenFolderCommand = ReactiveCommandRC.Create(() =>
             {
                 Files.Folder = this;
-            })
+            }, this)
             .DisposeWith(Disposables);
 
-            ModifyFolderCommand = ReactiveCommand.CreateFromTask(() => files.ModifyFSAsync(this))
+            ModifyFolderCommand = ReactiveCommandRC.CreateFromTask(() => files.ModifyFSAsync(this), this)
                 .DisposeWith(Disposables);
         }
     }

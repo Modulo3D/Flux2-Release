@@ -39,9 +39,9 @@ namespace Flux.ViewModels
         [RemoteOutput(false)]
         public ushort Position { get; }
 
-        private readonly ObservableAsPropertyHelper<string> _FeederStateStr;
+        private readonly ObservableAsPropertyHelper<RemoteText> _FeederStateStr;
         [RemoteOutput(true)]
-        public string FeederStateStr => _FeederStateStr.Value;
+        public RemoteText FeederStateStr => _FeederStateStr.Value;
 
         private readonly ObservableAsPropertyHelper<string> _FeederBrush;
         [RemoteOutput(true)]
@@ -54,7 +54,7 @@ namespace Flux.ViewModels
         public ushort MixingCount { get; }
 
         // CONSTRUCTOR
-        public FeederViewModel(FeedersViewModel feeders, ushort position, ushort mixing_count) : base($"{typeof(FeederViewModel).GetRemoteControlName()}??{position}")
+        public FeederViewModel(FeedersViewModel feeders, ushort position, ushort mixing_count) : base($"{position}")
         {
             Feeders = feeders;
             Flux = feeders.Flux;
@@ -100,11 +100,11 @@ namespace Flux.ViewModels
             _FeederStateStr = this.WhenAnyValue(v => v.FeederState)
                 .Select(state => state switch
                 {
-                    EFeederState.FEEDER_SELECTED => "feederSelected",
-                    EFeederState.FEEDER_WAIT => "feederWait",
-                    EFeederState.FEEDER_EMPTY => "feederEmpty",
-                    EFeederState.IN_CHANGE => "feederInChange",
-                    _ => "feederError",
+                    EFeederState.FEEDER_SELECTED => new RemoteText("selected", true),
+                    EFeederState.FEEDER_WAIT => new RemoteText("wait", true),
+                    EFeederState.FEEDER_EMPTY => new RemoteText("empty", true),
+                    EFeederState.IN_CHANGE => new RemoteText("inChange", true),
+                    _ => new RemoteText("error", true),
                 })
                 .ToPropertyRC(this, v => v.FeederStateStr);
 

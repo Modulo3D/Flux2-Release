@@ -10,17 +10,20 @@ namespace Flux.ViewModels
 {
     public class LoadFilamentOperationViewModel : ChangeFilamentOperationViewModel<LoadFilamentOperationViewModel>
     {
+        public LoadFilamentConditionViewModel LoadFilamentCondition { get; }
         public LoadFilamentOperationViewModel(MaterialViewModel material) : base(material)
         {
+            LoadFilamentCondition = new LoadFilamentConditionViewModel(this);
+            LoadFilamentCondition.Initialize();
         }
 
-        protected override string FindTitleText(bool idle)
+        protected override RemoteText FindTitleText(bool idle)
         {
-            return idle ? "waitLoadMaterial" : "loadingMaterial";
+            return idle ? new RemoteText("waitLoadMaterial", true) : new RemoteText("loadingMaterial", true);
         }
-        protected override string FindOperationText(bool idle)
+        protected override RemoteText FindOperationText(bool idle)
         {
-            return idle ? "loadMaterial" : "---";
+            return idle ? new RemoteText("loadMaterial", true) : new RemoteText("---", false);
         }
         protected override async Task<bool> ExecuteOperationAsync()
         {
@@ -32,7 +35,7 @@ namespace Flux.ViewModels
             {
                 var insert_iteration_dist = 10;
                 ushort max_insert_iterations = 3;
-                if (!await Flux.IterateConfirmDialogAsync("loadFilamentDialog", "isFilamentLoaded", max_insert_iterations,
+                if (!await Flux.IterateDialogAsync(f => new ConfirmDialog(f, new RemoteText("insertFilament", true), new RemoteText()), max_insert_iterations,
                     () => Flux.ConnectionProvider.ManualFilamentInsert(feeder_index, insert_iteration_dist, 100)))
                     return await Flux.ConnectionProvider.ManualFilamentExtract(feeder_index, max_insert_iterations, insert_iteration_dist, 500);
 
@@ -43,7 +46,8 @@ namespace Flux.ViewModels
             if (!await ExecuteFilamentOperation(filament_settings, c => c.GetLoadFilamentGCode))
                 return false;
 
-            if (!await Flux.IterateConfirmDialogAsync("loadFilamentDialog", "isFilamentPurged", 3,
+            ushort max_purge_iterations = 3;
+            if (!await Flux.IterateDialogAsync(f => new ConfirmDialog(f, new RemoteText("purgeFilament", true), new RemoteText()), max_purge_iterations,
                 () => Flux.ConnectionProvider.PurgeAsync(filament_settings.Value)))
                 return false;
 
@@ -69,30 +73,7 @@ namespace Flux.ViewModels
                     return true;
                 });
 
-            yield return (ConditionViewModel.Create(
-                Flux.StatusProvider,
-                "material",
-                Observable.CombineLatest(
-                    Material.WhenAnyValue(f => f.State),
-                    Material.WhenAnyValue(m => m.Document),
-                    Material.ToolMaterial.WhenAnyValue(m => m.State),
-                    (state, material, tool_material) => (state, material, tool_material)),
-                    (state, value) =>
-                    {
-                        if (value.state.Loaded)
-                            return new ConditionState(EConditionState.Disabled, $"material.loaded; {value.material}");
-
-                        if (!value.material.HasValue)
-                            return new ConditionState(EConditionState.Disabled, "material.read");
-
-                        if (!value.tool_material.Compatible.ValueOr(() => false))
-                            return new ConditionState(EConditionState.Error, $"material.incompatible; {value.material}");
-
-                        if (!value.state.Locked)
-                            return new ConditionState(EConditionState.Warning, "material.lock");
-
-                        return new ConditionState(EConditionState.Stable, $"material.readyToLoad; {value.material}");
-                    }, state => state.Create(UpdateNFCAsync, "nFC", can_update_nfc)), new FilamentOperationConditionAttribute());
+            yield return (LoadFilamentCondition, new FilamentOperationConditionAttribute());
         }
 
         public override async Task<NFCTagRW> UpdateNFCAsync()

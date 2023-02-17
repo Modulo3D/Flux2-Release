@@ -40,7 +40,7 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public IEnumerable<string> ExpectedNozzles => _ExpectedNozzles.Value;
 
-        public PrintingViewModel(FluxViewModel flux) : base(flux, "printing")
+        public PrintingViewModel(FluxViewModel flux) : base(flux)
         {
         }
 

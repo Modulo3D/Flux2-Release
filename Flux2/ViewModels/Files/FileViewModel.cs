@@ -25,7 +25,7 @@ namespace Flux.ViewModels
         public FilesViewModel Files { get; }
         public Optional<FolderViewModel> Folder { get; }
 
-        public FSViewModel(FilesViewModel files, Optional<FolderViewModel> folder, FLUX_File file) : base($"{typeof(TViewModel).GetRemoteControlName()}??{file.Name}")
+        public FSViewModel(FilesViewModel files, Optional<FolderViewModel> folder, FLUX_File file) : base($"{file.Name}")
         {
             Files = files;
             Folder = folder;
@@ -54,16 +54,16 @@ namespace Flux.ViewModels
 
         public FileViewModel(FilesViewModel files, Optional<FolderViewModel> folder, FLUX_File file) : base(files, folder, file)
         {
-            EditFileCommand = ReactiveCommand.CreateFromTask(() => files.EditFileAsync(this))
+            EditFileCommand = ReactiveCommandRC.CreateFromTask(() => files.EditFileAsync(this), this)
                 .DisposeWith(Disposables);
 
-            ModifyFileCommand = ReactiveCommand.CreateFromTask(() => files.ModifyFSAsync(this))
+            ModifyFileCommand = ReactiveCommandRC.CreateFromTask(() => files.ModifyFSAsync(this), this)
                 .DisposeWith(Disposables);
 
             if (folder.ConvertOr(f => f.FSFullPath.Contains(files.Flux.ConnectionProvider.MacroPath), () => false) ||
                 folder.ConvertOr(f => f.FSFullPath.Contains(files.Flux.ConnectionProvider.StoragePath), () => false))
             {
-                ExecuteFileCommand = ReactiveCommand.CreateFromTask(() => files.ExecuteFileAsync(this))
+                ExecuteFileCommand = ReactiveCommandRC.CreateFromTask(() => files.ExecuteFileAsync(this), this)
                     .DisposeWith(Disposables);
             }
         }

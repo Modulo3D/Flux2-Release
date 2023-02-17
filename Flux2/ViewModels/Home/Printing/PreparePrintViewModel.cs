@@ -1,4 +1,5 @@
 ﻿using DynamicData;
+using Flux.ViewModels;
 using Modulo3DNet;
 using System.Linq;
 using System.Reactive.Linq;
@@ -22,7 +23,7 @@ namespace Flux.ViewModels
         }
         public override void Initialize()
         {
-            var conditions = Flux.StatusProvider.GetConditions<PreparePrintConditionAttribute>().SelectMany(kvp => kvp.Value);
+            var conditions = Flux.ConditionsProvider.GetConditions<PreparePrintConditionAttribute>().SelectMany(kvp => kvp.Value);
             Conditions.AddRange(conditions.Select(c => c.condition));
         }
     }

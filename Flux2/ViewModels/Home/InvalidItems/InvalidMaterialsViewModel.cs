@@ -12,13 +12,10 @@ namespace Flux.ViewModels
 {
     public class InvalidMaterialViewModel : InvalidItemViewModel<InvalidMaterialViewModel>
     {
-        public override string CurrentValueName => "MATERIALE CARICATO";
-        public override string ExpectedValueName => "MATERIALE RICHIESTO";
-
         private readonly ObservableAsPropertyHelper<string> _InvalidItemBrush;
         public override string InvalidItemBrush => _InvalidItemBrush.Value;
 
-        public InvalidMaterialViewModel(FeederEvaluator eval) : base($"{typeof(InvalidMaterialViewModel).GetRemoteControlName()}??{eval.Feeder.Position}", eval)
+        public InvalidMaterialViewModel(FeederEvaluator eval) : base(eval)
         {
             _InvalidItemBrush = Observable.CombineLatest(
                 eval.Material.WhenAnyValue(m => m.CurrentDocument),
@@ -50,12 +47,8 @@ namespace Flux.ViewModels
         }
     }
 
-    [RemoteControl]
     public class InvalidMaterialsViewModel : InvalidItemsViewModel<InvalidMaterialsViewModel>
     {
-        public override string Title => "MATERIALI NON VALIDI";
-        public override string ChangeName => "CAMBIA MATERIALE";
-
         public InvalidMaterialsViewModel(FluxViewModel flux) : base(flux)
         {
         }

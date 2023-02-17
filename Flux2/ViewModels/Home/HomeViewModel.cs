@@ -18,11 +18,11 @@ namespace Flux.ViewModels
         public FluxViewModel Flux { get; }
         [RemoteCommand]
         public ReactiveCommand<Unit, Unit> CancelPrintCommand { get; }
-        public HomePhaseViewModel(FluxViewModel flux, string name = default) : base(name)
+        public HomePhaseViewModel(FluxViewModel flux)
         {
             Flux = flux;
             var can_cancel = Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation).Select(s => s.CanSafeStop);
-            CancelPrintCommand = ReactiveCommand.CreateFromTask(async () => { await Flux.ConnectionProvider.CancelPrintAsync(false); }, can_cancel);
+            CancelPrintCommand = ReactiveCommandRC.CreateFromTask(async () => { await Flux.ConnectionProvider.CancelPrintAsync(false); }, (THomePhase)this, can_cancel);
         }
         public virtual void Initialize()
         {
@@ -36,7 +36,7 @@ namespace Flux.ViewModels
         public LowNozzlesViewModel LowNozzlesPhase { get; }
         public PurgeNozzlesViewModel ColdNozzlesPhase { get; }
         public PreparePrintViewModel PreparePrintPhase { get; }
-        public InvalidToolsViewModel InvalidToolsPhase { get; }
+        public InvalidNozzlesViewModel InvalidToolsPhase { get; }
         public LowMaterialsViewModel LowMaterialsPhase { get; }
         public InvalidProbesViewModel InvalidProbesPhase { get; }
         public InvalidPrinterViewModel InvalidPrinterPhase { get; }
@@ -52,7 +52,7 @@ namespace Flux.ViewModels
             PrintingPhase = new PrintingViewModel(Flux);
             ColdNozzlesPhase = new PurgeNozzlesViewModel(Flux);
             PreparePrintPhase = new PreparePrintViewModel(Flux);
-            InvalidToolsPhase = new InvalidToolsViewModel(Flux);
+            InvalidToolsPhase = new InvalidNozzlesViewModel(Flux);
             LowMaterialsPhase = new LowMaterialsViewModel(Flux);
             InvalidProbesPhase = new InvalidProbesViewModel(Flux);
             InvalidPrinterPhase = new InvalidPrinterViewModel(Flux);

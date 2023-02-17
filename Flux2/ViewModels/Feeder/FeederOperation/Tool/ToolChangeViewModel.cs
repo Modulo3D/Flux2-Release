@@ -52,7 +52,7 @@
                     ComboOption.Create("temp", "TEMPERATURE DISPONIBILI", temperatures, converter: typeof(TemperatureConverter)),
                 });
 
-                if (result == ContentDialogResult.Secondary)
+                if (result == DialogResult.Secondary)
                     return;
 
                 var temperature = values[0].Convert(m => (double)m);
@@ -161,7 +161,7 @@
                 ComboOption.Create("procedure", "PROCEDURE DISPONIBILI", Enum.GetValues<ToolProceduresStart>(), p => (uint)p),
             });
 
-            if (result == ContentDialogResult.Secondary)
+            if (result == DialogResult.Secondary)
                 return false;
 
             var procedure = values[0].Convert(m => (ToolProceduresStart)m);
@@ -356,7 +356,7 @@
                 ComboOption.Create("procedure", "PROCEDURE DISPONIBILI", Enum.GetValues<ToolProceduresEnd>(), p => (uint)p),
             });
 
-            if (result == ContentDialogResult.Secondary)
+            if (result == DialogResult.Secondary)
                 return false;
 
             var procedure = values[0].Convert(m => (ToolProceduresEnd)m);

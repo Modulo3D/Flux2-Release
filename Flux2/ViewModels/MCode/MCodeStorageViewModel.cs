@@ -62,7 +62,7 @@ namespace Flux.ViewModels
         private readonly ObservableAsPropertyHelper<bool> _CanDelete;
         public bool CanDelete => _CanDelete.Value;
 
-        public MCodeStorageViewModel(MCodesViewModel mcodes, MCodeKey mcode_key, MCodeAnalyzer analyzer) : base($"{typeof(MCodeStorageViewModel).GetRemoteControlName()}??{mcode_key}")
+        public MCodeStorageViewModel(MCodesViewModel mcodes, MCodeKey mcode_key, MCodeAnalyzer analyzer) : base($"{mcode_key}")
         {
             MCodes = mcodes;
             Analyzer = analyzer;

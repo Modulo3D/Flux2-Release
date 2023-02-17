@@ -11,14 +11,11 @@ namespace Flux.ViewModels
 {
     public class LowMaterialViewModel : InvalidValueViewModel<LowMaterialViewModel>
     {
-        public override string ItemName => "MATERIALE";
-        public override string CurrentValueName => "PESO RIMANENTE";
-        public override string ExpectedValueName => "PESO RICHIESTO";
 
         private readonly ObservableAsPropertyHelper<string> _InvalidItemBrush;
         public override string InvalidItemBrush => _InvalidItemBrush.Value;
 
-        public LowMaterialViewModel(FeederEvaluator eval) : base($"{typeof(LowMaterialViewModel).GetRemoteControlName()}??{eval.Feeder.Position}", eval)
+        public LowMaterialViewModel(FeederEvaluator eval) : base(eval)
         {
             _InvalidItemBrush = Observable.CombineLatest(
                eval.Material.WhenAnyValue(m => m.CurrentWeight),
@@ -59,11 +56,8 @@ namespace Flux.ViewModels
 
     public class LowMaterialsViewModel : InvalidValuesViewModel<LowMaterialsViewModel>
     {
-        public override string Title => "MATERIALI NON SUFFICIENTI";
-        public override string ChangeName => "CAMBIA MATERIALE";
-
         private ObservableAsPropertyHelper<bool> _CanStartWithInvalidValues;
-        public override bool CanStartWithInvalidValues => _CanStartWithInvalidValues.Value;
+        public override bool CanStartWithInvalidValues => true;
 
         public LowMaterialsViewModel(FluxViewModel flux) : base(flux)
         {
@@ -79,7 +73,7 @@ namespace Flux.ViewModels
                 .AsObservableListRC(this);
 
             _CanStartWithInvalidValues = Flux.StatusProvider.FeederEvaluators.Connect()
-                .TrueForAny(line => line.Material.WhenAnyValue(m => m.HasEmptyWeight), e => e)
+                .TrueForAll(line => line.Material.WhenAnyValue(m => m.HasEmptyWeight), e => !e)
                 .ToPropertyRC(this, v => v.CanStartWithInvalidValues);
 
             base.Initialize();

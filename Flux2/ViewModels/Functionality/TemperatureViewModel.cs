@@ -39,12 +39,12 @@ namespace Flux.ViewModels
         public Optional<FLUX_Temp> Temperature => _Temperature.Value;
 
         [RemoteOutput(false)]
-        public string Label { get; }
+        public RemoteText Label { get; }
 
-        public TemperatureViewModel(TemperaturesViewModel temperatures, IFLUX_Variable<FLUX_Temp, double> temp_var) : base($"temperature??{temp_var.Name}")
+        public TemperatureViewModel(TemperaturesViewModel temperatures, IFLUX_Variable<FLUX_Temp, double> temp_var) : base($"{temp_var.Name}")
         {
             Flux = temperatures.Flux;
-            Label = $"temp; {temp_var.Unit.Alias}";
+            Label = new RemoteText($"temp;{temp_var.Unit.Alias}", true);
 
             var can_safe_cycle = Flux.StatusProvider
                 .WhenAnyValue(s => s.StatusEvaluation)

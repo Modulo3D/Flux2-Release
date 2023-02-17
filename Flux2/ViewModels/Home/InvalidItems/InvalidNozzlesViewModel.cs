@@ -10,15 +10,12 @@ using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
-    public class InvalidToolViewModel : InvalidItemViewModel<InvalidToolViewModel>
+    public class InvalidNozzleViewModel : InvalidItemViewModel<InvalidNozzleViewModel>
     {
-        public override string CurrentValueName => "UTENSILE CARICATO";
-        public override string ExpectedValueName => "UTENSILE RICHIESTO";
-
         private readonly ObservableAsPropertyHelper<string> _InvalidItemBrush;
         public override string InvalidItemBrush => _InvalidItemBrush.Value;
 
-        public InvalidToolViewModel(FeederEvaluator eval) : base($"{typeof(InvalidToolViewModel).GetRemoteControlName()}??{eval.Feeder.Position}", eval)
+        public InvalidNozzleViewModel(FeederEvaluator eval) : base(eval)
         {
             _InvalidItemBrush = Observable.CombineLatest(
                eval.ToolNozzle.WhenAnyValue(m => m.CurrentDocument),
@@ -50,12 +47,9 @@ namespace Flux.ViewModels
         }
     }
 
-    public class InvalidToolsViewModel : InvalidItemsViewModel<InvalidToolsViewModel>
+    public class InvalidNozzlesViewModel : InvalidItemsViewModel<InvalidNozzlesViewModel>
     {
-        public override string Title => "UTENSILI NON VALIDI";
-        public override string ChangeName => "CAMBIA UTENSILE";
-
-        public InvalidToolsViewModel(FluxViewModel flux) : base(flux)
+        public InvalidNozzlesViewModel(FluxViewModel flux) : base(flux)
         {
         }
 
@@ -64,7 +58,7 @@ namespace Flux.ViewModels
             InvalidItems = Flux.StatusProvider.FeederEvaluators.Connect().RemoveKey()
                 .AutoRefresh(line => line.ToolNozzle.IsInvalid)
                 .Filter(line => line.ToolNozzle.IsInvalid)
-                .Transform(line => (IInvalidItemViewModel)new InvalidToolViewModel(line))
+                .Transform(line => (IInvalidItemViewModel)new InvalidNozzleViewModel(line))
                 .Sort(EvaluationComparer)
                 .AsObservableListRC(this);
         }

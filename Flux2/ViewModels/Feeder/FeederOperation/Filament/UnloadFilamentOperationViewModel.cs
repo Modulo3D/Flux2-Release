@@ -9,17 +9,20 @@ namespace Flux.ViewModels
 {
     public class UnloadFilamentOperationViewModel : ChangeFilamentOperationViewModel<UnloadFilamentOperationViewModel>
     {
+        public UnloadFilamentConditionViewModel UnloadFilamentCondition { get; }
         public UnloadFilamentOperationViewModel(MaterialViewModel material) : base(material)
         {
+            UnloadFilamentCondition = new UnloadFilamentConditionViewModel(this);
+            UnloadFilamentCondition.Initialize();
         }
 
-        protected override string FindTitleText(bool idle)
+        protected override RemoteText FindTitleText(bool idle)
         {
-            return idle ? "waitUnloadMaterial" : "unloadingMaterial";
+            return idle ? new RemoteText("waitUnloadMaterial", true) : new RemoteText("unloadingMaterial", true);
         }
-        protected override string FindOperationText(bool idle)
+        protected override RemoteText FindOperationText(bool idle)
         {
-            return idle ? "unloadMaterial" : "---";
+            return idle ? new RemoteText("unloadMaterial", true) : new RemoteText("---", false);
         }
         protected override async Task<bool> ExecuteOperationAsync()
         {
@@ -48,31 +51,7 @@ namespace Flux.ViewModels
         {
             foreach (var condition in base.FindConditions())
                 yield return condition;
-
-            yield return (ConditionViewModel.Create(
-                Flux.StatusProvider,
-                "material",
-                Observable.CombineLatest(
-                    Material.WhenAnyValue(f => f.State),
-                    Material.WhenAnyValue(m => m.Document),
-                    Material.ToolMaterial.WhenAnyValue(m => m.State),
-                    (state, material, tool_material) => (state, material, tool_material)),
-                    (state, value) =>
-                    {
-                        if (!value.state.Loaded && !value.state.Inserted && value.state.Locked)
-                            return new ConditionState(EConditionState.Warning, "material.unlock");
-
-                        if (!value.state.Loaded && !value.state.Inserted && !value.state.Locked)
-                            return new ConditionState(EConditionState.Disabled, $"material.unloaded; {value.material}");
-
-                        if (!value.material.HasValue)
-                            return new ConditionState(EConditionState.Warning, "material.read");
-
-                        if (!value.tool_material.Compatible.ValueOr(() => false))
-                            return new ConditionState(EConditionState.Error, $"material.incompatible; {value.material}");
-
-                        return new ConditionState(EConditionState.Stable, $"material.readyToUnload; {value.material}");
-                    }, state => state.Create(UpdateNFCAsync, "nFC")), new FilamentOperationConditionAttribute());
+            yield return (UnloadFilamentCondition, new FilamentOperationConditionAttribute());
         }
         public override async Task<NFCTagRW> UpdateNFCAsync()
         {

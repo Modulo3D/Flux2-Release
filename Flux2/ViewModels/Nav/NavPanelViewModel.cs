@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
+    [RemoteControl(baseClass: typeof(NavPanelViewModel<>))]
     public class NavPanelViewModel<TNavPanelViewModel> : FluxRoutableNavBarViewModel<TNavPanelViewModel>
         where TNavPanelViewModel : NavPanelViewModel<TNavPanelViewModel>
     {
@@ -19,7 +20,7 @@ namespace Flux.ViewModels
         [RemoteContent(true)]
         public IObservableList<CmdButton> VisibleButtons { get; }
 
-        public NavPanelViewModel(FluxViewModel flux, string name = default) : base(flux, $"navPanel??{typeof(TNavPanelViewModel).GetRemoteControlName()}{(string.IsNullOrEmpty(name) ? "" : $"??{name}")}")
+        public NavPanelViewModel(FluxViewModel flux, string name = "") : base(flux, name)
         {
             SourceListRC.Create(this, v => v.Buttons);
             VisibleButtons = Buttons.Connect()
@@ -34,7 +35,7 @@ namespace Flux.ViewModels
             OptionalObservable<bool> visible = default)
             where TFluxRoutableViewModel : IFluxRoutableViewModel
         {
-            Buttons.Add(new NavButton<TFluxRoutableViewModel>(Flux, route, can_navigate, visible));
+            Buttons.Add(new NavButton<TFluxRoutableViewModel>(route.Flux, route, can_navigate, visible));
         }
 
         public void AddModal<TFluxRoutableViewModel>(
@@ -46,11 +47,12 @@ namespace Flux.ViewModels
             where TFluxRoutableViewModel : IFluxRoutableViewModel
         {
             var modal = new NavModalViewModel<TFluxRoutableViewModel>(Flux, route, navigate_back, show_navbar);
-            Buttons.Add(new NavButtonModal<TFluxRoutableViewModel>(Flux, modal, can_navigate, visible));
+            Buttons.Add(new NavButtonModal<TFluxRoutableViewModel>(route.Flux, modal, can_navigate, visible));
         }
 
 
         public Lazy<TFluxRoutableViewModel> AddModal<TFluxRoutableViewModel>(
+            IFlux flux,
             Func<TFluxRoutableViewModel> get_route,
             OptionalObservable<bool> can_navigate = default,
             OptionalObservable<bool> visible = default,
@@ -60,10 +62,11 @@ namespace Flux.ViewModels
         {
             var lazy_route = new Lazy<TFluxRoutableViewModel>(get_route);
             var modal = new Lazy<NavModalViewModel<TFluxRoutableViewModel>>(() => new NavModalViewModel<TFluxRoutableViewModel>(Flux, lazy_route.Value, navigate_back, show_navbar));
-            Buttons.Add(new NavButtonModal<TFluxRoutableViewModel>(Flux, modal, can_navigate, visible));
+            Buttons.Add(new NavButtonModal<TFluxRoutableViewModel>(flux, modal, can_navigate, visible));
             return lazy_route;
         }
         public void AddModal<TFluxRoutableViewModel>(
+            IFlux flux,
             Lazy<TFluxRoutableViewModel> lazy_route,
             OptionalObservable<bool> can_navigate = default,
             OptionalObservable<bool> visible = default,
@@ -72,7 +75,7 @@ namespace Flux.ViewModels
             where TFluxRoutableViewModel : IFluxRoutableViewModel
         {
             var modal = new Lazy<NavModalViewModel<TFluxRoutableViewModel>>(() => new NavModalViewModel<TFluxRoutableViewModel>(Flux, lazy_route.Value, navigate_back, show_navbar));
-            Buttons.Add(new NavButtonModal<TFluxRoutableViewModel>(Flux, modal, can_navigate, visible));
+            Buttons.Add(new NavButtonModal<TFluxRoutableViewModel>(flux, modal, can_navigate, visible));
         }
 
         public void AddCommand(
@@ -101,7 +104,7 @@ namespace Flux.ViewModels
         {
             var variable = Flux.ConnectionProvider.GetVariable(get_variable);
             if (variable.HasValue)
-                Buttons.Add(new ToggleButton(name, Flux, variable.Value, can_execute, visible));
+                Buttons.Add(new ToggleButton(name, variable.Value, can_execute, visible));
         }
 
         public void AddCommand(
@@ -111,7 +114,7 @@ namespace Flux.ViewModels
             OptionalObservable<bool> visible = default)
         {
             var variable = Flux.ConnectionProvider.GetVariable(get_variable);
-            Buttons.Add(new ToggleButton(name, Flux, variable, can_execute, visible));
+            Buttons.Add(new ToggleButton(name, variable, can_execute, visible));
         }
 
         public void AddCommand(
@@ -123,7 +126,7 @@ namespace Flux.ViewModels
         {
             var variable = Flux.ConnectionProvider.GetVariable(get_array, alias);
             if (variable.HasValue)
-                Buttons.Add(new ToggleButton(name, Flux, variable.Value, can_execute, visible));
+                Buttons.Add(new ToggleButton(name, variable.Value, can_execute, visible));
         }
 
         public void AddCommand(
@@ -135,7 +138,7 @@ namespace Flux.ViewModels
         {
             var variable = Flux.ConnectionProvider.GetVariable(get_array, alias);
             if (variable.HasValue)
-                Buttons.Add(new ToggleButton(name, Flux, variable.Value, can_execute, visible));
+                Buttons.Add(new ToggleButton(name, variable.Value, can_execute, visible));
         }
 
 

@@ -11,8 +11,8 @@ using System.Reactive.Linq;
 
 namespace Flux.ViewModels
 {
-    public abstract class MemoryGroupBaseViewModel<TViewModel> : RemoteControl<TViewModel>
-        where TViewModel : MemoryGroupBaseViewModel<TViewModel>
+    public abstract class MemoryGroupBaseViewModel<TMemoryGroupBaseViewModel> : RemoteControl<TMemoryGroupBaseViewModel>
+        where TMemoryGroupBaseViewModel : MemoryGroupBaseViewModel<TMemoryGroupBaseViewModel>
     {
         public FluxViewModel Flux { get; }
 
@@ -30,10 +30,10 @@ namespace Flux.ViewModels
         [RemoteOutput(false)]
         public abstract string VariableName { get; }
 
-        public MemoryGroupBaseViewModel(FluxViewModel flux, string name) : base($"{typeof(TViewModel).GetRemoteControlName()}??{name}")
+        public MemoryGroupBaseViewModel(FluxViewModel flux, string name) : base(name)
         {
             Flux = flux;
-            ToggleCommand = ReactiveCommandRC.Create(Toggle, (TViewModel)this);
+            ToggleCommand = ReactiveCommandRC.Create(Toggle, (TMemoryGroupBaseViewModel)this);
         }
 
         private void Toggle()

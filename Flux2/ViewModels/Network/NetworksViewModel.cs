@@ -51,7 +51,7 @@
                     SecondaryButtonText = "Annulla"
                 };
 
-                if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+                if (await dialog.ShowAsync() == DialogResult.Primary)
                 {
                     var users = await User.FindAllAsync();
 

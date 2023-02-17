@@ -13,7 +13,7 @@
         public NetworkViewModel(NetworksViewModel networks, WiFiAvailableNetwork network)
         {
             Network = network;
-            Connect = ReactiveCommand.CreateFromTask(async () => await networks.Connect.Execute(this));
+            Connect = ReactiveCommandRC.CreateFromTask(async () => await networks.Connect.Execute(this));
         }
     }*/
 }

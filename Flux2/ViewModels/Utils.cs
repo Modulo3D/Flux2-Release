@@ -1,5 +1,6 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
+using EmbedIO.Routing;
 using Modulo3DNet;
 using ReactiveUI;
 using System;
@@ -13,7 +14,7 @@ using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
-    public abstract class DialogOption<TViewModel, TValue> : RemoteControl<TViewModel>, IDialogOption<TValue>
+    /*public abstract class DialogOption<TViewModel, TValue> : RemoteControl<TViewModel>, IDialogOption<TValue>
         where TViewModel : DialogOption<TViewModel, TValue>
     {
         [RemoteOutput(false)]
@@ -23,7 +24,7 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public abstract bool HasValue { get; }
 
-        public DialogOption(string name, string title) : base($"{typeof(TViewModel).GetRemoteControlName()}??{name}")
+        public DialogOption(string name, string title) : base($"{name}")
         {
             Title = title;
         }
@@ -125,65 +126,6 @@ namespace Flux.ViewModels
         private void SetValue(double value) => Value = value;
     }
 
-    public class ContentDialog : RemoteControl<ContentDialog>, IContentDialog
-    {
-        public IFlux Flux { get; }
-
-        [RemoteOutput(false)]
-        public string Title { get; }
-
-        [RemoteCommand()]
-        public Optional<ReactiveCommand<Unit, Unit>> CloseCommand { get; }
-
-        [RemoteCommand()]
-        public Optional<ReactiveCommand<Unit, Unit>> ConfirmCommand { get; }
-
-        [RemoteCommand()]
-        public Optional<ReactiveCommand<Unit, Unit>> CancelCommand { get; }
-
-        public TaskCompletionSource<ContentDialogResult> ShowAsyncSource { get; private set; }
-
-        public ContentDialog(
-            IFlux flux,
-            string title,
-            Func<Task> confirm = default,
-            OptionalObservable<bool> can_confirm = default,
-            Func<Task> cancel = default,
-            OptionalObservable<bool> can_cancel = default) : base("dialog")
-        {
-            Flux = flux;
-            Title = title;
-
-            ConfirmCommand = can_confirm.Convert(c => ReactiveCommandRC.CreateFromTask(async () =>
-            {
-                if (confirm != default)
-                    await confirm.Invoke();
-                ShowAsyncSource.SetResult(ContentDialogResult.Primary);
-            }, this, c));
-
-            CancelCommand = can_cancel.Convert(c => ReactiveCommandRC.CreateFromTask(async () =>
-            {
-                if (cancel != default)
-                    await cancel.Invoke();
-                ShowAsyncSource.SetResult(ContentDialogResult.Secondary);
-            }, this, c));
-
-            ShowAsyncSource = new TaskCompletionSource<ContentDialogResult>();
-        }
-
-        public async Task<ContentDialogResult> ShowAsync()
-        {
-            Flux.ContentDialog = this;
-            return await ShowAsyncSource.Task;
-        }
-
-        public override void Dispose()
-        {
-            base.Dispose();
-            Flux.ContentDialog = default;
-        }
-    }
-
     public class ProgressBar : DialogOption<ProgressBar, double>
     {
         private double _Value;
@@ -246,7 +188,7 @@ namespace Flux.ViewModels
                .Select(v => has_value?.Invoke(v) ?? true)
                .ToPropertyRC(this, v => v.HasValue);
         }
-    }
+    }*/
 
     public static class FluxColors
     {

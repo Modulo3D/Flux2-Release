@@ -11,6 +11,50 @@ using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
+    public class SetProbeOffsetDialog : InputDialog<SetProbeOffsetDialog, ProbeOffset>
+    {
+        private double _XProbeOffset;
+        [RemoteInput(step: 0.05, converter: typeof(MillimeterConverter))]
+        public double XProbeOffset
+        {
+            get => _XProbeOffset;
+            set => this.RaiseAndSetIfChanged(ref _XProbeOffset, value);
+        }
+
+        private double _YProbeOffset;
+        [RemoteInput(step: 0.05, converter: typeof(MillimeterConverter))]
+        public double YProbeOffset
+        {
+            get => _YProbeOffset;
+            set => this.RaiseAndSetIfChanged(ref _YProbeOffset, value);
+        }
+
+        private double _ZProbeOffset;
+        [RemoteInput(step: 0.01, converter: typeof(MillimeterConverter))]
+        public double ZProbeOffset
+        {
+            get => _ZProbeOffset;
+            set => this.RaiseAndSetIfChanged(ref _ZProbeOffset, value);
+        }
+
+        public SetProbeOffsetDialog(IFlux flux, ProbeOffset offset) : base(flux, offset, new RemoteText("title", true))
+        {
+            XProbeOffset = offset.X;
+            YProbeOffset = offset.Y;
+            ZProbeOffset = offset.Z;
+        }
+
+        public override Optional<ProbeOffset> Confirm()
+        {
+            return StartValue.Value with 
+            {
+                X = XProbeOffset,
+                Y = YProbeOffset,
+                Z = ZProbeOffset
+            };
+        }
+    }
+
     public class OffsetViewModel : RemoteControl<OffsetViewModel>, IFluxOffsetViewModel
     {
         public FluxViewModel Flux { get; }
@@ -100,7 +144,7 @@ namespace Flux.ViewModels
         [RemoteOutput(false)]
         public ushort Position => Feeder.Position;
 
-        public OffsetViewModel(CalibrationViewModel calibration, IFluxFeederViewModel feeder) : base($"{typeof(OffsetViewModel).GetRemoteControlName()}??{feeder.Position}")
+        public OffsetViewModel(CalibrationViewModel calibration, IFluxFeederViewModel feeder) : base($"{feeder.Position}")
         {
             Feeder = feeder;
             Flux = calibration.Flux;
@@ -303,9 +347,9 @@ namespace Flux.ViewModels
                     var tool = await tool_nfc.GetDocumentAsync<Tool>(db.Value, tn => tn.ToolGuid);
                     if (tool.HasValue)
                     {
-                        var x = tool.Value[n => n.ToolXOffset, 0.0];
-                        var y = tool.Value[n => n.ToolYOffset, 0.0];
-                        var z = tool.Value[n => n.ToolZOffset, 0.0];
+                        var x = tool.Value[n => n.ToolXOffset];
+                        var y = tool.Value[n => n.ToolYOffset];
+                        var z = tool.Value[n => n.ToolZOffset];
                         var probe_offset = new ProbeOffset(probe_offset_key, x, y, z);
                         user_settings.Local.ProbeOffsets.AddOrUpdate(probe_offset);
                     }
@@ -348,9 +392,9 @@ namespace Flux.ViewModels
             var tool = await nfc.Tag.Value.GetDocumentAsync<Tool>(db.Value, tn => tn.ToolGuid);
             if (!tool.HasValue)
                 return Optional<ToolOffset>.None;
-            var x = tool.Value[t => t.ToolXOffset, 0.0];
-            var y = tool.Value[t => t.ToolYOffset, 0.0];
-            var z = tool.Value[t => t.ToolZOffset, 0.0];
+            var x = tool.Value[t => t.ToolXOffset];
+            var y = tool.Value[t => t.ToolYOffset];
+            var z = tool.Value[t => t.ToolZOffset];
             return new ToolOffset(x, y, z);
         }
 
@@ -365,17 +409,11 @@ namespace Flux.ViewModels
             if (!ProbeOffsetKey.HasValue)
                 return;
 
-            var offset_x = new NumericOption("offset_x", "OFFSET X", ProbeOffset.ConvertOr(o => o.X, () => 0), 0.05);
-            var offset_y = new NumericOption("offset_y", "OFFSET Y", ProbeOffset.ConvertOr(o => o.Y, () => 0), 0.05);
-            var offset_z = new NumericOption("offset_z", "OFFSET Z", ProbeOffset.ConvertOr(o => o.Z, () => 0), 0.01);
-            var result = await Flux.ShowSelectionAsync(
-                "dialog.setProbeOffset",
-                new[] { offset_x, offset_y, offset_z });
-
-            if (result != ContentDialogResult.Primary)
+            var result = await Flux.ShowDialogAsync(f => new SetProbeOffsetDialog(Flux, ProbeOffset.Value));
+            if (result.result != DialogResult.Primary || !result.data.HasValue)
                 return;
-
-            ModifyProbeOffset(p => new ProbeOffset(p.Key, offset_x.Value, offset_y.Value, offset_z.Value));
+            
+            ModifyProbeOffset(p => result.data.Value);
         }
         public async Task ProbeOffsetAsync()
         {
@@ -414,9 +452,9 @@ namespace Flux.ViewModels
                 if (!tool.HasValue)
                     return new ProbeOffset(ProbeOffsetKey.Value, 0, 0, 0);
 
-                var x_offset = tool.Value[t => t.ToolXOffset, 0.0];
-                var y_offset = tool.Value[t => t.ToolYOffset, 0.0];
-                var z_offset = tool.Value[t => t.ToolZOffset, 0.0];
+                var x_offset = tool.Value[t => t.ToolXOffset];
+                var y_offset = tool.Value[t => t.ToolYOffset];
+                var z_offset = tool.Value[t => t.ToolZOffset];
 
                 return new ProbeOffset(ProbeOffsetKey.Value, x_offset, y_offset, z_offset);
             });

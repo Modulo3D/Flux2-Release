@@ -116,26 +116,15 @@ namespace Flux.ViewModels
                 Optional<IRemoteControl> control_item = Flux;
                 foreach (var path in control_path)
                 {
-                    var path_data = path.Split("##", StringSplitOptions.RemoveEmptyEntries);
+                    var path_data = path.Split("??", StringSplitOptions.RemoveEmptyEntries);
                     var control_list_path = path_data[0];
-                    var control_item_path = path_data[1];
+                    var control_item_path = path_data.Length > 1 ? path_data[1] : "";
 
                     var control_list = control_item.Value.RemoteContents.Lookup(control_list_path);
                     if (!control_list.HasValue)
                         return;
 
                     control_item = control_list.Value.LookupControl(control_item_path);
-                    if (!control_item.HasValue)
-                    {
-                        var sub_item_data = control_item_path.Split("??", StringSplitOptions.RemoveEmptyEntries);
-                        if (sub_item_data.Length < 2)
-                            return;
-
-                        var sub_item_path = sub_item_data[1];
-                        control_item = control_list.Value.LookupControl(sub_item_path);
-                        if (!control_item.HasValue)
-                            return;
-                    }
                 }
 
                 // catch disposed object exception
@@ -355,7 +344,7 @@ namespace Flux.ViewModels
                     await Flux.DatabaseProvider.Database.Value.AccessLocalDatabaseAsync(db => receive_database_async(parser.Files[0].Data, db.Filename));
                 }
 
-                Flux.DatabaseProvider.InitializeAsync();
+                await Flux.DatabaseProvider.InitializeAsync();
 
                 return true;
             }

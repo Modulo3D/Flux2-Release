@@ -3,10 +3,11 @@ using Modulo3DNet;
 using ReactiveUI;
 using System.Reactive;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 
 namespace Flux.ViewModels
 {
-    public class NavModalViewModel<TFluxRoutableViewModel> : FluxRoutableViewModel<NavModalViewModel<TFluxRoutableViewModel>>
+    public sealed class NavModalViewModel<TFluxRoutableViewModel> : FluxRoutableViewModel<NavModalViewModel<TFluxRoutableViewModel>>
         where TFluxRoutableViewModel : IFluxRoutableViewModel
     {
         [RemoteCommand]
@@ -20,11 +21,11 @@ namespace Flux.ViewModels
             TFluxRoutableViewModel route,
             OptionalObservable<bool> can_navigate_back = default,
             OptionalObservable<bool> show_navbar = default)
-            : base(flux, show_navbar, $"navModal??{route.Name}")
+            : base(flux, show_navbar, $"{typeof(TFluxRoutableViewModel).GetRemoteElementClass()}{(string.IsNullOrEmpty(route.Name) ? "" : $";{route.Name}")}")
         {
             Content = route;
-            NavigateBackCommand = ReactiveCommand.Create(
-                () => { Flux.Navigator.NavigateBack(); },
+            NavigateBackCommand = ReactiveCommandRC.Create(
+                Flux.Navigator.NavigateBack, this,
                 can_navigate_back.ObservableOr(() => true));
         }
 
