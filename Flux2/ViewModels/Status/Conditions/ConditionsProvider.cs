@@ -65,50 +65,96 @@ namespace Flux.ViewModels
         private SourceCache<IConditionViewModel, string> _LockClosedConditions;
 
         [StatusBarCondition]
-        public SourceCache<IConditionViewModel, string> ChamberConditions
+        public SourceCache<IConditionViewModel, string> ChamberHotConditions
         {
             get
             {
-                if (_ChamberConditions == default)
+                if (_ChamberHotConditions == default)
                 {
-                    SourceCacheRC.Create(this, v => v._ChamberConditions, c => c.Name);
-                    var temp_chamber = Flux.ConnectionProvider.GetArray(c => c.TEMP_PLATE);
+                    SourceCacheRC.Create(this, v => v._ChamberHotConditions, c => c.Name);
+                    var temp_chamber = Flux.ConnectionProvider.GetArray(c => c.TEMP_CHAMBER);
                     if (!temp_chamber.HasValue)
-                        return _ChamberConditions;
+                        return _ChamberHotConditions;
                     foreach (var chamber in temp_chamber.Value.Variables.KeyValues)
                     {
-                        var chamber_condition = new ChamberConditionViewModel(this, chamber.Value);
+                        var chamber_condition = new ChamberHotConditionViewModel(this, chamber.Value);
                         chamber_condition.Initialize();
-                        _ChamberConditions.AddOrUpdate(chamber_condition);
+                        _ChamberHotConditions.AddOrUpdate(chamber_condition);
                     }
                 }
-                return _ChamberConditions;
+                return _ChamberHotConditions;
             }
         }
-        private SourceCache<IConditionViewModel, string> _ChamberConditions;
+        private SourceCache<IConditionViewModel, string> _ChamberHotConditions;
 
         [StatusBarCondition]
-        public SourceCache<IConditionViewModel, string> PlateConditions
+        public SourceCache<IConditionViewModel, string> PlateHotConditions
         {
             get
             {
-                if (_PlateConditions == default)
+                if (_PlateHotConditions == default)
                 {
-                    SourceCacheRC.Create(this, v => v._PlateConditions, c => c.Name);
+                    SourceCacheRC.Create(this, v => v._PlateHotConditions, c => c.Name);
                     var temp_plate = Flux.ConnectionProvider.GetArray(c => c.TEMP_PLATE);
                     if (!temp_plate.HasValue)
-                        return _PlateConditions;
+                        return _PlateHotConditions;
                     foreach (var plate in temp_plate.Value.Variables.KeyValues)
                     {
-                        var plate_condition = new PlateConditionViewModel(this, plate.Value);
+                        var plate_condition = new PlateHotConditionViewModel(this, plate.Value);
                         plate_condition.Initialize();
-                        _PlateConditions.AddOrUpdate(plate_condition);
+                        _PlateHotConditions.AddOrUpdate(plate_condition);
                     }
                 }
-                return _PlateConditions;
+                return _PlateHotConditions;
             }
         }
-        private SourceCache<IConditionViewModel, string> _PlateConditions;
+        private SourceCache<IConditionViewModel, string> _PlateHotConditions;
+
+        [ColdPrinterCondition]
+        public SourceCache<IConditionViewModel, string> ChamberColdConditions
+        {
+            get
+            {
+                if (_ChamberColdConditions == default)
+                {
+                    SourceCacheRC.Create(this, v => v._ChamberColdConditions, c => c.Name);
+                    var temp_chamber = Flux.ConnectionProvider.GetArray(c => c.TEMP_CHAMBER);
+                    if (!temp_chamber.HasValue)
+                        return _ChamberColdConditions;
+                    foreach (var chamber in temp_chamber.Value.Variables.KeyValues)
+                    {
+                        var chamber_condition = new ChamberColdConditionViewModel(this, chamber.Value);
+                        chamber_condition.Initialize();
+                        _ChamberColdConditions.AddOrUpdate(chamber_condition);
+                    }
+                }
+                return _ChamberColdConditions;
+            }
+        }
+        private SourceCache<IConditionViewModel, string> _ChamberColdConditions;
+
+        [ColdPrinterCondition]
+        public SourceCache<IConditionViewModel, string> PlateColdConditions
+        {
+            get
+            {
+                if (_PlateColdConditions == default)
+                {
+                    SourceCacheRC.Create(this, v => v._PlateColdConditions, c => c.Name);
+                    var temp_plate = Flux.ConnectionProvider.GetArray(c => c.TEMP_PLATE);
+                    if (!temp_plate.HasValue)
+                        return _PlateColdConditions;
+                    foreach (var plate in temp_plate.Value.Variables.KeyValues)
+                    {
+                        var plate_condition = new PlateColdConditionViewModel(this, plate.Value);
+                        plate_condition.Initialize();
+                        _PlateColdConditions.AddOrUpdate(plate_condition);
+                    }
+                }
+                return _PlateColdConditions;
+            }
+        }
+        private SourceCache<IConditionViewModel, string> _PlateColdConditions;
 
         [PrintCondition]
         [CycleCondition]
@@ -168,20 +214,20 @@ namespace Flux.ViewModels
         private Optional<IConditionViewModel> _NotInChange;
 
         [ManualCalibrationCondition]
-        public Optional<IConditionViewModel> HasZPlateHeight
+        public IConditionViewModel ProbeCondition
         {
             get
             {
                 var z_plate_height = Flux.ConnectionProvider.GetVariable(m => m.Z_BED_HEIGHT);
-                if (z_plate_height.HasValue && !_HasZPlateHeight.HasValue)
+                if (_ProbeCondition == null)
                 { 
-                    _HasZPlateHeight = new HasZPlateHeightConditionViewModel(this, z_plate_height.Value);
-                    _HasZPlateHeight.Value.Initialize();
+                    _ProbeCondition = new ProbeConditionViewModel(this, z_plate_height);
+                    _ProbeCondition.Initialize();
                 }
-                return _HasZPlateHeight;
+                return _ProbeCondition;
             }
         }
-        private Optional<IConditionViewModel> _HasZPlateHeight;
+        private IConditionViewModel _ProbeCondition;
 
         [StatusBarCondition]
         public IConditionViewModel DebugCondition

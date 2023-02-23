@@ -41,7 +41,8 @@ namespace Flux.ViewModels
         [RemoteOutput(false)]
         public RemoteText Label { get; }
 
-        public TemperatureViewModel(TemperaturesViewModel temperatures, IFLUX_Variable<FLUX_Temp, double> temp_var) : base($"{temp_var.Name}")
+        public TemperatureViewModel(TemperaturesViewModel temperatures, IFLUX_Variable<FLUX_Temp, double> temp_var)
+            : base($"{typeof(TemperatureViewModel).GetRemoteElementClass()};{temp_var.Name}")
         {
             Flux = temperatures.Flux;
             Label = new RemoteText($"temp;{temp_var.Unit.Alias}", true);

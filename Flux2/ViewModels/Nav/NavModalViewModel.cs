@@ -19,13 +19,12 @@ namespace Flux.ViewModels
         public NavModalViewModel(
             FluxViewModel flux,
             TFluxRoutableViewModel route,
-            OptionalObservable<bool> can_navigate_back = default,
-            OptionalObservable<bool> show_navbar = default)
-            : base(flux, show_navbar, $"{typeof(TFluxRoutableViewModel).GetRemoteElementClass()}{(string.IsNullOrEmpty(route.Name) ? "" : $";{route.Name}")}")
+            OptionalObservable<bool> can_navigate_back = default)
+            : base(flux, $"{typeof(TFluxRoutableViewModel).GetRemoteElementClass()}{(string.IsNullOrEmpty(route.Name) ? "" : $";{route.Name}")}")
         {
             Content = route;
             NavigateBackCommand = ReactiveCommandRC.Create(
-                Flux.Navigator.NavigateBack, this,
+                () => Flux.Navigator.NavigateBack(), this,
                 can_navigate_back.ObservableOr(() => true));
         }
 

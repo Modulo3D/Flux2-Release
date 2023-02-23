@@ -21,7 +21,7 @@ namespace Flux.ViewModels
             Func<CmdButton, ReactiveCommand<Unit, Unit>> command,
             OptionalObservable<bool> visible = default,
             OptionalObservable<Optional<bool>> active = default)
-            : base(name)
+            : base($"{typeof(CmdButton).GetRemoteElementClass()}.{name}")
         {
             Command = command(this);
             _Visible = visible

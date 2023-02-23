@@ -42,7 +42,8 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public abstract string InvalidItemBrush { get; }
 
-        public InvalidItemViewModel(FeederEvaluator eval) : base($"{eval.Feeder.Position}")
+        public InvalidItemViewModel(FeederEvaluator eval)
+            : base($"{typeof(TInvalidItemViewModel).GetRemoteElementClass()};{eval.Feeder.Position}")
         {
             Evaluation = eval;
 

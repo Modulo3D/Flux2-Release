@@ -47,7 +47,8 @@ namespace Flux.ViewModels
         [RemoteOutput(true, typeof(DateTimeConverter<RelativeDateTimeFormat>))]
         public DateTime EndTime => _EndTime.Value;
 
-        public MCodeQueueViewModel(MCodesViewModel mcodes, FluxJob job) : base($"{job.QueuePosition}")
+        public MCodeQueueViewModel(MCodesViewModel mcodes, FluxJob job)
+            : base($"{typeof(MCodeQueueViewModel).GetRemoteElementClass()};{job.QueuePosition}")
         {
             FluxJob = job;
             MCodes = mcodes;

@@ -3,8 +3,12 @@ using DynamicData.Kernel;
 using Modulo3DNet;
 using ReactiveUI;
 using System;
+using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Reactive.Linq;
+using System.Reflection;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
@@ -274,7 +278,7 @@ namespace Flux.ViewModels
             AddCommand("keepChamber", m => m.KEEP_CHAMBER);
             AddCommand("keepExtruders", m => m.KEEP_TOOL, visible: advanced_mode);
             AddCommand("runDaemon", m => m.RUN_DAEMON, visible: advanced_mode);
-            AddCommand("plotReferenceCount", () => ReactiveRC.PlotReferenceCount(), visible: advanced_mode);
+            AddCommand("plotReferenceCount", ReactiveRC.PlotReferenceCount, visible: advanced_mode);
 
             AddCommand(
                 new ToggleButton(
@@ -373,7 +377,7 @@ namespace Flux.ViewModels
 
                     AddCommand(
                         "homePrinter",
-                        () => Flux.ConnectionProvider.HomeAsync(),
+                        () => Flux.ConnectionProvider.HomeAsync(true),
                         can_execute: IS_IEHS,
                         visible: advanced_mode);
 

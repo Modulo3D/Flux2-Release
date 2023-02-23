@@ -52,4 +52,11 @@ namespace Flux.ViewModels
         {
         }
     }
+    public class ColdPrinterConditionAttribute : FilterConditionAttribute
+    {
+        public ColdPrinterConditionAttribute(string name = default, bool filter_on_cycle = true, string[] include_alias = default, string[] exclude_alias = default)
+             : base(name, filter_on_cycle, include_alias, exclude_alias)
+        {
+        }
+    }
 }

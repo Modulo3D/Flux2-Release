@@ -109,31 +109,34 @@ namespace Flux.ViewModels
 
         public void NavigateModal<TFluxRoutableViewModel>(
             TFluxRoutableViewModel route,
-            OptionalObservable<bool> navigate_back = default,
-            OptionalObservable<bool> show_navbar = default)
+            OptionalObservable<bool> navigate_back = default)
             where TFluxRoutableViewModel : IFluxRoutableViewModel
         {
-            Navigate(new NavModalViewModel<TFluxRoutableViewModel>(Flux, route, navigate_back, show_navbar), false);
+            Navigate(new NavModalViewModel<TFluxRoutableViewModel>(Flux, route, navigate_back), false);
         }
         public void NavigateModal<TFluxRoutableViewModel>(
             Lazy<TFluxRoutableViewModel> lazy_route,
-            OptionalObservable<bool> navigate_back = default,
-            OptionalObservable<bool> show_navbar = default)
+            OptionalObservable<bool> navigate_back = default)
             where TFluxRoutableViewModel : IFluxRoutableViewModel
         {
-            Navigate(new NavModalViewModel<TFluxRoutableViewModel>(Flux, lazy_route.Value, navigate_back, show_navbar), false);
+            Navigate(new NavModalViewModel<TFluxRoutableViewModel>(Flux, lazy_route.Value, navigate_back), false);
         }
 
-        public void NavigateBack()
+        public bool NavigateBack()
         {
             try
             {
                 if (PreviousViewModels.TryPop(out var previous))
+                { 
                     CurrentViewModel = previous.ToOptional();
+                    return true;
+                }
+                return false;
             }
             catch (Exception ex)
             {
                 Flux.Messages.LogException(this, ex);
+                return false;
             }
         }
 
@@ -161,8 +164,8 @@ namespace Flux.ViewModels
 
         public FluxRoutableViewModel(
             FluxViewModel flux,
-            OptionalObservable<bool> show_navbar = default,
-            string name = "") : base(name)
+            string name = "",
+            OptionalObservable<bool> show_navbar = default) : base(string.IsNullOrEmpty(name) ? name : $"{typeof(TFluxRoutableViewModel).GetRemoteElementClass()};{name}")
         {
             Flux = flux;
             ShowNavBar = show_navbar.ObservableOr(() => false);
@@ -186,7 +189,7 @@ namespace Flux.ViewModels
         public FluxRoutableNavBarViewModel(
             FluxViewModel flux,
             string name = "")
-            : base(flux, OptionalObservable.Some(true), name)
+            : base(flux, name, OptionalObservable.Some(true))
         {
         }
     }

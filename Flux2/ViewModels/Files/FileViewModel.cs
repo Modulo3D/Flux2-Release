@@ -14,8 +14,8 @@ namespace Flux.ViewModels
         Optional<FolderViewModel> Folder { get; }
     }
 
-    public abstract class FSViewModel<TViewModel> : RemoteControl<TViewModel>, IFSViewModel
-        where TViewModel : FSViewModel<TViewModel>
+    public abstract class FSViewModel<TFSViewModel> : RemoteControl<TFSViewModel>, IFSViewModel
+        where TFSViewModel : FSViewModel<TFSViewModel>
     {
 
         [RemoteOutput(false)]
@@ -25,7 +25,8 @@ namespace Flux.ViewModels
         public FilesViewModel Files { get; }
         public Optional<FolderViewModel> Folder { get; }
 
-        public FSViewModel(FilesViewModel files, Optional<FolderViewModel> folder, FLUX_File file) : base($"{file.Name}")
+        public FSViewModel(FilesViewModel files, Optional<FolderViewModel> folder, FLUX_File file)
+            : base($"{typeof(TFSViewModel).GetRemoteElementClass()};{file.Name}")
         {
             Files = files;
             Folder = folder;

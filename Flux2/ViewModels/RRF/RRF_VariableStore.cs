@@ -119,8 +119,6 @@ namespace Flux.ViewModels
                 Global.CreateArray(c => c.X_PROBE_OFFSET, false, 0.0, max_extruders);
                 Global.CreateArray(c => c.Y_PROBE_OFFSET, false, 0.0, max_extruders);
                 Global.CreateArray(c => c.Z_PROBE_OFFSET, false, 0.0, max_extruders);
-                Global.CreateArray(c => c.X_HOME_OFFSET, true, 0.0, max_extruders);
-                Global.CreateArray(c => c.Y_HOME_OFFSET, true, 0.0, max_extruders);
             }
             catch (Exception ex)
             {
@@ -163,21 +161,24 @@ namespace Flux.ViewModels
     // S300
     public class RRF_VariableStoreS300 : RRF_VariableStoreBase
     {
+        public const ushort MaxExtruders = 4;
+
         public override bool CanMeshProbePlate => true;
         public override bool HasPrintUnloader => false;
         public override bool CanProbeMagazine => true;
 
-        public override VariableUnits ExtrudersUnits => new(("T", 4));
+        public override VariableUnits ExtrudersUnits => new(("T", MaxExtruders));
 
-        public override VariableUnits HeaterUnits => new("main.plate", ("T", 4));
-        public override VariableUnits AnalogUnits => new("main.plate", ("T", 4));
+        public override VariableUnits HeaterUnits => new("main.plate", ("T", MaxExtruders));
+        public override VariableUnits AnalogUnits => new("main.plate", ("T", MaxExtruders));
 
         public override VariableUnits EndstopsUnits => new("X", "Y", "Z");
         public override VariableUnits AxesUnits => new("X", "Y", "Z", "C");
 
         public override VariableUnits GpInUnits => new("clamp");
 
-        public RRF_VariableStoreS300(RRF_ConnectionProvider connection_provider) : base(connection_provider, 4)
+
+        public RRF_VariableStoreS300(RRF_ConnectionProvider connection_provider) : base(connection_provider, MaxExtruders)
         {
             try
             {
@@ -212,6 +213,9 @@ namespace Flux.ViewModels
 
                 Global.CreateArray(c => c.X_MAGAZINE_POS, true, 0.0, 4);
                 Global.CreateArray(c => c.Y_MAGAZINE_POS, true, 0.0, 4);
+
+                Global.CreateArray(c => c.X_HOME_OFFSET, true, -2.7, MaxExtruders);
+                Global.CreateArray(c => c.Y_HOME_OFFSET, true, -0.5, MaxExtruders);
             }
             catch (Exception ex)
             {
@@ -238,27 +242,30 @@ namespace Flux.ViewModels
     // MP500
     public class RRF_VariableStoreMP500 : RRF_VariableStoreBase
     {
+        public const ushort MaxExtruders = 2;
+        public const ushort MaxFilaments = 4;
+
         public override bool CanMeshProbePlate => false;
         public override bool HasPrintUnloader => false;
         public override bool CanProbeMagazine => false;
 
-        public override VariableUnits ExtrudersUnits => new(("T", 2));
+        public override VariableUnits ExtrudersUnits => new(("T", MaxExtruders));
         public override VariableUnits AxesUnits => new("X", "Y", "Z", "U", "V");
         public override VariableUnits EndstopsUnits => new("X", "Y", "Z", "U", "V");
 
-        public override VariableUnits FilamentUnits => new(2, ("M", 4));
-        public override VariableUnits GpInUnits => new("main.lock", "spools.lock", ("M", 4), ("T", 2));
+        public override VariableUnits FilamentUnits => new(MaxExtruders, ("M", MaxFilaments));
+        public override VariableUnits GpInUnits => new("main.lock", "spools.lock", ("M", MaxFilaments), ("T", MaxExtruders));
         public override VariableUnits GpOutUnits => new("main.lock", "spools.lock", "main.light", "main.vacuum", "shutdown");
 
-        public override VariableUnits HeaterUnits => new("main.plate", "main.chamber", ("T", 2));
-        public override VariableUnits AnalogUnits => new("main.plate", "main.chamber", ("T", 2), "main.vacuum", ("F", 4), ("H", 4));
+        public override VariableUnits HeaterUnits => new("main.plate", "main.chamber", ("T", MaxExtruders));
+        public override VariableUnits AnalogUnits => new("main.plate", "main.chamber", ("T", MaxExtruders), "main.vacuum", ("F", MaxFilaments), ("H", MaxFilaments));
 
-        public RRF_VariableStoreMP500(RRF_ConnectionProvider connection_provider) : base(connection_provider, 2)
+        public RRF_VariableStoreMP500(RRF_ConnectionProvider connection_provider) : base(connection_provider, MaxExtruders)
         {
             try
             {
                 Heaters.CreateArray(c => c.TEMP_CHAMBER, (c, m) => m.GetTemperature(), SetChamberTemperatureAsync, "main.chamber");
-                Heaters.CreateArray(c => c.TEMP_TOOL, (c, m) => m.GetTemperature(), SetToolTemperatureAsync, ("T", 2));
+                Heaters.CreateArray(c => c.TEMP_TOOL, (c, m) => m.GetTemperature(), SetToolTemperatureAsync, ("T", MaxExtruders));
                 Heaters.CreateArray(c => c.TEMP_PLATE, (c, m) => m.GetTemperature(), SetPlateTemperatureAsync, "main.plate");
 
                 GpOut.CreateArray(c => c.OPEN_LOCK, (c, m) => m.Pwm == 1, WriteGpOutAsync, "main.lock", "spools.lock");
@@ -266,13 +273,17 @@ namespace Flux.ViewModels
                 GpOut.CreateVariable(c => c.ENABLE_VACUUM, (c, m) => m.Pwm == 1, WriteGpOutAsync, "main.vacuum");
                 GpOut.CreateVariable(c => c.DISABLE_24V, (c, m) => m.Pwm == 1, WriteGpOutAsync, "shutdown");
 
+                Analog.CreateArray(c => c.FILAMENT_HUMIDITY, (c, h) => read_humidity(h), ("H", MaxFilaments));
                 Analog.CreateVariable(c => c.VACUUM_PRESENCE, (c, v) => read_pressure(v), "main.vacuum");
+                
                 GpIn.CreateArray(c => c.LOCK_CLOSED, (c, m) => m.Value == 1, "main.lock", "spools.lock");
                 GpIn.CreateArray(c => c.FILAMENT_AFTER_GEAR, (c, m) => m.Value == 1, ("M", 4));
                 GpIn.CreateArray(c => c.FILAMENT_ON_HEAD, (c, m) => m.Value == 1, ("T", 2));
-                Analog.CreateArray(c => c.FILAMENT_HUMIDITY, (c, h) => read_humidity(h), ("H", 4));
 
-                Filaments.CreateArray(c => c.FILAMENT_BEFORE_GEAR, (c, m) => m.Status == "ok", ("M", 4));
+                Filaments.CreateArray(c => c.FILAMENT_BEFORE_GEAR, (c, m) => m.Status == "ok", ("M", MaxFilaments));
+
+                Global.CreateArray(c => c.X_HOME_OFFSET, true, 0.0, MaxExtruders);
+                Global.CreateArray(c => c.Y_HOME_OFFSET, true, 0.0, MaxExtruders);
 
                 Global.CreateVariable(c => c.Z_BED_HEIGHT, false, FluxViewModel.MaxZBedHeight);
                 Global.CreateVariable(c => c.Z_PROBE_CORRECTION, true, 0.0);

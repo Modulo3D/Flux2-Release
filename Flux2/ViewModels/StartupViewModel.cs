@@ -30,16 +30,20 @@ namespace Flux.ViewModels
             var startup = Observable.CombineLatest(
                 Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation),
                 Flux.ConnectionProvider.WhenAnyValue(c => c.IsConnecting),
-                (e, connecting) => (e.IsHomed, connecting))
+                (status, connecting) => (status, connecting))
+                .Throttle(TimeSpan.FromSeconds(0.5))
                 .DistinctUntilChanged();
 
-            startup.Where(t => t.connecting || !t.IsHomed)
+            startup.Where(t => t.connecting || (!t.status.IsHomed && t.status.IsIdle))
                 .ObserveOn(RxApp.MainThreadScheduler)
                 .SubscribeRC(t => Flux.Navigator?.Navigate(this), this);
 
-            startup.Where(t => !t.connecting && t.IsHomed)
+            startup
+                .PairWithPreviousValue()
+                .Where(t => t.OldValue.connecting || !t.OldValue.status.IsHomed)
+                .Where(t => !t.NewValue.connecting && t.NewValue.status.IsHomed && t.NewValue.status.IsIdle)
                 .ObserveOn(RxApp.MainThreadScheduler)
-                .SubscribeRC(_ => Flux.Navigator?.NavigateHome(), this);
+                .SubscribeRC(_ => { Flux.Navigator?.NavigateHome(); }, this);
 
             var can_home = Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation)
                 .Select(s => s.CanSafeCycle && !s.IsHomed);
@@ -74,7 +78,7 @@ namespace Flux.ViewModels
 
         private async Task StartupAsync()
         {
-            var home_response = await Flux.ConnectionProvider.HomeAsync();
+            var home_response = await Flux.ConnectionProvider.HomeAsync(true);
             if (home_response == false)
                 return;
         }

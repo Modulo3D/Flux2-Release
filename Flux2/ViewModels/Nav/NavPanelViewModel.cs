@@ -42,11 +42,10 @@ namespace Flux.ViewModels
             TFluxRoutableViewModel route,
             OptionalObservable<bool> can_navigate = default,
             OptionalObservable<bool> visible = default,
-            OptionalObservable<bool> navigate_back = default,
-            OptionalObservable<bool> show_navbar = default)
+            OptionalObservable<bool> navigate_back = default)
             where TFluxRoutableViewModel : IFluxRoutableViewModel
         {
-            var modal = new NavModalViewModel<TFluxRoutableViewModel>(Flux, route, navigate_back, show_navbar);
+            var modal = new NavModalViewModel<TFluxRoutableViewModel>(Flux, route, navigate_back);
             Buttons.Add(new NavButtonModal<TFluxRoutableViewModel>(route.Flux, modal, can_navigate, visible));
         }
 
@@ -56,12 +55,11 @@ namespace Flux.ViewModels
             Func<TFluxRoutableViewModel> get_route,
             OptionalObservable<bool> can_navigate = default,
             OptionalObservable<bool> visible = default,
-            OptionalObservable<bool> navigate_back = default,
-            OptionalObservable<bool> show_navbar = default)
+            OptionalObservable<bool> navigate_back = default)
             where TFluxRoutableViewModel : IFluxRoutableViewModel
         {
             var lazy_route = new Lazy<TFluxRoutableViewModel>(get_route);
-            var modal = new Lazy<NavModalViewModel<TFluxRoutableViewModel>>(() => new NavModalViewModel<TFluxRoutableViewModel>(Flux, lazy_route.Value, navigate_back, show_navbar));
+            var modal = new Lazy<NavModalViewModel<TFluxRoutableViewModel>>(() => new NavModalViewModel<TFluxRoutableViewModel>(Flux, lazy_route.Value, navigate_back));
             Buttons.Add(new NavButtonModal<TFluxRoutableViewModel>(flux, modal, can_navigate, visible));
             return lazy_route;
         }
@@ -70,11 +68,10 @@ namespace Flux.ViewModels
             Lazy<TFluxRoutableViewModel> lazy_route,
             OptionalObservable<bool> can_navigate = default,
             OptionalObservable<bool> visible = default,
-            OptionalObservable<bool> navigate_back = default,
-            OptionalObservable<bool> show_navbar = default)
+            OptionalObservable<bool> navigate_back = default)
             where TFluxRoutableViewModel : IFluxRoutableViewModel
         {
-            var modal = new Lazy<NavModalViewModel<TFluxRoutableViewModel>>(() => new NavModalViewModel<TFluxRoutableViewModel>(Flux, lazy_route.Value, navigate_back, show_navbar));
+            var modal = new Lazy<NavModalViewModel<TFluxRoutableViewModel>>(() => new NavModalViewModel<TFluxRoutableViewModel>(Flux, lazy_route.Value, navigate_back));
             Buttons.Add(new NavButtonModal<TFluxRoutableViewModel>(flux, modal, can_navigate, visible));
         }
 

@@ -14,7 +14,7 @@ namespace Flux.ViewModels
         [RemoteCommand]
         public ReactiveCommand<Unit, Unit> ResetMagazineCommand { get; internal set; }
 
-        public MagazineViewModel(FluxViewModel flux) : base(flux, Observable.Return(true).ToOptional())
+        public MagazineViewModel(FluxViewModel flux) : base(flux)
         {
             Magazine = Flux.Feeders.Feeders.Connect()
                 .Transform(f => new MagazineItemViewModel(Flux, f))

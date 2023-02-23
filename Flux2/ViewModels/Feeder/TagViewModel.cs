@@ -57,7 +57,8 @@ namespace Flux.ViewModels
             FeedersViewModel feeders, FeederViewModel feeder, ushort position,
             Func<IFluxFeedersViewModel, INFCStorage<TNFCTag>> get_tag_storage,
             Func<ILocalDatabase, TNFCTag, Task<TDocument>> find_document,
-            Func<TNFCTag, Guid> check_tag, bool watch_odometer_for_pause) : base($"{position}")
+            Func<TNFCTag, Guid> check_tag, bool watch_odometer_for_pause) 
+            : base($"{typeof(TTagViewModel).GetRemoteElementClass()};{position}")
         {
             Feeder = feeder;
             Feeders = feeders;

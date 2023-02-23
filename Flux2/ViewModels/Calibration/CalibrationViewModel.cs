@@ -144,11 +144,16 @@ namespace Flux.ViewModels
                 }
                 else
                 {
+                    await Flux.ConnectionProvider.CancelPrintAsync(true);
+
                     if (Flux.ConnectionProvider.HasVariable(c => c.Z_BED_HEIGHT))
                         await Flux.ConnectionProvider.WriteVariableAsync(c => c.Z_BED_HEIGHT, FluxViewModel.MaxZBedHeight);
 
                     if (Flux.ConnectionProvider.HasVariable(c => c.ENABLE_VACUUM))
                         await Flux.ConnectionProvider.WriteVariableAsync(c => c.ENABLE_VACUUM, true);
+
+                    if (Flux.ConditionsProvider.ProbeCondition is ProbeConditionViewModel probe_condition)
+                        probe_condition.IsProbed = false;
 
                     Flux.Navigator.Navigate(ManualCalibration.Value);
                 }

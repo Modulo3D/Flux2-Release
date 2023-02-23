@@ -144,7 +144,8 @@ namespace Flux.ViewModels
         [RemoteOutput(false)]
         public ushort Position => Feeder.Position;
 
-        public OffsetViewModel(CalibrationViewModel calibration, IFluxFeederViewModel feeder) : base($"{feeder.Position}")
+        public OffsetViewModel(CalibrationViewModel calibration, IFluxFeederViewModel feeder) 
+            : base($"{typeof(OffsetViewModel).GetRemoteElementClass()};{feeder.Position}")
         {
             Feeder = feeder;
             Flux = calibration.Flux;

@@ -50,7 +50,8 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public bool HasValue => _HasValue.Value;
 
-        public MemoryVariableViewModel(FluxViewModel flux, IFLUX_Variable variable, Optional<List<FLUX_VariableAttribute>> attributes) : base($"{variable.Name}")
+        public MemoryVariableViewModel(FluxViewModel flux, IFLUX_Variable variable, Optional<List<FLUX_VariableAttribute>> attributes)
+            : base($"{typeof(MemoryVariableViewModel).GetRemoteElementClass()};{variable.Name}")
         {
             Flux = flux;
             Variable = variable;

@@ -30,7 +30,8 @@ namespace Flux.ViewModels
         [RemoteOutput(false)]
         public abstract string VariableName { get; }
 
-        public MemoryGroupBaseViewModel(FluxViewModel flux, string name) : base(name)
+        public MemoryGroupBaseViewModel(FluxViewModel flux, string name) 
+            : base($"{typeof(TMemoryGroupBaseViewModel).GetRemoteElementClass()};{name}")
         {
             Flux = flux;
             ToggleCommand = ReactiveCommandRC.Create(Toggle, (TMemoryGroupBaseViewModel)this);

@@ -20,15 +20,6 @@ using System.Xml.Linq;
 
 namespace Flux.ViewModels
 {
-    public enum RRF_RequestPriority : ushort
-    {
-        Immediate = 3,
-        High = 2,
-        Medium = 1,
-        Low = 0
-    }
-
-
     public interface IRRF_Request
     {
         TimeSpan Timeout { get; }
@@ -37,6 +28,13 @@ namespace Flux.ViewModels
 
         bool TrySetCanceled();
         Task<bool> TrySendAsync(HttpClient client, CancellationToken ct);
+    }
+    public enum RRF_RequestPriority : ushort
+    {
+        Immediate = 3,
+        High = 2,
+        Medium = 1,
+        Low = 0
     }
 
     public readonly struct RRF_Request<TData> : IRRF_Request
