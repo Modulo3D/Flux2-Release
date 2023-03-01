@@ -32,9 +32,9 @@ namespace Flux.ViewModels
         public bool Filter(IConditionViewModel condition)
         {
             if (IncludeAlias.HasValue)
-                return IncludeAlias.Value.Contains(condition.Name);
+                return IncludeAlias.Value.Any(condition.Name.Contains);
             if (ExcludeAlias.HasValue)
-                return !ExcludeAlias.Value.Contains(condition.Name);
+                return !ExcludeAlias.Value.Any(condition.Name.Contains);
             return true;
         }
     }

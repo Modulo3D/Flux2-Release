@@ -204,19 +204,4 @@ namespace Flux.ViewModels
             await Flux.ConnectionProvider.CancelPrintAsync(true);
         }
     }
-
-    public class LayerHeightComparer : IEqualityComparer<double>
-    {
-        public LayerHeightComparer()
-        {
-        }
-        public bool Equals(double x, double y)
-        {
-            return Math.Round(x, 2) == Math.Round(y, 2);
-        }
-        public int GetHashCode(double d)
-        {
-            return Math.Round(d, 2).GetHashCode();
-        }
-    }
 }

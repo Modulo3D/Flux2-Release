@@ -282,6 +282,7 @@ namespace Flux.ViewModels
             VacuumPresence = vacuum_presence;
         }
 
+
         protected override IObservable<ConditionState> GetState(IObservable<bool> is_idle)
         {
             return Observable.CombineLatest(

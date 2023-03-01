@@ -243,6 +243,7 @@ namespace Flux.ViewModels
                 {
                     user
                         .WithWebApiSetting(s => s.PrinterName)
+                        .WithWebApiSetting(s => s.StartupCost)
                         .WithWebApiSetting(s => s.CostHour);
                 })
                 .WithWebApi("/settings/core", Flux.SettingsProvider.CoreSettings, core =>

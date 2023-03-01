@@ -81,13 +81,13 @@ namespace Flux.ViewModels
                 .ObserveVariable(m => m.QUEUE)
                 .StartWithDefault();
 
-            _JobQueue = queue_preview.CombineLatest(queue_pos,
+            _JobQueue = Observable.CombineLatest(queue_preview, queue_pos,
                 (queue_preview, queue_pos) => (queue_preview, queue_pos))
                 .SelectAsync(t => get_queue(t.queue_preview, t.queue_pos))
                 .StartWithDefault()
                 .ToPropertyRC(this, v => v.JobQueue);
 
-            var current_job = queue_preview.CombineLatest(queue_pos,
+            var current_job = Observable.CombineLatest(queue_preview, queue_pos,
                 (queue_preview, queue_pos) => (queue_preview, queue_pos))
                 .SelectMany(t => get_current_job(t.queue_preview, t.queue_pos))
                 .StartWithDefault();
@@ -120,7 +120,7 @@ namespace Flux.ViewModels
                 .ObserveVariable(c => c.RECOVERY)
                 .StartWithDefault();
 
-            var current_recovery = recovery_preview.CombineLatest(current_job,
+            var current_recovery = Observable.CombineLatest(recovery_preview, current_job,
                 (recovery_preview, current_job) => (recovery_preview, current_job))
                 .SelectAsync(t => get_recovery(t.recovery_preview, t.current_job))
                 .StartWithDefault();
@@ -138,10 +138,11 @@ namespace Flux.ViewModels
             var current_mcode_key = current_job
                 .Convert(j => j.MCodeKey);
 
-            var current_mcode = Flux.MCodes.AvaiableMCodes.Connect()
-                .AutoRefresh(m => m.Analyzer)
-                .WatchOptional(current_mcode_key)
-                .Convert(m => m.Analyzer)
+            var current_vm = Flux.MCodes.AvaiableMCodes.Connect()
+                .WatchOptional(current_mcode_key);
+
+            var current_mcode = current_vm
+                .ConvertMany(vm => vm.WhenAnyValue(vm => vm.Analyzer))
                 .Convert(a => a.MCode)
                 .StartWithDefault()
                 .DistinctUntilChanged();
@@ -192,7 +193,8 @@ namespace Flux.ViewModels
                 current_mcode,
                 (printer_id, selected_mcode) => !selected_mcode.HasValue || selected_mcode.Value.PrinterId != printer_id);
 
-            _StartEvaluation = has_low_nozzles.CombineLatest(
+            _StartEvaluation = Observable.CombineLatest( 
+                has_low_nozzles,
                 has_cold_nozzles,
                 has_low_materials,
                 has_invalid_tools,
@@ -204,7 +206,8 @@ namespace Flux.ViewModels
                 .DistinctUntilChanged()
                 .ToPropertyRC(this, v => v.StartEvaluation);
 
-            _PrintingEvaluation = current_job.CombineLatest(
+            _PrintingEvaluation = Observable.CombineLatest(
+                current_job,
                 current_mcode,
                 current_recovery,
                 PrintingEvaluation.Create)
@@ -215,7 +218,8 @@ namespace Flux.ViewModels
                 .ObserveVariable(m => m.IS_HOMED)
                 .ValueOr(() => false);
 
-            var has_safe_state = Flux.ConnectionProvider.WhenAnyValue(v => v.IsConnecting).CombineLatest(
+            var has_safe_state = Observable.CombineLatest(
+                Flux.ConnectionProvider.WhenAnyValue(v => v.IsConnecting),
                 Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS),
                 Flux.Feeders.WhenAnyValue(f => f.HasInvalidStates),
                 HasSafeState)
@@ -224,14 +228,16 @@ namespace Flux.ViewModels
             var cycle_conditions = Flux.ConditionsProvider.ObserveConditions<CycleConditionAttribute>();
             var print_conditions = Flux.ConditionsProvider.ObserveConditions<PrintConditionAttribute>();
 
-            var can_safe_cycle = is_idle.CombineLatest(
+            var can_safe_cycle = Observable.CombineLatest(
+                is_idle,
                 has_safe_state,
                 cycle_conditions.QueryWhenChanged(),
                 (idle, state, safe_cycle) => idle && state && safe_cycle.All(s => s.Valid))
                 .StartWith(false)
                 .DistinctUntilChanged();
 
-            var can_safe_print = is_idle.CombineLatest(
+            var can_safe_print = Observable.CombineLatest(
+                is_idle,
                 has_safe_state,
                 print_conditions.QueryWhenChanged(),
                 (idle, state, safe_print) => idle && state && safe_print.All(s => s.Valid));
@@ -242,7 +248,8 @@ namespace Flux.ViewModels
                 .StartWith(false)
                 .DistinctUntilChanged();
 
-            var can_safe_hold = is_cycle.CombineLatest(
+            var can_safe_hold = Observable.CombineLatest(
+                is_cycle,
                 has_safe_state,
                 cycle_conditions.QueryWhenChanged(),
                 (cycle, state, safe_cycle) => cycle && state && safe_cycle.All(s => s.Valid))
@@ -259,13 +266,14 @@ namespace Flux.ViewModels
                 })
                 .ValueOr(() => false);
 
-            _StatusEvaluation = is_idle.CombineLatest(
+            _StatusEvaluation = Observable.CombineLatest(
+                is_idle,
                 is_homed,
                 is_cycle,
                 can_safe_stop,
                 can_safe_hold,
-                can_safe_cycle,
-                can_safe_print,
+                can_safe_cycle, 
+                can_safe_print, 
                 is_enabled_axis,
                 StatusEvaluation.Create)
                 .DistinctUntilChanged()
@@ -280,7 +288,8 @@ namespace Flux.ViewModels
                 .ObserveVariable(c => c.STORAGE)
                 .DistinctUntilChanged();
 
-            _PrintProgress = this.WhenAnyValue(v => v.StatusEvaluation).CombineLatest(
+            _PrintProgress = Observable.CombineLatest(
+                this.WhenAnyValue(v => v.StatusEvaluation),
                 this.WhenAnyValue(v => v.PrintingEvaluation),
                 storage,
                 progress,
@@ -291,7 +300,8 @@ namespace Flux.ViewModels
             var database = Flux.DatabaseProvider
                 .WhenAnyValue(v => v.Database);
 
-            var sample_print_progress = is_cycle.CombineLatest(
+            var sample_print_progress = Observable.CombineLatest(
+                is_cycle,
                 current_mcode,
                 Observable.Interval(TimeSpan.FromSeconds(5)).StartWith(0),
                 (_, _, _) => Unit.Default);

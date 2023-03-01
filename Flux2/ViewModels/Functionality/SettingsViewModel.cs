@@ -68,12 +68,20 @@ namespace Flux.ViewModels
             set => this.RaiseAndSetIfChanged(ref _PrinterName, value);
         }
 
-        private Optional<float> _CostHour = 15;
+        private Optional<double> _CostHour = 15;
         [RemoteInput]
-        public Optional<float> CostHour
+        public Optional<double> CostHour
         {
             get => _CostHour;
             set => this.RaiseAndSetIfChanged(ref _CostHour, value);
+        }
+
+        private Optional<double> _StartupCost = 15;
+        [RemoteInput]
+        public Optional<double> StartupCost
+        {
+            get => _StartupCost;
+            set => this.RaiseAndSetIfChanged(ref _StartupCost, value);
         }
 
         private Optional<int> _StandbyMinutes = 0;
@@ -149,6 +157,9 @@ namespace Flux.ViewModels
             user_settings.WhenAnyValue(s => s.CostHour)
                 .BindToRC(this, v => v.CostHour);
 
+            user_settings.WhenAnyValue(s => s.StartupCost)
+                .BindToRC(this, v => v.StartupCost);
+
             user_settings.WhenAnyValue(s => s.StandbyMinutes)
                 .BindToRC(this, v => v.StandbyMinutes);
 
@@ -197,6 +208,7 @@ namespace Flux.ViewModels
 
                 user_settings.CostHour = CostHour;
                 core_settings.PLCAddress = PlcAddress;
+                user_settings.StartupCost = StartupCost;
                 user_settings.PrinterName = PrinterName;
                 core_settings.WebcamAddress = WebcamAddress;
                 core_settings.LoggerAddress = LoggerAddress;

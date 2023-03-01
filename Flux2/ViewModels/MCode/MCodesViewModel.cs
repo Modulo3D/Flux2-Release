@@ -1,9 +1,11 @@
 ﻿using DynamicData;
+using DynamicData.Binding;
 using DynamicData.Kernel;
 using DynamicData.PLinq;
 using Modulo3DNet;
 using ReactiveUI;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -19,10 +21,10 @@ namespace Flux.ViewModels
     {
         private CancellationTokenSource PrepareMCodeCTS { get; set; }
 
-        [RemoteContent(true)]
+        [RemoteContent(true, nameof(IFluxMCodeStorageViewModel.FileNumber))]
         public ISourceCache<IFluxMCodeStorageViewModel, MCodeKey> AvaiableMCodes { get; private set; }
 
-        [RemoteContent(true)]
+        [RemoteContent(true, nameof(IFluxMCodeQueueViewModel.QueuePosition))]
         public IObservableCache<IFluxMCodeQueueViewModel, QueuePosition> QueuedMCodes { get; private set; }
 
         [RemoteCommand]
@@ -60,13 +62,12 @@ namespace Flux.ViewModels
                 .ValueOr(() => new QueuePosition(-1))
                 .ToPropertyRC(this, v => v.QueuePosition);
 
-
             SourceCacheRC.Create(this, v => v.AvaiableMCodes, f => f.MCodeKey);
 
             var can_delete_all = AvaiableMCodes.Connect()
                 .TrueForAll(mcode => mcode.WhenAnyValue(m => m.CanDelete), d => d);
 
-            DeleteAllCommand = ReactiveCommandRC.CreateFromTask(async () => { await ClearMCodeStorageAsync(); }, this, can_delete_all);
+            DeleteAllCommand = ReactiveCommandRC.CreateFromTask(ClearMCodeStorageAsync, this, can_delete_all);
 
             this.WhenAnyValue(v => v.RemovableDrivePath)
                 .DistinctUntilChanged(folder => folder.ConvertOr(f => f.FullName, () => ""))
@@ -78,14 +79,7 @@ namespace Flux.ViewModels
             Task.Run(() => ImportMCodesAsync());
 
             var filter_queue = this.WhenAnyValue(v => v.QueuePosition)
-                .Select(p =>
-                {
-                    return (Func<IFluxMCodeQueueViewModel, bool>)filter_queue_func;
-                    bool filter_queue_func(IFluxMCodeQueueViewModel queue)
-                    {
-                        return p > -1 && queue.FluxJob.QueuePosition >= p;
-                    }
-                });
+                .Select(p => (Func<IFluxMCodeQueueViewModel, bool>)(q => p > -1 && q.FluxJob.QueuePosition >= p));
 
             QueuedMCodes = Flux.StatusProvider
                .WhenAnyValue(s => s.JobQueue)
@@ -94,6 +88,12 @@ namespace Flux.ViewModels
                .Filter(filter_queue)
                .DisposeMany()
                .AsObservableCacheRC(this);
+
+            var storage_comparer = SortExpressionComparer<IFluxMCodeStorageViewModel>
+                .Ascending(storage => storage.FileNumber);
+
+            var queue_comparer = SortExpressionComparer<IFluxMCodeQueueViewModel>
+                .Ascending(storage => storage.FluxJob.QueuePosition);
 
             Flux.StatusProvider
                 .WhenAnyValue(s => s.JobQueue)
@@ -186,7 +186,7 @@ namespace Flux.ViewModels
 
                 var file_vm = AvaiableMCodes.Lookup(mcode_key);
                 if (file_vm.HasValue)
-                    continue;
+                    File.Delete(file_name);
 
                 mcodes.Add(mcode_key, file);
             }
@@ -531,6 +531,11 @@ namespace Flux.ViewModels
                 yield break;
             foreach (var job in job_queue.Value.Values)
                 yield return new MCodeQueueViewModel(this, job);
+        }
+
+        public Optional<IFluxMCodeStorageViewModel> LookupMCode(MCode mcode)
+        {
+            throw new NotImplementedException();
         }
     }
 }

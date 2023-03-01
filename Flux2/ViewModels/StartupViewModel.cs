@@ -38,12 +38,18 @@ namespace Flux.ViewModels
                 .ObserveOn(RxApp.MainThreadScheduler)
                 .SubscribeRC(t => Flux.Navigator?.Navigate(this), this);
 
+
             startup
                 .PairWithPreviousValue()
                 .Where(t => t.OldValue.connecting || !t.OldValue.status.IsHomed)
-                .Where(t => !t.NewValue.connecting && t.NewValue.status.IsHomed && t.NewValue.status.IsIdle)
+                .Where(t => !t.NewValue.connecting && t.NewValue.status.IsHomed)
                 .ObserveOn(RxApp.MainThreadScheduler)
-                .SubscribeRC(_ => { Flux.Navigator?.NavigateHome(); }, this);
+                .SubscribeRC(_ => 
+                {
+                    if(!Flux.Navigator.CurrentViewModel.HasValue || 
+                       Flux.Navigator.CurrentViewModel.Value is StartupViewModel)
+                       Flux.Navigator?.NavigateHome(); 
+                }, this);
 
             var can_home = Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation)
                 .Select(s => s.CanSafeCycle && !s.IsHomed);
