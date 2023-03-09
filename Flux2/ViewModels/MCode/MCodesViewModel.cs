@@ -2,16 +2,19 @@
 using DynamicData.Binding;
 using DynamicData.Kernel;
 using DynamicData.PLinq;
+using Microsoft.FSharp.Data.UnitSystems.SI.UnitNames;
 using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -139,6 +142,9 @@ namespace Flux.ViewModels
                         Flux.Messages.LogException(this, ex);
                     }
 
+                    if (parse_ip_file(folder))
+                        return;
+
                     //if (parse_operator_file(folder))
                     //    return;
                 }
@@ -182,10 +188,48 @@ namespace Flux.ViewModels
                 {
                     // Find mcode files
                     using var operator_open = ipaddress_file.Value.OpenRead();
-                    var ipaddress_config = JsonUtils.Deserialize<OperatorUSB>(operator_open);
+                    var ipaddress_config = JsonUtils.Deserialize<OperatorEthernetConfig>(operator_open);
                     if (!ipaddress_config.HasValue)
                         return false;
 
+                    if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                    {
+                        var dhcpcd_conf = new FileInfo("/etc/dhcpcd.conf");
+                        if (dhcpcd_conf.Exists)
+                            dhcpcd_conf.Delete();
+
+                        using var dhcpcd_conf_writer = dhcpcd_conf.CreateText();
+                        dhcpcd_conf_writer.WriteLine("hostname");
+                        dhcpcd_conf_writer.WriteLine("clientid");
+                        dhcpcd_conf_writer.WriteLine("persistent");
+                        dhcpcd_conf_writer.WriteLine("option rapid_commit");
+                        dhcpcd_conf_writer.WriteLine("option domain_name_servers, domain_name, domain_search, host_name");
+                        dhcpcd_conf_writer.WriteLine("option classless_static_routes");
+                        dhcpcd_conf_writer.WriteLine("option interface_mtu");
+                        dhcpcd_conf_writer.WriteLine("require dhcp_server_identifier");
+                        dhcpcd_conf_writer.WriteLine("slaac private");
+
+                        dhcpcd_conf_writer.WriteLine("");
+                        dhcpcd_conf_writer.WriteLine("interface eth0");
+                        dhcpcd_conf_writer.WriteLine($"static ip_address={ipaddress_config.Value.Eth0Interface}");
+
+                        dhcpcd_conf_writer.WriteLine("");
+                        dhcpcd_conf_writer.WriteLine("interface eth1");
+                        dhcpcd_conf_writer.WriteLine($"static ip_address={ipaddress_config.Value.Eth1Interface}");
+                        dhcpcd_conf_writer.WriteLine($"static routers={ipaddress_config.Value.Eth1Router}");
+                        dhcpcd_conf_writer.WriteLine($"static domain_name_servers={ipaddress_config.Value.Eth1DNS}");
+
+                        using var process = new Process
+                        {
+                            StartInfo = new ProcessStartInfo
+                            {
+                                UseShellExecute = true,
+                                FileName = "/bin/bash",
+                                Arguments = $"-c \"sudo reboot\"",
+                            }
+                        };
+                        process.Start();
+                    }
 
                     return true;
                 }
@@ -465,7 +509,7 @@ namespace Flux.ViewModels
                 Flux.StatusProvider.StartWithLowMaterials = false;
 
                 var connection_provider = Flux.ConnectionProvider;
-                var queue_size = connection_provider.VariableStoreBase.HasPrintUnloader ? 99 : 99;
+                var queue_size = connection_provider.VariableStoreBase.HasPrintUnloader ? 99 : 1;
 
                 if (!await PrepareMCodeAsync(mcode))
                     return false;

@@ -95,10 +95,8 @@ namespace Flux.ViewModels
                 .StartWithDefault()
                 .ToPropertyRC(this, v => v.JobQueue);
 
-            var current_job = Observable.CombineLatest(queue_preview, queue_pos,
-                (queue_preview, queue_pos) => (queue_preview, queue_pos))
-                .SelectMany(t => get_current_job(t.queue_preview, t.queue_pos))
-                .StartWithDefault();
+            var current_job = this.WhenAnyValue(v => v.JobQueue)
+                .Convert(q => q.CurrentJob);
 
             async Task<Optional<JobQueue>> get_queue(Optional<FluxJobQueuePreview> preview, Optional<QueuePosition> queue_pos)
             {
@@ -110,30 +108,16 @@ namespace Flux.ViewModels
                 return await preview.Value.GetJobQueueAsync(Flux.ConnectionProvider, queue_pos.Value, queue_cts.Token);
             }
 
-            async Task<Optional<FluxJob>> get_current_job(Optional<FluxJobQueuePreview> preview, Optional<QueuePosition> queue_pos)
-            {
-                if (!preview.HasValue)
-                    return default;
-
-                if (!queue_pos.HasValue)
-                    return default;
-
-                using var queue_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                var queue = await preview.Value.GetJobQueueAsync(Flux.ConnectionProvider, queue_pos.Value, queue_cts.Token);
-
-                return queue.Lookup(queue_pos.Value);
-            }
-
             var recovery_preview = Flux.ConnectionProvider
                 .ObserveVariable(c => c.RECOVERY)
                 .StartWithDefault();
 
-            var current_recovery = Observable.CombineLatest(recovery_preview, current_job,
-                (recovery_preview, current_job) => (recovery_preview, current_job))
-                .SelectAsync(t => get_recovery(t.recovery_preview, t.current_job))
+            var current_recovery = Observable.CombineLatest(current_job, recovery_preview,
+                (current_job, recovery_preview) => (current_job, recovery_preview))
+                .SelectAsync(t => get_recovery(t.current_job, t.recovery_preview))
                 .StartWithDefault();
 
-            async Task<Optional<FluxJobRecovery>> get_recovery(Optional<FluxJobRecoveryPreview> recovery_preview, Optional<FluxJob> current_job)
+            async Task<Optional<FluxJobRecovery>> get_recovery(Optional<FluxJob> current_job, Optional<FluxJobRecoveryPreview> recovery_preview)
             {
                 if (!recovery_preview.HasValue)
                     return default;
@@ -143,14 +127,15 @@ namespace Flux.ViewModels
                 return await recovery_preview.Value.GetFluxJobRecoveryAsync(Flux.ConnectionProvider, current_job.Value, queue_cts.Token);
             }
 
-            var current_mcode_key = current_job
+            var current_mcode_key = this.WhenAnyValue(v => v.JobQueue)
+                .Convert(q => q.CurrentJob)
                 .Convert(j => j.MCodeKey);
 
             var current_vm = Flux.MCodes.AvaiableMCodes.Connect()
                 .WatchOptional(current_mcode_key);
 
             var current_mcode = current_vm
-                .ConvertMany(vm => vm.WhenAnyValue(vm => vm.Analyzer))
+                .Convert(vm => vm.Analyzer)
                 .Convert(a => a.MCode)
                 .StartWithDefault()
                 .DistinctUntilChanged();

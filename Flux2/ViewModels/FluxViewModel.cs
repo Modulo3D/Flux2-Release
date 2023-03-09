@@ -165,6 +165,9 @@ namespace Flux.ViewModels
 
         public FluxViewModel(ILogger<IFlux> logger)
         {
+            var date = DateTime.Now;
+            var eq = new FluxJobQueuePreview(new FLUX_File() { Date = date, Name = "ciao", Size = 10, Type = FLUX_FileType.File }) == new FluxJobQueuePreview(new FLUX_File() { Date = date, Name = "ciao", Size = 10, Type = FLUX_FileType.File });
+
             Logger = logger;
 
             ServicePointManager.UseNagleAlgorithm = false;
