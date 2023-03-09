@@ -1,0 +1,35 @@
+; reset extrusion mode
+M83
+
+; delete resurrect
+M30 "/gcodes/storage/resurrect.g"
+
+; turn off heating
+if global.keep_chamber == false
+	M140 S0
+	M141 S0
+
+if global.keep_tool == false
+	G10 P0 S0 R0
+	G10 P1 S0 R0
+	
+M106 P2 S0
+M106 P4 S0
+
+; lower the plate
+M98 P"/macros/lower_plate"
+
+; deselect tool
+T-1
+
+; turn off light
+M42 P2 S0
+
+; turn off vacuum
+M42 P3 S0
+
+; stop job
+M98 P"/macros/job/stop" R0 D{state.time}
+
+; reset the queue
+set global.queue_pos = -1

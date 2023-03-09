@@ -79,4 +79,9 @@
     </Reference>
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Storage\Duet\MP500\" />
+    <Folder Include="Storage\Duet\S300\" />
+  </ItemGroup>
+
 </Project>
