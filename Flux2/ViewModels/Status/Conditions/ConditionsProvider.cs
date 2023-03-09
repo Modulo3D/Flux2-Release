@@ -36,7 +36,6 @@ namespace Flux.ViewModels
         [CycleCondition(exclude_alias: new[] { "spools.lock" })]
         [PreparePrintCondition(exclude_alias: new[] { "spools.lock" })]
         [FilamentOperationCondition(exclude_alias: new[] { "spools.lock" })]
-        [ManualCalibrationCondition(exclude_alias: new[] { "spools.lock" })]
         public SourceCache<IConditionViewModel, string> LockClosedConditions
         {
             get
@@ -111,6 +110,7 @@ namespace Flux.ViewModels
         private SourceCache<IConditionViewModel, string> _PlateHotConditions;
 
         [ColdPrinterCondition]
+        [ManualCalibrationCondition]
         public SourceCache<IConditionViewModel, string> ChamberColdConditions
         {
             get
@@ -134,6 +134,7 @@ namespace Flux.ViewModels
         private SourceCache<IConditionViewModel, string> _ChamberColdConditions;
 
         [ColdPrinterCondition]
+        [ManualCalibrationCondition]
         public SourceCache<IConditionViewModel, string> PlateColdConditions
         {
             get
@@ -228,6 +229,22 @@ namespace Flux.ViewModels
             }
         }
         private IConditionViewModel _ProbeCondition;
+
+        [ManualCalibrationCondition]
+        public IConditionViewModel FeelerGaugeCondition
+        {
+            get
+            {
+                if (_FeelerGaugeCondition == null)
+                {
+                    _FeelerGaugeCondition = new FeelerGaugeConditionViewModel(this);
+                    _FeelerGaugeCondition.Initialize();
+                }
+                return _FeelerGaugeCondition;
+            }
+        }
+
+        private IConditionViewModel _FeelerGaugeCondition;
 
         [StatusBarCondition]
         public IConditionViewModel DebugCondition

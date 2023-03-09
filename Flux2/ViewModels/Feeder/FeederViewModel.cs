@@ -25,7 +25,7 @@ namespace Flux.ViewModels
         private readonly ObservableAsPropertyHelper<Optional<IFluxMaterialViewModel>> _SelectedMaterial;
         public Optional<IFluxMaterialViewModel> SelectedMaterial => _SelectedMaterial.Value;
 
-        [RemoteContent(true)]
+        [RemoteContent(true, comparer:(nameof(IFluxMaterialViewModel.Position)))]
         public IObservableCache<IFluxMaterialViewModel, ushort> Materials { get; }
 
         IFluxToolNozzleViewModel IFluxFeederViewModel.ToolNozzle => ToolNozzle;

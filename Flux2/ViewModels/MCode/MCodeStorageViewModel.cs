@@ -151,8 +151,10 @@ namespace Flux.ViewModels
                     async Task<(FeederReport feeder, Optional<Material> material)> get_material(FeederReport feeder)
                     {
                         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                        var result = await db.Value.FindByIdAsync<Material>(feeder.MaterialId, cts.Token);
-                        return (feeder, result.FirstOrOptional(m => m != null));
+                        var result = await db
+                            .ConvertAsync(db => db.FindByIdAsync<Material>(feeder.MaterialId, cts.Token))
+                            .ConvertAsync(r => r.FirstOrOptional(m => m != null));
+                        return (feeder, result);
                     }
                 });
 

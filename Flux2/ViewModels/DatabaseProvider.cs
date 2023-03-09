@@ -41,6 +41,7 @@ namespace Flux.ViewModels
             {
                 if (Database.HasValue)
                     Database.Value.Dispose();
+                Database = default;
                 
                 //var service = new DeLoreanClient("http://localhost:5004/DeLorean/");
                 var service = new DeLoreanClient("http://deloreanservice.azurewebsites.net/delorean");
@@ -74,12 +75,11 @@ namespace Flux.ViewModels
                         Filename = Files.Database.FullName,
                     };
 
-                    database = new LocalDatabase(connection);
-                    Modulo3DNet.Database.RegisterCuraSlicerDatabase(database);
-
-                    await initialize_callback?.Invoke(database);
+                    database = new LocalDatabase(connection, Modulo3DNet.Database.RegisterCuraSlicerDatabase);
+                    if(initialize_callback != null)
+                        await initialize_callback?.Invoke(database);
+                    
                     Database = database.ToOptional();
-
                     return true;
                 }
                 else

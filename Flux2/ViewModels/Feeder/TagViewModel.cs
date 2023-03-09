@@ -22,8 +22,10 @@ namespace Flux.ViewModels
         public abstract TState State { get; }
         public FeederViewModel Feeder { get; }
         public FeedersViewModel Feeders { get; }
-        public Func<TNFCTag, Guid> CheckTag { get; }
         public abstract ushort VirtualTagId { get; }
+        public Func<TNFCTag, Guid> CheckTag { get; }
+        public bool WatchOdometerForPause { get; set; }
+        public Func<ExtrusionKey, CardId> GetCardId { get; }
         public OdometerViewModel<TNFCTag> Odometer { get; private set; }
         IOdometerViewModel<TNFCTag> IFluxTagViewModel<TNFCTag>.Odometer => Odometer;
 
@@ -51,12 +53,11 @@ namespace Flux.ViewModels
         IFluxFeederViewModel IFluxTagViewModel.Feeder => Feeder;
         IFluxFeedersViewModel IFluxTagViewModel.Feeders => Feeders;
 
-        public bool WatchOdometerForPause { get; set; }
-
         public TagViewModel(
             FeedersViewModel feeders, FeederViewModel feeder, ushort position,
             Func<IFluxFeedersViewModel, INFCStorage<TNFCTag>> get_tag_storage,
             Func<ILocalDatabase, TNFCTag, Task<TDocument>> find_document,
+            Func<ExtrusionKey, CardId> get_card_id,
             Func<TNFCTag, Guid> check_tag, bool watch_odometer_for_pause) 
             : base($"{typeof(TTagViewModel).GetRemoteElementClass()};{position}")
         {
@@ -65,6 +66,7 @@ namespace Flux.ViewModels
             Flux = feeders.Flux;
             Position = position;
             CheckTag = check_tag;
+            GetCardId = get_card_id;
             WatchOdometerForPause = watch_odometer_for_pause;
 
             var virtual_card_id = Flux.MCodes
@@ -121,18 +123,46 @@ namespace Flux.ViewModels
 
                 var nfc = NFCSlot.WhenAnyValue(s => s.Nfc);
 
-                Observable.CombineLatest(pause_on_empty_odometer, nfc, (pause_on_empty_odometer, nfc) =>
+                var variable_store = Flux.ConnectionProvider.VariableStoreBase;
+                var extrusion_key_index = ArrayIndex.FromZeroBase(Feeder.Position, variable_store);
+
+                var extrusion_key_unit = Flux.ConnectionProvider
+                    .GetArrayUnit(c => c.EXTR_KEY, extrusion_key_index);
+
+                var extrusion_key_str = Flux.ConnectionProvider
+                    .ObserveVariable(v => v.EXTR_KEY, extrusion_key_unit);
+
+                var remaining_weight = this.WhenAnyValue(v => v.RemainingWeight);
+
+                Observable.CombineLatest(
+                    pause_on_empty_odometer, nfc, remaining_weight, extrusion_key_str,
+                    (pause_on_empty_odometer, nfc, remaining_weight, extrusion_key_str) =>
                     {
                         if (!pause_on_empty_odometer)
                             return false;
-                        if (!nfc.HasTag)
+
+                        if (!extrusion_key_str.HasChange)
+                            return false; 
+                        if (!extrusion_key_str.Change.HasValue)
                             return false;
-                        if (!nfc.Tag.Value.CurWeightG.HasValue)
+                        if (!ExtrusionKey.TryParse(extrusion_key_str.Change.Value, out var extrusion_key))
                             return false;
-                        if (nfc.Tag.Value.CurWeightG.Value > -50)
+
+                        var card_id = GetCardId(extrusion_key);
+                        if (!nfc.CardId.HasValue)
                             return false;
+                        if (nfc.CardId.Value != card_id)
+                            return false;
+
+                        if (!remaining_weight.HasValue)
+                            return false;
+                        if (remaining_weight.Value > 0.1)
+                            return false;
+
                         return true;
                     })
+                    .Throttle(TimeSpan.FromSeconds(1))
+                    .DistinctUntilChanged()
                     .Where(has_pause => has_pause)
                     .SubscribeRC(_ => Flux.ConnectionProvider.PausePrintAsync(true), (TTagViewModel)this);
             }

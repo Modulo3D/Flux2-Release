@@ -43,6 +43,7 @@ namespace Flux.ViewModels
 
     public class InvalidProbesViewModel : InvalidValuesViewModel<InvalidProbesViewModel>
     {
+        public override bool StartWithInvalidValuesEnabled => false;
         public override bool CanStartWithInvalidValues => false;
         public InvalidProbesViewModel(FluxViewModel flux) : base(flux)
         {
@@ -55,7 +56,6 @@ namespace Flux.ViewModels
                 .AutoRefresh(line => line.IsInvalidProbe)
                 .Filter(line => line.IsInvalidProbe)
                 .Transform(line => (IInvalidValueViewModel)new InvalidProbeViewModel(line))
-                .Sort(EvaluationComparer)
                 .AsObservableListRC(this);
         }
 

@@ -140,6 +140,16 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
+        public override GCodeString GetRenamePauseGCode(Optional<JobKey> job_key)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override GCodeString GetWriteExtrusionMMGCode(ArrayIndex position, double distance_mm)
+        {
+            throw new NotImplementedException();
+        }
+
         public override GCodeString GetHomingGCode(params char[] axis)
         {
             throw new NotImplementedException();
@@ -367,6 +377,11 @@ namespace Flux.ViewModels
         }
 
         public override GCodeString GetLogExtrusionGCode(ArrayIndex position, Optional<ExtrusionKey> extr_key, FluxJob job)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override GCodeString GetGotoMaintenancePositionGCode()
         {
             throw new NotImplementedException();
         }

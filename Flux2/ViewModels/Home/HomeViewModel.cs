@@ -50,6 +50,7 @@ namespace Flux.ViewModels
         {
             WelcomePhase = new WelcomeViewModel(Flux);
             PrintingPhase = new PrintingViewModel(Flux);
+            LowNozzlesPhase = new LowNozzlesViewModel(Flux);
             ColdNozzlesPhase = new PurgeNozzlesViewModel(Flux);
             PreparePrintPhase = new PreparePrintViewModel(Flux);
             InvalidToolsPhase = new InvalidNozzlesViewModel(Flux);
@@ -59,6 +60,7 @@ namespace Flux.ViewModels
             InvalidMaterialsPhase = new InvalidMaterialsViewModel(Flux);
 
             PrintingPhase.Initialize();
+            LowNozzlesPhase.Initialize();
             ColdNozzlesPhase.Initialize();
             PreparePrintPhase.Initialize();
             InvalidToolsPhase.Initialize();
@@ -99,7 +101,7 @@ namespace Flux.ViewModels
                         return LowMaterialsPhase;
 
                 if (start_eval.HasLowNozzles)
-                    return LowMaterialsPhase;
+                    return LowNozzlesPhase;
 
                 if (!status_eval.CanSafePrint)
                     return PreparePrintPhase;

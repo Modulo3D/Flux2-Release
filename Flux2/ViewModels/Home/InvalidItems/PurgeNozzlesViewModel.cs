@@ -66,6 +66,7 @@ namespace Flux.ViewModels
 
     public class PurgeNozzlesViewModel : InvalidValuesViewModel<PurgeNozzlesViewModel>
     {
+        public override bool StartWithInvalidValuesEnabled => false;
         public override bool CanStartWithInvalidValues => false;
         public PurgeNozzlesViewModel(FluxViewModel flux) : base(flux)
         {
@@ -78,7 +79,6 @@ namespace Flux.ViewModels
                 .AutoRefresh(line => line.HasColdNozzle)
                 .Filter(line => line.HasColdNozzle)
                 .Transform(line => (IInvalidValueViewModel)new PurgeNozzleViewModel(line))
-                .Sort(EvaluationComparer)
                 .AsObservableListRC(this);
         }
 

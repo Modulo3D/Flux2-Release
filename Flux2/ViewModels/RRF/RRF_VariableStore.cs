@@ -13,7 +13,6 @@ namespace Flux.ViewModels
     public abstract class RRF_VariableStoreBase : FLUX_VariableStore<RRF_VariableStoreBase, RRF_ConnectionProvider>
     {
         public IFLUX_Variable<bool, bool> ITERATOR { get; set; }
-        public IFLUX_Variable<bool, bool> INIT_VARS { get; set; }
 
         public RRF_GlobalModelBuilder.RRF_InnerGlobalModelBuilder Global { get; }
         public RRF_ModelBuilder.RRF_InnerModelBuilder<FLUX_FileList> Queue { get; }

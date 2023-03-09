@@ -163,7 +163,7 @@ namespace Flux.ViewModels
         public FluxRoutableViewModel(
             FluxViewModel flux,
             string name = "",
-            OptionalObservable<bool> show_navbar = default) : base(string.IsNullOrEmpty(name) ? name : $"{typeof(TFluxRoutableViewModel).GetRemoteElementClass()};{name}")
+            OptionalObservable<bool> show_navbar = default) : base(string.IsNullOrEmpty(name) ? $"{typeof(TFluxRoutableViewModel).GetRemoteElementClass()}" : name)
         {
             Flux = flux;
             ShowNavBar = show_navbar.ObservableOr(() => false);

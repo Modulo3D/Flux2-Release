@@ -20,7 +20,7 @@ namespace Flux.ViewModels
             FluxViewModel flux,
             TFluxRoutableViewModel route,
             OptionalObservable<bool> can_navigate_back = default)
-            : base(flux, $"{typeof(TFluxRoutableViewModel).GetRemoteElementClass()}{(string.IsNullOrEmpty(route.Name) ? "" : $";{route.Name}")}")
+            : base(flux, string.IsNullOrEmpty(route.Name) ? $"{typeof(TFluxRoutableViewModel).GetRemoteElementClass()}" : route.Name)
         {
             Content = route;
             NavigateBackCommand = ReactiveCommandRC.Create(

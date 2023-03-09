@@ -59,7 +59,6 @@ namespace Flux.ViewModels
                .AutoRefresh(line => line.Material.IsInvalid)
                .Filter(line => line.Material.IsInvalid)
                .Transform(line => (IInvalidItemViewModel)new InvalidMaterialViewModel(line))
-               .Sort(EvaluationComparer)
                .AsObservableListRC(this);
         }
 

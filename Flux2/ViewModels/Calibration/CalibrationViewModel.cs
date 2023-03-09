@@ -16,7 +16,7 @@ namespace Flux.ViewModels
     {
         IFlux IFluxCalibrationViewModel.Flux => Flux;
 
-        [RemoteContent(true)]
+        [RemoteContent(true, comparer:(nameof(IFluxOffsetViewModel.Position)))]
         public IObservableCache<IFluxOffsetViewModel, ushort> Offsets { get; }
 
         private readonly ObservableAsPropertyHelper<Optional<ToolId>> _GroupId;
@@ -154,6 +154,9 @@ namespace Flux.ViewModels
 
                     if (Flux.ConditionsProvider.ProbeCondition is ProbeConditionViewModel probe_condition)
                         probe_condition.IsProbed = false;
+
+                    if (Flux.ConditionsProvider.FeelerGaugeCondition is FeelerGaugeConditionViewModel feeler_gauge_condition)
+                        feeler_gauge_condition.Value = default;
 
                     Flux.Navigator.Navigate(ManualCalibration.Value);
                 }

@@ -30,11 +30,11 @@ namespace Flux.ViewModels
         [RemoteCommand]
         public ReactiveCommand<Unit, Unit> DeleteAllCommand { get; }
 
-        private Optional<DirectoryInfo> _RemovableDrivePath;
-        public Optional<DirectoryInfo> RemovableDrivePath
+        private Optional<DirectoryInfo[]> _RemovableDrivePaths;
+        public Optional<DirectoryInfo[]> RemovableDrivePaths
         {
-            get => _RemovableDrivePath;
-            set => this.RaiseAndSetIfChanged(ref _RemovableDrivePath, value);
+            get => _RemovableDrivePaths;
+            set => this.RaiseAndSetIfChanged(ref _RemovableDrivePaths, value);
         }
 
         private Optional<OperatorUSB> _OperatorUSB;
@@ -69,9 +69,8 @@ namespace Flux.ViewModels
 
             DeleteAllCommand = ReactiveCommandRC.CreateFromTask(ClearMCodeStorageAsync, this, can_delete_all);
 
-            this.WhenAnyValue(v => v.RemovableDrivePath)
-                .DistinctUntilChanged(folder => folder.ConvertOr(f => f.FullName, () => ""))
-                .SubscribeRC(ExploreDrive, this);
+            this.WhenAnyValue(v => v.RemovableDrivePaths)
+                .SubscribeRC(ExploreDrives, this);
         }
 
         public void Initialize()
@@ -106,62 +105,94 @@ namespace Flux.ViewModels
         {
             try
             {
-                var externalDevices = DriveInfo.GetDrives();
-                var removableDrive = externalDevices.FirstOrOptional(d =>
-                    d.VolumeLabel.ToLower().Contains("modulo"));
-
-                RemovableDrivePath = removableDrive.Convert(d => d.RootDirectory);
+                var media = new DirectoryInfo("/media");
+                RemovableDrivePaths = media.ToOptional(m => m.Exists)
+                    .Convert(m => m.GetDirectories())
+                    .Convert(m => m.Where(d => d.Name.StartsWith("usb")))
+                    .Convert(m => m.ToArray());
             }
             catch (Exception ex)
             {
-                RemovableDrivePath = default;
+                RemovableDrivePaths = default;
                 Flux.Messages.LogException(this, ex);
             }
         }
-        private void ExploreDrive(Optional<DirectoryInfo> folder)
+        private void ExploreDrives(Optional<DirectoryInfo[]> folders)
         {
-            var settings = Flux.SettingsProvider.CoreSettings.Local;
-            if (folder.HasValue)
+            try
             {
-                try
-                {
-                    _ = Task.Run(async () => { await ImportMCodesAsync(folder.Value); });
-                }
-                catch (Exception ex)
-                {
-                    Flux.Messages.LogException(this, ex);
-                }
+                if (!folders.HasValue)
+                    return;
+                
+                if (folders.Value.Length == 0)
+                    return;
 
-                Optional<FileInfo> operator_file = default;
-                try
-                {
-                    operator_file = folder.Value.GetFiles("operator.modulo").FirstOrDefault();
-                }
-                catch
-                {
-                }
-
-                if (operator_file.HasValue)
+                var settings = Flux.SettingsProvider.CoreSettings.Local;
+                foreach (var folder in folders.Value)
                 {
                     try
                     {
-                        // Find mcode files
-                        using var operator_open = operator_file.Value.OpenRead();
-                        OperatorUSB = JsonUtils.Deserialize<OperatorUSB>(operator_open).ValueOrDefault();
+                        _ = Task.Run(async () => { await ImportMCodesAsync(folder); });
                     }
                     catch (Exception ex)
                     {
                         Flux.Messages.LogException(this, ex);
                     }
-                }
-                else
-                {
-                    OperatorUSB = default;
+
+                    //if (parse_operator_file(folder))
+                    //    return;
                 }
             }
-            else
+            catch (Exception ex)
             {
-                OperatorUSB = default;
+                Console.WriteLine(ex);
+            }
+
+            bool parse_operator_file(DirectoryInfo folder)
+            {
+                var operator_file = folder.GetFiles("operator.modulo").FirstOrOptional(_ => true);
+                if (!operator_file.HasValue)
+                {
+                    OperatorUSB = default;
+                    return false;
+                }
+
+                try
+                {
+                    // Find mcode files
+                    using var operator_open = operator_file.Value.OpenRead();
+                    OperatorUSB = JsonUtils.Deserialize<OperatorUSB>(operator_open);
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    Flux.Messages.LogException(this, ex);
+                    OperatorUSB = default;
+                    return false;
+                }
+            }
+
+            bool parse_ip_file(DirectoryInfo folder)
+            {
+                var ipaddress_file = folder.GetFiles("ipaddress.modulo").FirstOrOptional(_ => true);
+                if (!ipaddress_file.HasValue)
+                    return false;
+
+                try
+                {
+                    // Find mcode files
+                    using var operator_open = ipaddress_file.Value.OpenRead();
+                    var ipaddress_config = JsonUtils.Deserialize<OperatorUSB>(operator_open);
+                    if (!ipaddress_config.HasValue)
+                        return false;
+
+
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    return false;
+                }
             }
         }
 
@@ -430,10 +461,11 @@ namespace Flux.ViewModels
         {
             try
             {
+                Flux.StatusProvider.StartWithLowNozzles = false;
                 Flux.StatusProvider.StartWithLowMaterials = false;
 
                 var connection_provider = Flux.ConnectionProvider;
-                var queue_size = connection_provider.VariableStoreBase.HasPrintUnloader ? 99 : 1;
+                var queue_size = connection_provider.VariableStoreBase.HasPrintUnloader ? 99 : 99;
 
                 if (!await PrepareMCodeAsync(mcode))
                     return false;
@@ -478,6 +510,9 @@ namespace Flux.ViewModels
 
             var jobs = queue.Value.Values
                 .Where(j => j.QueuePosition != mcode.FluxJob.QueuePosition);
+
+            if (!jobs.Any())
+                await Flux.ConnectionProvider.CancelPrintAsync(true);
 
             if (!await GenerateQueueAsync(jobs))
                 return false;

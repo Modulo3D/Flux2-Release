@@ -14,7 +14,7 @@ namespace Flux.ViewModels
 {
     public class FeedersViewModel : FluxRoutableNavBarViewModel<FeedersViewModel>, IFluxFeedersViewModel
     {
-        [RemoteContent(true)]
+        [RemoteContent(true, comparer:(nameof(IFluxFeederViewModel.Position)))]
         public IObservableCache<IFluxFeederViewModel, ushort> Feeders { get; }
         public IObservableCache<IFluxMaterialViewModel, ushort> ToolMaterials { get; }
         public IObservableCache<IFluxToolNozzleViewModel, ushort> ToolNozzles { get; }

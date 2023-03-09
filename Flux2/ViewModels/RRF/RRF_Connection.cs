@@ -864,7 +864,7 @@ namespace Flux.ViewModels
         public override GCodeString GetDeleteFileGCode(string folder, string filename)
         {
             var file_path = CombinePaths(folder, filename);
-            return $"M30 0:/{file_path}";
+            return $"M30 \"0:/{file_path}\"";
         }
         public override GCodeString GetLogEventGCode(FluxJob job, FluxEventType event_type)
         {
@@ -872,6 +872,15 @@ namespace Flux.ViewModels
             var event_type_str = event_type.ToEnumString();
 
             return $"echo >>\"0:/{event_path}\" \"{event_type_str};\"^{{state.time}}";
+        }
+        public override GCodeString GetWriteExtrusionMMGCode(ArrayIndex position, double distance_mm)
+        {
+            var array_unit = GetArrayUnit(c => c.EXTR_MM, position);
+            var extr_mm_var = GetVariable(c => c.EXTR_MM, array_unit);
+            if (!extr_mm_var.HasValue)
+                return default;
+
+            return $"set {extr_mm_var.Value} = {distance_mm}";
         }
         public override GCodeString GetWriteExtrusionKeyGCode(ArrayIndex position, Optional<ExtrusionKey> extr_key)
         {
@@ -882,6 +891,17 @@ namespace Flux.ViewModels
 
             var extr_key_str = extr_key.ConvertOr(k => k.ToString(), () => "");
             return $"set {extr_key_var.Value} = \"{extr_key_str}\"";
+        }
+        public override GCodeString GetRenamePauseGCode(Optional<JobKey> job_key)
+        {
+            if (!job_key.HasValue)
+                return default;
+            return $"M471 S\"{CombinePaths(SystemPath, "resurrect.g")}\" T\"{CombinePaths(QueuePath, $"{job_key.Value}.recovery")}\" D1";
+        }
+
+        public override GCodeString GetGotoMaintenancePositionGCode()
+        {
+            return "M98 P\"/macros/goto_maintenance_position\"";
         }
     }
 }

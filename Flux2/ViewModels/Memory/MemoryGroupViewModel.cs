@@ -15,7 +15,7 @@ namespace Flux.ViewModels
         [RemoteOutput(false)]
         public override string VariableName { get; }
 
-        [RemoteContent(true)]
+        [RemoteContent(true, comparer: (nameof(VariableName)))]
         public IObservableCache<IMemoryVariableBase, string> Variables { get; private set; }
 
         private SourceCache<IMemoryVariableBase, string> VariableSource { get; set; }

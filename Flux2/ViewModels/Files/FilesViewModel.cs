@@ -86,7 +86,7 @@ namespace Flux.ViewModels
 
         public async Task ModifyFSAsync(IFSViewModel fs)
         {
-            var result = await Flux.ShowDialogAsync(f => new ModifyFSDialog(f, (FLUX_FileModify.Delete, fs.Name)));
+            var result = await Flux.ShowDialogAsync(f => new ModifyFSDialog(f, (FLUX_FileModify.Delete, fs.FSName)));
             if (result.result != DialogResult.Primary || !result.data.HasValue)
                 return;
 
@@ -124,10 +124,7 @@ namespace Flux.ViewModels
             if (!file_source.HasValue)
                 return;
 
-            var textbox = new TextBox("source", file.FSName, file_source.Value, multiline: true);
-
-            var result = await Flux.ShowSelectionAsync(
-                "fsEdit", new[] { textbox });
+            var result = await Flux.ShowDialogAsync(f => new FileEditorDialog(f, new RemoteText(file.FSName, false)));
 
             if (result != DialogResult.Primary)
                 return;

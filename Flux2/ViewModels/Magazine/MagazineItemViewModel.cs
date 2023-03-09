@@ -1,5 +1,7 @@
-﻿using Modulo3DNet;
+﻿using DynamicData.Kernel;
+using Modulo3DNet;
 using ReactiveUI;
+using System.Reactive;
 using System.Reactive.Linq;
 
 namespace Flux.ViewModels
@@ -19,6 +21,12 @@ namespace Flux.ViewModels
 
         [RemoteOutput(false)]
         public ushort Position => Feeder.Position;
+
+        [RemoteCommand]
+        public ReactiveCommand<Unit, Unit> ResetHeaterFaultCommand { get; }
+
+        [RemoteCommand]
+        public Optional<ReactiveCommand<Unit, Unit>> RaisePistonCommand { get; }
 
         public MagazineItemViewModel(FluxViewModel flux, IFluxFeederViewModel feeder) 
             : base($"{typeof(MagazineItemViewModel).GetRemoteElementClass()};{feeder.Position}")
@@ -42,6 +50,9 @@ namespace Flux.ViewModels
             _Nozzle = Feeder.ToolNozzle.WhenAnyValue(f => f.Document)
                 .Select(d => d.nozzle.ToString())
                 .ToProperty(this, v => v.Nozzle);
+
+            // TODO
+            ResetHeaterFaultCommand = ReactiveCommandRC.Create(() => { }, this, Observable.Return(false));
         }
     }
 }

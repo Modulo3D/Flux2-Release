@@ -220,7 +220,7 @@ namespace Flux.ViewModels
         [RemoteContent(true)]
         public ISourceList<CmdButton> MoveDownButtons { get; private set; }
 
-        [RemoteContent(true)]
+        [RemoteContent(true, comparer:(nameof(ManualCalibrationItemViewModel.Position)))]
         public IObservableList<ManualCalibrationItemViewModel> ToolItems { get; }
 
         private readonly ObservableAsPropertyHelper<string> _AxisPosition;
@@ -294,14 +294,14 @@ namespace Flux.ViewModels
                         if (!offset.HasValue)
                             return;
 
-                        var bed_height = 0.0;
+                        var bed_height_mm = 0.0;
                         if (Flux.ConnectionProvider.HasVariable(c => c.Z_BED_HEIGHT))
                         {
                             var z_bed_height = await Flux.ConnectionProvider.ReadVariableAsync(c => c.Z_BED_HEIGHT);
                             if (!z_bed_height.HasValue)
                                 return;
 
-                            bed_height = z_bed_height.Value;
+                            bed_height_mm = z_bed_height.Value;
                         }
 
                         var axis_position = await Flux.ConnectionProvider.ReadVariableAsync(m => m.AXIS_POSITION);
@@ -312,7 +312,15 @@ namespace Flux.ViewModels
                         if (!z.HasValue)
                             return;
 
-                        offset.Value.ModifyProbeOffset(p => new ProbeOffset(p.Key, p.X, p.Y, z.Value - bed_height - 0.3));
+                        if (Flux.ConditionsProvider.FeelerGaugeCondition is not FeelerGaugeConditionViewModel feeler_gauge_condition)
+                            return;
+
+                        if (!feeler_gauge_condition.Value.HasValue)
+                            return;
+
+                        var feeler_gauge_mm = feeler_gauge_condition.Value.Value;
+
+                        offset.Value.ModifyProbeOffset(p => new ProbeOffset(p.Key, p.X, p.Y, z.Value - bed_height_mm - feeler_gauge_mm));
                         Flux.SettingsProvider.UserSettings.PersistLocalSettings();
                     }
                 }, this);

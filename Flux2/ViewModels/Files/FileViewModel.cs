@@ -14,6 +14,20 @@ namespace Flux.ViewModels
         Optional<FolderViewModel> Folder { get; }
     }
 
+    public class FileEditorDialog : Dialog<FileEditorDialog, DialogResult>
+    {
+        public FileEditorDialog(IFlux flux, RemoteText title) : base(flux, title)
+        {
+        }
+
+        protected override OptionalObservable<bool> CanConfirm { get; } = OptionalObservable.Some(true);
+        protected override OptionalObservable<bool> CanCancel { get; } = OptionalObservable.Some(true);
+        protected override OptionalObservable<bool> CanClose { get; } = default;
+
+        public override Optional<DialogResult> Confirm() => DialogResult.Primary;
+        public override Optional<DialogResult> Cancel() => DialogResult.Secondary;
+    }
+
     public abstract class FSViewModel<TFSViewModel> : RemoteControl<TFSViewModel>, IFSViewModel
         where TFSViewModel : FSViewModel<TFSViewModel>
     {

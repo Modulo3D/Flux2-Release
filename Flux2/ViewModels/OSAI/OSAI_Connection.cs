@@ -1483,6 +1483,11 @@ namespace Flux.ViewModels
                 $"LS0 = \"{extr_key_str}\"",
                 $"M4001[7, E0, 0, 0]");
         }
+        public override GCodeString GetWriteExtrusionMMGCode(ArrayIndex position, double distance_mm)
+        {
+            // TODO
+            throw new NotImplementedException();
+        }
         public override GCodeString GetStartPartProgramGCode(string folder, string filename, Optional<FluxJobRecovery> recovery)
         {
             var feeder_axis = VariableStoreBase.FeederAxis;
@@ -1525,6 +1530,15 @@ namespace Flux.ViewModels
         public override GCodeString GetLogExtrusionGCode(ArrayIndex position, Optional<ExtrusionKey> extr_key, FluxJob job)
         {
             return default;
+        }
+        public override GCodeString GetRenamePauseGCode(Optional<JobKey> job_key)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override GCodeString GetGotoMaintenancePositionGCode()
+        {
+            throw new NotImplementedException();
         }
     }
 }

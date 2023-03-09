@@ -12,6 +12,7 @@ namespace Flux.ViewModels
 {
     public interface IInvalidItemViewModel : IRemoteControl
     {
+        ushort Position { get; }
         FeederEvaluator Evaluation { get; }
         Optional<string> CurrentValue { get; }
         Optional<string> ExpectedValue { get; }
@@ -29,7 +30,7 @@ namespace Flux.ViewModels
         public FeederEvaluator Evaluation { get; }
 
         [RemoteOutput(false)]
-        public uint Position => Evaluation.Feeder.Position;
+        public ushort Position => Evaluation.Feeder.Position;
 
         private readonly ObservableAsPropertyHelper<Optional<string>> _CurrentValue;
         [RemoteOutput(true)]
@@ -106,20 +107,17 @@ namespace Flux.ViewModels
     public abstract class InvalidItemsViewModel<TInvalidItemsViewModel> : InvalidFeedersViewModel<TInvalidItemsViewModel>, IInvalidItemsViewModel
         where TInvalidItemsViewModel : InvalidItemsViewModel<TInvalidItemsViewModel>
     {
-        [RemoteContent(true)]
+        [RemoteContent(true, comparer: (nameof(IInvalidItemViewModel.Position)))]
         public IObservableList<IInvalidItemViewModel> InvalidItems { get; protected set; }
-
-        public Comparer<IInvalidItemViewModel> EvaluationComparer { get; }
 
         public InvalidItemsViewModel(FluxViewModel flux) : base(flux)
         {
-            EvaluationComparer = Comparer<IInvalidItemViewModel>.Create((tm1, tm2) => tm1.Evaluation.Feeder.Position.CompareTo(tm2.Evaluation.Feeder.Position));
         }
     }
 
     public interface IInvalidValuesViewModel : IInvalidFeedersViewModel
     {
-        ReactiveCommand<Unit, Unit> StartWithInvalidValuesCommand { get; }
+        Optional<ReactiveCommand<Unit, Unit>> StartWithInvalidValuesCommand { get; }
         IObservableList<IInvalidValueViewModel> InvalidValues { get; }
         bool CanStartWithInvalidValues { get; }
     }
@@ -128,25 +126,27 @@ namespace Flux.ViewModels
     public abstract class InvalidValuesViewModel<TInvalidValuesViewModel> : InvalidFeedersViewModel<TInvalidValuesViewModel>, IInvalidValuesViewModel
         where TInvalidValuesViewModel : InvalidValuesViewModel<TInvalidValuesViewModel>
     {
-        [RemoteContent(true)]
+        [RemoteContent(true, comparer:(nameof(IInvalidValueViewModel.Position)))]
         public IObservableList<IInvalidValueViewModel> InvalidValues { get; protected set; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> StartWithInvalidValuesCommand { get; protected set; }
+        public Optional<ReactiveCommand<Unit, Unit>> StartWithInvalidValuesCommand { get; protected set; }
 
         [RemoteOutput(true)]
         public abstract bool CanStartWithInvalidValues { get; }
-
-        public Comparer<IInvalidValueViewModel> EvaluationComparer { get; }
+        [RemoteOutput(true)]
+        public abstract bool StartWithInvalidValuesEnabled { get; }
 
         public InvalidValuesViewModel(FluxViewModel flux) : base(flux)
         {
-            EvaluationComparer = Comparer<IInvalidValueViewModel>.Create((tm1, tm2) => tm1.Evaluation.Feeder.Position.CompareTo(tm2.Evaluation.Feeder.Position));
         }
 
         public override void Initialize()
         {
-            var can_start = this.WhenAnyValue(v => v.CanStartWithInvalidValues);
-            StartWithInvalidValuesCommand = ReactiveCommandRC.Create(StartWithInvalidValues, (TInvalidValuesViewModel)this, can_start);
+            if (CanStartWithInvalidValues)
+            { 
+                var can_start = this.WhenAnyValue(v => v.StartWithInvalidValuesEnabled);
+                StartWithInvalidValuesCommand = ReactiveCommandRC.Create(StartWithInvalidValues, (TInvalidValuesViewModel)this, can_start);
+            }
         }
 
         public abstract void StartWithInvalidValues();

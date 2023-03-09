@@ -46,7 +46,7 @@ namespace Flux.ViewModels
         {
             return (await tn.GetDocumentAsync<Tool>(db, tn => tn.ToolGuid),
                 await tn.GetDocumentAsync<Nozzle>(db, tn => tn.NozzleGuid));
-        }, t => t.ToolGuid, watch_odometer_for_pause: false)
+        }, k => k.ToolId, t => t.ToolGuid, watch_odometer_for_pause: false)
         {
             var variable_store = Flux.ConnectionProvider.VariableStoreBase;
             var feeder_index = ArrayIndex.FromZeroBase(Position, variable_store);

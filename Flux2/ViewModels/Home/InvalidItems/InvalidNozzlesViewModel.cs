@@ -59,7 +59,6 @@ namespace Flux.ViewModels
                 .AutoRefresh(line => line.ToolNozzle.IsInvalid)
                 .Filter(line => line.ToolNozzle.IsInvalid)
                 .Transform(line => (IInvalidItemViewModel)new InvalidNozzleViewModel(line))
-                .Sort(EvaluationComparer)
                 .AsObservableListRC(this);
         }
 

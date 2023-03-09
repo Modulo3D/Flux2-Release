@@ -1,4 +1,5 @@
 ﻿using DynamicData;
+using DynamicData.Kernel;
 using Modulo3DNet;
 using ReactiveUI;
 using System.Reactive;
@@ -12,7 +13,7 @@ namespace Flux.ViewModels
         public IObservableCache<MagazineItemViewModel, ushort> Magazine { get; private set; }
 
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> ResetMagazineCommand { get; internal set; }
+        public Optional<ReactiveCommand<Unit, Unit>> ResetMagazineCommand { get; internal set; }
 
         public MagazineViewModel(FluxViewModel flux) : base(flux)
         {
@@ -24,7 +25,8 @@ namespace Flux.ViewModels
                 .WhenAnyValue(s => s.StatusEvaluation)
                 .Select(s => s.IsIdle);
 
-            ResetMagazineCommand = ReactiveCommandRC.CreateFromTask(async () => { await Flux.ConnectionProvider.ResetMagazineAsync(); }, this, is_idle);
+            if (Flux.ConnectionProvider.VariableStoreBase.HasToolChange)
+                ResetMagazineCommand = ReactiveCommandRC.CreateFromTask(Flux.ConnectionProvider.ResetMagazineAsync, this, is_idle);
 
             var top_lock_unit = Flux.ConnectionProvider.GetArrayUnit(m => m.LOCK_CLOSED, "top");
             if (Flux.ConnectionProvider.HasVariable(m => m.LOCK_CLOSED, top_lock_unit))

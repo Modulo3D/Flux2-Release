@@ -80,7 +80,7 @@ namespace Flux.ViewModels
                 db => (tm, ct) => db.FindAsync(tool_nozzle.nozzle.Value, tm, ct), db => db.GetTargetAsync)
                 .ExecuteAsync<ToolMaterial>(cts.Token);
 
-            var tool_material = toolmaterials.FirstOrDefault().ToOptional();
+            var tool_material = toolmaterials.FirstOrOptional(_ => true);
             return new ToolMaterialState(tool_material.HasValue);
         }
 
@@ -104,7 +104,7 @@ namespace Flux.ViewModels
                 db => (tm, ct) => db.FindAsync(tool_nozzle.nozzle.Value, tm, ct), db => db.GetTargetAsync)
                 .ExecuteAsync<ToolMaterial>(cts.Token);
 
-            return toolmaterials.FirstOrDefault().ToOptional();
+            return toolmaterials.FirstOrOptional(_ => true);
         }
     }
 }

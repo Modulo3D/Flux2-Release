@@ -77,7 +77,7 @@ namespace Flux.ViewModels
         public MaterialViewModel(FeedersViewModel feeders, FeederViewModel feeder, ushort position) : base(feeders, feeder, position, s => s.NFCMaterials, (db, m) =>
         {
             return m.GetDocumentAsync<Material>(db, m => m.MaterialGuid);
-        }, t => t.MaterialGuid, watch_odometer_for_pause: true)
+        }, k => k.MaterialId, t => t.MaterialGuid, watch_odometer_for_pause: true)
         {
             _ExtrusionKey = Observable.CombineLatest(
                   Feeder.ToolNozzle.NFCSlot.WhenAnyValue(t => t.Nfc),

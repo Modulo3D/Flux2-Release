@@ -30,12 +30,20 @@ namespace Flux.ViewModels
         public IObservableCache<Optional<DocumentQueue<Material>>, ushort> ExpectedMaterialsQueue { get; private set; }
         public IObservableCache<Optional<DocumentQueue<Nozzle>>, ushort> ExpectedNozzlesQueue { get; private set; }
 
+        private bool _StartWithLowNozzles;
+        public bool StartWithLowNozzles
+        {
+            get => _StartWithLowNozzles;
+            set => this.RaiseAndSetIfChanged(ref _StartWithLowNozzles, value);
+        }
+
         private bool _StartWithLowMaterials;
         public bool StartWithLowMaterials
         {
             get => _StartWithLowMaterials;
             set => this.RaiseAndSetIfChanged(ref _StartWithLowMaterials, value);
         }
+
 
         private ObservableAsPropertyHelper<FLUX_ProcessStatus> _FluxStatus;
         public FLUX_ProcessStatus FluxStatus => _FluxStatus.Value;
@@ -157,6 +165,7 @@ namespace Flux.ViewModels
                 .Convert(data => data == FLUX_ProcessStatus.CYCLE)
                 .ValueOr(() => false);
 
+            var start_with_low_nozzles = this.WhenAnyValue(s => s.StartWithLowNozzles);
             var start_with_low_materials = this.WhenAnyValue(s => s.StartWithLowMaterials);
 
             var has_invalid_materials = FeederEvaluators.Connect()
@@ -201,6 +210,7 @@ namespace Flux.ViewModels
                 has_invalid_probes,
                 has_invalid_printer,
                 has_invalid_materials,
+                start_with_low_nozzles,
                 start_with_low_materials,
                 StartEvaluation.Create)
                 .DistinctUntilChanged()

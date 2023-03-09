@@ -55,6 +55,7 @@ namespace Flux.ViewModels
 
     public class LowNozzlesViewModel : InvalidValuesViewModel<LowNozzlesViewModel>
     {
+        public override bool StartWithInvalidValuesEnabled => true;
         public override bool CanStartWithInvalidValues => true;
         public LowNozzlesViewModel(FluxViewModel flux) : base(flux)
         {
@@ -66,7 +67,6 @@ namespace Flux.ViewModels
                 .AutoRefresh(line => line.ToolNozzle.HasLowWeight)
                 .Filter(line => line.ToolNozzle.HasLowWeight)
                 .Transform(line => (IInvalidValueViewModel)new LowMaterialViewModel(line))
-                .Sort(EvaluationComparer)
                 .AsObservableListRC(this);
         }
 
@@ -78,7 +78,7 @@ namespace Flux.ViewModels
 
         public override void StartWithInvalidValues()
         {
-            throw new NotImplementedException();
+            Flux.StatusProvider.StartWithLowNozzles = true;
         }
     }
 }

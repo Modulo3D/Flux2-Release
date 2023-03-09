@@ -10,6 +10,7 @@ using System.Reactive.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using static Microsoft.FSharp.Core.ByRefKinds;
 
 namespace Flux.ViewModels
 {
@@ -60,9 +61,63 @@ namespace Flux.ViewModels
 
             StateChanged = this.WhenAnyValue(v => v.State);
         }
-
         protected abstract IObservable<ConditionState> GetState(IObservable<bool> is_idle);
         protected virtual Optional<(Func<Task> action, IObservable<bool> can_execute)> GetExecuteAction(IObservable<bool> is_idle) => default;
+    }
+
+    [RemoteControl(baseClass: typeof(ConditionViewModel<>))]
+    public abstract class InputConditionViewModel<TInputConditionViewModel, TInput> : ConditionViewModel<TInputConditionViewModel>
+         where TInputConditionViewModel : InputConditionViewModel<TInputConditionViewModel, TInput>
+    {
+        [RemoteInput]
+        public abstract TInput Input { get; set; }
+
+        private Optional<TInput> _Value;
+        public Optional<TInput> Value 
+        {
+            get => _Value;
+            set => this.RaiseAndSetIfChanged(ref _Value, value);
+        }
+        protected InputConditionViewModel(ConditionsProvider conditions, string name = "") : base(conditions, name)
+        {
+        }
+        protected sealed override IObservable<ConditionState> GetState(IObservable<bool> is_idle)
+        {
+            return GetState(is_idle, this.WhenAnyValue(v => v.Value));
+        }
+        protected abstract IObservable<ConditionState> GetState(IObservable<bool> is_idle, IObservable<Optional<TInput>> value);
+    }
+
+    public class FeelerGaugeConditionViewModel : InputConditionViewModel<FeelerGaugeConditionViewModel, double>
+    {
+        public FeelerGaugeConditionViewModel(ConditionsProvider conditions) : base(conditions)
+        {
+        }
+
+        private double _Input;
+        [RemoteInput(step:0.05, min:0, max:1, converter:typeof(MillimeterConverter))]
+        public override double Input
+        {
+            get => _Input; 
+            set => this.RaiseAndSetIfChanged(ref _Input, value); 
+        }
+
+        protected override IObservable<ConditionState> GetState(IObservable<bool> is_idle, IObservable<Optional<double>> value)
+        {
+            return Observable.CombineLatest(is_idle, value, (i, v) => 
+            {
+                if(!v.HasValue)
+                    return new ConditionState(EConditionState.Warning, new RemoteText($"noOffset", true));
+                if(v.Value < 0.05)
+                    return new ConditionState(EConditionState.Warning, new RemoteText($"noOffset", true));
+                return new ConditionState(EConditionState.Stable, new RemoteText($"okOffset;{$"{v.Value:0.00}".Replace(",", ".")}mm", true));
+            });
+        }
+
+        protected override Optional<(Func<Task> action, IObservable<bool> can_execute)> GetExecuteAction(IObservable<bool> is_idle)
+        {
+            return (() => { Value = Input; return Task.CompletedTask; }, Observable.Return(true));
+        }
     }
 
     public class LockClosedConditionViewModel : ConditionViewModel<LockClosedConditionViewModel>
@@ -224,6 +279,10 @@ namespace Flux.ViewModels
 
                     return new ConditionState(EConditionState.Stable, new RemoteText($"off;{HeaterTemp.Unit}", true));
                 });
+        }
+        protected override Optional<(Func<Task> action, IObservable<bool> can_execute)> GetExecuteAction(IObservable<bool> is_idle)
+        {
+            return (() => Flux.ConnectionProvider.WriteVariableAsync(_ => HeaterTemp, 0.0), is_idle);
         }
     }
     public class ChamberColdConditionViewModel : HeaterColdConditionViewModel<ChamberColdConditionViewModel>

@@ -9,7 +9,7 @@ namespace Flux.ViewModels
     {
         public SourceCache<MemoryGroupViewModel, string> VariableGroupsSource { get; private set; }
 
-        [RemoteContent(true)]
+        [RemoteContent(true, comparer:(nameof(MemoryGroupViewModel.VariableName)))]
         public IObservableCache<MemoryGroupViewModel, string> VariableGroups { get; }
 
         public MemoryViewModel(FluxViewModel flux) : base(flux)

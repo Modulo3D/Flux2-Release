@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Reactive;
+using System.Reactive.Linq;
 using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
@@ -94,7 +95,11 @@ namespace Flux.ViewModels
 
         public HeightmapViewModel(FluxViewModel flux) : base(flux)
         {
-            ProbeHeightmapCommand = ReactiveCommandRC.CreateFromTask(ProbeHeightmapAsync, this);
+            var can_probe = Flux.StatusProvider
+               .WhenAnyValue(s => s.StatusEvaluation)
+               .Select(s => s.CanSafeCycle);
+
+            ProbeHeightmapCommand = ReactiveCommandRC.CreateFromTask(ProbeHeightmapAsync, this, can_probe);
             ProbeHeightmapSettingsCommand = ReactiveCommandRC.CreateFromTask(ProbeHeightmapSettingsAsync, this);
 
             _PlateTemperature = Flux.ConnectionProvider
