@@ -1,0 +1,20 @@
+; reset extrusion mode
+M83
+
+if global.keep_chamber == false
+	M140 S0
+	
+if global.keep_tool == false
+	G10 P0 S0 R0
+	G10 P1 S0 R0
+	G10 P2 S0 R0
+	G10 P3 S0 R0
+
+; lower the plate
+M98 P"/macros/lower_plate"
+
+; deselect tool
+T-1
+
+; reset the queue
+set global.queue_pos = -1
