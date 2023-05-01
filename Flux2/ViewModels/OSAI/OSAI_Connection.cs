@@ -122,33 +122,22 @@ namespace Flux.ViewModels
             Flux = flux;
         }
 
-        public async Task<OSAI_Response<TData>> TryEnqueueRequestAsync<TData>(Func<OPENcontrolPortTypeClient, CancellationToken, Task<TData>> request, OSAI_RequestPriority priority, CancellationToken ct, TimeSpan timeout = default)
+        public async Task<OSAI_Response<TData>> TryEnqueueRequestAsync<TData>(Func<OPENcontrolPortTypeClient, CancellationToken, Task<TData>> request, OSAI_RequestPriority priority, CancellationToken ct, Func<TData, bool> retval, TimeSpan timeout = default)
         {
             if (!Client.HasValue)
                 return default;
-            var osai_request = new OSAI_Request<TData>(request, priority, ct, timeout);
+            var osai_request = new OSAI_Request<TData>(async (c, ct) => 
+            {
+                var response = await request(c, ct);
+                if (!retval(response))
+                    return default;
+                return default;
+            }, priority, ct, timeout);
             using var ctr = osai_request.Cancellation.Register(() => osai_request.TrySetCanceled());
             Requests.Enqueue(osai_request.Priority, osai_request);
             var result = await osai_request.Response.Task;
             await ctr.DisposeAsync();
             return result;
-        }
-        private async Task<TData> TryEnqueueRequestAsync<TData>(Func<OPENcontrolPortTypeClient, CancellationToken, Task<TData>> request, OSAI_RequestPriority priority, CancellationToken ct, Func<TData, bool> retval, TimeSpan timeout = default) 
-        {
-            var response = await TryEnqueueRequestAsync(async (c, ct) =>
-            {
-                var response = await request(c, ct);
-                if (!retval(response))
-                    return false;
-                return true;
-            }, priority, ct);
-
-            if (!response.Ok)
-                return false;
-
-            return response.Content.ValueOrDefault();
-
-            var response = await TryEnqueueRequestAsync(request, priority, ct, timeout);
         }
 
         // CONNECT
