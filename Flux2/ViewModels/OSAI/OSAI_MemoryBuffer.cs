@@ -206,13 +206,13 @@ namespace Flux.ViewModels
                 .GroupBy(v => v.Priority)
                 .ToDictionary(group => group.Key, group => group);
 
-            DisposableThread.Start(UpdateBuffersAsync, TimeSpan.FromMilliseconds(100));
+            DisposableThread.Start(UpdateBuffersAsync, TimeSpan.FromMilliseconds(25));
 
-            AddModelReader(plc_variables, OSAI_ReadPriority.LOW, OSAI_Connection.LowPriority);
-            AddModelReader(plc_variables, OSAI_ReadPriority.HIGH, OSAI_Connection.HighPriority);
-            AddModelReader(plc_variables, OSAI_ReadPriority.MEDIUM, OSAI_Connection.MediumPriority);
-            AddModelReader(plc_variables, OSAI_ReadPriority.ULTRALOW, OSAI_Connection.UltraLowPriority);
-            AddModelReader(plc_variables, OSAI_ReadPriority.ULTRAHIGH, OSAI_Connection.UltraHighPriority);
+            AddModelReader(plc_variables, OSAI_ReadPriority.LOW, TimeSpan.FromMilliseconds(25));
+            AddModelReader(plc_variables, OSAI_ReadPriority.HIGH, TimeSpan.FromMilliseconds(50));
+            AddModelReader(plc_variables, OSAI_ReadPriority.MEDIUM, TimeSpan.FromMilliseconds(100));
+            AddModelReader(plc_variables, OSAI_ReadPriority.ULTRALOW, TimeSpan.FromMilliseconds(200));
+            AddModelReader(plc_variables, OSAI_ReadPriority.ULTRAHIGH, TimeSpan.FromMilliseconds(400));
 
             var has_full_variables_read = MemoryReaders.Connect()
                 .TrueForAll(f => f.WhenAnyValue(f => f.HasMemoryRead), r => r);

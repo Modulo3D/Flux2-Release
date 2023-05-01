@@ -7,15 +7,97 @@ using System.Collections.Immutable;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
+using System.Net;
 using System.Reactive.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
+using GreenSuperGreen.Queues;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace Flux.ViewModels
 {
+    public interface IOSAI_Request
+    {
+        TimeSpan Timeout { get; }
+        OSAI_RequestPriority Priority { get; }
+        CancellationToken Cancellation { get; }
+
+        bool TrySetCanceled();
+        Task<bool> TrySendAsync(OPENcontrolPortTypeClient client, CancellationToken ct);
+    }
+    public enum OSAI_RequestPriority : ushort
+    {
+        Immediate = 3,
+        High = 2,
+        Medium = 1,
+        Low = 0
+    }
+
+    public readonly struct OSAI_Request<TData> : IOSAI_Request
+    {
+        public TimeSpan Timeout { get; }
+        public Func<OPENcontrolPortTypeClient, CancellationToken, Task<TData>> Request { get; }
+        public OSAI_RequestPriority Priority { get; }
+        public CancellationToken Cancellation { get; }
+        public TaskCompletionSource<OSAI_Response<TData>> Response { get; }
+        public OSAI_Request(Func<OPENcontrolPortTypeClient, CancellationToken, Task<TData>> request, OSAI_RequestPriority priority, CancellationToken ct, TimeSpan timeout = default)
+        {
+            Timeout = timeout;
+            Request = request;
+            Cancellation = ct;
+            Priority = priority;
+            Response = new TaskCompletionSource<OSAI_Response<TData>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
+        public override string ToString() => $"{nameof(OSAI_Request<TData>)} Method:{Request.Method}";
+        public async Task<bool> TrySendAsync(OPENcontrolPortTypeClient client, CancellationToken ct)
+        {
+            try
+            {
+                var response = await Request(client, ct);
+                var osai_response = new OSAI_Response<TData>(response);
+                return Response.TrySetResult(osai_response);
+            }
+            catch (Exception ex)
+            {
+                Response.TrySetResult(default);
+                return false;
+            }
+        }
+
+        public bool TrySetCanceled()
+        {
+            return Response.TrySetResult(default);
+        }
+    }
+
+    public interface IOSAI_Response
+    {
+        bool Ok { get; }
+    }
+    public record struct OSAI_Response<TData>(Optional<TData> Content) : IOSAI_Response
+    {
+        public bool Ok
+        {
+            get
+            {
+                if (!Content.HasValue)
+                    return false;
+                return true;
+            }
+        }
+
+        public override string ToString()
+        {
+            if (!Content.HasValue)
+                return $"{nameof(OSAI_Response<TData>)} Task cancellata";
+            return "OK";
+        }
+    }
+
     public class OSAI_Connection : FLUX_Connection<OSAI_Connection, OSAI_ConnectionProvider, OSAI_VariableStore, OPENcontrolPortTypeClient>
     {
         public const ushort AxisNum = 4;
@@ -32,11 +114,41 @@ namespace Flux.ViewModels
         public override string CombinePaths(params string[] paths) => string.Join("\\", paths);
 
         public FluxViewModel Flux { get; }
+        public PriorityQueueNotifierUC<OSAI_RequestPriority, IOSAI_Request> Requests { get; }
 
         // MEMORY VARIABLES
         public OSAI_Connection(FluxViewModel flux, OSAI_ConnectionProvider connection_provider) : base(connection_provider)
         {
             Flux = flux;
+        }
+
+        public async Task<OSAI_Response<TData>> TryEnqueueRequestAsync<TData>(Func<OPENcontrolPortTypeClient, CancellationToken, Task<TData>> request, OSAI_RequestPriority priority, CancellationToken ct, TimeSpan timeout = default)
+        {
+            if (!Client.HasValue)
+                return default;
+            var osai_request = new OSAI_Request<TData>(request, priority, ct, timeout);
+            using var ctr = osai_request.Cancellation.Register(() => osai_request.TrySetCanceled());
+            Requests.Enqueue(osai_request.Priority, osai_request);
+            var result = await osai_request.Response.Task;
+            await ctr.DisposeAsync();
+            return result;
+        }
+        private async Task<TData> TryEnqueueRequestAsync<TData>(Func<OPENcontrolPortTypeClient, CancellationToken, Task<TData>> request, OSAI_RequestPriority priority, CancellationToken ct, Func<TData, bool> retval, TimeSpan timeout = default) 
+        {
+            var response = await TryEnqueueRequestAsync(async (c, ct) =>
+            {
+                var response = await request(c, ct);
+                if (!retval(response))
+                    return false;
+                return true;
+            }, priority, ct);
+
+            if (!response.Ok)
+                return false;
+
+            return response.Content.ValueOrDefault();
+
+            var response = await TryEnqueueRequestAsync(request, priority, ct, timeout);
         }
 
         // CONNECT
@@ -80,687 +192,276 @@ namespace Flux.ViewModels
         }
 
         // MEMORY R/W
-        public async Task<bool> WriteVariableAsync(OSAI_BitIndexAddress address, bool value)
+        private async Task<bool> WriteVariableAsync<TOSAI_Address, TData, TResponse>(
+            TOSAI_Address address, TData value, CancellationToken ct, 
+            Func<OPENcontrolPortTypeClient, TOSAI_Address, TData, Task<TResponse>> write,
+            Func<TResponse, bool> retval)
         {
-            try
+            var response = await TryEnqueueRequestAsync(async (c, ct) =>
             {
-                if (!Client.HasValue)
+                var write_response = await write(c, address, value);
+                if (!retval(write_response))
                     return false;
-
-                var write_request = new WriteVarWordBitRequest((ushort)address.VarCode, ProcessNumber, address.Index, address.BitIndex, value ? (ushort)1 : (ushort)0);
-                var write_response = await Client.Value.WriteVarWordBitAsync(write_request);
-
-                if (!ProcessResponse(
-                    write_response.retval,
-                    write_response.ErrClass,
-                    write_response.ErrNum))
-                    return false;
-
                 return true;
-            }
-            catch { return false; }
+            }, OSAI_RequestPriority.Immediate, ct);
+
+            if (!response.Ok)
+                return false;
+
+            return response.Content.ValueOrDefault();
         }
-        public async Task<bool> WriteVariableAsync(OSAI_IndexAddress address, short value)
+        public Task<bool> WriteVariableAsync(OSAI_BitIndexAddress address, bool value, CancellationToken ct)
         {
-            try
-            {
-                if (!Client.HasValue)
-                    return false;
-
-                var write_request = new WriteVarWordRequest((ushort)address.VarCode, ProcessNumber, address.Index, 1, new unsignedshortarray { ShortConverter.Convert(value) });
-                var write_response = await Client.Value.WriteVarWordAsync(write_request);
-
-                if (!ProcessResponse(
-                    write_response.retval,
-                    write_response.ErrClass,
-                    write_response.ErrNum))
-                    return false;
-
-                return true;
-            }
-            catch { return false; }
+            return WriteVariableAsync(address, value, ct,
+                (c, a, v) => c.WriteVarWordBitAsync(new WriteVarWordBitRequest((ushort)a.VarCode, ProcessNumber, a.Index, a.BitIndex, v ? (ushort)1 : (ushort)0)),
+                r => ProcessResponse(r.retval, r.ErrClass, r.ErrNum));
         }
-        public async Task<bool> WriteVariableAsync(OSAI_IndexAddress address, string value)
+        public Task<bool> WriteVariableAsync(OSAI_IndexAddress address, short value, CancellationToken ct)
         {
-            try
-            {
-                if (value.Length > 128)
-                    return false;
-
-                if (!Client.HasValue)
-                    return false;
-
-                var write_request = new WriteVarTextRequest((ushort)address.VarCode, ProcessNumber, address.Index, (ushort)value.Length, value);
-                var write_response = await Client.Value.WriteVarTextAsync(write_request);
-
-                if (!ProcessResponse(
-                    write_response.retval,
-                    write_response.ErrClass,
-                    write_response.ErrNum))
-                    return false;
-
-                return true;
-            }
-            catch { return false; }
+            return WriteVariableAsync(address, value, ct,
+                (c, a, v) => c.WriteVarWordAsync(new WriteVarWordRequest((ushort)a.VarCode, ProcessNumber, a.Index, 1, new unsignedshortarray { ShortConverter.Convert(v) })),
+                r => ProcessResponse(r.retval, r.ErrClass, r.ErrNum));
         }
-        public async Task<bool> WriteVariableAsync(OSAI_IndexAddress address, ushort value)
+        public async Task<bool> WriteVariableAsync(OSAI_IndexAddress address, string value, CancellationToken ct)
         {
-            try
-            {
-                if (!Client.HasValue)
-                    return false;
+            if (value.Length > 128)
+                return false;
 
-                var write_request = new WriteVarWordRequest((ushort)address.VarCode, ProcessNumber, address.Index, 1, new unsignedshortarray { value });
-                var write_response = await Client.Value.WriteVarWordAsync(write_request);
-
-                if (!ProcessResponse(
-                    write_response.retval,
-                    write_response.ErrClass,
-                    write_response.ErrNum))
-                    return false;
-
-                return true;
-            }
-            catch { return false; }
+            return await WriteVariableAsync(address, value, ct,
+                (c, a, v) => c.WriteVarTextAsync(new WriteVarTextRequest((ushort)a.VarCode, ProcessNumber, a.Index, (ushort)v.Length, v)),
+                r => ProcessResponse(r.retval, r.ErrClass, r.ErrNum));
         }
-        public async Task<bool> WriteVariableAsync(OSAI_IndexAddress address, double value)
+        public Task<bool> WriteVariableAsync(OSAI_IndexAddress address, ushort value, CancellationToken ct)
         {
-            try
-            {
-                if (!Client.HasValue)
-                    return false;
-
-                var write_request = new WriteVarDoubleRequest((ushort)address.VarCode, ProcessNumber, address.Index, 1, new doublearray { value });
-                var write_response = await Client.Value.WriteVarDoubleAsync(write_request);
-
-                if (!ProcessResponse(
-                    write_response.retval,
-                    write_response.ErrClass,
-                    write_response.ErrNum))
-                    return false;
-
-                return true;
-            }
-            catch { return false; }
+            return WriteVariableAsync(address, value, ct,
+                (c, a, v) => c.WriteVarWordAsync(new WriteVarWordRequest((ushort)a.VarCode, ProcessNumber, a.Index, 1, new unsignedshortarray { v })),
+                r => ProcessResponse(r.retval, r.ErrClass, r.ErrNum));
         }
-        public async Task<bool> WriteVariableAsync(OSAI_IndexAddress address, ushort bit_index, bool value)
+        public Task<bool> WriteVariableAsync(OSAI_IndexAddress address, double value, CancellationToken ct)
         {
-            try
-            {
-                if (!Client.HasValue)
-                    return false;
-
-                var write_request = new WriteVarWordBitRequest((ushort)address.VarCode, ProcessNumber, address.Index, bit_index, value ? (ushort)1 : (ushort)0);
-                var write_response = await Client.Value.WriteVarWordBitAsync(write_request);
-
-                if (!ProcessResponse(
-                    write_response.retval,
-                    write_response.ErrClass,
-                    write_response.ErrNum))
-                    return false;
-
-                return true;
-            }
-            catch { return false; }
+            return WriteVariableAsync(address, value, ct,
+                (c, a, v) => c.WriteVarDoubleAsync(new WriteVarDoubleRequest((ushort)a.VarCode, ProcessNumber, a.Index, 1, new doublearray { v })),
+                r => ProcessResponse(r.retval, r.ErrClass, r.ErrNum));
+        }
+        public Task<bool> WriteVariableAsync(OSAI_IndexAddress address, ushort bit_index, bool value, CancellationToken ct)
+        {
+            return WriteVariableAsync(address, value, ct,
+                (c, a, v) => c.WriteVarWordBitAsync(new WriteVarWordBitRequest((ushort)a.VarCode, ProcessNumber, a.Index, bit_index, v ? (ushort)1 : (ushort)0)),
+                r => ProcessResponse(r.retval, r.ErrClass, r.ErrNum));
         }
 
-        public async Task<bool> WriteVariableAsync(OSAI_NamedAddress address, bool value)
+        public Task<bool> WriteVariableAsync(OSAI_NamedAddress address, bool value, CancellationToken ct)
         {
-            try
-            {
-                if (!Client.HasValue)
-                    return false;
-
-                var write_named_variable_request = new WriteNamedVarDoubleRequest(ProcessNumber, address.Name, 1, address.Index, -1, -1, new doublearray() { value ? 1.0 : 0.0 });
-                var write_named_variable_response = await Client.Value.WriteNamedVarDoubleAsync(write_named_variable_request);
-
-                if (!ProcessResponse(
-                    write_named_variable_response.retval,
-                    write_named_variable_response.ErrClass,
-                    write_named_variable_response.ErrNum))
-                    return false;
-
-                return true;
-            }
-            catch { return false; }
+            return WriteVariableAsync(address, value, ct,
+                (c, a, v) => c.WriteNamedVarDoubleAsync(new WriteNamedVarDoubleRequest(ProcessNumber, a.Name, 1, a.Index, -1, -1, new doublearray() { v ? 1.0 : 0.0 })),
+                r => ProcessResponse(r.retval, r.ErrClass, r.ErrNum));
         }
-        public async Task<bool> WriteVariableAsync(OSAI_NamedAddress address, short value)
+        public Task<bool> WriteVariableAsync(OSAI_NamedAddress address, short value, CancellationToken ct)
         {
-            try
-            {
-                if (!Client.HasValue)
-                    return false;
-
-                var write_named_variable_request = new WriteNamedVarDoubleRequest(ProcessNumber, address.Name, 1, address.Index, -1, -1, new doublearray() { value });
-                var write_named_variable_response = await Client.Value.WriteNamedVarDoubleAsync(write_named_variable_request);
-
-                if (!ProcessResponse(
-                    write_named_variable_response.retval,
-                    write_named_variable_response.ErrClass,
-                    write_named_variable_response.ErrNum))
-                    return false;
-
-                return true;
-            }
-            catch { return false; }
+            return WriteVariableAsync(address, value, ct,
+                (c, a, v) => c.WriteNamedVarDoubleAsync(new WriteNamedVarDoubleRequest(ProcessNumber, a.Name, 1, a.Index, -1, -1, new doublearray() { v })),
+                r => ProcessResponse(r.retval, r.ErrClass, r.ErrNum));
+          
         }
-        public async Task<bool> WriteVariableAsync(OSAI_NamedAddress address, ushort value)
+        public Task<bool> WriteVariableAsync(OSAI_NamedAddress address, ushort value, CancellationToken ct)
         {
-            try
-            {
-                if (!Client.HasValue)
-                    return false;
-
-                var write_named_variable_request = new WriteNamedVarDoubleRequest(ProcessNumber, address.Name, 1, address.Index, -1, -1, new doublearray() { value });
-                var write_named_variable_response = await Client.Value.WriteNamedVarDoubleAsync(write_named_variable_request);
-
-                if (!ProcessResponse(
-                    write_named_variable_response.retval,
-                    write_named_variable_response.ErrClass,
-                    write_named_variable_response.ErrNum))
-                    return false;
-
-                return true;
-            }
-            catch { return false; }
+            return WriteVariableAsync(address, value, ct,
+                (c, a, v) => c.WriteNamedVarDoubleAsync(new WriteNamedVarDoubleRequest(ProcessNumber, a.Name, 1, a.Index, -1, -1, new doublearray() { v })),
+                r => ProcessResponse(r.retval, r.ErrClass, r.ErrNum));
         }
-        public async Task<bool> WriteVariableAsync(OSAI_NamedAddress address, double value)
+        public Task<bool> WriteVariableAsync(OSAI_NamedAddress address, double value, CancellationToken ct)
         {
-            try
-            {
-                if (!Client.HasValue)
-                    return false;
-
-                var write_named_variable_request = new WriteNamedVarDoubleRequest(ProcessNumber, address.Name, 1, address.Index, -1, -1, new doublearray() { value });
-                var write_named_variable_response = await Client.Value.WriteNamedVarDoubleAsync(write_named_variable_request);
-
-                if (!ProcessResponse(
-                    write_named_variable_response.retval,
-                    write_named_variable_response.ErrClass,
-                    write_named_variable_response.ErrNum))
-                    return false;
-
-                return true;
-            }
-            catch { return false; }
+            return WriteVariableAsync(address, value, ct,
+                (c, a, v) => c.WriteNamedVarDoubleAsync(new WriteNamedVarDoubleRequest(ProcessNumber, a.Name, 1, a.Index, -1, -1, new doublearray() { v })),
+                r => ProcessResponse(r.retval, r.ErrClass, r.ErrNum));
         }
-        public async Task<bool> WriteVariableAsync(OSAI_NamedAddress address, string value, ushort lenght)
+        public async Task<bool> WriteVariableAsync(OSAI_NamedAddress address, string value, ushort lenght, CancellationToken ct)
         {
-            try
-            {
-                if (!Client.HasValue)
-                    return false;
+            if (value.Length > lenght)
+                return false;
 
-                if (value.Length > lenght)
-                    return false;
+            var bytes_array = Encoding.ASCII.GetBytes(value);
 
-                var bytes_array = Encoding.ASCII.GetBytes(value);
-                var write_named_variable_request = new WriteNamedVarByteArrayRequest(ProcessNumber, address.Name, (ushort)bytes_array.Length, 0, -1, -1, bytes_array);
-                var write_named_variable_response = await Client.Value.WriteNamedVarByteArrayAsync(write_named_variable_request);
-
-                if (!ProcessResponse(
-                    write_named_variable_response.retval,
-                    write_named_variable_response.ErrClass,
-                    write_named_variable_response.ErrNum))
-                    return false;
-
-                return true;
-            }
-            catch { return false; }
+            return await WriteVariableAsync(address, bytes_array, ct,
+                (c, a, v) => c.WriteNamedVarByteArrayAsync(new WriteNamedVarByteArrayRequest(ProcessNumber, a.Name, (ushort)v.Length, 0, -1, -1, v)),
+                r => ProcessResponse(r.retval, r.ErrClass, r.ErrNum));
         }
 
-        public async Task<Optional<bool>> ReadBoolAsync(OSAI_BitIndexAddress address)
+        private async Task<Optional<TData>> ReadVariableAsync<TOSAI_Address, TData, TResponse>(
+            TOSAI_Address address, CancellationToken ct,
+            Func<OPENcontrolPortTypeClient, TOSAI_Address, Task<TResponse>> read,
+            Func<TResponse, TOSAI_Address, TData> get_value,
+            Func<TResponse, bool> retval)
         {
-            try
+            var response = await TryEnqueueRequestAsync(async (c, ct) =>
             {
-                if (!Client.HasValue)
+                var read_response = await read(c, address);
+                if (!retval(read_response))
                     return default;
+                return get_value(read_response, address);
+            }, OSAI_RequestPriority.Immediate, ct);
 
-                var read_request = new ReadVarWordRequest((ushort)address.VarCode, ProcessNumber, address.Index, 1);
-                var read_response = await Client.Value.ReadVarWordAsync(read_request);
+            if (!response.Ok)
+                return default;
 
-                if (!ProcessResponse(
-                    read_response.retval,
-                    read_response.ErrClass,
-                    read_response.ErrNum))
-                    return default;
-
-                return read_response.Value[0].IsBitSet(address.BitIndex);
-            }
-            catch { return default; }
+            return response.Content;
         }
-        public async Task<Optional<ushort>> ReadUShortAsync(OSAI_IndexAddress address)
+        public Task<Optional<bool>> ReadBoolAsync(OSAI_BitIndexAddress address, CancellationToken ct)
         {
-            try
-            {
-                if (!Client.HasValue)
-                    return default;
-
-                var read_request = new ReadVarWordRequest((ushort)address.VarCode, ProcessNumber, address.Index, 1);
-                var read_response = await Client.Value.ReadVarWordAsync(read_request);
-
-                if (!ProcessResponse(
-                    read_response.retval,
-                    read_response.ErrClass,
-                    read_response.ErrNum))
-                    return default;
-
-                return read_response.Value[0];
-            }
-            catch { return default; }
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadVarWordAsync(new ReadVarWordRequest((ushort)a.VarCode, ProcessNumber, a.Index, 1)),
+                (r, a) => r.Value[0].IsBitSet(a.BitIndex),
+                r => ProcessResponse(r.retval, r.ErrClass, r.ErrNum));
         }
-        public async Task<Optional<short>> ReadShortAsync(OSAI_IndexAddress address)
+        public Task<Optional<ushort>> ReadUShortAsync(OSAI_IndexAddress address, CancellationToken ct)
         {
-            try
-            {
-                if (!Client.HasValue)
-                    return default;
-
-                var read_request = new ReadVarWordRequest((ushort)address.VarCode, ProcessNumber, address.Index, 1);
-                var read_response = await Client.Value.ReadVarWordAsync(read_request);
-
-                if (!ProcessResponse(
-                    read_response.retval,
-                    read_response.ErrClass,
-                    read_response.ErrNum))
-                    return default;
-
-                return ShortConverter.Convert(read_response.Value[0]);
-            }
-            catch { return default; }
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadVarWordAsync(new ReadVarWordRequest((ushort)a.VarCode, ProcessNumber, a.Index, 1)),
+                (r, a) => r.Value[0],
+                r => ProcessResponse(r.retval, r.ErrClass, r.ErrNum));
         }
-        public async Task<Optional<string>> ReadTextAsync(OSAI_IndexAddress address)
+        public Task<Optional<short>> ReadShortAsync(OSAI_IndexAddress address, CancellationToken ct)
         {
-            try
-            {
-                if (!Client.HasValue)
-                    return default;
-
-                var read_request = new ReadVarTextRequest((ushort)address.VarCode, ProcessNumber, address.Index, 128);
-                var read_response = await Client.Value.ReadVarTextAsync(read_request);
-
-                if (!ProcessResponse(
-                    read_response.retval,
-                    read_response.ErrClass,
-                    read_response.ErrNum))
-                    return default;
-
-                return read_response.Text;
-            }
-            catch { return default; }
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadVarWordAsync(new ReadVarWordRequest((ushort)a.VarCode, ProcessNumber, a.Index, 1)),
+                (r, a) => ShortConverter.Convert(r.Value[0]),
+                r => ProcessResponse(r.retval, r.ErrClass, r.ErrNum));
         }
-        public async Task<Optional<double>> ReadDoubleAsync(OSAI_IndexAddress address)
+        public Task<Optional<string>> ReadTextAsync(OSAI_IndexAddress address, CancellationToken ct)
         {
-            try
-            {
-                if (!Client.HasValue)
-                    return default;
-
-                var read_request = new ReadVarDoubleRequest((ushort)address.VarCode, ProcessNumber, address.Index, 1);
-                var read_response = await Client.Value.ReadVarDoubleAsync(read_request);
-
-                if (!ProcessResponse(
-                    read_response.retval,
-                    read_response.ErrClass,
-                    read_response.ErrNum))
-                    return default;
-
-                return read_response.Value[0];
-            }
-            catch { return default; }
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadVarTextAsync(new ReadVarTextRequest((ushort)a.VarCode, ProcessNumber, a.Index, 128)),
+                (r, a) => r.Text,
+                r => ProcessResponse(r.retval, r.ErrClass, r.ErrNum));
         }
-        public async Task<Optional<bool>> ReadBoolAsync(OSAI_IndexAddress address, ushort bit_index)
+        public Task<Optional<double>> ReadDoubleAsync(OSAI_IndexAddress address, CancellationToken ct)
         {
-            try
-            {
-                if (!Client.HasValue)
-                    return default;
-
-                var read_request = new ReadVarWordRequest((ushort)address.VarCode, ProcessNumber, address.Index, 1);
-                var read_response = await Client.Value.ReadVarWordAsync(read_request);
-
-                if (!ProcessResponse(
-                    read_response.retval,
-                    read_response.ErrClass,
-                    read_response.ErrNum))
-                    return default;
-
-                return read_response.Value[0].IsBitSet(bit_index);
-            }
-            catch { return default; }
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadVarDoubleAsync(new ReadVarDoubleRequest((ushort)a.VarCode, ProcessNumber, a.Index, 1)),
+                (r, a) => r.Value[0],
+                r => ProcessResponse(r.retval, r.ErrClass, r.ErrNum));
+        }
+        public Task<Optional<bool>> ReadBoolAsync(OSAI_IndexAddress address, ushort bit_index, CancellationToken ct)
+        {
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadVarWordAsync(new ReadVarWordRequest((ushort)a.VarCode, ProcessNumber, a.Index, 1)),
+                (r, a) => r.Value[0].IsBitSet(bit_index),
+            r => ProcessResponse(r.retval, r.ErrClass, r.ErrNum));
         }
 
-        public async Task<Optional<bool>> ReadNamedBoolAsync(OSAI_NamedAddress address)
+        public Task<Optional<bool>> ReadNamedBoolAsync(OSAI_NamedAddress address, CancellationToken ct)
         {
-            try
-            {
-                if (!Client.HasValue)
-                    return default;
-
-                var read_named_variable_request = new ReadNamedVarDoubleRequest(ProcessNumber, address.Name, 1, address.Index, -1, -1);
-                var read_named_variable_response = await Client.Value.ReadNamedVarDoubleAsync(read_named_variable_request);
-
-                if (!ProcessResponse(
-                    read_named_variable_response.retval,
-                    read_named_variable_response.ErrClass,
-                    read_named_variable_response.ErrNum,
-                    address.ToString()))
-                    return default;
-
-                return read_named_variable_response.Value[0] == 1.0;
-            }
-            catch { return default; }
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadNamedVarDoubleAsync(new ReadNamedVarDoubleRequest(ProcessNumber, a.Name, 1, a.Index, -1, -1)),
+                (r, a) => r.Value[0] == 1.0,
+            r => ProcessResponse(r.retval, r.ErrClass, r.ErrNum));
         }
-        public async Task<Optional<short>> ReadNamedShortAsync(OSAI_NamedAddress address)
+        public Task<Optional<short>> ReadNamedShortAsync(OSAI_NamedAddress address, CancellationToken ct)
         {
-            try
-            {
-                if (!Client.HasValue)
-                    return default;
-
-                var read_named_variable_request = new ReadNamedVarDoubleRequest(ProcessNumber, address.Name, 1, address.Index, -1, -1);
-                var read_named_variable_response = await Client.Value.ReadNamedVarDoubleAsync(read_named_variable_request);
-
-                if (!ProcessResponse(
-                    read_named_variable_response.retval,
-                    read_named_variable_response.ErrClass,
-                    read_named_variable_response.ErrNum,
-                    address.ToString()))
-                    return default;
-
-                return (short)read_named_variable_response.Value[0];
-            }
-            catch { return default; }
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadNamedVarDoubleAsync(new ReadNamedVarDoubleRequest(ProcessNumber, a.Name, 1, a.Index, -1, -1)),
+                (r, a) => (short)r.Value[0],
+            r => ProcessResponse(r.retval, r.ErrClass, r.ErrNum));
         }
-        public async Task<Optional<ushort>> ReadNamedUShortAsync(OSAI_NamedAddress address)
+        public Task<Optional<ushort>> ReadNamedUShortAsync(OSAI_NamedAddress address, CancellationToken ct)
         {
-            try
-            {
-                if (!Client.HasValue)
-                    return default;
-
-                var read_named_variable_request = new ReadNamedVarDoubleRequest(ProcessNumber, address.Name, 1, address.Index, -1, -1);
-                var read_named_variable_response = await Client.Value.ReadNamedVarDoubleAsync(read_named_variable_request);
-
-                if (!ProcessResponse(
-                    read_named_variable_response.retval,
-                    read_named_variable_response.ErrClass,
-                    read_named_variable_response.ErrNum,
-                    address.ToString()))
-                    return default;
-
-                return (ushort)read_named_variable_response.Value[0];
-            }
-            catch { return default; }
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadNamedVarDoubleAsync(new ReadNamedVarDoubleRequest(ProcessNumber, a.Name, 1, a.Index, -1, -1)),
+                (r, a) => (ushort)r.Value[0],
+            r => ProcessResponse(r.retval, r.ErrClass, r.ErrNum));
         }
-        public async Task<Optional<double>> ReadNamedDoubleAsync(OSAI_NamedAddress address)
+        public Task<Optional<double>> ReadNamedDoubleAsync(OSAI_NamedAddress address, CancellationToken ct)
         {
-            try
-            {
-                if (!Client.HasValue)
-                    return default;
-
-                var read_named_variable_request = new ReadNamedVarDoubleRequest(ProcessNumber, address.Name, 1, address.Index, -1, -1);
-                var read_named_variable_response = await Client.Value.ReadNamedVarDoubleAsync(read_named_variable_request);
-
-                if (!ProcessResponse(
-                    read_named_variable_response.retval,
-                    read_named_variable_response.ErrClass,
-                    read_named_variable_response.ErrNum,
-                    address.ToString()))
-                    return default;
-
-                return read_named_variable_response.Value[0];
-            }
-            catch { return default; }
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadNamedVarDoubleAsync(new ReadNamedVarDoubleRequest(ProcessNumber, a.Name, 1, a.Index, -1, -1)),
+                (r, a) => r.Value[0],
+            r => ProcessResponse(r.retval, r.ErrClass, r.ErrNum));
         }
-        public async Task<Optional<string>> ReadNamedStringAsync(OSAI_NamedAddress address, ushort lenght)
+        public Task<Optional<string>> ReadNamedStringAsync(OSAI_NamedAddress address, ushort lenght, CancellationToken ct)
         {
-            try
-            {
-                if (!Client.HasValue)
-                    return default;
-
-                var read_named_variable_request = new ReadNamedVarByteArrayRequest(ProcessNumber, address.Name, lenght, address.Index, -1, -1);
-                var read_named_variable_response = await Client.Value.ReadNamedVarByteArrayAsync(read_named_variable_request);
-
-                if (!ProcessResponse(
-                    read_named_variable_response.retval,
-                    read_named_variable_response.ErrClass,
-                    read_named_variable_response.ErrNum,
-                    address.ToString()))
-                    return default;
-
-                return Encoding.ASCII.GetString(read_named_variable_response.Value);
-            }
-            catch { return default; }
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadNamedVarByteArrayAsync(new ReadNamedVarByteArrayRequest(ProcessNumber, a.Name, lenght, a.Index, -1, -1)),
+                (r, a) => Encoding.ASCII.GetString(r.Value),
+            r => ProcessResponse(r.retval, r.ErrClass, r.ErrNum));
         }
 
-        public async Task<Optional<TOut>> ReadBoolAsync<TOut>(OSAI_BitIndexAddress address, Func<bool, TOut> convert_func)
+        public Task<Optional<TOut>> ReadBoolAsync<TOut>(OSAI_BitIndexAddress address, Func<bool, TOut> convert_func, CancellationToken ct)
         {
-            try
-            {
-                if (!Client.HasValue)
-                    return default;
-
-                var read_request = new ReadVarWordRequest((ushort)address.VarCode, ProcessNumber, address.Index, 1);
-                var read_response = await Client.Value.ReadVarWordAsync(read_request);
-
-                if (!ProcessResponse(
-                    read_response.retval,
-                    read_response.ErrClass,
-                    read_response.ErrNum))
-                    return default;
-
-                return convert_func(read_response.Value[0].IsBitSet(address.BitIndex));
-            }
-            catch { return default; }
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadVarWordAsync(new ReadVarWordRequest((ushort)a.VarCode, ProcessNumber, a.Index, 1)),
+                (r, a) => convert_func(r.Value[0].IsBitSet(a.BitIndex)),
+            r => ProcessResponse(r.retval, r.ErrClass, r.ErrNum));
         }
-        public async Task<Optional<TOut>> ReadUShortAsync<TOut>(OSAI_IndexAddress address, Func<ushort, TOut> convert_func)
+        public Task<Optional<TOut>> ReadUShortAsync<TOut>(OSAI_IndexAddress address, Func<ushort, TOut> convert_func, CancellationToken ct)
         {
-            try
-            {
-                if (!Client.HasValue)
-                    return default;
-
-                var read_request = new ReadVarWordRequest((ushort)address.VarCode, ProcessNumber, address.Index, 1);
-                var read_response = await Client.Value.ReadVarWordAsync(read_request);
-
-                if (!ProcessResponse(
-                    read_response.retval,
-                    read_response.ErrClass,
-                    read_response.ErrNum))
-                    return default;
-
-                return convert_func(read_response.Value[0]);
-            }
-            catch { return default; }
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadVarWordAsync(new ReadVarWordRequest((ushort)a.VarCode, ProcessNumber, a.Index, 1)),
+                (r, a) => convert_func(r.Value[0]),
+            r => ProcessResponse(r.retval, r.ErrClass, r.ErrNum));
         }
-        public async Task<Optional<TOut>> ReadShortAsync<TOut>(OSAI_IndexAddress address, Func<short, TOut> convert_func)
+        public Task<Optional<TOut>> ReadShortAsync<TOut>(OSAI_IndexAddress address, Func<short, TOut> convert_func, CancellationToken ct)
         {
-            try
-            {
-                if (!Client.HasValue)
-                    return default;
-
-                var read_request = new ReadVarWordRequest((ushort)address.VarCode, ProcessNumber, address.Index, 1);
-                var read_response = await Client.Value.ReadVarWordAsync(read_request);
-
-                if (!ProcessResponse(
-                    read_response.retval,
-                    read_response.ErrClass,
-                    read_response.ErrNum))
-                    return default;
-
-                return convert_func(ShortConverter.Convert(read_response.Value[0]));
-            }
-            catch { return default; }
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadVarWordAsync(new ReadVarWordRequest((ushort)a.VarCode, ProcessNumber, a.Index, 1)),
+                (r, a) => convert_func(ShortConverter.Convert(r.Value[0])),
+            r => ProcessResponse(r.retval, r.ErrClass, r.ErrNum));
         }
-        public async Task<Optional<TOut>> ReadTextAsync<TOut>(OSAI_IndexAddress address, Func<string, TOut> convert_func)
+        public Task<Optional<TOut>> ReadTextAsync<TOut>(OSAI_IndexAddress address, Func<string, TOut> convert_func, CancellationToken ct)
         {
-            try
-            {
-                if (!Client.HasValue)
-                    return default;
-
-                var read_request = new ReadVarTextRequest((ushort)address.VarCode, ProcessNumber, address.Index, 128);
-                var read_response = await Client.Value.ReadVarTextAsync(read_request);
-
-                if (!ProcessResponse(
-                    read_response.retval,
-                    read_response.ErrClass,
-                    read_response.ErrNum))
-                    return default;
-
-                return convert_func(read_response.Text);
-            }
-            catch { return default; }
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadVarTextAsync(new ReadVarTextRequest((ushort)a.VarCode, ProcessNumber, a.Index, 1)),
+                (r, a) => convert_func(r.Text),
+            r => ProcessResponse(r.retval, r.ErrClass, r.ErrNum));
         }
-        public async Task<Optional<TOut>> ReadDoubleAsync<TOut>(OSAI_IndexAddress address, Func<double, TOut> convert_func)
+        public Task<Optional<TOut>> ReadDoubleAsync<TOut>(OSAI_IndexAddress address, Func<double, TOut> convert_func, CancellationToken ct)
         {
-            try
-            {
-                if (!Client.HasValue)
-                    return default;
-
-                var read_request = new ReadVarDoubleRequest((ushort)address.VarCode, ProcessNumber, address.Index, 1);
-                var read_response = await Client.Value.ReadVarDoubleAsync(read_request);
-
-                if (!ProcessResponse(
-                    read_response.retval,
-                    read_response.ErrClass,
-                    read_response.ErrNum))
-                    return default;
-
-                return convert_func(read_response.Value[0]);
-            }
-            catch { return default; }
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadVarDoubleAsync(new ReadVarDoubleRequest((ushort)a.VarCode, ProcessNumber, a.Index, 1)),
+                (r, a) => convert_func(r.Value[0]),
+            r => ProcessResponse(r.retval, r.ErrClass, r.ErrNum));
         }
-        public async Task<Optional<TOut>> ReadBoolAsync<TOut>(OSAI_IndexAddress address, ushort bit_index, Func<bool, TOut> convert_func)
+        public Task<Optional<TOut>> ReadBoolAsync<TOut>(OSAI_IndexAddress address, ushort bit_index, Func<bool, TOut> convert_func, CancellationToken ct)
         {
-            try
-            {
-                if (!Client.HasValue)
-                    return default;
-
-                var read_request = new ReadVarWordRequest((ushort)address.VarCode, ProcessNumber, address.Index, 1);
-                var read_response = await Client.Value.ReadVarWordAsync(read_request);
-
-                if (!ProcessResponse(
-                    read_response.retval,
-                    read_response.ErrClass,
-                    read_response.ErrNum))
-                    return default;
-
-                return convert_func(read_response.Value[0].IsBitSet(bit_index));
-            }
-            catch { return default; }
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadVarWordAsync(new ReadVarWordRequest((ushort)a.VarCode, ProcessNumber, a.Index, 1)),
+                (r, a) => convert_func(r.Value[0].IsBitSet(bit_index)),
+            r => ProcessResponse(r.retval, r.ErrClass, r.ErrNum));
         }
 
-        public async Task<Optional<TOut>> ReadNamedBoolAsync<TOut>(OSAI_NamedAddress address, Func<bool, TOut> convert_func)
+        public Task<Optional<TOut>> ReadNamedBoolAsync<TOut>(OSAI_NamedAddress address, Func<bool, TOut> convert_func, CancellationToken ct)
         {
-            try
-            {
-                if (!Client.HasValue)
-                    return default;
-
-                var read_named_variable_request = new ReadNamedVarDoubleRequest(ProcessNumber, address.Name, 1, address.Index, -1, -1);
-                var read_named_variable_response = await Client.Value.ReadNamedVarDoubleAsync(read_named_variable_request);
-
-                if (!ProcessResponse(
-                    read_named_variable_response.retval,
-                    read_named_variable_response.ErrClass,
-                    read_named_variable_response.ErrNum,
-                    address.ToString()))
-                    return default;
-
-                return convert_func(read_named_variable_response.Value[0] == 1.0);
-            }
-            catch { return default; }
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadNamedVarDoubleAsync(new ReadNamedVarDoubleRequest(ProcessNumber, a.Name, 1, a.Index, -1, -1)),
+                (r, a) => convert_func(r.Value[0] == 1.0),
+            r => ProcessResponse(r.retval, r.ErrClass, r.ErrNum));
         }
-        public async Task<Optional<TOut>> ReadNamedShortAsync<TOut>(OSAI_NamedAddress address, Func<short, TOut> convert_func)
+        public Task<Optional<TOut>> ReadNamedShortAsync<TOut>(OSAI_NamedAddress address, Func<short, TOut> convert_func, CancellationToken ct)
         {
-            try
-            {
-                if (!Client.HasValue)
-                    return default;
-
-                var read_named_variable_request = new ReadNamedVarDoubleRequest(ProcessNumber, address.Name, 1, address.Index, -1, -1);
-                var read_named_variable_response = await Client.Value.ReadNamedVarDoubleAsync(read_named_variable_request);
-
-                if (!ProcessResponse(
-                    read_named_variable_response.retval,
-                    read_named_variable_response.ErrClass,
-                    read_named_variable_response.ErrNum,
-                    address.ToString()))
-                    return default;
-
-                return convert_func((short)read_named_variable_response.Value[0]);
-            }
-            catch { return default; }
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadNamedVarDoubleAsync(new ReadNamedVarDoubleRequest(ProcessNumber, a.Name, 1, a.Index, -1, -1)),
+                (r, a) => convert_func((short)r.Value[0]),
+            r => ProcessResponse(r.retval, r.ErrClass, r.ErrNum));
         }
-        public async Task<Optional<TOut>> ReadNamedUShortAsync<TOut>(OSAI_NamedAddress address, Func<ushort, TOut> convert_func)
+        public Task<Optional<TOut>> ReadNamedUShortAsync<TOut>(OSAI_NamedAddress address, Func<ushort, TOut> convert_func, CancellationToken ct)
         {
-            try
-            {
-                if (!Client.HasValue)
-                    return default;
-
-                var read_named_variable_request = new ReadNamedVarDoubleRequest(ProcessNumber, address.Name, 1, address.Index, -1, -1);
-                var read_named_variable_response = await Client.Value.ReadNamedVarDoubleAsync(read_named_variable_request);
-
-                if (!ProcessResponse(
-                    read_named_variable_response.retval,
-                    read_named_variable_response.ErrClass,
-                    read_named_variable_response.ErrNum,
-                    address.ToString()))
-                    return default;
-
-                return convert_func((ushort)read_named_variable_response.Value[0]);
-            }
-            catch { return default; }
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadNamedVarDoubleAsync(new ReadNamedVarDoubleRequest(ProcessNumber, a.Name, 1, a.Index, -1, -1)),
+                (r, a) => convert_func((ushort)r.Value[0]),
+            r => ProcessResponse(r.retval, r.ErrClass, r.ErrNum));
         }
-        public async Task<Optional<TOut>> ReadNamedDoubleAsync<TOut>(OSAI_NamedAddress address, Func<double, TOut> convert_func)
+        public Task<Optional<TOut>> ReadNamedDoubleAsync<TOut>(OSAI_NamedAddress address, Func<double, TOut> convert_func, CancellationToken ct)
         {
-            try
-            {
-                if (!Client.HasValue)
-                    return default;
-
-                var read_named_variable_request = new ReadNamedVarDoubleRequest(ProcessNumber, address.Name, 1, address.Index, -1, -1);
-                var read_named_variable_response = await Client.Value.ReadNamedVarDoubleAsync(read_named_variable_request);
-
-                if (!ProcessResponse(
-                    read_named_variable_response.retval,
-                    read_named_variable_response.ErrClass,
-                    read_named_variable_response.ErrNum,
-                    address.ToString()))
-                    return default;
-
-                return convert_func(read_named_variable_response.Value[0]);
-            }
-            catch { return default; }
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadNamedVarDoubleAsync(new ReadNamedVarDoubleRequest(ProcessNumber, a.Name, 1, a.Index, -1, -1)),
+                (r, a) => convert_func(r.Value[0]),
+            r => ProcessResponse(r.retval, r.ErrClass, r.ErrNum));
         }
-        public async Task<Optional<TOut>> ReadNamedStringAsync<TOut>(OSAI_NamedAddress address, ushort lenght, Func<string, TOut> convert_func)
+        public Task<Optional<TOut>> ReadNamedStringAsync<TOut>(OSAI_NamedAddress address, ushort lenght, Func<string, TOut> convert_func, CancellationToken ct)
         {
-            try
-            {
-                if (!Client.HasValue)
-                    return default;
-
-                var read_named_variable_request = new ReadNamedVarByteArrayRequest(ProcessNumber, address.Name, lenght, address.Index, -1, -1);
-                var read_named_variable_response = await Client.Value.ReadNamedVarByteArrayAsync(read_named_variable_request);
-
-                if (!ProcessResponse(
-                    read_named_variable_response.retval,
-                    read_named_variable_response.ErrClass,
-                    read_named_variable_response.ErrNum,
-                    address.ToString()))
-                    return default;
-
-                return convert_func(Encoding.ASCII.GetString(read_named_variable_response.Value));
-            }
-            catch { return default; }
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadNamedVarByteArrayAsync(new ReadNamedVarByteArrayRequest(ProcessNumber, a.Name, lenght, a.Index, -1, -1)),
+                (r, a) => convert_func(Encoding.ASCII.GetString(r.Value)),
+            r => ProcessResponse(r.retval, r.ErrClass, r.ErrNum));
         }
 
         // BASIC FUNCTIONS
@@ -773,7 +474,15 @@ namespace Flux.ViewModels
             }
             return true;
         }
-
+        public static bool ProcessResponse(ushort retval, uint ErrClass, uint ErrNum)
+        {
+            if (retval == 0)
+            {
+                Debug.WriteLine($"Errore: classe: {ErrClass}, Codice {ErrNum}");
+                return false;
+            }
+            return true;
+        }
         public override Task<bool> InitializeVariablesAsync(CancellationToken ct)
         {
             return Task.FromResult(true);
@@ -1485,8 +1194,7 @@ namespace Flux.ViewModels
         }
         public override GCodeString GetWriteExtrusionMMGCode(ArrayIndex position, double distance_mm)
         {
-            // TODO
-            throw new NotImplementedException();
+            return $"!EXTR_MM({position.GetZeroBaseIndex()}) = {distance_mm}";
         }
         public override GCodeString GetStartPartProgramGCode(string folder, string filename, Optional<FluxJobRecovery> recovery)
         {
@@ -1531,14 +1239,14 @@ namespace Flux.ViewModels
         {
             return default;
         }
-        public override GCodeString GetRenamePauseGCode(Optional<JobKey> job_key)
+        public override GCodeString GetPausePrependGCode(Optional<JobKey> job_key)
         {
-            throw new NotImplementedException();
+            return default;
         }
 
         public override GCodeString GetGotoMaintenancePositionGCode()
         {
-            throw new NotImplementedException();
+            return $"(CLS, MACRO\\goto_maintenance_position)";
         }
     }
 }

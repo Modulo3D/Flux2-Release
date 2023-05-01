@@ -146,10 +146,43 @@ namespace Flux.ViewModels
                     if (!closed || open)
                     {
                         if (!is_idle)
-                            return new ConditionState(EConditionState.Error, new RemoteText($"openDuringCycle;{OpenLock.Unit}", true));
+                            return new ConditionState(EConditionState.Warning, new RemoteText($"openDuringCycle;{OpenLock.Unit}", true));
                         return new ConditionState(EConditionState.Warning, new RemoteText($"close;{OpenLock.Unit}", true));
                     }
                     return new ConditionState(EConditionState.Stable, new RemoteText($"closed;{OpenLock.Unit}", true));
+                });
+        }
+    }
+    public class LockToggleConditionViewModel : ConditionViewModel<LockToggleConditionViewModel>
+    {
+        public IFLUX_Variable<bool, bool> LockClosed { get; }
+        public IFLUX_Variable<bool, bool> OpenLock { get; }
+        public LockToggleConditionViewModel(ConditionsProvider conditions, IFLUX_Variable<bool, bool> lock_closed, IFLUX_Variable<bool, bool> open_lock)
+            : base(conditions, open_lock.Unit.Alias)
+        {
+            OpenLock = open_lock;
+            LockClosed = lock_closed;
+        }
+
+        protected override Optional<(Func<Task> action, IObservable<bool> can_execute)> GetExecuteAction(IObservable<bool> is_idle)
+        {
+            return (() => Flux.ConnectionProvider.ToggleVariableAsync(_ => OpenLock), is_idle);
+        }
+        protected override IObservable<ConditionState> GetState(IObservable<bool> is_idle)
+        {
+            return Observable.CombineLatest(
+                LockClosed.ValueChanged.ValueOrDefault(),
+                OpenLock.ValueChanged.ValueOrDefault(),
+                is_idle,
+                (closed, open, is_idle) =>
+                {
+                    if (!closed || open)
+                    {
+                        if (!is_idle)
+                            return new ConditionState(EConditionState.Warning, new RemoteText($"openDuringCycle;{OpenLock.Unit}", true));
+                        return new ConditionState(EConditionState.Stable, new RemoteText($"close;{OpenLock.Unit}", true));
+                    }
+                    return new ConditionState(EConditionState.Stable, new RemoteText($"open;{OpenLock.Unit}", true));
                 });
         }
     }

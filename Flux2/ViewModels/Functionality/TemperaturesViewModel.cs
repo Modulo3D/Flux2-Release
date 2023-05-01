@@ -9,7 +9,7 @@ namespace Flux.ViewModels
 {
     public class TemperaturesViewModel : FluxRoutableViewModel<TemperaturesViewModel>
     {
-        [RemoteContent(true)]
+        [RemoteContent(true, comparer:(nameof(TemperatureViewModel.Position)))]
         public IObservableCache<TemperatureViewModel, string> Temperatures { get; set; }
 
         public TemperaturesViewModel(FluxViewModel flux) : base(flux)
@@ -23,6 +23,8 @@ namespace Flux.ViewModels
 
         private IEnumerable<TemperatureViewModel> FindTemperatures(Optional<(ushort machine_extruders, ushort mixing_extruders)> extruders)
         {
+            ushort temp_pos = 0;
+
             if (extruders.HasValue)
             {
                 var variable_store = Flux.ConnectionProvider.VariableStoreBase;
@@ -35,7 +37,7 @@ namespace Flux.ViewModels
                     if (!extr_temp.HasValue)
                         continue;
 
-                    yield return new TemperatureViewModel(this, extr_temp.Value);
+                    yield return new TemperatureViewModel(this, temp_pos++, extr_temp.Value);
                 }
             }
 
@@ -44,7 +46,7 @@ namespace Flux.ViewModels
             {
                 var chamber_temp = Flux.ConnectionProvider.GetVariable(m => m.TEMP_CHAMBER, chamber_unit.Alias);
                 if (chamber_temp.HasValue)
-                    yield return new TemperatureViewModel(this, chamber_temp.Value);
+                    yield return new TemperatureViewModel(this, temp_pos++, chamber_temp.Value);
             }
 
             var plate_units = Flux.ConnectionProvider.GetArrayUnits(c => c.TEMP_PLATE);
@@ -52,7 +54,7 @@ namespace Flux.ViewModels
             {
                 var plate_temp = Flux.ConnectionProvider.GetVariable(m => m.TEMP_PLATE, plate_unit.Alias);
                 if (plate_temp.HasValue)
-                    yield return new TemperatureViewModel(this, plate_temp.Value);
+                    yield return new TemperatureViewModel(this, temp_pos++, plate_temp.Value);
             }
         }
     }

@@ -163,7 +163,7 @@ namespace Flux.ViewModels
         {
             return $"rr_gcode?gcode={string.Join("%0A", paramacro)}".Length;
         }
-        public async Task<RRF_Response<TData>> ExecuteAsync<TData>(RRF_Request<TData> rrf_request)
+        public async Task<RRF_Response<TData>> TryEnqueueRequestAsync<TData>(RRF_Request<TData> rrf_request)
         {
             if (!Client.HasValue)
                 return default;
@@ -248,7 +248,7 @@ namespace Flux.ViewModels
                 }
 
                 var request = new RRF_Request<string>(resource, HttpMethod.Get, RRF_RequestPriority.Immediate, ct);
-                var response = await ExecuteAsync(request);
+                var response = await TryEnqueueRequestAsync(request);
                 if (!response.Ok)
                 {
                     Flux.Messages.LogMessage($"{request}", $"{response}", MessageLevel.ERROR, 0);
@@ -539,7 +539,7 @@ namespace Flux.ViewModels
 
                 var path = $"{folder}/{name}".TrimStart('/');
                 var request = new RRF_Request<string>($"rr_mkdir?dir=0:/{path}", HttpMethod.Get, RRF_RequestPriority.Immediate, ct);
-                var response = await ExecuteAsync(request);
+                var response = await TryEnqueueRequestAsync(request);
                 return response.Ok;
             }
             catch
@@ -557,7 +557,7 @@ namespace Flux.ViewModels
                 {
                     var first = file_list.ConvertOr(f => f.Next, () => 0);
                     var request = new RRF_Request<FLUX_FileList>($"rr_filelist?dir={folder}&first={first}", HttpMethod.Get, RRF_RequestPriority.Immediate, ct);
-                    var response = await ExecuteAsync(request);
+                    var response = await TryEnqueueRequestAsync(request);
 
                     file_list = response.Content;
                     if (file_list.HasValue)
@@ -612,7 +612,7 @@ namespace Flux.ViewModels
                     return default;
 
                 var request = new RRF_Request<string>($"rr_download?name=0:/{folder}/{filename}", HttpMethod.Get, RRF_RequestPriority.Immediate, ct);
-                var response = await ExecuteAsync(request);
+                var response = await TryEnqueueRequestAsync(request);
                 return response.Content;
             }
             catch
@@ -640,7 +640,7 @@ namespace Flux.ViewModels
                     return true;
 
                 var request = new RRF_Request<RRF_Err>($"rr_delete?name=0:/{path}", HttpMethod.Get, RRF_RequestPriority.Immediate, ct);
-                var response = await ExecuteAsync(request);
+                var response = await TryEnqueueRequestAsync(request);
 
                 if (!response.Ok)
                     return false;
@@ -667,7 +667,7 @@ namespace Flux.ViewModels
                 var new_path = $"{folder}/{new_filename}".TrimStart('/');
 
                 var request = new RRF_Request<RRF_Err>($"rr_move?old=0:/{old_path}&new=0:/{new_path}&deleteexisting=yes", HttpMethod.Get, RRF_RequestPriority.Immediate, ct);
-                var response = await ExecuteAsync(request);
+                var response = await TryEnqueueRequestAsync(request);
 
                 if (!response.Ok)
                     return false;
@@ -892,7 +892,7 @@ namespace Flux.ViewModels
             var extr_key_str = extr_key.ConvertOr(k => k.ToString(), () => "");
             return $"set {extr_key_var.Value} = \"{extr_key_str}\"";
         }
-        public override GCodeString GetRenamePauseGCode(Optional<JobKey> job_key)
+        public override GCodeString GetPausePrependGCode(Optional<JobKey> job_key)
         {
             if (!job_key.HasValue)
                 return default;

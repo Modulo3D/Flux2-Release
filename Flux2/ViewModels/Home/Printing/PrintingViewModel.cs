@@ -135,7 +135,7 @@ namespace Flux.ViewModels
 
         public async Task StartPrintAsync()
         {
-            await Flux.ConnectionProvider.StartPrintAsync();
+            await Flux.ConnectionProvider.StartPrintAsync(false);
         }
 
         public Task EnterPhaseAsync()

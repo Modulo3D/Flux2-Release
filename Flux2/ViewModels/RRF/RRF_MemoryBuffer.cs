@@ -80,7 +80,7 @@ namespace Flux.ViewModels
         {
             var connection = MemoryBuffer.ConnectionProvider.Connection;
             var request = new RRF_Request<RRF_ObjectModelResponse<TData>>($"rr_model?key={Resource}&flags={Flags}", HttpMethod.Get, priority, ct, MemoryBuffer.RequestTimeout);
-            var response = await connection.ExecuteAsync(request);
+            var response = await connection.TryEnqueueRequestAsync(request);
             return response.Content.Convert(m => m.Result);
         }
     }
@@ -102,7 +102,7 @@ namespace Flux.ViewModels
             {
                 var first = file_list.ConvertOr(f => f.Next, () => 0);
                 var request = new RRF_Request<FLUX_FileList>($"rr_filelist?dir={Resource}&first={first}", HttpMethod.Get, priority, ct, MemoryBuffer.RequestTimeout);
-                var response = await connection.ExecuteAsync(request);
+                var response = await connection.TryEnqueueRequestAsync(request);
                     
                 file_list = response.Content;
                 if (!file_list.HasValue)

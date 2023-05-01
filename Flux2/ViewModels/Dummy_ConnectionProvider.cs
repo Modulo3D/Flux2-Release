@@ -140,10 +140,6 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override GCodeString GetRenamePauseGCode(Optional<JobKey> job_key)
-        {
-            throw new NotImplementedException();
-        }
 
         public override GCodeString GetWriteExtrusionMMGCode(ArrayIndex position, double distance_mm)
         {
@@ -382,6 +378,11 @@ namespace Flux.ViewModels
         }
 
         public override GCodeString GetGotoMaintenancePositionGCode()
+        {
+            throw new NotImplementedException();
+        }
+
+        public override GCodeString GetPausePrependGCode(Optional<JobKey> job_key)
         {
             throw new NotImplementedException();
         }

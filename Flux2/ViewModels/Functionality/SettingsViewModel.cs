@@ -69,7 +69,7 @@ namespace Flux.ViewModels
         }
 
         private Optional<double> _CostHour = 15;
-        [RemoteInput]
+        [RemoteInput(step: 0.5, min: 0)]
         public Optional<double> CostHour
         {
             get => _CostHour;
@@ -77,7 +77,7 @@ namespace Flux.ViewModels
         }
 
         private Optional<double> _StartupCost = 15;
-        [RemoteInput]
+        [RemoteInput(step: 0.5, min: 0)]
         public Optional<double> StartupCost
         {
             get => _StartupCost;

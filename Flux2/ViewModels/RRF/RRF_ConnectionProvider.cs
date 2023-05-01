@@ -69,7 +69,7 @@ namespace Flux.ViewModels
 
                     case RRF_ConnectionPhase.DISCONNECTING_CLIENT:
                         var disconnect_request = new RRF_Request<RRF_Err>("rr_disconnect", HttpMethod.Get, RRF_RequestPriority.Immediate, ct);
-                        var disconnect_response = await Connection.ExecuteAsync(disconnect_request);
+                        var disconnect_response = await Connection.TryEnqueueRequestAsync(disconnect_request);
 
                         var disconnected = disconnect_response.Ok && disconnect_response.Content.ConvertOrDefault(err => err.Error == 0);
                         ConnectionPhase = disconnected ? RRF_ConnectionPhase.CONNECTING_CLIENT : RRF_ConnectionPhase.START_PHASE;
@@ -77,7 +77,7 @@ namespace Flux.ViewModels
 
                     case RRF_ConnectionPhase.CONNECTING_CLIENT:
                         var connect_request = new RRF_Request<RRF_Err>($"rr_connect?password=\"\"&time={DateTime.Now}", HttpMethod.Get, RRF_RequestPriority.Immediate, ct);
-                        var connect_response = await Connection.ExecuteAsync(connect_request);
+                        var connect_response = await Connection.TryEnqueueRequestAsync(connect_request);
 
                         var connected = connect_response.Ok && connect_response.Content.ConvertOrDefault(err => err.Error == 0);
                         ConnectionPhase = connected ? RRF_ConnectionPhase.READING_STATUS : RRF_ConnectionPhase.START_PHASE;

@@ -27,7 +27,7 @@ namespace Flux.ViewModels
         public ReactiveCommand<Unit, Unit> SelectTargetCommand { get; }
 
         private double _TargetTemperature = 0;
-        [RemoteInput(step: 10, converter: typeof(TemperatureConverter))]
+        [RemoteInput(step: 10, min: 0, max: 500, converter: typeof(TemperatureConverter))]
         public double TargetTemperature
         {
             get => _TargetTemperature;
@@ -41,9 +41,13 @@ namespace Flux.ViewModels
         [RemoteOutput(false)]
         public RemoteText Label { get; }
 
-        public TemperatureViewModel(TemperaturesViewModel temperatures, IFLUX_Variable<FLUX_Temp, double> temp_var)
+        [RemoteOutput(false)]
+        public ushort Position { get; }
+
+        public TemperatureViewModel(TemperaturesViewModel temperatures, ushort position, IFLUX_Variable<FLUX_Temp, double> temp_var)
             : base($"{typeof(TemperatureViewModel).GetRemoteElementClass()};{temp_var.Name}")
         {
+            Position = position;
             Flux = temperatures.Flux;
             Label = new RemoteText($"temp;{temp_var.Unit.Alias}", true);
 

@@ -63,6 +63,34 @@ namespace Flux.ViewModels
         }
         private SourceCache<IConditionViewModel, string> _LockClosedConditions;
 
+        [FilamentOperationCondition(include_alias: new[] { "spools.lock" })]
+        public SourceCache<IConditionViewModel, string> LockToggleConditions
+        {
+            get
+            {
+                if (_LockToggleConditions == default)
+                {
+                    SourceCacheRC.Create(this, v => v._LockToggleConditions, c => c.Name);
+                    var locks_closed = Flux.ConnectionProvider.GetVariables(c => c.LOCK_CLOSED);
+                    if (locks_closed.HasValue)
+                    {
+                        foreach (var lock_closed in locks_closed.Value.KeyValues)
+                        {
+                            var open_lock = Flux.ConnectionProvider.GetVariable(c => c.OPEN_LOCK, lock_closed.Key.Alias);
+                            if (open_lock.HasValue)
+                            {
+                                var lock_closed_condition = new LockToggleConditionViewModel(this, lock_closed.Value, open_lock.Value);
+                                lock_closed_condition.Initialize();
+                                _LockToggleConditions.AddOrUpdate(lock_closed_condition);
+                            }
+                        }
+                    }
+                }
+                return _LockToggleConditions;
+            }
+        }
+        private SourceCache<IConditionViewModel, string> _LockToggleConditions;
+
         [StatusBarCondition]
         public SourceCache<IConditionViewModel, string> ChamberHotConditions
         {

@@ -101,6 +101,7 @@ namespace Flux.ViewModels
                 model.CreateArray(c => c.X_PROBE_OFFSET, 4, "!X_PRB_OF_T", OSAI_ReadPriority.LOW);
                 model.CreateArray(c => c.Y_PROBE_OFFSET, 4, "!Y_PRB_OF_T", OSAI_ReadPriority.LOW);
                 model.CreateArray(c => c.Z_PROBE_OFFSET, 4, "!Z_PRB_OF_T", OSAI_ReadPriority.LOW);
+                model.CreateArray(c => c.EXTR_MM,        4, "!EXTR_MM",    OSAI_ReadPriority.LOW);
 
 
                 model.CreateVariable(c => c.AXIS_POSITION, OSAI_ReadPriority.HIGH, GetAxisPositionAsync);

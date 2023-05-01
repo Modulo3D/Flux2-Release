@@ -61,18 +61,6 @@ namespace Flux.ViewModels
         {
             foreach (var condition in base.FindConditions())
                 yield return condition;
-
-            var can_update_nfc = Material
-                .WhenAnyValue(m => m.State)
-                .Select(s =>
-                {
-                    if (s.Inserted && !s.Known)
-                        return false;
-                    if (s.Loaded || s.Locked)
-                        return false;
-                    return true;
-                });
-
             yield return (LoadFilamentCondition, new FilamentOperationConditionAttribute());
         }
 
