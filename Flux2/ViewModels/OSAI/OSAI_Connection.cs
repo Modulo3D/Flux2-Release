@@ -18,6 +18,7 @@ using System.Xml.Linq;
 using GreenSuperGreen.Queues;
 using static System.Runtime.InteropServices.JavaScript.JSType;
 using System.Reflection.Metadata;
+using System.Reactive.Disposables;
 
 namespace Flux.ViewModels
 {
@@ -131,8 +132,35 @@ namespace Flux.ViewModels
         public OSAI_Connection(FluxViewModel flux, OSAI_ConnectionProvider connection_provider) : base(connection_provider)
         {
             Flux = flux;
-        }
 
+            var values = ((OSAI_RequestPriority[])Enum.GetValues(typeof(OSAI_RequestPriority)))
+                .OrderByDescending(e => (ushort)e);
+            Requests = new PriorityQueueNotifierUC<OSAI_RequestPriority, IOSAI_Request>(values);
+
+            DisposableThread.Start(TryDequeueAsync, TimeSpan.Zero)
+                .DisposeWith(Disposables);
+        }
+        private async Task TryDequeueAsync()
+        {
+            if (!Client.HasValue)
+                return;
+            await Requests.EnqueuedItemsAsync();
+            while (Requests.TryDequeu(out var rrf_request))
+            {
+                try
+                {
+                    using var request_cts = CancellationTokenSource.CreateLinkedTokenSource(rrf_request.Cancellation);
+                    if (rrf_request.Timeout > TimeSpan.Zero)
+                        request_cts.CancelAfter(rrf_request.Timeout);
+
+                    await rrf_request.TrySendAsync(Client.Value, request_cts.Token);
+                }
+                catch
+                {
+                    rrf_request.TrySetCanceled();
+                }
+            }
+        }
         public async Task<OSAI_Response<TData>> TryEnqueueRequestAsync<TData>(
             Func<OPENcontrolPortTypeClient, CancellationToken, Task<TData>> request, 
             Func<TData, OSAI_Err> retval, 
