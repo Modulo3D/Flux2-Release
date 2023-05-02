@@ -207,13 +207,13 @@ namespace Flux.ViewModels
                 .GroupBy(v => v.Priority)
                 .ToDictionary(group => group.Key, group => group);
 
-            DisposableThread.Start(UpdateBuffersAsync, TimeSpan.FromMilliseconds(25));
+            DisposableThread.Start(UpdateBuffersAsync, TimeSpan.FromMilliseconds(100));
 
-            AddModelReader(plc_variables, OSAI_ReadPriority.LOW, TimeSpan.FromMilliseconds(25));
-            AddModelReader(plc_variables, OSAI_ReadPriority.HIGH, TimeSpan.FromMilliseconds(50));
-            AddModelReader(plc_variables, OSAI_ReadPriority.MEDIUM, TimeSpan.FromMilliseconds(100));
-            AddModelReader(plc_variables, OSAI_ReadPriority.ULTRALOW, TimeSpan.FromMilliseconds(200));
-            AddModelReader(plc_variables, OSAI_ReadPriority.ULTRAHIGH, TimeSpan.FromMilliseconds(400));
+            AddModelReader(plc_variables, OSAI_ReadPriority.LOW, TimeSpan.FromMilliseconds(1000));
+            AddModelReader(plc_variables, OSAI_ReadPriority.HIGH, TimeSpan.FromMilliseconds(500));
+            AddModelReader(plc_variables, OSAI_ReadPriority.MEDIUM, TimeSpan.FromMilliseconds(800));
+            AddModelReader(plc_variables, OSAI_ReadPriority.ULTRALOW, TimeSpan.FromMilliseconds(1500));
+            AddModelReader(plc_variables, OSAI_ReadPriority.ULTRAHIGH, TimeSpan.FromMilliseconds(200));
 
             var has_full_variables_read = MemoryReaders.Connect()
                 .TrueForAll(f => f.WhenAnyValue(f => f.HasMemoryRead), r => r);
@@ -279,7 +279,7 @@ namespace Flux.ViewModels
             return ConnectionProvider.Connection.TryEnqueueRequestAsync(
                 (c, ct) => c.ReadVarDoubleAsync(request),
                 r => r.Value, r => new(r.retval, r.ErrClass, r.ErrNum),
-                OSAI_RequestPriority.Immediate, double_buffer_cts.Token);
+                OSAI_RequestPriority.Medium, double_buffer_cts.Token);
         }
         private Task<Optional<unsignedshortarray>> UpdateWordBufferAsync(ReadVarWordRequest request)
         {
@@ -287,7 +287,7 @@ namespace Flux.ViewModels
             return ConnectionProvider.Connection.TryEnqueueRequestAsync(
                 (c, ct) => c.ReadVarWordAsync(request),
                 r => r.Value, r => new(r.retval, r.ErrClass, r.ErrNum),
-                OSAI_RequestPriority.Immediate, word_buffer_cts.Token);
+                OSAI_RequestPriority.Medium, word_buffer_cts.Token);
         }
         public static async Task UpdateVariablesAsync(IEnumerable<IOSAI_AsyncVariable> variables)
         {
