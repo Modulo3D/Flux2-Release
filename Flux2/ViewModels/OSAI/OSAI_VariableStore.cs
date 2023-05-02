@@ -114,7 +114,7 @@ namespace Flux.ViewModels
                 model.CreateVariable(c => c.MCODE_EVENT, OSAI_ReadPriority.HIGH, GetMCodeEventsAsync);
                 model.CreateVariable(c => c.EXTRUSIONS, OSAI_ReadPriority.HIGH, GetExtrusionSetQueueAsync);
                 model.CreateVariable(c => c.PROCESS_MODE, OSAI_ReadPriority.ULTRAHIGH, GetProcessModeAsync, SetProcessModeAsync);
-                model.CreateVariable(c => c.BOOT_MODE, OSAI_ReadPriority.ULTRAHIGH, _ => Task.FromResult(Optional.Some(Unit.Default)), SetBootModeAsync);
+                model.CreateVariable(c => c.BOOT_MODE, OSAI_ReadPriority.ULTRAHIGH, (_, _) => Task.FromResult(Optional.Some(Unit.Default)), SetBootModeAsync);
                 model.CreateVariable(c => c.PROGRESS, OSAI_ReadPriority.ULTRAHIGH, GetProgressAsync);
 
                 // GW VARIABLES                                                                                                                                                                                                                                                                              
@@ -203,230 +203,157 @@ namespace Flux.ViewModels
             }
         }
 
-        private static async Task<Optional<FLUX_AxisPosition>> GetAxisPositionAsync(OSAI_ConnectionProvider connection_provider)
+        private static async Task<Optional<FLUX_AxisPosition>> GetAxisPositionAsync(OSAI_ConnectionProvider connection_provider, CancellationToken ct)
         {
             var connection = connection_provider.Connection;
-            var axis_position = await connection.GetAxesPositionAsync(OSAI_AxisPositionSelect.Absolute);
+            var axis_position = await connection.GetAxesPositionAsync(OSAI_AxisPositionSelect.Absolute, ct);
             if (!axis_position.HasValue)
                 return default;
 
             return axis_position;
         }
-        private static async Task<Optional<FluxJobRecoveryPreview>> GetJobRecoveryPreviewAsync(OSAI_ConnectionProvider connection_provider)
+        private static async Task<Optional<FluxJobRecoveryPreview>> GetJobRecoveryPreviewAsync(OSAI_ConnectionProvider connection_provider, CancellationToken ct)
         {
             var connection = connection_provider.Connection;
-            using var queue_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            var queue_files = await connection.ListFilesAsync(c => c.QueuePath, queue_ctk.Token);
+            var queue_files = await connection.ListFilesAsync(c => c.QueuePath, ct);
             if (!queue_files.HasValue)
                 return default;
 
             return queue_files.Value.GetJobRecoveryPreview();
         }
-        private static async Task<Optional<MCodeStorage>> GetMCodeStorageAsync(OSAI_ConnectionProvider connection_provider)
+        private static async Task<Optional<MCodeStorage>> GetMCodeStorageAsync(OSAI_ConnectionProvider connection_provider, CancellationToken ct)
         {
             var connection = connection_provider.Connection;
-            using var queue_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            var queue_files = await connection.ListFilesAsync(c => c.StoragePath, queue_ctk.Token);
+            var queue_files = await connection.ListFilesAsync(c => c.StoragePath, ct);
             if (!queue_files.HasValue)
                 return default;
 
             return queue_files.Value.GetMCodeStorage();
         }
-        private static async Task<Optional<FluxJobQueuePreview>> GetJobQueuePreviewAsync(OSAI_ConnectionProvider connection_provider)
+        private static async Task<Optional<FluxJobQueuePreview>> GetJobQueuePreviewAsync(OSAI_ConnectionProvider connection_provider, CancellationToken ct)
         {
             var connection = connection_provider.Connection;
-            using var queue_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-
-            var queue_files = await connection.ListFilesAsync(c => c.QueuePath, queue_ctk.Token);
+            var queue_files = await connection.ListFilesAsync(c => c.QueuePath, ct);
             if (!queue_files.HasValue)
                 return default;
 
             return queue_files.Value.GetJobQueuePreview();
         }
-        private static async Task<Optional<ExtrusionSetQueuePreview<ExtrusionMM>>> GetExtrusionSetQueueAsync(OSAI_ConnectionProvider connection_provider)
+        private static async Task<Optional<ExtrusionSetQueuePreview<ExtrusionMM>>> GetExtrusionSetQueueAsync(OSAI_ConnectionProvider connection_provider, CancellationToken ct)
         {
             var connection = connection_provider.Connection;
-            using var queue_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            var queue_files = await connection.ListFilesAsync(c => c.ExtrusionEventPath, queue_ctk.Token);
+            var queue_files = await connection.ListFilesAsync(c => c.ExtrusionEventPath, ct);
             if (!queue_files.HasValue)
                 return default;
 
             return queue_files.Value.GetExtrusionSetQueue();
         }
-        private static async Task<Optional<MCodeEventStoragePreview>> GetMCodeEventsAsync(OSAI_ConnectionProvider connection_provider)
+        private static async Task<Optional<MCodeEventStoragePreview>> GetMCodeEventsAsync(OSAI_ConnectionProvider connection_provider, CancellationToken ct)
         {
             var connection = connection_provider.Connection;
-            using var queue_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            var queue_files = await connection.ListFilesAsync(c => c.JobEventPath, queue_ctk.Token);
+            var queue_files = await connection.ListFilesAsync(c => c.JobEventPath, ct);
             if (!queue_files.HasValue)
                 return default;
 
             return queue_files.Value.GetMCodeEvents();
         }
-        private static async Task<Optional<MCodeProgress>> GetProgressAsync(OSAI_ConnectionProvider connection_provider)
+        private static async Task<Optional<MCodeProgress>> GetProgressAsync(OSAI_ConnectionProvider connection_provider, CancellationToken ct)
         {
-            var client = connection_provider.Connection.Client;
-            if (!client.HasValue)
+            var get_pp_response = await connection_provider.Connection.TryEnqueueRequestAsync(
+                (c, ct) => c.GetActivePartProgramAsync(new GetActivePartProgramRequest(OSAI_Connection.ProcessNumber)),
+                r => r.Main, r => new(r.retval, r.ErrClass, r.ErrNum), OSAI_RequestPriority.Immediate, ct);
+
+            if (!get_pp_response.HasValue)
                 return default;
 
-            var get_pp_request = new GetActivePartProgramRequest(OSAI_Connection.ProcessNumber);
-            var get_pp_response = await client.Value.GetActivePartProgramAsync(get_pp_request);
-            if (!OSAI_Connection.ProcessResponse(
-                get_pp_response.retval,
-                get_pp_response.ErrClass,
-                get_pp_response.ErrNum))
+            var get_blk_num_response = await connection_provider.Connection.TryEnqueueRequestAsync(
+                (c, ct) => c.GetBlkNumAsync(OSAI_Connection.ProcessNumber),
+                r => r.Body, r => new(r.Body.retval, r.Body.ErrClass, r.Body.ErrNum), OSAI_RequestPriority.Immediate, ct);
+
+            if (!get_blk_num_response.HasValue)
                 return default;
 
-            var get_blk_num_response = await client.Value.GetBlkNumAsync(OSAI_Connection.ProcessNumber);
-            if (!OSAI_Connection.ProcessResponse(
-                get_blk_num_response.Body.retval,
-                get_blk_num_response.Body.ErrClass,
-                get_blk_num_response.Body.ErrNum))
-                return default;
-
-            var filename = Path.GetFileNameWithoutExtension(get_pp_response.Main);
+            var filename = Path.GetFileNameWithoutExtension(get_pp_response.Value);
             if (!MCodeKey.TryParse(filename, out var mcode_key))
                 return default(MCodeProgress);
 
-            var block_nr = get_blk_num_response.Body.GetBlkNum.MainActBlk;
+            var block_nr = get_blk_num_response.Value.GetBlkNum.MainActBlk;
             var block_number = new BlockNumber(block_nr, BlockType.Line);
             
             return new MCodeProgress(mcode_key, block_number);
         }
 
-        private static async Task<Optional<OSAI_BootPhase>> GetBootPhaseAsync(OSAI_ConnectionProvider connection_provider)
+        private static async Task<Optional<OSAI_BootPhase>> GetBootPhaseAsync(OSAI_ConnectionProvider connection_provider, CancellationToken ct)
         {
-            try
-            {
-                var client = connection_provider.Connection.Client;
-                if (!client.HasValue)
-                    return default;
+            var boot_phase_response = await connection_provider.Connection.TryEnqueueRequestAsync(
+                (c, ct) => c.BootPhaseEnquiryAsync(new BootPhaseEnquiryRequest()),
+                r => r.Phase, r => new(r.retval, r.ErrClass, r.ErrNum), OSAI_RequestPriority.Immediate, ct);
 
-                var boot_phase_request = new BootPhaseEnquiryRequest();
-                var boot_phase_response = await client.Value.BootPhaseEnquiryAsync(boot_phase_request);
+            if (!boot_phase_response.HasValue)
+                return default;
 
-                if (!OSAI_Connection.ProcessResponse(
-                    boot_phase_response.retval,
-                    boot_phase_response.ErrClass,
-                    boot_phase_response.ErrNum))
-                    return default;
-
-                return (OSAI_BootPhase)boot_phase_response.Phase;
-            }
-            catch { return default; }
+            return (OSAI_BootPhase)boot_phase_response.Value;
         }
-        private static async Task<bool> SetBootModeAsync(OSAI_ConnectionProvider connection_provider, OSAI_BootMode boot_mode)
+        private static async Task<bool> SetBootModeAsync(OSAI_ConnectionProvider connection_provider, OSAI_BootMode boot_mode, CancellationToken ct)
         {
-            try
-            {
-                var client = connection_provider.Connection.Client;
-                if (!client.HasValue)
-                    return default;
+            var boot_mode_response = await connection_provider.Connection.TryEnqueueRequestAsync(
+                (c, ct) => c.BootModeAsync(new BootModeRequest((ushort)boot_mode)),
+                r => new(r.retval, r.ErrClass, r.ErrNum), OSAI_RequestPriority.Immediate, ct);
 
-                var boot_mode_request = new BootModeRequest((ushort)boot_mode);
-                var boot_mode_response = await client.Value.BootModeAsync(boot_mode_request);
-
-                if (!OSAI_Connection.ProcessResponse(
-                    boot_mode_response.retval,
-                    boot_mode_response.ErrClass,
-                    boot_mode_response.ErrNum))
-                    return false;
-
-                return true;
-            }
-            catch { return false; }
+            return boot_mode_response.Ok;
         }
-        private static async Task<Optional<OSAI_ProcessMode>> GetProcessModeAsync(OSAI_ConnectionProvider connection_provider)
+        private static async Task<Optional<OSAI_ProcessMode>> GetProcessModeAsync(OSAI_ConnectionProvider connection_provider, CancellationToken ct)
         {
-            try
-            {
-                var client = connection_provider.Connection.Client;
-                if (!client.HasValue)
-                    return default;
+            var process_status_response = await connection_provider.Connection.TryEnqueueRequestAsync(
+                (c, ct) => c.GetProcessStatusAsync(OSAI_Connection.ProcessNumber),
+                r => r.Body, r => new(r.Body.retval, r.Body.ErrClass, r.Body.ErrNum), OSAI_RequestPriority.Immediate, ct);
 
-                var process_status_response = await client.Value.GetProcessStatusAsync(OSAI_Connection.ProcessNumber);
+            if (!process_status_response.HasValue)
+                return default;
 
-                if (!OSAI_Connection.ProcessResponse(
-                    process_status_response.Body.retval,
-                    process_status_response.Body.ErrClass,
-                    process_status_response.Body.ErrNum))
-                    return default;
-
-                return (OSAI_ProcessMode)process_status_response.Body.ProcStat.Mode;
-            }
-            catch { return default; }
+            return (OSAI_ProcessMode)process_status_response.Value.ProcStat.Mode;
         }
-        private static async Task<Optional<FLUX_ProcessStatus>> GetProcessStatusAsync(OSAI_ConnectionProvider connection_provider)
+        private static async Task<Optional<FLUX_ProcessStatus>> GetProcessStatusAsync(OSAI_ConnectionProvider connection_provider, CancellationToken ct)
         {
-            try
+            var process_status_response = await connection_provider.Connection.TryEnqueueRequestAsync(
+                (c, ct) => c.GetProcessStatusAsync(OSAI_Connection.ProcessNumber),
+                r => r.Body, r => new(r.Body.retval, r.Body.ErrClass, r.Body.ErrNum), OSAI_RequestPriority.Immediate, ct);
+
+            if (!process_status_response.HasValue)
+                return default;
+
+            var status = (OSAI_ProcessStatus)process_status_response.Value.ProcStat.Status;
+            return status switch
             {
-                var client = connection_provider.Connection.Client;
-                if (!client.HasValue)
-                    return default;
-
-                var process_status_response = await client.Value.GetProcessStatusAsync(OSAI_Connection.ProcessNumber);
-
-                if (!OSAI_Connection.ProcessResponse(
-                    process_status_response.Body.retval,
-                    process_status_response.Body.ErrClass,
-                    process_status_response.Body.ErrNum))
-                    return default;
-
-                var status = (OSAI_ProcessStatus)process_status_response.Body.ProcStat.Status;
-                switch (status)
-                {
-                    case OSAI_ProcessStatus.NONE:
-                        return FLUX_ProcessStatus.NONE;
-
-                    case OSAI_ProcessStatus.IDLE:
-                        return FLUX_ProcessStatus.IDLE;
-
-                    case OSAI_ProcessStatus.CYCLE:
-                    case OSAI_ProcessStatus.HOLDA:
-                    case OSAI_ProcessStatus.RUNH:
-                    case OSAI_ProcessStatus.HRUN:
-                    case OSAI_ProcessStatus.RESET:
-                    case OSAI_ProcessStatus.WAIT:
-                    case OSAI_ProcessStatus.INPUT:
-                        return FLUX_ProcessStatus.CYCLE;
-
-                    case OSAI_ProcessStatus.ERRO:
-                        return FLUX_ProcessStatus.ERROR;
-
-                    case OSAI_ProcessStatus.EMERG:
-                        return FLUX_ProcessStatus.EMERG;
-
-                    default:
-                        return FLUX_ProcessStatus.NONE;
-                }
-            }
-            catch { return default; }
+                OSAI_ProcessStatus.NONE => FLUX_ProcessStatus.NONE,
+                OSAI_ProcessStatus.IDLE => FLUX_ProcessStatus.IDLE,
+                OSAI_ProcessStatus.CYCLE or 
+                OSAI_ProcessStatus.HOLDA or
+                OSAI_ProcessStatus.RUNH or
+                OSAI_ProcessStatus.HRUN or 
+                OSAI_ProcessStatus.RESET or 
+                OSAI_ProcessStatus.WAIT or 
+                OSAI_ProcessStatus.INPUT => FLUX_ProcessStatus.CYCLE,
+                OSAI_ProcessStatus.ERRO => FLUX_ProcessStatus.ERROR,
+                OSAI_ProcessStatus.EMERG => FLUX_ProcessStatus.EMERG,
+                _ => FLUX_ProcessStatus.NONE,
+            };
         }
-        private static async Task<bool> SetProcessModeAsync(OSAI_ConnectionProvider connection_provider, OSAI_ProcessMode process_mode)
+        private static async Task<bool> SetProcessModeAsync(OSAI_ConnectionProvider connection_provider, OSAI_ProcessMode process_mode, CancellationToken ct)
         {
-            try
-            {
-                var client = connection_provider.Connection.Client;
-                if (!client.HasValue)
-                    return default;
+            var set_process_mode_response = await connection_provider.Connection.TryEnqueueRequestAsync(
+                (c, ct) => c.SetProcessModeAsync(new SetProcessModeRequest(OSAI_Connection.ProcessNumber, (ushort)process_mode)),
+                r => new(r.retval, r.ErrClass, r.ErrNum), OSAI_RequestPriority.Immediate, ct);
 
-                var set_process_mode_request = new SetProcessModeRequest(OSAI_Connection.ProcessNumber, (ushort)process_mode);
-                var set_process_mode_response = await client.Value.SetProcessModeAsync(set_process_mode_request);
+            if (!set_process_mode_response.Ok)
+                return false;
 
-                if (!OSAI_Connection.ProcessResponse(
-                    set_process_mode_response.retval,
-                    set_process_mode_response.ErrClass,
-                    set_process_mode_response.ErrNum))
-                    return false;
-
-                return await connection_provider.Connection.WaitProcessModeAsync(
-                    m => m == process_mode,
-                    TimeSpan.FromSeconds(0),
-                    TimeSpan.FromSeconds(0.1),
-                    TimeSpan.FromSeconds(0.2),
-                    TimeSpan.FromSeconds(1));
-            }
-            catch { return false; }
+            return await connection_provider.Connection.WaitProcessModeAsync(
+                m => m == process_mode,
+                TimeSpan.FromSeconds(0),
+                TimeSpan.FromSeconds(0.1),
+                TimeSpan.FromSeconds(0.2),
+                TimeSpan.FromSeconds(1));
         }
     }
 }

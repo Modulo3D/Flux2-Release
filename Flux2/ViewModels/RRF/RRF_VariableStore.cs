@@ -84,7 +84,7 @@ namespace Flux.ViewModels
                 Axes.CreateVariable(c => c.AXIS_POSITION, (c, a) => a.GetAxisPosition());
                 Axes.CreateArray(c => c.ENABLE_DRIVERS, (c, m) => m.IsEnabledDriver(), EnableDriverAsync);
 
-                Endstops.CreateArray(c => c.AXIS_ENDSTOP, (c, e) => e.Triggered, (c, e, u) => Task.FromResult(true));
+                Endstops.CreateArray(c => c.AXIS_ENDSTOP, (c, e) => e.Triggered, (c, e, u, ct) => Task.FromResult(true));
 
                 Tools.CreateVariable(c => c.TOOL_NUM, (c, t) => (ushort)t.Count);
                 Queue.CreateVariable(c => c.QUEUE, (c, m) => m.GetJobQueuePreview());
@@ -125,35 +125,30 @@ namespace Flux.ViewModels
             }
         }
 
-        protected static async Task<bool> SetPlateTemperatureAsync(RRF_ConnectionProvider connection_provider, double temperature, VariableUnit unit)
+        protected static async Task<bool> SetPlateTemperatureAsync(RRF_ConnectionProvider connection_provider, double temperature, VariableUnit unit, CancellationToken ct)
         {
             var connection = connection_provider.Connection;
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-            return await connection.PostGCodeAsync(new[] { $"M140 P{unit.Index} S{temperature}" }, cts.Token);
+            return await connection.PostGCodeAsync(new[] { $"M140 P{unit.Index} S{temperature}" }, ct);
         }
-        protected static async Task<bool> SetChamberTemperatureAsync(RRF_ConnectionProvider connection_provider, double temperature, VariableUnit unit)
+        protected static async Task<bool> SetChamberTemperatureAsync(RRF_ConnectionProvider connection_provider, double temperature, VariableUnit unit, CancellationToken ct)
         {
             var connection = connection_provider.Connection;
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-            return await connection.PostGCodeAsync(new[] { $"M141 P{unit.Index} S{temperature}" }, cts.Token);
+            return await connection.PostGCodeAsync(new[] { $"M141 P{unit.Index} S{temperature}" }, ct);
         }
-        protected static async Task<bool> EnableDriverAsync(RRF_ConnectionProvider connection_provider, bool enable, VariableUnit unit)
+        protected static async Task<bool> EnableDriverAsync(RRF_ConnectionProvider connection_provider, bool enable, VariableUnit unit, CancellationToken ct)
         {
             var connection = connection_provider.Connection;
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-            return await connection.PostGCodeAsync(new[] { $"{(enable ? "M17" : "M18")} {unit.Alias}" }, cts.Token);
+            return await connection.PostGCodeAsync(new[] { $"{(enable ? "M17" : "M18")} {unit.Alias}" }, ct);
         }
-        protected static async Task<bool> SetToolTemperatureAsync(RRF_ConnectionProvider connection_provider, double temperature, VariableUnit unit)
+        protected static async Task<bool> SetToolTemperatureAsync(RRF_ConnectionProvider connection_provider, double temperature, VariableUnit unit, CancellationToken ct)
         {
             var connection = connection_provider.Connection;
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-            return await connection.PostGCodeAsync(new[] { $"M104 T{unit.Index} S{temperature}" }, cts.Token);
+            return await connection.PostGCodeAsync(new[] { $"M104 T{unit.Index} S{temperature}" }, ct);
         }
-        protected static async Task<bool> WriteGpOutAsync(RRF_ConnectionProvider connection_provider, bool pwm, VariableUnit unit)
+        protected static async Task<bool> WriteGpOutAsync(RRF_ConnectionProvider connection_provider, bool pwm, VariableUnit unit, CancellationToken ct)
         {
             var connection = connection_provider.Connection;
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-            return await connection.PostGCodeAsync(new[] { $"M42 P{unit.Address} S{(pwm ? 1 : 0)}" }, cts.Token);
+            return await connection.PostGCodeAsync(new[] { $"M42 P{unit.Address} S{(pwm ? 1 : 0)}" }, ct);
         }
     }
 

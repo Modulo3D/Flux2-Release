@@ -344,35 +344,33 @@ namespace Flux.ViewModels
         }
 
         // CONTROL
-        public override async Task<bool> StopAsync()
+        public override async Task<bool> StopAsync(CancellationToken ct)
         {
             using var put_reset_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             return await PostGCodeAsync(new[]
             {
                 "M108", "M25",
                 "set global.iterator = false", "M0"
-            }, put_reset_cts.Token);
+            }, ct);
         }
-        public override async Task<bool> CancelAsync()
+        public override async Task<bool> CancelAsync(CancellationToken ct)
         {
-            using var put_reset_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             return await PostGCodeAsync(new GCodeString[]
             {
                 "M108", "M25",
                 "set global.iterator = false", "M0",
                 GetExecuteMacroGCode(InnerQueuePath, "cancel.g"),
                 GetExecuteMacroGCode(MacroPath, "end_print")
-            }, put_reset_cts.Token);
+            }, ct);
         }
-        public override async Task<bool> PauseAsync()
+        public override async Task<bool> PauseAsync(CancellationToken ct)
         {
-            using var put_reset_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             return await PostGCodeAsync(new[]
             {
                 "M108", "M25",
                 "set global.iterator = false", "M0",
                 GetExecuteMacroGCode(InnerQueuePath, "pause.g")
-            }, put_reset_cts.Token);
+            }, ct);
         }
         public override async Task<bool> ExecuteParamacroAsync(GCodeString paramacro, CancellationToken put_ct, bool can_cancel = false)
         {

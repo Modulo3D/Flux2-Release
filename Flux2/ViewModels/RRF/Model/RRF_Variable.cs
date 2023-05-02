@@ -37,11 +37,11 @@ namespace Flux.ViewModels
             Func<RRF_MemoryBuffer, Task<Optional<TModel>>> read_model,
             Func<RRF_ObjectModel, IObservable<Optional<TModel>>> get_model,
             Func<RRF_ConnectionProvider, TModel, Optional<TRData>> get_data,
-            Func<RRF_ConnectionProvider, TWData, Task<bool>> write_data = default,
+            Func<RRF_ConnectionProvider, TWData, CancellationToken, Task<bool>> write_data = default,
             VariableUnit unit = default) :
             base(connection_provider, name,
                 observe_func: c => observe_func(c, get_model, get_data),
-                read_func: c => read_variable(c, read_model, s => get_data(c, s)),
+                read_func: (c, ct) => read_variable(c, read_model, s => get_data(c, s)),
                 write_func: write_data,
                 unit)
         {
@@ -53,11 +53,11 @@ namespace Flux.ViewModels
             Func<RRF_MemoryBuffer, Task<Optional<TModel>>> read_model,
             Func<RRF_ObjectModel, IObservable<Optional<TModel>>> get_model,
             Func<RRF_ConnectionProvider, TModel, Task<Optional<TRData>>> get_data,
-            Func<RRF_ConnectionProvider, TWData, Task<bool>> write_data = default,
+            Func<RRF_ConnectionProvider, TWData, CancellationToken, Task<bool>> write_data = default,
             VariableUnit unit = default) :
             base(connection_provider, name,
                 observe_func: c => observe_func(c, get_model, get_data),
-                read_func: c => read_variable(c, read_model, s => get_data(c, s)),
+                read_func: (c, ct) => read_variable(c, read_model, s => get_data(c, s)),
                 write_func: write_data,
                 unit)
         {
@@ -120,8 +120,8 @@ namespace Flux.ViewModels
             Func<object, TData> convert_data = default)
             : base(connection_provider, name,
                 observe_func: c => observe_func(c, name.ToLower(), convert_data),
-                read_func: c => read_variable(c, name.ToLower(), convert_data),
-                write_func: (c, v) => write_variable(c, name.ToLower(), v, stored))
+                read_func: (c, ct) => read_variable(c, name.ToLower(), ct, convert_data),
+                write_func: (c, v, ct) => write_variable(c, name.ToLower(), v, stored, ct))
         {
             Stored = stored;
             Variable = name.ToLower();
@@ -148,21 +148,19 @@ namespace Flux.ViewModels
             return connection_provider.MemoryBuffer.ObserveGlobalModel(m => get_data(m, variable, convert_data));
         }
 
-        private static async Task<Optional<TData>> read_variable(RRF_ConnectionProvider connection_provider, string variable, Func<object, TData> convert_data = default)
+        private static async Task<Optional<TData>> read_variable(RRF_ConnectionProvider connection_provider, string variable, CancellationToken ct, Func<object, TData> convert_data = default)
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            var global = await connection_provider.MemoryBuffer.GetModelDataAsync(m => m.Global, cts.Token);
+            var global = await connection_provider.MemoryBuffer.GetModelDataAsync(m => m.Global, ct);
             if (!global.HasValue)
                 return default;
             return get_data(global.Value, variable, convert_data);
         }
 
-        private static async Task<bool> write_variable(RRF_ConnectionProvider connection_provider, string variable, TData v, bool stored)
+        private static async Task<bool> write_variable(RRF_ConnectionProvider connection_provider, string variable, TData v, bool stored, CancellationToken ct)
         {
             var connection = connection_provider.Connection;
             var s_value = sanitize_value(v);
-            using var write_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            if (!await connection.PostGCodeAsync(new[] { $"set global.{variable} = {s_value}" }, write_cts.Token))
+            if (!await connection.PostGCodeAsync(new[] { $"set global.{variable} = {s_value}" }, ct))
             {
                 connection_provider.Flux.Messages.LogMessage($"Impossibile scrivere la variabile {variable}", "Errore durante l'esecuzione del gcode", MessageLevel.ERROR, 0);
                 return false;

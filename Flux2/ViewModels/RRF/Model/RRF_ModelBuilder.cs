@@ -63,7 +63,7 @@ namespace Flux.ViewModels
             public void CreateVariable<TRData, TWData>(
                 Expression<Func<RRF_VariableStoreBase, IFLUX_Variable<TRData, TWData>>> variable_expression,
                 Func<RRF_ConnectionProvider, TModel, Optional<TRData>> get_data,
-                Func<RRF_ConnectionProvider, TWData, Task<bool>> write_data = default)
+                Func<RRF_ConnectionProvider, TWData, CancellationToken, Task<bool>> write_data = default)
             {
                 
                 var variable_name = string.Join('/', variable_expression.GetMembersName());
@@ -74,7 +74,7 @@ namespace Flux.ViewModels
             public void CreateVariable<TRData, TWData>(
                 Expression<Func<RRF_VariableStoreBase, IFLUX_Variable<TRData, TWData>>> variable_expression,
                 Func<RRF_ConnectionProvider, TModel, Task<Optional<TRData>>> get_data,
-                Func<RRF_ConnectionProvider, TWData, Task<bool>> write_data = default)
+                Func<RRF_ConnectionProvider, TWData, CancellationToken, Task<bool>> write_data = default)
             {
                 
                 var variable_name = string.Join('/', variable_expression.GetMembersName());
@@ -105,7 +105,7 @@ namespace Flux.ViewModels
             public void CreateVariable<TRData, TWData>(
                 Expression<Func<RRF_VariableStoreBase, Optional<IFLUX_Variable<TRData, TWData>>>> variable_expression,
                 Func<RRF_ConnectionProvider, TModel, Optional<TRData>> get_data,
-                Func<RRF_ConnectionProvider, TWData, Task<bool>> write_data = default)
+                Func<RRF_ConnectionProvider, TWData, CancellationToken, Task<bool>> write_data = default)
             {
                 
                 var variable_name = string.Join('/', variable_expression.GetMembersName());
@@ -116,7 +116,7 @@ namespace Flux.ViewModels
             public void CreateVariable<TRData, TWData>(
                 Expression<Func<RRF_VariableStoreBase, Optional<IFLUX_Variable<TRData, TWData>>>> variable_expression,
                 Func<RRF_ConnectionProvider, TModel, Task<Optional<TRData>>> get_data,
-                Func<RRF_ConnectionProvider, TWData, Task<bool>> write_data = default)
+                Func<RRF_ConnectionProvider, TWData, CancellationToken, Task<bool>> write_data = default)
             {
                 
                 var variable_name = string.Join('/', variable_expression.GetMembersName());
@@ -200,15 +200,15 @@ namespace Flux.ViewModels
                 public void CreateArray<TRData, TWData>(
                     Expression<Func<RRF_VariableStoreBase, IFLUX_Array<TRData, TWData>>> array_expression,
                     Func<RRF_ConnectionProvider, TList, Optional<TRData>> get_data,
-                    Func<RRF_ConnectionProvider, TWData, VariableUnit, Task<bool>> write_data,
+                    Func<RRF_ConnectionProvider, TWData, VariableUnit, CancellationToken, Task<bool>> write_data,
                     params VariableRange[] variables_range)
                 {
                     
                     var array_name = string.Join('/', array_expression.GetMembersName());
                     Optional<RRF_VariableObjectModel<TModel, TRData, TWData>> get_variable(VariableUnit unit)
                     {
-                        Task<bool> write_unit_data(RRF_ConnectionProvider c, TWData d) => write_data(c, d, unit);
                         Optional<TList> get_value(List<TList> list) => list.ElementAtOrDefault(unit.Address);
+                        Task<bool> write_unit_data(RRF_ConnectionProvider c, TWData d, CancellationToken ct) => write_data(c, d, unit, ct);
                         Optional<TRData> get_variable(RRF_ConnectionProvider c, TModel m) => GetVariables(m).Convert(get_value).Convert(m => get_data(c, m));
                         return new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, $"{array_name} {unit.Alias}", ReadModel, GetModel, get_variable, write_unit_data, unit);
                     }
@@ -226,15 +226,15 @@ namespace Flux.ViewModels
                 public void CreateArray<TRData, TWData>(
                     Expression<Func<RRF_VariableStoreBase, Optional<IFLUX_Array<TRData, TWData>>>> array_expression,
                     Func<RRF_ConnectionProvider, TList, Optional<TRData>> get_data,
-                    Func<RRF_ConnectionProvider, TWData, VariableUnit, Task<bool>> write_data,
+                    Func<RRF_ConnectionProvider, TWData, VariableUnit, CancellationToken, Task<bool>> write_data,
                     params VariableRange[] variables_range)
                 {
                     
                     var array_name = string.Join('/', array_expression.GetMembersName());
                     Optional<RRF_VariableObjectModel<TModel, TRData, TWData>> get_variable(VariableUnit unit)
                     {
-                        Task<bool> write_unit_data(RRF_ConnectionProvider c, TWData d) => write_data(c, d, unit);
                         Optional<TList> get_value(List<TList> list) => list.ElementAtOrDefault(unit.Address);
+                        Task<bool> write_unit_data(RRF_ConnectionProvider c, TWData d, CancellationToken ct) => write_data(c, d, unit, ct);
                         Optional<TRData> get_variable(RRF_ConnectionProvider c, TModel m) => GetVariables(m).Convert(get_value).Convert(m => get_data(c, m));
                         return new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, $"{array_name} {unit.Alias}", ReadModel, GetModel, get_variable, write_unit_data, unit);
                     }
@@ -278,15 +278,15 @@ namespace Flux.ViewModels
                 public void CreateVariable<TRData, TWData>(
                     Expression<Func<RRF_VariableStoreBase, Optional<IFLUX_Variable<TRData, TWData>>>> variable_expression,
                     Func<RRF_ConnectionProvider, TList, Optional<TRData>> get_data,
-                    Func<RRF_ConnectionProvider, TWData, VariableUnit, Task<bool>> write_data,
+                    Func<RRF_ConnectionProvider, TWData, VariableUnit, CancellationToken, Task<bool>> write_data,
                     VariableAlias alias)
                 {
                     
                     var variable_name = string.Join('/', variable_expression.GetMembersName());
                     Optional<RRF_VariableObjectModel<TModel, TRData, TWData>> get_variable(VariableUnit unit)
                     {
-                        Task<bool> write_unit_data(RRF_ConnectionProvider c, TWData d) => write_data(c, d, unit);
                         Optional<TList> get_value(List<TList> list) => list.ElementAtOrDefault(unit.Address);
+                        Task<bool> write_unit_data(RRF_ConnectionProvider c, TWData d, CancellationToken ct) => write_data(c, d, unit, ct);
                         Optional<TRData> get_variable(RRF_ConnectionProvider c, TModel m) => GetVariables(m).Convert(get_value).Convert(m => get_data(c, m));
                         return new RRF_VariableObjectModel<TModel, TRData, TWData>(ConnectionProvider, variable_name, ReadModel, GetModel, get_variable, write_unit_data, unit);
                     }

@@ -117,11 +117,14 @@ namespace Flux.ViewModels
 
                     // RESETS PLC
                     case OSAI_ConnectionPhase.RESET_PRINTER:
-                        var reset_plc = await Connection.StopAsync();
-                        if (reset_plc)
-                            ConnectionPhase = OSAI_ConnectionPhase.SELECT_PROCESS_MODE;
-                        else
-                            ConnectionPhase = OSAI_ConnectionPhase.ENABLE_AUX_ON;
+                        using (var stop_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5)))
+                        {
+                            var reset_plc = await Connection.StopAsync(stop_cts.Token);
+                            if (reset_plc)
+                                ConnectionPhase = OSAI_ConnectionPhase.SELECT_PROCESS_MODE;
+                            else
+                                ConnectionPhase = OSAI_ConnectionPhase.ENABLE_AUX_ON;
+                        }
                         break;
 
                     // SET PROCESS MODE TO AUTO
@@ -135,11 +138,14 @@ namespace Flux.ViewModels
 
                     // REFERENCE ALL AXIS
                     case OSAI_ConnectionPhase.REFERENCE_AXES:
-                        var ref_axis = await Connection.AxesRefAsync('X', 'Y', 'Z', 'A');
-                        if (ref_axis)
-                            ConnectionPhase = OSAI_ConnectionPhase.READ_FULL_MEMORY;
-                        else
-                            ConnectionPhase = OSAI_ConnectionPhase.ENABLE_AUX_ON;
+                        using (var ref_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5)))
+                        {
+                            var ref_axis = await Connection.AxesRefAsync(ref_cts.Token, 'X', 'Y', 'Z', 'A');
+                            if (ref_axis)
+                                ConnectionPhase = OSAI_ConnectionPhase.READ_FULL_MEMORY;
+                            else
+                                ConnectionPhase = OSAI_ConnectionPhase.ENABLE_AUX_ON;
+                        }
                         break;
 
                     case OSAI_ConnectionPhase.READ_FULL_MEMORY:

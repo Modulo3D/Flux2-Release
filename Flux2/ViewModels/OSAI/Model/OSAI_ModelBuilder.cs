@@ -3,6 +3,7 @@ using Modulo3DNet;
 using System;
 using System.Linq.Expressions;
 using System.Reactive;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
@@ -22,8 +23,8 @@ namespace Flux.ViewModels
         public void CreateVariable<TRData, TWData>(
             Expression<Func<OSAI_VariableStore, IFLUX_Variable<TRData, TWData>>> variable_expression,
             OSAI_ReadPriority priority,
-            Func<OSAI_ConnectionProvider, Task<Optional<TRData>>> read_func = default,
-            Func<OSAI_ConnectionProvider, TWData, Task<bool>> write_func = default)
+            Func<OSAI_ConnectionProvider, CancellationToken, Task<Optional<TRData>>> read_func = default,
+            Func<OSAI_ConnectionProvider, TWData, CancellationToken, Task<bool>> write_func = default)
         {
             var variable_name = string.Join('/', variable_expression.GetMembersName());
             var variable = new OSAI_AsyncVariable<TRData, TWData>(ConnectionProvider, variable_name, priority, read_func, write_func);

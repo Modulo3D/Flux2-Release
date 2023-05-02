@@ -58,8 +58,8 @@ namespace Flux.ViewModels
             OSAI_ConnectionProvider connection_provider,
             string name,
             OSAI_ReadPriority priority,
-            Func<OSAI_ConnectionProvider, Task<Optional<TRData>>> read_func = null,
-            Func<OSAI_ConnectionProvider, TWData, Task<bool>> write_func = null, VariableUnit unit = default)
+            Func<OSAI_ConnectionProvider, CancellationToken, Task<Optional<TRData>>> read_func = null,
+            Func<OSAI_ConnectionProvider, TWData, CancellationToken, Task<bool>> write_func = null, VariableUnit unit = default)
             : base(connection_provider, name, read_func, write_func, unit)
         {
             Priority = priority;
@@ -77,8 +77,8 @@ namespace Flux.ViewModels
             string name,
             IOSAI_Address address,
             Func<OSAI_MemoryBuffer, IObservable<Optional<TRData>>> observe_func,
-            Func<OSAI_ConnectionProvider, Task<Optional<TRData>>> read_func = null,
-            Func<OSAI_ConnectionProvider, TWData, Task<bool>> write_func = null, VariableUnit unit = default)
+            Func<OSAI_ConnectionProvider, CancellationToken, Task<Optional<TRData>>> read_func = null,
+            Func<OSAI_ConnectionProvider, TWData, CancellationToken, Task<bool>> write_func = null, VariableUnit unit = default)
             : base(connection_provider, name, c => observe_value(c, observe_func), read_func, write_func, unit)
         {
             Address = address;
@@ -101,8 +101,8 @@ namespace Flux.ViewModels
             : base(connection_provider, name, address,
                 observe_func: m => m.ObserveWordVar(address)
                     .Convert(b => b.IsBitSet(address.BitIndex)),
-                read_func: c => c.Connection.ReadBoolAsync(address),
-                write_func: (c, v) => c.Connection.WriteVariableAsync(address, v),
+                read_func: (c, ct) => c.Connection.ReadBoolAsync(address, ct),
+                write_func: (c, v, ct) => c.Connection.WriteVariableAsync(address, v, ct),
                 unit)
         {
         }
@@ -117,8 +117,8 @@ namespace Flux.ViewModels
             VariableUnit unit = default)
             : base(connection_provider, name, address,
                 observe_func: m => m.ObserveWordVar(address),
-                read_func: c => c.Connection.ReadUShortAsync(address),
-                write_func: (c, v) => c.Connection.WriteVariableAsync(address, v),
+                read_func: (c, ct) => c.Connection.ReadUShortAsync(address, ct),
+                write_func: (c, v, ct) => c.Connection.WriteVariableAsync(address, v, ct),
                 unit)
         {
         }
@@ -134,8 +134,8 @@ namespace Flux.ViewModels
             : base(connection_provider, name, address,
                 observe_func: m => m.ObserveWordVar(address)
                     .Convert(s => ShortConverter.Convert(s)),
-                read_func: c => c.Connection.ReadShortAsync(address),
-                write_func: (c, v) => c.Connection.WriteVariableAsync(address, v),
+                read_func: (c, ct) => c.Connection.ReadShortAsync(address, ct),
+                write_func: (c, v, ct) => c.Connection.WriteVariableAsync(address, v, ct),
                 unit)
         {
         }
@@ -152,9 +152,8 @@ namespace Flux.ViewModels
                 observe_func: m => m.ObserveWordVar(address)
                     .Convert(s => ShortConverter.Convert(s))
                     .Convert(s => ArrayIndex.FromArrayBase(s, connection_provider.VariableStoreBase)),
-                read_func: c => c.Connection
-                    .ReadShortAsync(address, a => ArrayIndex.FromArrayBase(a, connection_provider.VariableStoreBase)),
-                write_func: (c, v) => c.Connection.WriteVariableAsync(address, v.GetArrayBaseIndex()),
+                read_func: (c, ct) => c.Connection.ReadShortAsync(address, a => ArrayIndex.FromArrayBase(a, connection_provider.VariableStoreBase), ct),
+                write_func: (c, v, ct) => c.Connection.WriteVariableAsync(address, v.GetArrayBaseIndex(), ct),
                 unit)
         {
         }
@@ -169,10 +168,8 @@ namespace Flux.ViewModels
             VariableUnit unit = default)
             : base(connection_provider, name, address,
                 observe_func: m => m.ObserveDWordVar(address),
-                read_func: c => c.Connection
-                    .ReadDoubleAsync(address),
-                write_func: (c, v) => c.Connection
-                    .WriteVariableAsync(address, v),
+                read_func: (c, ct) => c.Connection.ReadDoubleAsync(address, ct),
+                write_func: (c, v, ct) => c.Connection.WriteVariableAsync(address, v, ct),
                 unit)
         {
         }
@@ -191,8 +188,8 @@ namespace Flux.ViewModels
             OSAI_ReadPriority priority,
             VariableUnit unit = default)
             : base(connection_provider, name, priority,
-                  read_func: c => c.Connection.ReadTextAsync(address),
-                  write_func: (c, v) => c.Connection.WriteVariableAsync(address, v),
+                  read_func: (c, ct) => c.Connection.ReadTextAsync(address, ct),
+                  write_func: (c, v, ct) => c.Connection.WriteVariableAsync(address, v, ct),
                   unit)
         {
             Address = address;
@@ -213,8 +210,8 @@ namespace Flux.ViewModels
             OSAI_ReadPriority priority,
             VariableUnit unit = default)
             : base(connection_provider, name, priority,
-                  read_func: c => c.Connection.ReadTextAsync(address),
-                  write_func: (c, v) => c.Connection.WriteVariableAsync(address, v),
+                  read_func: (c, ct) => c.Connection.ReadTextAsync(address, ct),
+                  write_func: (c, v, ct) => c.Connection.WriteVariableAsync(address, v, ct),
                   unit)
         {
             Address = address;
@@ -236,18 +233,18 @@ namespace Flux.ViewModels
             Func<double, string> get_temp_gcode,
             VariableUnit unit = default)
             : base(connection_provider, name, priority,
-                  read_func: c => read_async(c, address),
-                  write_func: (c, v) => write_async(c, v, get_temp_gcode),
+                  read_func: (c, ct) => read_async(c, address, ct),
+                  write_func: (c, v, ct) => write_async(c, v, get_temp_gcode, ct),
                   unit)
         {
             Address = address;
             Group = $"{address.VarCode}";
         }
 
-        private static async Task<Optional<FLUX_Temp>> read_async(OSAI_ConnectionProvider connection_provider, OSAI_IndexAddress address)
+        private static async Task<Optional<FLUX_Temp>> read_async(OSAI_ConnectionProvider connection_provider, OSAI_IndexAddress address, CancellationToken ct)
         {
             var connection = connection_provider.Connection;
-            var data = await connection.ReadTextAsync(address);
+            var data = await connection.ReadTextAsync(address, ct);
             if (!data.HasValue)
                 return default;
 
@@ -258,10 +255,9 @@ namespace Flux.ViewModels
             return new FLUX_Temp(current, target);
         }
 
-        private static async Task<bool> write_async(OSAI_ConnectionProvider connection_provider, double temp, Func<double, string> get_temp_gcode)
+        private static async Task<bool> write_async(OSAI_ConnectionProvider connection_provider, double temp, Func<double, string> get_temp_gcode, CancellationToken ct)
         {
-            using var put_write_temp_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            return await connection_provider.ExecuteParamacroAsync(_ => new[] { get_temp_gcode(temp) }, put_write_temp_cts.Token, false);
+            return await connection_provider.ExecuteParamacroAsync(_ => new[] { get_temp_gcode(temp) }, ct, false);
         }
     }
 
@@ -276,8 +272,8 @@ namespace Flux.ViewModels
             string name,
             OSAI_NamedAddress address,
             OSAI_ReadPriority priority,
-            Func<OSAI_ConnectionProvider, Task<Optional<TRData>>> read_func = null,
-            Func<OSAI_ConnectionProvider, TWData, Task<bool>> write_func = null,
+            Func<OSAI_ConnectionProvider, CancellationToken, Task<Optional<TRData>>> read_func = null,
+            Func<OSAI_ConnectionProvider, TWData, CancellationToken, Task<bool>> write_func = null,
             VariableUnit unit = default)
             : base(connection_provider, name, priority, read_func, write_func, unit)
         {
@@ -295,8 +291,8 @@ namespace Flux.ViewModels
             OSAI_ReadPriority priority,
             VariableUnit unit = default)
             : base(connection_provider, name, address, priority,
-                  read_func: c => c.Connection.ReadNamedDoubleAsync(address),
-                  write_func: (c, v) => c.Connection.WriteVariableAsync(address, v),
+                  read_func: (c, ct) => c.Connection.ReadNamedDoubleAsync(address, ct),
+                  write_func: (c, v, ct) => c.Connection.WriteVariableAsync(address, v, ct),
                   unit)
         {
         }
@@ -311,8 +307,8 @@ namespace Flux.ViewModels
             OSAI_ReadPriority priority,
             VariableUnit unit = default)
             : base(connection_provider, name, address, priority,
-                read_func: c => c.Connection.ReadNamedShortAsync(address),
-                write_func: (c, v) => c.Connection.WriteVariableAsync(address, v),
+                read_func: (c, ct) => c.Connection.ReadNamedShortAsync(address, ct),
+                write_func: (c, v, ct) => c.Connection.WriteVariableAsync(address, v, ct),
                 unit)
         {
         }
@@ -326,8 +322,8 @@ namespace Flux.ViewModels
             OSAI_ReadPriority priority,
             VariableUnit unit = default)
             : base(connection_provider, name, address, priority,
-                read_func: c => c.Connection.ReadNamedUShortAsync(address),
-                write_func: (c, v) => c.Connection.WriteVariableAsync(address, v),
+                read_func: (c, ct) => c.Connection.ReadNamedUShortAsync(address, ct),
+                write_func: (c, v, ct) => c.Connection.WriteVariableAsync(address, v, ct),
                 unit)
         {
         }
@@ -341,10 +337,8 @@ namespace Flux.ViewModels
             OSAI_ReadPriority priority,
             VariableUnit unit = default)
             : base(connection_provider, name, address, priority,
-                read_func: c => c.Connection
-                    .ReadNamedShortAsync(address, s => (QueuePosition)s),
-                write_func: (c, v) => c.Connection
-                    .WriteVariableAsync(address, v),
+                read_func: (c, ct) => c.Connection.ReadNamedShortAsync(address, s => (QueuePosition)s, ct), 
+                write_func: (c, v, ct) => c.Connection.WriteVariableAsync(address, v, ct),
                 unit)
         {
         }
@@ -360,8 +354,8 @@ namespace Flux.ViewModels
             ushort lenght,
             VariableUnit unit = default)
             : base(connection_provider, name, address, priority,
-                read_func: c => c.Connection.ReadNamedStringAsync(address, lenght),
-                write_func: (c, v) => c.Connection.WriteVariableAsync(address, v, lenght),
+                read_func: (c, ct) => c.Connection.ReadNamedStringAsync(address, lenght, ct), 
+                write_func: (c, v, ct) => c.Connection.WriteVariableAsync(address, v, lenght, ct),
                 unit)
         {
         }
@@ -376,8 +370,8 @@ namespace Flux.ViewModels
             OSAI_ReadPriority priority,
             VariableUnit unit = default)
             : base(connection_provider, name, address, priority,
-                read_func: c => c.Connection.ReadNamedBoolAsync(address),
-                write_func: (c, v) => c.Connection.WriteVariableAsync(address, v),
+                read_func: (c, ct) => c.Connection.ReadNamedBoolAsync(address, ct),
+                write_func: (c, v, ct) => c.Connection.WriteVariableAsync(address, v, ct),
                 unit)
         {
         }
@@ -392,10 +386,8 @@ namespace Flux.ViewModels
             OSAI_IndexAddress address,
             VariableUnit unit = default)
             : base(connection_provider, name, address,
-                observe_func: c => c.ObserveWordVar(address)
-                    .Convert(get_pressure),
-                read_func: c => c.Connection
-                    .ReadUShortAsync(address, get_pressure),
+                observe_func: c => c.ObserveWordVar(address).Convert(get_pressure),
+                read_func: (c, ct) => c.Connection.ReadUShortAsync(address, get_pressure, ct),
                 unit: unit)
         {
         }

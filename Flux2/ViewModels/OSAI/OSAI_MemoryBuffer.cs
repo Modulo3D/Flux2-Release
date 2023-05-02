@@ -9,6 +9,7 @@ using System.Linq;
 using System.Reactive;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
@@ -272,47 +273,21 @@ namespace Flux.ViewModels
             GW_BUFFER = await UpdateWordBufferAsync(GW_BUFFER_REQ);
             MW_BUFFER = await UpdateWordBufferAsync(MW_BUFFER_REQ);
         }
-        private async Task<Optional<doublearray>> UpdateDoubleBufferAsync(ReadVarDoubleRequest request)
+        private Task<Optional<doublearray>> UpdateDoubleBufferAsync(ReadVarDoubleRequest request)
         {
-            try
-            {
-                var client = ConnectionProvider.Connection.Client;
-                if (!client.HasValue)
-                    return default;
-
-                var response = await client.Value.ReadVarDoubleAsync(request);
-                if (OSAI_Connection.ProcessResponse(
-                    response.retval,
-                    response.ErrClass,
-                    response.ErrNum))
-                    return response.Value;
-                return default;
-            }
-            catch
-            {
-                return default;
-            }
+            using var double_buffer_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            return ConnectionProvider.Connection.TryEnqueueRequestAsync(
+                (c, ct) => c.ReadVarDoubleAsync(request),
+                r => r.Value, r => new(r.retval, r.ErrClass, r.ErrNum),
+                OSAI_RequestPriority.Immediate, double_buffer_cts.Token);
         }
-        private async Task<Optional<unsignedshortarray>> UpdateWordBufferAsync(ReadVarWordRequest request)
+        private Task<Optional<unsignedshortarray>> UpdateWordBufferAsync(ReadVarWordRequest request)
         {
-            try
-            {
-                var client = ConnectionProvider.Connection.Client;
-                if (!client.HasValue)
-                    return default;
-
-                var response = await client.Value.ReadVarWordAsync(request);
-                if (OSAI_Connection.ProcessResponse(
-                    response.retval,
-                    response.ErrClass,
-                    response.ErrNum))
-                    return response.Value;
-                return default;
-            }
-            catch
-            {
-                return default;
-            }
+            using var word_buffer_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            return ConnectionProvider.Connection.TryEnqueueRequestAsync(
+                (c, ct) => c.ReadVarWordAsync(request),
+                r => r.Value, r => new(r.retval, r.ErrClass, r.ErrNum),
+                OSAI_RequestPriority.Immediate, word_buffer_cts.Token);
         }
         public static async Task UpdateVariablesAsync(IEnumerable<IOSAI_AsyncVariable> variables)
         {

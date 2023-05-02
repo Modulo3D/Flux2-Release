@@ -58,8 +58,8 @@ namespace Flux.ViewModels
                 connection_provider,
                 $"{name} {unit.Alias}",
                 observe_func: c => observe_func(c, name.ToLower(), unit, convert_data),
-                read_func: c => read_variable(c, name.ToLower(), unit, convert_data),
-                write_func: (c, v) => write_variable(c, name.ToLower(), unit, v, stored),
+                read_func: (c, ct) => read_variable(c, name.ToLower(), unit, convert_data),
+                write_func: (c, v, ct) => write_variable(c, name.ToLower(), unit, v, stored),
                 unit: unit)
         {
             Stored = stored;

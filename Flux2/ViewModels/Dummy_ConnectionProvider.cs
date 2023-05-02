@@ -286,27 +286,12 @@ namespace Flux.ViewModels
             throw new NotImplementedException();
         }
 
-        public override Task<bool> StopAsync()
-        {
-            throw new NotImplementedException();
-        }
-
-        public override Task<bool> PauseAsync()
-        {
-            throw new NotImplementedException();
-        }
-
         public override Task<bool> ExecuteParamacroAsync(GCodeString paramacro, CancellationToken put_ct, bool can_cancel = false)
         {
             throw new NotImplementedException();
         }
 
         public override GCodeString GetExitPartProgramGCode()
-        {
-            throw new NotImplementedException();
-        }
-
-        public override Task<bool> CancelAsync()
         {
             throw new NotImplementedException();
         }
@@ -383,6 +368,21 @@ namespace Flux.ViewModels
         }
 
         public override GCodeString GetPausePrependGCode(Optional<JobKey> job_key)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override Task<bool> StopAsync(CancellationToken ct)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override Task<bool> CancelAsync(CancellationToken ct)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override Task<bool> PauseAsync(CancellationToken ct)
         {
             throw new NotImplementedException();
         }
