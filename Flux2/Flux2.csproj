@@ -49,7 +49,7 @@
 
   <ItemGroup>
     <PackageReference Include="Base62-Net" Version="1.2.157201" />
-    <PackageReference Include="DynamicData" Version="7.12.11" />
+    <PackageReference Include="DynamicData" Version="7.13.5" />
     <PackageReference Include="EmbedIO" Version="3.5.2" />
     <PackageReference Include="GreenSuperGreen.NetStandard" Version="1.2.6.1" />
     <PackageReference Include="HttpMultipartParser" Version="8.0.0" />

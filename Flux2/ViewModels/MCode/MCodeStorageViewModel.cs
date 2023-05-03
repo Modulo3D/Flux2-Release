@@ -50,7 +50,7 @@ namespace Flux.ViewModels
         [RemoteCommand]
         public ReactiveCommand<Unit, Unit> DeleteMCodeStorageCommand { get; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> SelectMCodeStorageCommand { get; }
+        public Func<Task> SelectMCodeStorageCommand { get; }
         [RemoteCommand]
         public ReactiveCommand<Unit, Unit> CancelSelectMCodeStorageCommand { get; }
         [RemoteCommand]
@@ -106,9 +106,9 @@ namespace Flux.ViewModels
                 .StartWith(false);
 
             _CanDelete = Observable.CombineLatest(
-                is_selecting_file,
                 in_queue,
-                (s, q) => !s && !q)
+                is_selecting_file,
+                (q, s) => !s && !q)
                 .ToPropertyRC(this, v => v.CanDelete);
 
             var is_idle = MCodes.Flux.StatusProvider
@@ -129,9 +129,11 @@ namespace Flux.ViewModels
                 async () => { await mcodes.DeleteAsync(false, this); }, this,
                 this.WhenAnyValue(v => v.CanDelete));
 
-            SelectMCodeStorageCommand = ReactiveCommandRC.CreateFromTask(
+            SelectMCodeStorageCommand = async () => await mcodes.AddToQueueAsync(this);
+            
+            /*ReactiveCommandRC.CreateFromTask(
                 async () => { await mcodes.AddToQueueAsync(this); }, this,
-                this.WhenAnyValue(v => v.CanSelect));
+                this.WhenAnyValue(v => v.CanSelect));*/
 
             CancelSelectMCodeStorageCommand = ReactiveCommandRC.Create(
                 () => mcodes.CancelPrepareMCode(), this,
@@ -158,7 +160,7 @@ namespace Flux.ViewModels
                     }
                 });
 
-            AddOutput("name", Analyzer.MCode.Name);
+            AddOutput("name", Observable.Interval(TimeSpan.FromSeconds(0.1)).Timestamp().Select(t => t.ToString()));
             AddOutput("quality", Analyzer.MCode.PrintQuality);
             AddOutput("quantities", quanitites, typeof(EnumerableConverter<WeightConverter, double>));
             AddOutput("infoToggled", this.WhenAnyValue(v => v.ShowInfo));

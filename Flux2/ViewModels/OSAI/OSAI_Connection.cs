@@ -95,7 +95,10 @@ namespace Flux.ViewModels
             get
             {
                 if (Err.Err == 0 || !Content.HasValue)
+                {
+                    Console.WriteLine(this);
                     return false;
+                }
                 return true;
             }
         }
@@ -805,7 +808,7 @@ namespace Flux.ViewModels
             var remove_file_response = await TryEnqueueRequestAsync(
                 (c, ct) => c.LogFSRemoveFileAsync(new LogFSRemoveFileRequest($"{folder}\\", filename)),
                 r => new(r.retval, r.ErrClass, r.ErrNum), OSAI_RequestPriority.Immediate, ct);
-            return remove_file_response.Ok;
+            return remove_file_response.Ok /*|| (remove_file_response.Err.ErrClass == 5 && remove_file_response.Err.ErrNum == 17)*/;
         }
         public override async Task<bool> CreateFolderAsync(string folder, string name, CancellationToken ct)
         {
