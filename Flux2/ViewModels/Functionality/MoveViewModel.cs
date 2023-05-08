@@ -34,29 +34,29 @@ namespace Flux.ViewModels
         }
 
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> MovePrinterLeftCommand { get; }
+        public ReactiveCommandBaseRC MovePrinterLeftCommand { get; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> MovePrinterRightCommand { get; }
+        public ReactiveCommandBaseRC MovePrinterRightCommand { get; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> MovePrinterBackCommand { get; }
+        public ReactiveCommandBaseRC MovePrinterBackCommand { get; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> MovePrinterFrontCommand { get; }
+        public ReactiveCommandBaseRC MovePrinterFrontCommand { get; }
 
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> MovePrinterUpCommand { get; }
+        public ReactiveCommandBaseRC MovePrinterUpCommand { get; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> MovePrinterDownCommand { get; }
+        public ReactiveCommandBaseRC MovePrinterDownCommand { get; }
 
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> MovePrinterExtrudeCommand { get; }
+        public ReactiveCommandBaseRC MovePrinterExtrudeCommand { get; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> MovePrinterRetractCommand { get; }
+        public ReactiveCommandBaseRC MovePrinterRetractCommand { get; }
 
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> StopPrinterCommand { get; }
+        public ReactiveCommandBaseRC StopPrinterCommand { get; }
 
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> ShowRoutinesCommand { get; }
+        public ReactiveCommandBaseRC ShowRoutinesCommand { get; }
 
         private readonly ObservableAsPropertyHelper<string> _AxisPosition;
         [RemoteOutput(true)]
@@ -76,7 +76,7 @@ namespace Flux.ViewModels
                 .ConvertOr(c => c.GetAxisPosition(), () => "")
                 .ToPropertyRC(this, v => v.AxisPosition);
 
-            ShowRoutinesCommand = ReactiveCommandRC.CreateFromTask(async () => { await Flux.ShowModalDialogAsync(f => f.Functionality.Routines); }, this);
+            ShowRoutinesCommand = ReactiveCommandBaseRC.CreateFromTask(async () => { await Flux.ShowModalDialogAsync(f => f.Functionality.Routines); }, this);
 
             var has_limits = variable_store.HasMovementLimits;
             var can_move_xyz = Flux.StatusProvider
@@ -93,19 +93,19 @@ namespace Flux.ViewModels
                 await Flux.ConnectionProvider.ExecuteParamacroAsync(c => c.GetMovementGCode((axis, move_distance, MovePrinterFeedrate), variable_store.MoveTransform), put_move_cts.Token, false);
             }
 
-            MovePrinterLeftCommand = ReactiveCommandRC.CreateFromTask(() => moveAsync('X', -MovePrinterDistance), this, can_move_xyz);
-            MovePrinterRightCommand = ReactiveCommandRC.CreateFromTask(() => moveAsync('X', MovePrinterDistance), this, can_move_xyz);
+            MovePrinterLeftCommand = ReactiveCommandBaseRC.CreateFromTask(() => moveAsync('X', -MovePrinterDistance), this, can_move_xyz);
+            MovePrinterRightCommand = ReactiveCommandBaseRC.CreateFromTask(() => moveAsync('X', MovePrinterDistance), this, can_move_xyz);
 
-            MovePrinterBackCommand = ReactiveCommandRC.CreateFromTask(() => moveAsync('Y', -MovePrinterDistance), this, can_move_xyz);
-            MovePrinterFrontCommand = ReactiveCommandRC.CreateFromTask(() => moveAsync('Y', MovePrinterDistance), this, can_move_xyz);
+            MovePrinterBackCommand = ReactiveCommandBaseRC.CreateFromTask(() => moveAsync('Y', -MovePrinterDistance), this, can_move_xyz);
+            MovePrinterFrontCommand = ReactiveCommandBaseRC.CreateFromTask(() => moveAsync('Y', MovePrinterDistance), this, can_move_xyz);
 
-            MovePrinterUpCommand = ReactiveCommandRC.CreateFromTask(() => moveAsync('Z', -MovePrinterDistance), this, can_move_xyz);
-            MovePrinterDownCommand = ReactiveCommandRC.CreateFromTask(() => moveAsync('Z', MovePrinterDistance), this, can_move_xyz);
+            MovePrinterUpCommand = ReactiveCommandBaseRC.CreateFromTask(() => moveAsync('Z', -MovePrinterDistance), this, can_move_xyz);
+            MovePrinterDownCommand = ReactiveCommandBaseRC.CreateFromTask(() => moveAsync('Z', MovePrinterDistance), this, can_move_xyz);
 
-            MovePrinterExtrudeCommand = ReactiveCommandRC.CreateFromTask(() => moveAsync(variable_store.FeederAxis, MovePrinterDistance), this, can_move_e);
-            MovePrinterRetractCommand = ReactiveCommandRC.CreateFromTask(() => moveAsync(variable_store.FeederAxis, -MovePrinterDistance), this, can_move_e);
+            MovePrinterExtrudeCommand = ReactiveCommandBaseRC.CreateFromTask(() => moveAsync(variable_store.FeederAxis, MovePrinterDistance), this, can_move_e);
+            MovePrinterRetractCommand = ReactiveCommandBaseRC.CreateFromTask(() => moveAsync(variable_store.FeederAxis, -MovePrinterDistance), this, can_move_e);
 
-            StopPrinterCommand = ReactiveCommandRC.CreateFromTask(Flux.ConnectionProvider.StopAsync, this);
+            StopPrinterCommand = ReactiveCommandBaseRC.CreateFromTask(Flux.ConnectionProvider.StopAsync, this);
         }
     }
 }

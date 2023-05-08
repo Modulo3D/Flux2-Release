@@ -31,7 +31,7 @@ namespace Flux.ViewModels
         public IObservableCache<IFluxMCodeQueueViewModel, QueuePosition> QueuedMCodes { get; private set; }
 
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> DeleteAllCommand { get; }
+        public ReactiveCommandBaseRC DeleteAllCommand { get; }
 
         private Optional<DirectoryInfo[]> _RemovableDrivePaths;
         public Optional<DirectoryInfo[]> RemovableDrivePaths
@@ -70,7 +70,7 @@ namespace Flux.ViewModels
             var can_delete_all = AvaiableMCodes.Connect()
                 .TrueForAll(mcode => mcode.WhenAnyValue(m => m.CanDelete), d => d);
 
-            DeleteAllCommand = ReactiveCommandRC.CreateFromTask(ClearMCodeStorageAsync, this, can_delete_all);
+            DeleteAllCommand = ReactiveCommandBaseRC.CreateFromTask(ClearMCodeStorageAsync, this, can_delete_all);
 
             this.WhenAnyValue(v => v.RemovableDrivePaths)
                 .SubscribeRC(ExploreDrives, this);

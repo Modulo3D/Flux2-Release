@@ -23,7 +23,7 @@ namespace Flux.ViewModels
     {
         FluxViewModel Flux { get; }
         CalibrationViewModel Calibration { get; }
-        Optional<ReactiveCommand<Unit, Unit>> CancelCalibrationCommand { get; }
+        Optional<ReactiveCommandBaseRC> CancelCalibrationCommand { get; }
     }
 
     public abstract class ManualCalibrationPhaseViewModel<TManualCalibrationPhase> : RemoteControl<TManualCalibrationPhase>, IManualCalibrationPhaseViewModel
@@ -33,7 +33,7 @@ namespace Flux.ViewModels
         public CalibrationViewModel Calibration { get; }
 
         [RemoteCommand]
-        public Optional<ReactiveCommand<Unit, Unit>> CancelCalibrationCommand { get; protected set; }
+        public Optional<ReactiveCommandBaseRC> CancelCalibrationCommand { get; protected set; }
     
         private readonly ObservableAsPropertyHelper<Optional<ushort>> _SelectedTool;
         [RemoteOutput(true)]
@@ -55,7 +55,7 @@ namespace Flux.ViewModels
         public virtual void Initialize()
         { 
             var can_cancel = GetCanCancelCalibration();
-            CancelCalibrationCommand = ReactiveCommandRC.CreateFromTask(ExitAsync, (TManualCalibrationPhase)this, can_cancel);
+            CancelCalibrationCommand = ReactiveCommandBaseRC.CreateFromTask(ExitAsync, (TManualCalibrationPhase)this, can_cancel);
         }
         public abstract IObservable<bool> GetCanCancelCalibration();
 
@@ -110,7 +110,7 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public string ProbeStateBrush => _ProbeStateBrush.Value;
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> SelectToolCommand { get; }
+        public ReactiveCommandBaseRC SelectToolCommand { get; }
         public PerformManualCalibrationViewModel ManualCalibration { get; }
 
         public ManualCalibrationItemViewModel(PerformManualCalibrationViewModel calibration, ushort position, IObservable<bool> not_executing) 
@@ -148,7 +148,7 @@ namespace Flux.ViewModels
                 can_safe_cycle,
                 (temp, offset, ne, tool, idle) => temp.HasValue && offset.HasValue && ne && idle && tool != Position);
 
-            SelectToolCommand = ReactiveCommandRC.CreateFromTask(SelectToolAsync, this, can_execute);
+            SelectToolCommand = ReactiveCommandBaseRC.CreateFromTask(SelectToolAsync, this, can_execute);
         }
         private async Task SelectToolAsync()
         {
@@ -266,13 +266,13 @@ namespace Flux.ViewModels
             var move_up_not_executing = MoveUpButtons.Connect()
                 .AddKey(b => b.Name)
                 .Transform(m => m.Command, true)
-                .TrueForAll(c => c.IsExecuting, e => !e)
+                .TrueForAll(c => c.WhenAnyValue(v => v.IsExecuting), e => !e)
                 .StartWith(false);
 
             var move_down_not_executing = MoveDownButtons.Connect()
                 .AddKey(b => b.Name)
                 .Transform(m => m.Command, true)
-                .TrueForAll(c => c.IsExecuting, e => !e)
+                .TrueForAll(c => c.WhenAnyValue(v => v.IsExecuting), e => !e)
                 .StartWith(false);
 
             var not_executing = Observable.CombineLatest(
@@ -382,13 +382,13 @@ namespace Flux.ViewModels
             var move_up_not_executing = MoveUpButtons.Connect()
                 .AddKey(b => b.Name)
                 .Transform(m => m.Command, true)
-                .TrueForAll(c => c.IsExecuting, e => !e)
+                .TrueForAll(c => c.WhenAnyValue(v => v.IsExecuting), e => !e)
                 .StartWith(false);
 
             var move_down_not_executing = MoveDownButtons.Connect()
                 .AddKey(b => b.Name)
                 .Transform(m => m.Command, true)
-                .TrueForAll(c => c.IsExecuting, e => !e)
+                .TrueForAll(c => c.WhenAnyValue(v => v.IsExecuting), e => !e)
                 .StartWith(false);
 
             var not_executing = Observable.CombineLatest(

@@ -11,14 +11,14 @@ namespace Flux.ViewModels
 {
     public class CmdButton : RemoteControl<CmdButton>
     {
-        public ReactiveCommand<Unit, Unit> Command { get; }
+        public ReactiveCommandBaseRC Command { get; }
 
         private readonly ObservableAsPropertyHelper<bool> _Visible;
         public bool Visible => _Visible.Value;
 
         private CmdButton(
             string name,
-            Func<CmdButton, ReactiveCommand<Unit, Unit>> command,
+            Func<CmdButton, ReactiveCommandBaseRC> command,
             OptionalObservable<bool> visible = default,
             OptionalObservable<Optional<bool>> active = default)
             : base($"{typeof(CmdButton).GetRemoteElementClass()}.{name}")
@@ -36,7 +36,7 @@ namespace Flux.ViewModels
             OptionalObservable<bool> can_execute = default,
             OptionalObservable<bool> visible = default,
             OptionalObservable<Optional<bool>> active = default)
-            : this(name, d => ReactiveCommandRC.Create(command, d, can_execute.ObservableOr(() => true)), visible, active)
+            : this(name, d => ReactiveCommandBaseRC.Create(command, d, can_execute.ObservableOr(() => true)), visible, active)
         {
         }
 
@@ -46,7 +46,7 @@ namespace Flux.ViewModels
             OptionalObservable<bool> can_execute = default,
             OptionalObservable<bool> visible = default,
             OptionalObservable<Optional<bool>> active = default)
-            : this(name, d => ReactiveCommandRC.CreateFromTask(command, d, can_execute.ObservableOr(() => true)), visible, active)
+            : this(name, d => ReactiveCommandBaseRC.CreateFromTask(command, d, can_execute.ObservableOr(() => true)), visible, active)
         {
         }
     }

@@ -261,14 +261,14 @@ namespace Flux.ViewModels
         {
             var get_pp_response = await connection_provider.Connection.TryEnqueueRequestAsync(
                 (c, ct) => c.GetActivePartProgramAsync(new GetActivePartProgramRequest(OSAI_Connection.ProcessNumber)),
-                r => r.Main, r => new(r.retval, r.ErrClass, r.ErrNum), OSAI_RequestPriority.Immediate, ct);
+                r => r.Main, r => new(r.retval, r.ErrClass, r.ErrNum), FLUX_RequestPriority.Immediate, ct);
 
             if (!get_pp_response.HasValue)
                 return default;
 
             var get_blk_num_response = await connection_provider.Connection.TryEnqueueRequestAsync(
                 (c, ct) => c.GetBlkNumAsync(OSAI_Connection.ProcessNumber),
-                r => r.Body, r => new(r.Body.retval, r.Body.ErrClass, r.Body.ErrNum), OSAI_RequestPriority.Immediate, ct);
+                r => r.Body, r => new(r.Body.retval, r.Body.ErrClass, r.Body.ErrNum), FLUX_RequestPriority.Immediate, ct);
 
             if (!get_blk_num_response.HasValue)
                 return default;
@@ -287,7 +287,7 @@ namespace Flux.ViewModels
         {
             var boot_phase_response = await connection_provider.Connection.TryEnqueueRequestAsync(
                 (c, ct) => c.BootPhaseEnquiryAsync(new BootPhaseEnquiryRequest()),
-                r => r.Phase, r => new(r.retval, r.ErrClass, r.ErrNum), OSAI_RequestPriority.Immediate, ct);
+                r => r.Phase, r => new(r.retval, r.ErrClass, r.ErrNum), FLUX_RequestPriority.Immediate, ct);
 
             if (!boot_phase_response.HasValue)
                 return default;
@@ -298,7 +298,7 @@ namespace Flux.ViewModels
         {
             var boot_mode_response = await connection_provider.Connection.TryEnqueueRequestAsync(
                 (c, ct) => c.BootModeAsync(new BootModeRequest((ushort)boot_mode)),
-                r => new(r.retval, r.ErrClass, r.ErrNum), OSAI_RequestPriority.Immediate, ct);
+                r => new(r.retval, r.ErrClass, r.ErrNum), FLUX_RequestPriority.Immediate, ct);
 
             return boot_mode_response.Ok;
         }
@@ -306,7 +306,7 @@ namespace Flux.ViewModels
         {
             var process_status_response = await connection_provider.Connection.TryEnqueueRequestAsync(
                 (c, ct) => c.GetProcessStatusAsync(OSAI_Connection.ProcessNumber),
-                r => r.Body, r => new(r.Body.retval, r.Body.ErrClass, r.Body.ErrNum), OSAI_RequestPriority.Immediate, ct);
+                r => r.Body, r => new(r.Body.retval, r.Body.ErrClass, r.Body.ErrNum), FLUX_RequestPriority.Immediate, ct);
 
             if (!process_status_response.HasValue)
                 return default;
@@ -317,7 +317,7 @@ namespace Flux.ViewModels
         {
             var process_status_response = await connection_provider.Connection.TryEnqueueRequestAsync(
                 (c, ct) => c.GetProcessStatusAsync(OSAI_Connection.ProcessNumber),
-                r => r.Body, r => new(r.Body.retval, r.Body.ErrClass, r.Body.ErrNum), OSAI_RequestPriority.Immediate, ct);
+                r => r.Body, r => new(r.Body.retval, r.Body.ErrClass, r.Body.ErrNum), FLUX_RequestPriority.Immediate, ct);
 
             if (!process_status_response.HasValue)
                 return default;
@@ -343,7 +343,7 @@ namespace Flux.ViewModels
         {
             var set_process_mode_response = await connection_provider.Connection.TryEnqueueRequestAsync(
                 (c, ct) => c.SetProcessModeAsync(new SetProcessModeRequest(OSAI_Connection.ProcessNumber, (ushort)process_mode)),
-                r => new(r.retval, r.ErrClass, r.ErrNum), OSAI_RequestPriority.Immediate, ct);
+                r => new(r.retval, r.ErrClass, r.ErrNum), FLUX_RequestPriority.Immediate, ct);
 
             if (!set_process_mode_response.Ok)
                 return false;

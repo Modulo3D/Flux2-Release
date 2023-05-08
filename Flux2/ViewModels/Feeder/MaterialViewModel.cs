@@ -19,10 +19,10 @@ namespace Flux.ViewModels
         public override MaterialState State => _State.Value;
 
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> UnloadMaterialCommand { get; private set; }
+        public ReactiveCommandBaseRC UnloadMaterialCommand { get; private set; }
 
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> LoadPurgeMaterialCommand { get; private set; }
+        public ReactiveCommandBaseRC LoadPurgeMaterialCommand { get; private set; }
 
         private ObservableAsPropertyHelper<string> _MaterialBrush;
         [RemoteOutput(true)]
@@ -179,8 +179,8 @@ namespace Flux.ViewModels
                     can_load = CanLoadMaterial(can_cycle, tool_nozzle, material, tool_material),
                 });
 
-            UnloadMaterialCommand = ReactiveCommandRC.CreateFromTask(UnloadAsync, this, material.Select(m => m.can_unload));
-            LoadPurgeMaterialCommand = ReactiveCommandRC.CreateFromTask(LoadPurgeAsync, this, material.Select(m => m.can_load || m.can_purge));
+            UnloadMaterialCommand = ReactiveCommandBaseRC.CreateFromTask(UnloadAsync, this, material.Select(m => m.can_unload));
+            LoadPurgeMaterialCommand = ReactiveCommandBaseRC.CreateFromTask(LoadPurgeAsync, this, material.Select(m => m.can_load || m.can_purge));
 
             var other_filament_after_gear = Feeder.Materials.Connect()
                 .Filter(m => m.Position != Position)

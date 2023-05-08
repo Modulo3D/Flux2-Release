@@ -93,11 +93,11 @@ namespace Flux.ViewModels
         public static double MaxZBedHeight = 10.0;
 
         [RemoteCommand]
-        public Optional<ReactiveCommand<Unit, Unit>> LeftButtonCommand { get; private set; }
+        public Optional<ReactiveCommandBaseRC> LeftButtonCommand { get; private set; }
         [RemoteCommand]
-        public Optional<ReactiveCommand<Unit, Unit>> RightButtonCommand { get; private set; }
+        public Optional<ReactiveCommandBaseRC> RightButtonCommand { get; private set; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> OpenStatusBarCommand { get; private set; }
+        public ReactiveCommandBaseRC OpenStatusBarCommand { get; private set; }
 
         public HomeViewModel Home { get; private set; }
         public WebcamViewModel Webcam { get; private set; }
@@ -165,9 +165,6 @@ namespace Flux.ViewModels
 
         public FluxViewModel(ILogger<IFlux> logger)
         {
-            var date = DateTime.Now;
-            var eq = new FluxJobQueuePreview(new FLUX_File() { Date = date, Name = "ciao", Size = 10, Type = FLUX_FileType.File }) == new FluxJobQueuePreview(new FLUX_File() { Date = date, Name = "ciao", Size = 10, Type = FLUX_FileType.File });
-
             Logger = logger;
 
             ServicePointManager.UseNagleAlgorithm = false;
@@ -195,7 +192,7 @@ namespace Flux.ViewModels
                     var printer_result = await db.FindByIdAsync<Printer>(printer_id.ValueOr(() => 0), cts.Token);
                     var printer = printer_result.FirstOrOptional(_ => true);
 
-                    ConnectionProvider = printer.ConvertOr(p => p.Id, () => -1) switch
+                    var connection_provider = printer.ConvertOr(p => p.Id, () => -1) switch
                     {
                         5 => new OSAI_ConnectionProvider(this),
                         6 => new OSAI_ConnectionProvider(this),
@@ -208,8 +205,17 @@ namespace Flux.ViewModels
                         13 => new RRF_ConnectionProvider(this, c => new RRF_VariableStoreS300A(c)),
                         14 => new RRF_ConnectionProvider(this, c => new RRF_VariableStoreS300A(c)),
                         15 => new OSAI_ConnectionProvider(this),
-                        _ => new Dummy_ConnectionProvider(this)
+                        _ => Optional<IFLUX_ConnectionProvider>.None
                     };
+
+                    if (!connection_provider.HasValue)
+                    {
+                        Console.WriteLine("Nessuna configurazione trovata");
+                        Environment.Exit(-1);
+                        return;
+                    }
+
+                    ConnectionProvider = connection_provider.Value;
 
                     Feeders = new FeedersViewModel(this);
                     MCodes = new MCodesViewModel(this);
@@ -245,13 +251,13 @@ namespace Flux.ViewModels
 
                     // COMMANDS
                     if (ConnectionProvider.HasVariable(s => s.CHAMBER_LIGHT))
-                        RightButtonCommand = ReactiveCommandRC.CreateFromTask(async () => { await ConnectionProvider.ToggleVariableAsync(m => m.CHAMBER_LIGHT); }, this);
+                        RightButtonCommand = ReactiveCommandBaseRC.CreateFromTask(async () => { await ConnectionProvider.ToggleVariableAsync(m => m.CHAMBER_LIGHT); }, this);
 
                     if (ConnectionProvider.HasVariable(s => s.OPEN_LOCK, main_lock_unit))
-                        LeftButtonCommand = ReactiveCommandRC.CreateFromTask(async () => { await ConnectionProvider.ToggleVariableAsync(m => m.OPEN_LOCK, main_lock_unit); }, this, is_idle);
+                        LeftButtonCommand = ReactiveCommandBaseRC.CreateFromTask(async () => { await ConnectionProvider.ToggleVariableAsync(m => m.OPEN_LOCK, main_lock_unit); }, this, is_idle);
 
                     var status_bar_nav = new NavModalViewModel<StatusBarViewModel>(this, StatusBar);
-                    OpenStatusBarCommand = ReactiveCommandRC.Create(() => { Navigator.Navigate(status_bar_nav); }, this);
+                    OpenStatusBarCommand = ReactiveCommandBaseRC.Create(() => { Navigator.Navigate(status_bar_nav); }, this);
 
                     ConnectionProvider.Initialize();
                     StatusProvider.Initialize();

@@ -39,13 +39,13 @@ namespace Flux.ViewModels
         public bool CurrentIndex => _CurrentIndex.Value;
 
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> DeleteMCodeQueueCommand { get; }
+        public ReactiveCommandBaseRC DeleteMCodeQueueCommand { get; }
 
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> MoveUpMCodeQueueCommand { get; }
+        public ReactiveCommandBaseRC MoveUpMCodeQueueCommand { get; }
 
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> MoveDownMCodeQueueCommand { get; }
+        public ReactiveCommandBaseRC MoveDownMCodeQueueCommand { get; }
 
         private readonly ObservableAsPropertyHelper<DateTime> _EndTime;
         [RemoteOutput(true, typeof(DateTimeConverter<RelativeDateTimeFormat>))]
@@ -120,9 +120,9 @@ namespace Flux.ViewModels
             var can_delete = Observable.CombineLatest(can_safe_cycle, this.WhenAnyValue(v => v.QueuePosition), CanDeleteQueue);
             var can_move_down = Observable.CombineLatest(is_idle, this.WhenAnyValue(v => v.QueuePosition), last_queue_pos, CanMoveDownQueue);
 
-            DeleteMCodeQueueCommand = ReactiveCommandRC.CreateFromTask(async () => { await MCodes.DeleteFromQueueAsync(this); }, this, can_delete);
-            MoveUpMCodeQueueCommand = ReactiveCommandRC.CreateFromTask(async () => { await MCodes.MoveInQueueAsync(this, i => (short)(i - 1)); }, this, can_move_up);
-            MoveDownMCodeQueueCommand = ReactiveCommandRC.CreateFromTask(async () => { await MCodes.MoveInQueueAsync(this, i => (short)(i + 1)); }, this, can_move_down);
+            DeleteMCodeQueueCommand = ReactiveCommandBaseRC.CreateFromTask(async () => { await MCodes.DeleteFromQueueAsync(this); }, this, can_delete);
+            MoveUpMCodeQueueCommand = ReactiveCommandBaseRC.CreateFromTask(async () => { await MCodes.MoveInQueueAsync(this, i => (short)(i - 1)); }, this, can_move_up);
+            MoveDownMCodeQueueCommand = ReactiveCommandBaseRC.CreateFromTask(async () => { await MCodes.MoveInQueueAsync(this, i => (short)(i + 1)); }, this, can_move_down);
         }
 
         private bool CanDeleteQueue(bool is_idle, QueuePosition queue_position)

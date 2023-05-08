@@ -279,7 +279,7 @@ namespace Flux.ViewModels
             return ConnectionProvider.Connection.TryEnqueueRequestAsync(
                 (c, ct) => c.ReadVarDoubleAsync(request),
                 r => r.Value, r => new(r.retval, r.ErrClass, r.ErrNum),
-                OSAI_RequestPriority.Medium, double_buffer_cts.Token);
+                FLUX_RequestPriority.Medium, double_buffer_cts.Token);
         }
         private Task<Optional<unsignedshortarray>> UpdateWordBufferAsync(ReadVarWordRequest request)
         {
@@ -287,7 +287,7 @@ namespace Flux.ViewModels
             return ConnectionProvider.Connection.TryEnqueueRequestAsync(
                 (c, ct) => c.ReadVarWordAsync(request),
                 r => r.Value, r => new(r.retval, r.ErrClass, r.ErrNum),
-                OSAI_RequestPriority.Medium, word_buffer_cts.Token);
+                FLUX_RequestPriority.Medium, word_buffer_cts.Token);
         }
         public static async Task UpdateVariablesAsync(IEnumerable<IOSAI_AsyncVariable> variables)
         {

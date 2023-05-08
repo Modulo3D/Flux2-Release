@@ -207,7 +207,7 @@ namespace Flux.ViewModels
         public MessageCounter MessageCounter => _MessageCounter.Value;
 
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> ResetMessagesCommand { get; private set; }
+        public ReactiveCommandBaseRC ResetMessagesCommand { get; private set; }
 
         public MessagesViewModel(FluxViewModel flux) : base(flux)
         {
@@ -263,7 +263,7 @@ namespace Flux.ViewModels
                     return new MessageCounter(debugCount, infoCount, warningCount, errorCount, emergCount);
                 }).ToPropertyRC(this, v => v.MessageCounter);
 
-            ResetMessagesCommand = ReactiveCommandRC.Create(Messages.Clear, this);
+            ResetMessagesCommand = ReactiveCommandBaseRC.Create(Messages.Clear, this);
         }
 
         // LOG MESSAGES

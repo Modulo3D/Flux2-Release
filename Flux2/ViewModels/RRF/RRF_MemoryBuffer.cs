@@ -17,18 +17,18 @@ namespace Flux.ViewModels
 {
     public interface IRRF_MemoryReader : IFLUX_MemoryReader<RRF_MemoryBuffer>
     {
-        Task TryScheduleAsync(RRF_RequestPriority priority, CancellationToken ct);
+        Task TryScheduleAsync(FLUX_RequestPriority priority, CancellationToken ct);
     }
     public interface IRRF_MemoryReader<TData> : IRRF_MemoryReader, IFLUX_MemoryReader<RRF_MemoryBuffer, TData>
     {
-        new Task<Optional<TData>> TryScheduleAsync(RRF_RequestPriority priority, CancellationToken ct);
+        new Task<Optional<TData>> TryScheduleAsync(FLUX_RequestPriority priority, CancellationToken ct);
     }
     public abstract class RRF_MemoryReader<TData> : FLUX_MemoryReader<RRF_MemoryReader<TData>, RRF_MemoryBuffer, TData>, IRRF_MemoryReader<TData>
     {
-        private RRF_RequestPriority Priority { get; }
+        private FLUX_RequestPriority Priority { get; }
         protected Action<Optional<TData>> Action { get; }
         public CancellationTokenSource CTS { get; private set; }
-        protected RRF_MemoryReader(RRF_MemoryBuffer memory_buffer, string resource, RRF_RequestPriority priority, Action<Optional<TData>> action) : base(memory_buffer, resource)
+        protected RRF_MemoryReader(RRF_MemoryBuffer memory_buffer, string resource, FLUX_RequestPriority priority, Action<Optional<TData>> action) : base(memory_buffer, resource)
         {
             Action = action;
             Priority = priority;
@@ -63,20 +63,20 @@ namespace Flux.ViewModels
 
             return data;
         }
-        public abstract Task<Optional<TData>> TryScheduleAsync(RRF_RequestPriority priority, CancellationToken ct);
-        Task IRRF_MemoryReader.TryScheduleAsync(RRF_RequestPriority priority, CancellationToken ct) => TryScheduleAsync(priority, ct);
+        public abstract Task<Optional<TData>> TryScheduleAsync(FLUX_RequestPriority priority, CancellationToken ct);
+        Task IRRF_MemoryReader.TryScheduleAsync(FLUX_RequestPriority priority, CancellationToken ct) => TryScheduleAsync(priority, ct);
     }
 
     public class RRF_ModelReader<TData> : RRF_MemoryReader<TData>
     {
         public string Flags { get; }
-        public RRF_ModelReader(RRF_MemoryBuffer memory_buffer, string resource, string flags, RRF_RequestPriority priority, Action<Optional<TData>> action)
+        public RRF_ModelReader(RRF_MemoryBuffer memory_buffer, string resource, string flags, FLUX_RequestPriority priority, Action<Optional<TData>> action)
             : base(memory_buffer, resource, priority, action)
         {
             Flags = flags;
         }
 
-        public override async Task<Optional<TData>> TryScheduleAsync(RRF_RequestPriority priority, CancellationToken ct)
+        public override async Task<Optional<TData>> TryScheduleAsync(FLUX_RequestPriority priority, CancellationToken ct)
         {
             var connection = MemoryBuffer.ConnectionProvider.Connection;
             var request = new RRF_Request<RRF_ObjectModelResponse<TData>>($"rr_model?key={Resource}&flags={Flags}", HttpMethod.Get, priority, ct, MemoryBuffer.RequestTimeout);
@@ -86,12 +86,12 @@ namespace Flux.ViewModels
     }
     public class RRF_FileSystemReader : RRF_MemoryReader<FLUX_FileList>
     {
-        public RRF_FileSystemReader(RRF_MemoryBuffer memory_buffer, string resource, RRF_RequestPriority priority, Action<Optional<FLUX_FileList>> action)
+        public RRF_FileSystemReader(RRF_MemoryBuffer memory_buffer, string resource, FLUX_RequestPriority priority, Action<Optional<FLUX_FileList>> action)
             : base(memory_buffer, resource, priority, action)
         {
         }
 
-        public override async Task<Optional<FLUX_FileList>> TryScheduleAsync(RRF_RequestPriority priority, CancellationToken ct)
+        public override async Task<Optional<FLUX_FileList>> TryScheduleAsync(FLUX_RequestPriority priority, CancellationToken ct)
         {
             var connection = MemoryBuffer.ConnectionProvider.Connection;
 
@@ -124,13 +124,13 @@ namespace Flux.ViewModels
         public RRF_MemoryReaderGroup(RRF_MemoryBuffer memory_buffer, TimeSpan period) : base(memory_buffer, period)
         {
         }
-        public RRF_ModelReader<TData> AddModelReader<TData>(string path, string flags, RRF_RequestPriority priority, Action<Optional<TData>> model)
+        public RRF_ModelReader<TData> AddModelReader<TData>(string path, string flags, FLUX_RequestPriority priority, Action<Optional<TData>> model)
         {
             var reader = new RRF_ModelReader<TData>(MemoryBuffer, path, flags, priority, model);
             MemoryReaders.AddOrUpdate(reader);
             return reader;
         }
-        public RRF_FileSystemReader AddFileSytemReader(Func<RRF_ConnectionProvider, string> get_path, RRF_RequestPriority priority, Action<Optional<FLUX_FileList>> file_system)
+        public RRF_FileSystemReader AddFileSytemReader(Func<RRF_ConnectionProvider, string> get_path, FLUX_RequestPriority priority, Action<Optional<FLUX_FileList>> file_system)
         {
             var reader = new RRF_FileSystemReader(MemoryBuffer, get_path(MemoryBuffer.ConnectionProvider), priority, file_system);
             MemoryReaders.AddOrUpdate(reader);
@@ -170,19 +170,19 @@ namespace Flux.ViewModels
             MemoryReaders = new Dictionary<string, IRRF_MemoryReader>();
             SourceCacheRC.Create(this, v => v.MemoryReaderGroups, f => f.Period);
 
-            AddModelReader(ultra_fast, "state", "f", m => m.State, RRF_RequestPriority.Medium);
-            AddModelReader(fast, "tools", "f", m => m.Tools, RRF_RequestPriority.Medium);
-            AddModelReader(fast, "sensors", "f", m => m.Sensors, RRF_RequestPriority.Medium);
-            AddModelReader(fast, "global", "v", m => m.Global, RRF_RequestPriority.Medium);
-            AddModelReader(fast, "job", "v", m => m.FluxJob, RRF_RequestPriority.Medium);
-            AddModelReader(medium, "inputs", "f", m => m.Inputs, RRF_RequestPriority.Medium);
-            AddModelReader(medium, "move", "v", m => m.Move, RRF_RequestPriority.Medium);
-            AddModelReader(medium, "heat", "f", m => m.Heat, RRF_RequestPriority.Medium);
+            AddModelReader(ultra_fast, "state", "f", m => m.State, FLUX_RequestPriority.Medium);
+            AddModelReader(fast, "tools", "f", m => m.Tools, FLUX_RequestPriority.Medium);
+            AddModelReader(fast, "sensors", "f", m => m.Sensors, FLUX_RequestPriority.Medium);
+            AddModelReader(fast, "global", "v", m => m.Global, FLUX_RequestPriority.Medium);
+            AddModelReader(fast, "job", "v", m => m.FluxJob, FLUX_RequestPriority.Medium);
+            AddModelReader(medium, "inputs", "f", m => m.Inputs, FLUX_RequestPriority.Medium);
+            AddModelReader(medium, "move", "v", m => m.Move, FLUX_RequestPriority.Medium);
+            AddModelReader(medium, "heat", "f", m => m.Heat, FLUX_RequestPriority.Medium);
 
-            AddFileSytemReader(slow, c => c.QueuePath, m => m.Queue, RRF_RequestPriority.Immediate);
-            AddFileSytemReader(slow, c => c.StoragePath, m => m.Storage, RRF_RequestPriority.Immediate);
-            AddFileSytemReader(job, c => c.JobEventPath, m => m.JobEvents, RRF_RequestPriority.Immediate);
-            AddFileSytemReader(extrusion, c => c.ExtrusionEventPath, m => m.Extrusions, RRF_RequestPriority.Immediate);
+            AddFileSytemReader(slow, c => c.QueuePath, m => m.Queue, FLUX_RequestPriority.Immediate);
+            AddFileSytemReader(slow, c => c.StoragePath, m => m.Storage, FLUX_RequestPriority.Immediate);
+            AddFileSytemReader(job, c => c.JobEventPath, m => m.JobEvents, FLUX_RequestPriority.Immediate);
+            AddFileSytemReader(extrusion, c => c.ExtrusionEventPath, m => m.Extrusions, FLUX_RequestPriority.Immediate);
 
             _HasFullMemoryRead = MemoryReaderGroups.Connect()
                 .TrueForAll(f => f.WhenAnyValue(f => f.HasMemoryRead), r => r)
@@ -193,7 +193,7 @@ namespace Flux.ViewModels
         {
         }
 
-        private void AddModelReader<T>(TimeSpan period, string path, string flags, Expression<Func<RRF_ObjectModel, Optional<T>>> model, RRF_RequestPriority priority)
+        private void AddModelReader<T>(TimeSpan period, string path, string flags, Expression<Func<RRF_ObjectModel, Optional<T>>> model, FLUX_RequestPriority priority)
         {
             var memory_reader = MemoryReaderGroups.Lookup(period);
             if (!memory_reader.HasValue)
@@ -205,7 +205,7 @@ namespace Flux.ViewModels
             MemoryReaders.Add(model.ToString(), memory_reader.Value.AddModelReader<T>(path, flags, priority, v => setter(RRFObjectModel, v)));
         }
 
-        private void AddFileSytemReader(TimeSpan period, Func<RRF_ConnectionProvider, string> get_path, Expression<Func<RRF_ObjectModel, Optional<FLUX_FileList>>> file_system, RRF_RequestPriority priority)
+        private void AddFileSytemReader(TimeSpan period, Func<RRF_ConnectionProvider, string> get_path, Expression<Func<RRF_ObjectModel, Optional<FLUX_FileList>>> file_system, FLUX_RequestPriority priority)
         {
             var memory_reader = MemoryReaderGroups.Lookup(period);
             if (!memory_reader.HasValue)
@@ -222,7 +222,7 @@ namespace Flux.ViewModels
             var memory_reader = MemoryReaders.Lookup(dummy_expression.ToString());
             if (!memory_reader.HasValue)
                 return default;
-            return await ((IRRF_MemoryReader<TData>)memory_reader.Value).TryScheduleAsync(RRF_RequestPriority.Immediate, ct);
+            return await ((IRRF_MemoryReader<TData>)memory_reader.Value).TryScheduleAsync(FLUX_RequestPriority.Immediate, ct);
         }
 
         public IObservable<Optional<TModel>> ObserveModel<TModel>(

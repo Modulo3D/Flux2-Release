@@ -46,9 +46,9 @@ namespace Flux.ViewModels
         public IObservableList<IConditionViewModel> FilteredConditions { get; private set; }
 
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> CancelOperationCommand { get; private set; }
+        public ReactiveCommandBaseRC CancelOperationCommand { get; private set; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> ExecuteOperationCommand { get; private set; }
+        public ReactiveCommandBaseRC ExecuteOperationCommand { get; private set; }
 
         private ObservableAsPropertyHelper<Optional<FLUX_Temp>> _CurrentTemperature;
         [RemoteOutput(true, typeof(FluxTemperatureConverter))]
@@ -109,8 +109,8 @@ namespace Flux.ViewModels
                 .ConvertOr(t => t.Percentage, () => 0)
                 .ToPropertyRC((TViewModel)this, v => v.TemperaturePercentage);
 
-            CancelOperationCommand = ReactiveCommandRC.CreateFromTask(SafeCancelOperationAsync, (TViewModel)this, can_cancel);
-            ExecuteOperationCommand = ReactiveCommandRC.CreateFromTask(SafeExecuteOperationAsync, (TViewModel)this, can_execute);
+            CancelOperationCommand = ReactiveCommandBaseRC.CreateFromTask(SafeCancelOperationAsync, (TViewModel)this, can_cancel);
+            ExecuteOperationCommand = ReactiveCommandBaseRC.CreateFromTask(SafeExecuteOperationAsync, (TViewModel)this, can_execute);
         }
 
         public abstract Task UpdateNFCAsync();

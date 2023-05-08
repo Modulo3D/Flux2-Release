@@ -72,10 +72,10 @@ namespace Flux.ViewModels
         public Optional<FLUX_Temp> PlateTemperature => _PlateTemperature.Value;
 
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> ProbeHeightmapCommand { get; }
+        public ReactiveCommandBaseRC ProbeHeightmapCommand { get; }
 
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> ProbeHeightmapSettingsCommand { get; }
+        public ReactiveCommandBaseRC ProbeHeightmapSettingsCommand { get; }
 
         //private ushort _WidthProbePoints = 2;
         //[RemoteInput(min: 2, max: 10)]
@@ -99,8 +99,8 @@ namespace Flux.ViewModels
                .WhenAnyValue(s => s.StatusEvaluation)
                .Select(s => s.CanSafeCycle);
 
-            ProbeHeightmapCommand = ReactiveCommandRC.CreateFromTask(ProbeHeightmapAsync, this, can_probe);
-            ProbeHeightmapSettingsCommand = ReactiveCommandRC.CreateFromTask(ProbeHeightmapSettingsAsync, this);
+            ProbeHeightmapCommand = ReactiveCommandBaseRC.CreateFromTask(ProbeHeightmapAsync, this, can_probe);
+            ProbeHeightmapSettingsCommand = ReactiveCommandBaseRC.CreateFromTask(ProbeHeightmapSettingsAsync, this);
 
             _PlateTemperature = Flux.ConnectionProvider
                 .ObserveVariable(c => c.TEMP_PLATE, "main.plate")

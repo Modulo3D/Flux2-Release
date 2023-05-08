@@ -93,9 +93,9 @@ namespace Flux.ViewModels
         public bool IsOffsetRoot => _IsOffsetRoot.Value;
 
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> SetProbeOffsetCommand { get; }
+        public ReactiveCommandBaseRC SetProbeOffsetCommand { get; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> ResetProbeOffsetCommand { get; }
+        public ReactiveCommandBaseRC ResetProbeOffsetCommand { get; }
 
         private double _XUserOffset;
         [RemoteInput(step: 0.05, converter: typeof(MillimeterConverter))]
@@ -231,9 +231,9 @@ namespace Flux.ViewModels
                 this.WhenAnyValue(v => v.ProbeOffsetKey),
                 (i, p) => i && p.HasValue);
 
-            ResetProbeOffsetCommand = ReactiveCommandRC.Create(ResetProbeOffset, this, has_probe_offset_key);
+            ResetProbeOffsetCommand = ReactiveCommandBaseRC.Create(ResetProbeOffset, this, has_probe_offset_key);
 
-            SetProbeOffsetCommand = ReactiveCommandRC.CreateFromTask(SetProbeOffsetAsync, this, has_probe_offset_key);
+            SetProbeOffsetCommand = ReactiveCommandBaseRC.CreateFromTask(SetProbeOffsetAsync, this, has_probe_offset_key);
 
             var userOffset = this.WhenAnyValue(v => v.UserOffset);
             var probeOffset = this.WhenAnyValue(v => v.ProbeOffset);
