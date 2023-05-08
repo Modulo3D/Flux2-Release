@@ -160,7 +160,7 @@ namespace Flux.ViewModels
                     }
                 });
 
-            AddOutput("name", Observable.Interval(TimeSpan.FromSeconds(0.1)).Timestamp().Select(t => t.ToString()));
+            AddOutput("name", Analyzer.MCode.Name);
             AddOutput("quality", Analyzer.MCode.PrintQuality);
             AddOutput("quantities", quanitites, typeof(EnumerableConverter<WeightConverter, double>));
             AddOutput("infoToggled", this.WhenAnyValue(v => v.ShowInfo));
