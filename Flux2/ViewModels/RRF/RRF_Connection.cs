@@ -2,6 +2,7 @@
 using DynamicData.Kernel;
 using GreenSuperGreen.Queues;
 using Modulo3DNet;
+using OSAI;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -20,20 +21,20 @@ using System.Xml.Linq;
 
 namespace Flux.ViewModels
 {
-    public readonly struct RRF_Request<TData> : IFLUX_Request<HttpClient, TData>
+    public readonly struct RRF_Request<TData> : IFLUX_Request<HttpClient, RRF_Response<TData>>
     {
         public TimeSpan Timeout { get; }
         public HttpRequestMessage Request { get; }
         public FLUX_RequestPriority Priority { get; }
         public CancellationToken Cancellation { get; }
-        public TaskCompletionSource<IFLUX_Response<TData>> Response { get; }
+        public TaskCompletionSource<RRF_Response<TData>> Response { get; }
         public RRF_Request(string request, HttpMethod httpMethod, FLUX_RequestPriority priority, CancellationToken ct, TimeSpan timeout = default)
         {
             Timeout = timeout;
             Cancellation = ct;
             Priority = priority;
             Request = new HttpRequestMessage(httpMethod, request);
-            Response = new TaskCompletionSource<IFLUX_Response<TData>>(TaskCreationOptions.RunContinuationsAsynchronously);
+            Response = new TaskCompletionSource<RRF_Response<TData>>(TaskCreationOptions.RunContinuationsAsynchronously);
         }
         public override string ToString() => $"{nameof(RRF_Request<TData>)} Method:{Request.Method} Resource:{Request.RequestUri}";
         public async Task<bool> TrySendAsync(HttpClient client, CancellationToken ct)
@@ -64,7 +65,7 @@ namespace Flux.ViewModels
         }
     }
 
-    public readonly record struct RRF_Response<TData>(HttpStatusCode StatusCode, Optional<TData> Content) : IFLUX_Response<TData>
+    public readonly record struct RRF_Response<TData>(HttpStatusCode StatusCode, Optional<TData> Content) : IFLUX_Response
     {
         public bool Ok
         {
@@ -175,6 +176,10 @@ namespace Flux.ViewModels
 
             return true;
         }
+        public async Task<RRF_Response<TData>> TryEnqueueRequestAsync<TData>(RRF_Request<TData> rrf_request)
+        {
+            return await TryEnqueueRequestAsync<RRF_Request<TData>, RRF_Response<TData>>(rrf_request);
+        }
         public async Task<bool> PostGCodeAsync(GCodeString gcode, CancellationToken ct)
         {
             try
@@ -187,7 +192,7 @@ namespace Flux.ViewModels
                 }
 
                 var request = new RRF_Request<string>(resource, HttpMethod.Get, FLUX_RequestPriority.Immediate, ct);
-                var response = await TryEnqueueRequestAsync(request);
+                var response = await TryEnqueueRequestAsync<RRF_Request<string>, RRF_Response<string>>(request);
                 if (!response.Ok)
                 {
                     Flux.Messages.LogMessage($"{request}", $"{response}", MessageLevel.ERROR, 0);
@@ -442,7 +447,7 @@ namespace Flux.ViewModels
 
                 var path = $"{folder}/{name}".TrimStart('/');
                 var request = new RRF_Request<string>($"rr_mkdir?dir=0:/{path}", HttpMethod.Get, FLUX_RequestPriority.Immediate, ct);
-                var response = await TryEnqueueRequestAsync(request);
+                var response = await TryEnqueueRequestAsync<RRF_Request<string>, RRF_Response<string>>(request);
                 return response.Ok;
             }
             catch
@@ -460,7 +465,7 @@ namespace Flux.ViewModels
                 {
                     var first = file_list.ConvertOr(f => f.Next, () => 0);
                     var request = new RRF_Request<FLUX_FileList>($"rr_filelist?dir={folder}&first={first}", HttpMethod.Get, FLUX_RequestPriority.Immediate, ct);
-                    var response = await TryEnqueueRequestAsync(request);
+                    var response = await TryEnqueueRequestAsync<RRF_Request<FLUX_FileList>, RRF_Response<FLUX_FileList>>(request);
 
                     file_list = response.Content;
                     if (file_list.HasValue)
@@ -515,7 +520,7 @@ namespace Flux.ViewModels
                     return default;
 
                 var request = new RRF_Request<string>($"rr_download?name=0:/{folder}/{filename}", HttpMethod.Get, FLUX_RequestPriority.Immediate, ct);
-                var response = await TryEnqueueRequestAsync(request);
+                var response = await TryEnqueueRequestAsync<RRF_Request<string>, RRF_Response<string>>(request);
                 return response.Content;
             }
             catch
@@ -543,7 +548,7 @@ namespace Flux.ViewModels
                     return true;
 
                 var request = new RRF_Request<RRF_Err>($"rr_delete?name=0:/{path}", HttpMethod.Get, FLUX_RequestPriority.Immediate, ct);
-                var response = await TryEnqueueRequestAsync(request);
+                var response = await TryEnqueueRequestAsync<RRF_Request<RRF_Err>, RRF_Response<RRF_Err>>(request);
 
                 if (!response.Ok)
                     return false;

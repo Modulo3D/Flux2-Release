@@ -22,6 +22,7 @@ namespace Flux.ViewModels
 {
     public class MCodesViewModel : FluxRoutableNavBarViewModel<MCodesViewModel>, IFluxMCodesViewModel
     {
+        private SemaphoreSlim PrepareMCodeSemaphore { get; set; }
         private CancellationTokenSource PrepareMCodeCTS { get; set; }
 
         [RemoteContent(true, nameof(IFluxMCodeStorageViewModel.FileNumber))]
@@ -60,6 +61,8 @@ namespace Flux.ViewModels
 
         public MCodesViewModel(FluxViewModel flux) : base(flux)
         {
+            PrepareMCodeSemaphore = new SemaphoreSlim(1, 1);
+
             _QueuePosition = Flux.ConnectionProvider
                 .ObserveVariable(c => c.QUEUE_POS)
                 .ValueOr(() => new QueuePosition(-1))
@@ -328,6 +331,7 @@ namespace Flux.ViewModels
         }
         public async Task<bool> ClearMCodeStorageAsync()
         {
+
             var result = await Flux.ShowDialogAsync(f => new ConfirmDialog(f, new RemoteText("clearMCodes", true), new RemoteText()));
             if (result.result != DialogResult.Primary)
                 return true;
@@ -344,10 +348,14 @@ namespace Flux.ViewModels
         }
         public async Task<bool> PrepareMCodeAsync(IFluxMCodeStorageViewModel mcode, Action<double> report_progress = default)
         {
+            using var prepare_mcode_cts = new CancellationTokenSource(TimeSpan.FromSeconds(0.5));
+            await PrepareMCodeSemaphore.WaitAsync(prepare_mcode_cts.Token);
+
             report_progress_internal(0);
             var mcode_vm = Optional<IFluxMCodeStorageViewModel>.None;
             try
             {
+
                 IsPreparingFile = true;
                 mcode_vm = AvaiableMCodes.Lookup(mcode.MCodeKey);
                 if (!mcode_vm.HasValue)
@@ -372,10 +380,16 @@ namespace Flux.ViewModels
                 return true;
 
             }
+            catch(Exception ex)
+            {
+                Console.WriteLine(ex.ToString());
+                return false;
+            }
             finally
             {
                 IsPreparingFile = false;
                 report_progress_internal(0);
+                PrepareMCodeSemaphore.Release();
             }
 
             void report_progress_internal(double percentage)
@@ -610,11 +624,6 @@ namespace Flux.ViewModels
                 yield break;
             foreach (var job in job_queue.Value.Values)
                 yield return new MCodeQueueViewModel(this, job);
-        }
-
-        public Optional<IFluxMCodeStorageViewModel> LookupMCode(MCode mcode)
-        {
-            throw new NotImplementedException();
         }
     }
 }

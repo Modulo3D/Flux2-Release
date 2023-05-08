@@ -100,7 +100,7 @@ namespace Flux.ViewModels
             Flux.InitializeRemoteView();
             Flux.WhenAnyValue(f => f.RemoteControlData)
                 .DistinctUntilChanged()
-                .ThrottleMax(TimeSpan.FromMilliseconds(50), TimeSpan.FromMilliseconds(200))
+                //.ThrottleMax(TimeSpan.FromMilliseconds(50), TimeSpan.FromMilliseconds(200))
                 .Subscribe(async d => await SendRemoteControlDataAsync(d))
                 .DisposeWith(Disposables);
         }
@@ -149,12 +149,24 @@ namespace Flux.ViewModels
                         if (!command.HasValue)
                             return;
 
-                        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(0.5));
-                        await command.Value.ExecuteAsync(cts.Token);
+                        if (command_name == "selectMCodeStorage")
+                        {
+                            Parallel.For(0, 100, async i =>
+                            {
+                                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(0.5));
+                                await command.Value.ExecuteAsync(cts.Token);
+                            });
+                        }
+                        else
+                        {
+                            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+                            await command.Value.ExecuteAsync(cts.Token);
+                        }
                     }
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
+                    Flux.Messages.LogException(this, ex);
                 }
             }
             catch (Exception ex)

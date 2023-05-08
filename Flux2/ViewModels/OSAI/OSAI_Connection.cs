@@ -22,12 +22,12 @@ using System.Reactive.Disposables;
 
 namespace Flux.ViewModels
 {
-    public readonly struct OSAI_Request<TData> : IFLUX_Request<OPENcontrolPortTypeClient, TData>
+    public readonly struct OSAI_Request<TData> : IFLUX_Request<OPENcontrolPortTypeClient, OSAI_Response<TData>>
     {
         public TimeSpan Timeout { get; }
         public FLUX_RequestPriority Priority { get; }
         public CancellationToken Cancellation { get; }
-        public TaskCompletionSource<IFLUX_Response<TData>> Response { get; }
+        public TaskCompletionSource<OSAI_Response<TData>> Response { get; }
         public Func<TData, OSAI_Err> Retval { get; }
         public Func<OPENcontrolPortTypeClient, CancellationToken, Task<TData>> Request { get; }
         public OSAI_Request(
@@ -42,7 +42,7 @@ namespace Flux.ViewModels
             Request = request;
             Cancellation = ct;
             Priority = priority;
-            Response = new TaskCompletionSource<IFLUX_Response<TData>>(TaskCreationOptions.RunContinuationsAsynchronously);
+            Response = new TaskCompletionSource<OSAI_Response<TData>>(TaskCreationOptions.RunContinuationsAsynchronously);
         }
         public override string ToString() => $"{nameof(OSAI_Request<TData>)} Method:{Request.Method}";
         public async Task<bool> TrySendAsync(OPENcontrolPortTypeClient client, CancellationToken ct)
@@ -67,7 +67,7 @@ namespace Flux.ViewModels
     }
 
     public readonly record struct OSAI_Err(ushort Err, uint ErrClass, uint ErrNum);
-    public readonly record struct OSAI_Response<TData>(Optional<TData> Content, OSAI_Err Err) : IFLUX_Response<TData>
+    public readonly record struct OSAI_Response<TData>(Optional<TData> Content, OSAI_Err Err) : IFLUX_Response
     {
         public bool Ok
         {
@@ -122,7 +122,7 @@ namespace Flux.ViewModels
             TimeSpan timeout = default)
         {
             var osai_request = new OSAI_Request<TData>((c, ct) => request(c, ct), retval, priority, ct, timeout);
-            return (OSAI_Response<TData>)await TryEnqueueRequestAsync(osai_request);
+            return await TryEnqueueRequestAsync<OSAI_Request<TData>, OSAI_Response<TData>>(osai_request);
         }
         public async Task<Optional<TData>> TryEnqueueRequestAsync<TResponse, TData>(
             Func<OPENcontrolPortTypeClient, CancellationToken, Task<TResponse>> request,
@@ -135,7 +135,7 @@ namespace Flux.ViewModels
             try
             {
                 var osai_request = new OSAI_Request<TResponse>((c, ct) => request(c, ct), retval, priority, ct, timeout);
-                var response = await TryEnqueueRequestAsync(osai_request);
+                var response = await TryEnqueueRequestAsync<OSAI_Request<TResponse>, OSAI_Response<TResponse>>(osai_request);
 
                 if (!response.Ok)
                     return default;
@@ -488,6 +488,16 @@ namespace Flux.ViewModels
         {
             return await WriteVariableAsync("!REQ_HOLD", true, ct);
         }
+        protected async Task<bool> DeselectParamacroAsync()
+        {
+            using var deselect_part_program_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+            var deselect_part_program_response = await TryEnqueueRequestAsync(
+                (c, ct) => Client.Value.SelectPartProgramFromDriveAsync(new SelectPartProgramFromDriveRequest(ProcessNumber, $"")),
+                r => new(r.retval, r.ErrClass, r.ErrNum), FLUX_RequestPriority.Immediate, deselect_part_program_cts.Token);
+
+            return deselect_part_program_response.Ok;
+        }
         public override async Task<bool> ExecuteParamacroAsync(GCodeString paramacro, CancellationToken put_ct, bool can_cancel = false)
         {
             try
@@ -495,16 +505,7 @@ namespace Flux.ViewModels
                 if (!paramacro.HasValue)
                     return false;
 
-                var deselect_part_program_response = await TryEnqueueRequestAsync(
-                    (c, ct) => Client.Value.SelectPartProgramFromDriveAsync(new SelectPartProgramFromDriveRequest(ProcessNumber, $"")),
-                    r => new (r.retval, r.ErrClass, r.ErrNum), FLUX_RequestPriority.Immediate, put_ct);
-
-                if (!deselect_part_program_response.Ok)
-                    return false;
-
-                using var delete_paramacro_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                var remove_file_response = await DeleteAsync(StoragePath, "paramacro.mcode", delete_paramacro_ctk.Token);
-                if (!remove_file_response)
+                if (!await DeselectParamacroAsync())
                     return false;
 
                 // put file
@@ -560,6 +561,7 @@ namespace Flux.ViewModels
             ushort file_id;
             uint block_number = 0;
             ushort transaction = 0;
+            var tmp_guid = Guid.NewGuid();
 
             try
             {
@@ -570,6 +572,12 @@ namespace Flux.ViewModels
                 if (is_paramacro)
                 {
                     var path_name = CombinePaths(folder, filename);
+
+                    using var delete_paramacro_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    var remove_paramacro_response = await DeleteAsync(folder, filename, delete_paramacro_ctk.Token);
+                    if (!remove_paramacro_response)
+                        return false;
+
                     var gcode = GCodeString.Create(start, source, end, Environment.NewLine).ToString();
                     var put_file_request = new PutFileRequest(gcode, (uint)gcode.Length, path_name);
                     var put_file_response = await Client.Value.PutFileAsync(put_file_request);
@@ -581,18 +589,19 @@ namespace Flux.ViewModels
                 }
 
                 // upload a partprogram
+
                 using var delete_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                var remove_file_response = await DeleteAsync(folder, "file_upload.tmp", delete_cts.Token);
+                var remove_file_response = await DeleteAsync(folder, $"file_upload_{tmp_guid}.tmp", delete_cts.Token);
                 if (!remove_file_response)
                     return false;
 
-                var create_file_request = new LogFSCreateFileRequest($"{folder}\\file_upload.tmp");
+                var create_file_request = new LogFSCreateFileRequest($"{folder}\\file_upload_{tmp_guid}.tmp");
                 var create_file_response = await Client.Value.LogFSCreateFileAsync(create_file_request);
 
                 if (create_file_response.retval == 0)
                     return false;
 
-                var open_file_request = new LogFSOpenFileRequest($"{folder}\\file_upload.tmp", true, 0, 0);
+                var open_file_request = new LogFSOpenFileRequest($"{folder}\\file_upload_{tmp_guid}.tmp", true, 0, 0);
                 var open_file_response = await Client.Value.LogFSOpenFileAsync(open_file_request);
 
                 if (open_file_response.retval == 0)
@@ -693,7 +702,7 @@ namespace Flux.ViewModels
                     return false;
 
                 using var rename_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                var rename_response = await RenameAsync(folder, "file_upload.tmp", filename, rename_cts.Token); ;
+                var rename_response = await RenameAsync(folder, $"file_upload_{tmp_guid}.tmp", filename, rename_cts.Token); ;
                 if (!rename_response)
                     return false;
 
@@ -704,9 +713,21 @@ namespace Flux.ViewModels
                 return false;
             }
         }
-        public override Task<bool> ClearFolderAsync(string folder, CancellationToken ct)
+        public override async Task<bool> ClearFolderAsync(string folder, CancellationToken ct)
         {
-            return DeleteAsync(folder, "*", ct);
+            if (folder == StoragePath)
+                if (!await DeselectParamacroAsync())
+                    return false;
+
+            var file_list = await ListFilesAsync(folder, ct);
+            if (!file_list.HasValue)
+                return false;
+
+            foreach (var file in file_list.Value.Files)
+                if (!await DeleteAsync(folder, file.Name, ct))
+                    continue;
+
+            return true;
         }
         public override Task<Stream> GetFileStreamAsync(string folder, string name, CancellationToken ct)
         {
@@ -717,7 +738,7 @@ namespace Flux.ViewModels
             var remove_file_response = await TryEnqueueRequestAsync(
                 (c, ct) => c.LogFSRemoveFileAsync(new LogFSRemoveFileRequest($"{folder}\\", filename)),
                 r => new(r.retval, r.ErrClass, r.ErrNum), FLUX_RequestPriority.Immediate, ct);
-            return remove_file_response.Ok || (remove_file_response.Err.ErrClass == 5 && remove_file_response.Err.ErrNum == 17);
+            return remove_file_response.Ok;// || (remove_file_response.Err.ErrClass == 5 && remove_file_response.Err.ErrNum == 17);
         }
         public override async Task<bool> CreateFolderAsync(string folder, string name, CancellationToken ct)
         {

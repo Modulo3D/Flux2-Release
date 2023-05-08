@@ -56,7 +56,6 @@ namespace Flux.ViewModels
         {
             FluxJob = job;
             MCodes = mcodes;
-            _QueuePosition =
 
            _QueuePosition = MCodes.Flux.ConnectionProvider
                 .ObserveVariable(c => c.QUEUE_POS)
