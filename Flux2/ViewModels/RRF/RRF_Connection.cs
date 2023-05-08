@@ -20,37 +20,20 @@ using System.Xml.Linq;
 
 namespace Flux.ViewModels
 {
-    public interface IRRF_Request
-    {
-        TimeSpan Timeout { get; }
-        RRF_RequestPriority Priority { get; }
-        CancellationToken Cancellation { get; }
-
-        bool TrySetCanceled();
-        Task<bool> TrySendAsync(HttpClient client, CancellationToken ct);
-    }
-    public enum RRF_RequestPriority : ushort
-    {
-        Immediate = 3,
-        High = 2,
-        Medium = 1,
-        Low = 0
-    }
-
-    public readonly struct RRF_Request<TData> : IRRF_Request
+    public readonly struct RRF_Request<TData> : IFLUX_Request<HttpClient, TData>
     {
         public TimeSpan Timeout { get; }
         public HttpRequestMessage Request { get; }
-        public RRF_RequestPriority Priority { get; }
+        public FLUX_RequestPriority Priority { get; }
         public CancellationToken Cancellation { get; }
-        public TaskCompletionSource<RRF_Response<TData>> Response { get; }
-        public RRF_Request(string request, HttpMethod httpMethod, RRF_RequestPriority priority, CancellationToken ct, TimeSpan timeout = default)
+        public TaskCompletionSource<IFLUX_Response<TData>> Response { get; }
+        public RRF_Request(string request, HttpMethod httpMethod, FLUX_RequestPriority priority, CancellationToken ct, TimeSpan timeout = default)
         {
             Timeout = timeout;
             Cancellation = ct;
             Priority = priority;
             Request = new HttpRequestMessage(httpMethod, request);
-            Response = new TaskCompletionSource<RRF_Response<TData>>(TaskCreationOptions.RunContinuationsAsynchronously);
+            Response = new TaskCompletionSource<IFLUX_Response<TData>>(TaskCreationOptions.RunContinuationsAsynchronously);
         }
         public override string ToString() => $"{nameof(RRF_Request<TData>)} Method:{Request.Method} Resource:{Request.RequestUri}";
         public async Task<bool> TrySendAsync(HttpClient client, CancellationToken ct)
@@ -81,12 +64,7 @@ namespace Flux.ViewModels
         }
     }
 
-    public interface IRRF_Response
-    {
-        bool Ok { get; }
-        HttpStatusCode StatusCode { get; }
-    }
-    public record struct RRF_Response<TData>(HttpStatusCode StatusCode, Optional<TData> Content) : IRRF_Response
+    public readonly record struct RRF_Response<TData>(HttpStatusCode StatusCode, Optional<TData> Content) : IFLUX_Response<TData>
     {
         public bool Ok
         {
@@ -123,55 +101,16 @@ namespace Flux.ViewModels
         public override string ExtrusionEventPath => CombinePaths(EventPath, "extr");
 
         public FluxViewModel Flux { get; }
-        public PriorityQueueNotifierUC<RRF_RequestPriority, IRRF_Request> Requests { get; }
 
         public RRF_Connection(FluxViewModel flux, RRF_ConnectionProvider connection_provider) : base(connection_provider)
         {
             Flux = flux;
-
-            var values = ((RRF_RequestPriority[])Enum.GetValues(typeof(RRF_RequestPriority)))
-                .OrderByDescending(e => (ushort)e);
-            Requests = new PriorityQueueNotifierUC<RRF_RequestPriority, IRRF_Request>(values);
-
-            DisposableThread.Start(TryDequeueAsync, TimeSpan.Zero)
-                .DisposeWith(Disposables);
         }
 
         // BASIC OPERATIONS
-        private async Task TryDequeueAsync()
-        {
-            if (!Client.HasValue)
-                return;
-            await Requests.EnqueuedItemsAsync();
-            while (Requests.TryDequeu(out var rrf_request))
-            {
-                try
-                {
-                    using var request_cts = CancellationTokenSource.CreateLinkedTokenSource(rrf_request.Cancellation);
-                    if (rrf_request.Timeout > TimeSpan.Zero)
-                        request_cts.CancelAfter(rrf_request.Timeout);
-
-                    await rrf_request.TrySendAsync(Client.Value, request_cts.Token);
-                }
-                catch
-                {
-                    rrf_request.TrySetCanceled();
-                }
-            }
-        }
         public static int GetGCodeLenght(GCodeString paramacro)
         {
             return $"rr_gcode?gcode={string.Join("%0A", paramacro)}".Length;
-        }
-        public async Task<RRF_Response<TData>> TryEnqueueRequestAsync<TData>(RRF_Request<TData> rrf_request)
-        {
-            if (!Client.HasValue)
-                return default;
-            using var ctr = rrf_request.Cancellation.Register(() => rrf_request.TrySetCanceled());
-            Requests.Enqueue(rrf_request.Priority, rrf_request);
-            var result = await rrf_request.Response.Task;
-            await ctr.DisposeAsync();
-            return result;
         }
         public override async Task<bool> InitializeVariablesAsync(CancellationToken ct)
         {
@@ -247,7 +186,7 @@ namespace Flux.ViewModels
                     return false;
                 }
 
-                var request = new RRF_Request<string>(resource, HttpMethod.Get, RRF_RequestPriority.Immediate, ct);
+                var request = new RRF_Request<string>(resource, HttpMethod.Get, FLUX_RequestPriority.Immediate, ct);
                 var response = await TryEnqueueRequestAsync(request);
                 if (!response.Ok)
                 {
@@ -299,50 +238,16 @@ namespace Flux.ViewModels
         }
 
         // CONNECTION
-        public override Task<bool> CloseAsync()
+        protected override HttpClient ConnectAsyncInternal(string plc_address)
         {
-            try
-            {
-                if (!Client.HasValue)
-                    return Task.FromResult(true);
-                Client = null;
-
-                while (Requests.TryDequeu(out var rrf_request))
-                    rrf_request.TrySetCanceled();
-
-                return Task.FromResult(true);
-            }
-            catch
-            {
-                return Task.FromResult(false);
-            }
+            return new HttpClient() { BaseAddress = new Uri(plc_address) };
         }
-        public override async Task<bool> ConnectAsync()
+        protected override Task CloseAsyncInternal(HttpClient client)
         {
-            try
-            {
-                if (!await CloseAsync())
-                    return false;
-
-                if (!Flux.NetProvider.PLCNetworkConnectivity)
-                    return false;
-
-                var core_settings = Flux.SettingsProvider.CoreSettings.Local;
-                var plc_address = core_settings.PLCAddress;
-                if (!plc_address.HasValue)
-                    return false;
-
-                Client = new HttpClient() { BaseAddress = new Uri(plc_address.Value) };
-
-                //Client = new RestClient(plc_address.Value);
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
+            client.Dispose();
+            return Task.CompletedTask;
         }
-
+       
         // CONTROL
         public override async Task<bool> StopAsync(CancellationToken ct)
         {
@@ -536,7 +441,7 @@ namespace Flux.ViewModels
                     return false;
 
                 var path = $"{folder}/{name}".TrimStart('/');
-                var request = new RRF_Request<string>($"rr_mkdir?dir=0:/{path}", HttpMethod.Get, RRF_RequestPriority.Immediate, ct);
+                var request = new RRF_Request<string>($"rr_mkdir?dir=0:/{path}", HttpMethod.Get, FLUX_RequestPriority.Immediate, ct);
                 var response = await TryEnqueueRequestAsync(request);
                 return response.Ok;
             }
@@ -554,7 +459,7 @@ namespace Flux.ViewModels
                 do
                 {
                     var first = file_list.ConvertOr(f => f.Next, () => 0);
-                    var request = new RRF_Request<FLUX_FileList>($"rr_filelist?dir={folder}&first={first}", HttpMethod.Get, RRF_RequestPriority.Immediate, ct);
+                    var request = new RRF_Request<FLUX_FileList>($"rr_filelist?dir={folder}&first={first}", HttpMethod.Get, FLUX_RequestPriority.Immediate, ct);
                     var response = await TryEnqueueRequestAsync(request);
 
                     file_list = response.Content;
@@ -609,7 +514,7 @@ namespace Flux.ViewModels
                 if (ct.IsCancellationRequested)
                     return default;
 
-                var request = new RRF_Request<string>($"rr_download?name=0:/{folder}/{filename}", HttpMethod.Get, RRF_RequestPriority.Immediate, ct);
+                var request = new RRF_Request<string>($"rr_download?name=0:/{folder}/{filename}", HttpMethod.Get, FLUX_RequestPriority.Immediate, ct);
                 var response = await TryEnqueueRequestAsync(request);
                 return response.Content;
             }
@@ -637,7 +542,7 @@ namespace Flux.ViewModels
                 if (!file_list.Value.Files.Any(f => f.Name == filename))
                     return true;
 
-                var request = new RRF_Request<RRF_Err>($"rr_delete?name=0:/{path}", HttpMethod.Get, RRF_RequestPriority.Immediate, ct);
+                var request = new RRF_Request<RRF_Err>($"rr_delete?name=0:/{path}", HttpMethod.Get, FLUX_RequestPriority.Immediate, ct);
                 var response = await TryEnqueueRequestAsync(request);
 
                 if (!response.Ok)
@@ -664,7 +569,7 @@ namespace Flux.ViewModels
                 var old_path = $"{folder}/{old_filename}".TrimStart('/');
                 var new_path = $"{folder}/{new_filename}".TrimStart('/');
 
-                var request = new RRF_Request<RRF_Err>($"rr_move?old=0:/{old_path}&new=0:/{new_path}&deleteexisting=yes", HttpMethod.Get, RRF_RequestPriority.Immediate, ct);
+                var request = new RRF_Request<RRF_Err>($"rr_move?old=0:/{old_path}&new=0:/{new_path}&deleteexisting=yes", HttpMethod.Get, FLUX_RequestPriority.Immediate, ct);
                 var response = await TryEnqueueRequestAsync(request);
 
                 if (!response.Ok)

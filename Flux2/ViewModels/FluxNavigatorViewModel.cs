@@ -29,15 +29,15 @@ namespace Flux.ViewModels
         private Stack<IFluxRoutableViewModel> PreviousViewModels { get; }
 
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> HomeCommand { get; }
+        public ReactiveCommandBaseRC HomeCommand { get; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> MCodesCommand { get; }
+        public ReactiveCommandBaseRC MCodesCommand { get; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> FeedersCommand { get; }
+        public ReactiveCommandBaseRC FeedersCommand { get; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> CalibrationCommand { get; }
+        public ReactiveCommandBaseRC CalibrationCommand { get; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> FunctionalityCommand { get; }
+        public ReactiveCommandBaseRC FunctionalityCommand { get; }
 
         public FluxNavigatorViewModel(FluxViewModel flux)
         {

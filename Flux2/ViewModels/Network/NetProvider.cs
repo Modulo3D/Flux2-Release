@@ -17,6 +17,7 @@ using System.Net.NetworkInformation;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
@@ -148,8 +149,8 @@ namespace Flux.ViewModels
                         if (!command.HasValue)
                             return;
 
-                        //await Task.Delay(1000);
-                        await command.Value.Execute();
+                        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(0.5));
+                        await command.Value.ExecuteAsync(cts.Token);
                     }
                 }
                 catch (Exception)

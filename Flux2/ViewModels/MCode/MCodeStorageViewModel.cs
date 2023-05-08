@@ -48,13 +48,13 @@ namespace Flux.ViewModels
         public IObservableCache<Material, ushort> Materials { get; }
 
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> DeleteMCodeStorageCommand { get; }
+        public ReactiveCommandBaseRC DeleteMCodeStorageCommand { get; }
         [RemoteCommand]
-        public Func<Task> SelectMCodeStorageCommand { get; }
+        public ReactiveCommandBaseRC SelectMCodeStorageCommand { get; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> CancelSelectMCodeStorageCommand { get; }
+        public ReactiveCommandBaseRC CancelSelectMCodeStorageCommand { get; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> ToggleMCodeStorageInfoCommand { get; }
+        public ReactiveCommandBaseRC ToggleMCodeStorageInfoCommand { get; }
 
         private readonly ObservableAsPropertyHelper<bool> _CanSelect;
         public bool CanSelect => _CanSelect.Value;
@@ -123,19 +123,17 @@ namespace Flux.ViewModels
                 CanSelectMCode)
                 .ToPropertyRC(this, v => v.CanSelect);
 
-            ToggleMCodeStorageInfoCommand = ReactiveCommandRC.Create(() => { ShowInfo = !ShowInfo; }, this);
+            ToggleMCodeStorageInfoCommand = ReactiveCommandBaseRC.Create(() => { ShowInfo = !ShowInfo; }, this);
 
-            DeleteMCodeStorageCommand = ReactiveCommandRC.CreateFromTask(
+            DeleteMCodeStorageCommand = ReactiveCommandBaseRC.CreateFromTask(
                 async () => { await mcodes.DeleteAsync(false, this); }, this,
                 this.WhenAnyValue(v => v.CanDelete));
 
-            SelectMCodeStorageCommand = async () => await mcodes.AddToQueueAsync(this);
-            
-            /*ReactiveCommandRC.CreateFromTask(
+            SelectMCodeStorageCommand = ReactiveCommandBaseRC.CreateFromTask(
                 async () => { await mcodes.AddToQueueAsync(this); }, this,
-                this.WhenAnyValue(v => v.CanSelect));*/
+                this.WhenAnyValue(v => v.CanSelect));
 
-            CancelSelectMCodeStorageCommand = ReactiveCommandRC.Create(
+            CancelSelectMCodeStorageCommand = ReactiveCommandBaseRC.Create(
                 () => mcodes.CancelPrepareMCode(), this,
                 this.WhenAnyValue(v => v.IsUploading));
 

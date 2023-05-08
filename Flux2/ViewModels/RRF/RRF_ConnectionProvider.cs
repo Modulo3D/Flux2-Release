@@ -60,15 +60,12 @@ namespace Flux.ViewModels
                 switch (ConnectionPhase)
                 {
                     case RRF_ConnectionPhase.START_PHASE:
-                        while (Connection.Requests.TryDequeu(out var request))
-                            Console.WriteLine($"dropping request {request}");
-
                         if (await Connection.ConnectAsync())
                             ConnectionPhase = RRF_ConnectionPhase.DISCONNECTING_CLIENT;
                         break;
 
                     case RRF_ConnectionPhase.DISCONNECTING_CLIENT:
-                        var disconnect_request = new RRF_Request<RRF_Err>("rr_disconnect", HttpMethod.Get, RRF_RequestPriority.Immediate, ct);
+                        var disconnect_request = new RRF_Request<RRF_Err>("rr_disconnect", HttpMethod.Get, FLUX_RequestPriority.Immediate, ct);
                         var disconnect_response = await Connection.TryEnqueueRequestAsync(disconnect_request);
 
                         var disconnected = disconnect_response.Ok && disconnect_response.Content.ConvertOrDefault(err => err.Error == 0);
@@ -76,7 +73,7 @@ namespace Flux.ViewModels
                         break;
 
                     case RRF_ConnectionPhase.CONNECTING_CLIENT:
-                        var connect_request = new RRF_Request<RRF_Err>($"rr_connect?password=\"\"&time={DateTime.Now}", HttpMethod.Get, RRF_RequestPriority.Immediate, ct);
+                        var connect_request = new RRF_Request<RRF_Err>($"rr_connect?password=\"\"&time={DateTime.Now}", HttpMethod.Get, FLUX_RequestPriority.Immediate, ct);
                         var connect_response = await Connection.TryEnqueueRequestAsync(connect_request);
 
                         var connected = connect_response.Ok && connect_response.Content.ConvertOrDefault(err => err.Error == 0);

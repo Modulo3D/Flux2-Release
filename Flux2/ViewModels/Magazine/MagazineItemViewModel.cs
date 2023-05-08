@@ -23,10 +23,10 @@ namespace Flux.ViewModels
         public ushort Position => Feeder.Position;
 
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> ResetHeaterFaultCommand { get; }
+        public ReactiveCommandBaseRC ResetHeaterFaultCommand { get; }
 
         [RemoteCommand]
-        public Optional<ReactiveCommand<Unit, Unit>> RaisePistonCommand { get; }
+        public Optional<ReactiveCommandBaseRC> RaisePistonCommand { get; }
 
         public MagazineItemViewModel(FluxViewModel flux, IFluxFeederViewModel feeder) 
             : base($"{typeof(MagazineItemViewModel).GetRemoteElementClass()};{feeder.Position}")
@@ -52,7 +52,7 @@ namespace Flux.ViewModels
                 .ToProperty(this, v => v.Nozzle);
 
             // TODO
-            ResetHeaterFaultCommand = ReactiveCommandRC.Create(() => { }, this, Observable.Return(false));
+            ResetHeaterFaultCommand = ReactiveCommandBaseRC.Create(() => { }, this, Observable.Return(false));
         }
     }
 }

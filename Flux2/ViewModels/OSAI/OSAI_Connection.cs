@@ -22,35 +22,18 @@ using System.Reactive.Disposables;
 
 namespace Flux.ViewModels
 {
-    public interface IOSAI_Request
-    {
-        TimeSpan Timeout { get; }
-        OSAI_RequestPriority Priority { get; }
-        CancellationToken Cancellation { get; }
-
-        bool TrySetCanceled();
-        Task<bool> TrySendAsync(OPENcontrolPortTypeClient client, CancellationToken ct);
-    }
-    public enum OSAI_RequestPriority : ushort
-    {
-        Immediate = 3,
-        High = 2,
-        Medium = 1,
-        Low = 0
-    }
-
-    public readonly struct OSAI_Request<TData> : IOSAI_Request
+    public readonly struct OSAI_Request<TData> : IFLUX_Request<OPENcontrolPortTypeClient, TData>
     {
         public TimeSpan Timeout { get; }
-        public OSAI_RequestPriority Priority { get; }
+        public FLUX_RequestPriority Priority { get; }
         public CancellationToken Cancellation { get; }
-        public TaskCompletionSource<OSAI_Response<TData>> Response { get; }
+        public TaskCompletionSource<IFLUX_Response<TData>> Response { get; }
         public Func<TData, OSAI_Err> Retval { get; }
         public Func<OPENcontrolPortTypeClient, CancellationToken, Task<TData>> Request { get; }
         public OSAI_Request(
             Func<OPENcontrolPortTypeClient, CancellationToken, Task<TData>> request,
             Func<TData, OSAI_Err> retval,
-            OSAI_RequestPriority priority,
+            FLUX_RequestPriority priority,
             CancellationToken ct, 
             TimeSpan timeout = default)
         {
@@ -59,7 +42,7 @@ namespace Flux.ViewModels
             Request = request;
             Cancellation = ct;
             Priority = priority;
-            Response = new TaskCompletionSource<OSAI_Response<TData>>(TaskCreationOptions.RunContinuationsAsynchronously);
+            Response = new TaskCompletionSource<IFLUX_Response<TData>>(TaskCreationOptions.RunContinuationsAsynchronously);
         }
         public override string ToString() => $"{nameof(OSAI_Request<TData>)} Method:{Request.Method}";
         public async Task<bool> TrySendAsync(OPENcontrolPortTypeClient client, CancellationToken ct)
@@ -83,12 +66,8 @@ namespace Flux.ViewModels
         }
     }
 
-    public interface IOSAI_Response
-    {
-        bool Ok { get; }
-    }
-    public record struct OSAI_Err(ushort Err, uint ErrClass, uint ErrNum);
-    public record struct OSAI_Response<TData>(Optional<TData> Content, OSAI_Err Err) : IOSAI_Response
+    public readonly record struct OSAI_Err(ushort Err, uint ErrClass, uint ErrNum);
+    public readonly record struct OSAI_Response<TData>(Optional<TData> Content, OSAI_Err Err) : IFLUX_Response<TData>
     {
         public bool Ok
         {
@@ -129,74 +108,34 @@ namespace Flux.ViewModels
         public override string CombinePaths(params string[] paths) => string.Join("\\", paths);
 
         public FluxViewModel Flux { get; }
-        public PriorityQueueNotifierUC<OSAI_RequestPriority, IOSAI_Request> Requests { get; }
 
         // MEMORY VARIABLES
         public OSAI_Connection(FluxViewModel flux, OSAI_ConnectionProvider connection_provider) : base(connection_provider)
         {
             Flux = flux;
-
-            var values = ((OSAI_RequestPriority[])Enum.GetValues(typeof(OSAI_RequestPriority)))
-                .OrderByDescending(e => (ushort)e);
-            Requests = new PriorityQueueNotifierUC<OSAI_RequestPriority, IOSAI_Request>(values);
-
-            DisposableThread.Start(TryDequeueAsync, TimeSpan.Zero)
-                .DisposeWith(Disposables);
-        }
-        private async Task TryDequeueAsync()
-        {
-            if (!Client.HasValue)
-                return;
-            await Requests.EnqueuedItemsAsync();
-            while (Requests.TryDequeu(out var rrf_request))
-            {
-                try
-                {
-                    using var request_cts = CancellationTokenSource.CreateLinkedTokenSource(rrf_request.Cancellation);
-                    if (rrf_request.Timeout > TimeSpan.Zero)
-                        request_cts.CancelAfter(rrf_request.Timeout);
-
-                    await rrf_request.TrySendAsync(Client.Value, request_cts.Token);
-                }
-                catch
-                {
-                    rrf_request.TrySetCanceled();
-                }
-            }
         }
         public async Task<OSAI_Response<TData>> TryEnqueueRequestAsync<TData>(
             Func<OPENcontrolPortTypeClient, CancellationToken, Task<TData>> request, 
             Func<TData, OSAI_Err> retval, 
-            OSAI_RequestPriority priority,
+            FLUX_RequestPriority priority,
             CancellationToken ct,
             TimeSpan timeout = default)
         {
-            if (!Client.HasValue)
-                return default;
             var osai_request = new OSAI_Request<TData>((c, ct) => request(c, ct), retval, priority, ct, timeout);
-            using var ctr = osai_request.Cancellation.Register(() => osai_request.TrySetCanceled());
-            Requests.Enqueue(osai_request.Priority, osai_request);
-            var response = await osai_request.Response.Task;
-            await ctr.DisposeAsync();
-            return response;
+            return (OSAI_Response<TData>)await TryEnqueueRequestAsync(osai_request);
         }
         public async Task<Optional<TData>> TryEnqueueRequestAsync<TResponse, TData>(
             Func<OPENcontrolPortTypeClient, CancellationToken, Task<TResponse>> request,
             Func<TResponse, TData> get_value,
             Func<TResponse, OSAI_Err> retval,
-            OSAI_RequestPriority priority,
+            FLUX_RequestPriority priority,
             CancellationToken ct,
             TimeSpan timeout = default)
         {
             try
             {
-                if (!Client.HasValue)
-                    return default;
                 var osai_request = new OSAI_Request<TResponse>((c, ct) => request(c, ct), retval, priority, ct, timeout);
-                using var ctr = osai_request.Cancellation.Register(() => osai_request.TrySetCanceled());
-                Requests.Enqueue(osai_request.Priority, osai_request);
-                var response = await osai_request.Response.Task;
-                await ctr.DisposeAsync();
+                var response = await TryEnqueueRequestAsync(osai_request);
 
                 if (!response.Ok)
                     return default;
@@ -212,43 +151,13 @@ namespace Flux.ViewModels
         }
 
         // CONNECT
-        public override async Task<bool> CloseAsync()
+        protected override async Task CloseAsyncInternal(OPENcontrolPortTypeClient client)
         {
-            try
-            {
-                if (!Client.HasValue)
-                    return true;
-                await Client.Value.CloseAsync();
-                Client = null;
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
+            await client.CloseAsync();
         }
-        public override async Task<bool> ConnectAsync()
+        protected override OPENcontrolPortTypeClient ConnectAsyncInternal(string plc_address)
         {
-            try
-            {
-                if (!await CloseAsync())
-                    return false;
-
-                if (!Flux.NetProvider.PLCNetworkConnectivity)
-                    return false;
-
-                var core_settings = Flux.SettingsProvider.CoreSettings.Local;
-                var plc_address = core_settings.PLCAddress;
-                if (!plc_address.HasValue)
-                    return false;
-
-                Client = new OPENcontrolPortTypeClient(OPENcontrolPortTypeClient.EndpointConfiguration.OPENcontrol, plc_address.Value);
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
+            return new OPENcontrolPortTypeClient(OPENcontrolPortTypeClient.EndpointConfiguration.OPENcontrol, plc_address);
         }
 
         // MEMORY R/W
@@ -257,7 +166,7 @@ namespace Flux.ViewModels
             Func<OPENcontrolPortTypeClient, TOSAI_Address, TData, Task<TResponse>> write,
             Func<TResponse, OSAI_Err> retval)
         {
-            var response = await TryEnqueueRequestAsync((c, ct) => write(c, address, value), retval, OSAI_RequestPriority.Immediate, ct);
+            var response = await TryEnqueueRequestAsync((c, ct) => write(c, address, value), retval, FLUX_RequestPriority.Immediate, ct);
             return response.Ok;
         }
         public Task<bool> WriteVariableAsync(OSAI_BitIndexAddress address, bool value, CancellationToken ct)
@@ -343,7 +252,7 @@ namespace Flux.ViewModels
             Func<TResponse, TOSAI_Address, TData> get_value,
             Func<TResponse, OSAI_Err> retval)
         {
-            return TryEnqueueRequestAsync((c, ct) => read(c, address), v => get_value(v, address), retval, OSAI_RequestPriority.Immediate, ct);
+            return TryEnqueueRequestAsync((c, ct) => read(c, address), v => get_value(v, address), retval, FLUX_RequestPriority.Immediate, ct);
         }
         public Task<Optional<bool>> ReadBoolAsync(OSAI_BitIndexAddress address, CancellationToken ct)
         {
@@ -532,13 +441,13 @@ namespace Flux.ViewModels
             return TryEnqueueRequestAsync(
                 (c, ct) => c.GetAxesPositionAsync(new GetAxesPositionRequest(ProcessNumber, 0, (ushort)select, AxisNum)),
                 r => (FLUX_AxisPosition)r.IntPos.ToImmutableDictionary(p => (char)p.AxisName, p => p.position),
-                r => new(r.retval, r.ErrClass, r.ErrNum), OSAI_RequestPriority.Immediate, ct);
+                r => new(r.retval, r.ErrClass, r.ErrNum), FLUX_RequestPriority.Immediate, ct);
         }
         public async Task<bool> AxesRefAsync(CancellationToken ct, params char[] axes)
         {
             var response = await TryEnqueueRequestAsync(
                 (c, ct) => c.AxesRefAsync(new AxesRefRequest(ProcessNumber, (ushort)axes.Length, string.Join("", axes))),
-                r => new(r.retval, r.ErrClass, r.ErrNum), OSAI_RequestPriority.Immediate, ct);
+                r => new(r.retval, r.ErrClass, r.ErrNum), FLUX_RequestPriority.Immediate, ct);
 
             return response.Ok;
         }
@@ -548,7 +457,7 @@ namespace Flux.ViewModels
         {
             var response = await TryEnqueueRequestAsync(
                 (c, ct) => c.ResetAsync(new ResetRequest(ProcessNumber)),
-                r => new(r.retval, r.ErrClass, r.ErrNum), OSAI_RequestPriority.Immediate, ct);
+                r => new(r.retval, r.ErrClass, r.ErrNum), FLUX_RequestPriority.Immediate, ct);
 
             return response.Ok;
         }
@@ -588,7 +497,7 @@ namespace Flux.ViewModels
 
                 var deselect_part_program_response = await TryEnqueueRequestAsync(
                     (c, ct) => Client.Value.SelectPartProgramFromDriveAsync(new SelectPartProgramFromDriveRequest(ProcessNumber, $"")),
-                    r => new (r.retval, r.ErrClass, r.ErrNum), OSAI_RequestPriority.Immediate, put_ct);
+                    r => new (r.retval, r.ErrClass, r.ErrNum), FLUX_RequestPriority.Immediate, put_ct);
 
                 if (!deselect_part_program_response.Ok)
                     return false;
@@ -611,14 +520,14 @@ namespace Flux.ViewModels
 
                 var select_part_program_response = await TryEnqueueRequestAsync(
                     (c, ct) => Client.Value.SelectPartProgramFromDriveAsync(new SelectPartProgramFromDriveRequest(ProcessNumber, CombinePaths(StoragePath, "paramacro.mcode"))),
-                    r => new(r.retval, r.ErrClass, r.ErrNum), OSAI_RequestPriority.Immediate, put_ct);
+                    r => new(r.retval, r.ErrClass, r.ErrNum), FLUX_RequestPriority.Immediate, put_ct);
 
                 if (!select_part_program_response.Ok)
                     return false;
 
                 var cycle_response = await TryEnqueueRequestAsync(
                     (c, ct) => Client.Value.CycleAsync(new CycleRequest(ProcessNumber, 1)),
-                    r => new(r.retval, r.ErrClass, r.ErrNum), OSAI_RequestPriority.Immediate, put_ct);
+                    r => new(r.retval, r.ErrClass, r.ErrNum), FLUX_RequestPriority.Immediate, put_ct);
 
                 if (!cycle_response.Ok)
                     return false;
@@ -807,14 +716,14 @@ namespace Flux.ViewModels
         {
             var remove_file_response = await TryEnqueueRequestAsync(
                 (c, ct) => c.LogFSRemoveFileAsync(new LogFSRemoveFileRequest($"{folder}\\", filename)),
-                r => new(r.retval, r.ErrClass, r.ErrNum), OSAI_RequestPriority.Immediate, ct);
+                r => new(r.retval, r.ErrClass, r.ErrNum), FLUX_RequestPriority.Immediate, ct);
             return remove_file_response.Ok || (remove_file_response.Err.ErrClass == 5 && remove_file_response.Err.ErrNum == 17);
         }
         public override async Task<bool> CreateFolderAsync(string folder, string name, CancellationToken ct)
         {
             var create_dir_response = await TryEnqueueRequestAsync(
                 (c, ct) => c.LogFSCreateDirAsync(new LogFSCreateDirRequest($"{folder}\\{name}")),
-                r => new(r.retval, r.ErrClass, r.ErrNum), OSAI_RequestPriority.Immediate, ct);
+                r => new(r.retval, r.ErrClass, r.ErrNum), FLUX_RequestPriority.Immediate, ct);
             return create_dir_response.Ok;
         }
         public override async Task<Optional<FLUX_FileList>> ListFilesAsync(string folder, CancellationToken ct)
@@ -829,7 +738,7 @@ namespace Flux.ViewModels
 
                 find_first_result = await TryEnqueueRequestAsync(
                     (c, ct) => c.LogFSFindFirstOrDefaultAsync($"{folder}\\*"),
-                    r => r.Body, r => new(r.Body.retval, r.Body.ErrClass, r.Body.ErrNum), OSAI_RequestPriority.Immediate, ct);
+                    r => r.Body, r => new(r.Body.retval, r.Body.ErrClass, r.Body.ErrNum), FLUX_RequestPriority.Immediate, ct);
 
                 if (!find_first_result.HasValue)
                     return files_data;
@@ -849,7 +758,7 @@ namespace Flux.ViewModels
                 {
                     find_next_result = await TryEnqueueRequestAsync(
                         (c, ct) => c.LogFSFindNextAsync(handle),
-                        r => r.Body, r => new(r.Body.retval, r.Body.ErrClass, r.Body.ErrNum), OSAI_RequestPriority.Immediate, ct); 
+                        r => r.Body, r => new(r.Body.retval, r.Body.ErrClass, r.Body.ErrNum), FLUX_RequestPriority.Immediate, ct); 
                     
                     if (!find_next_result.HasValue)
                         return files_data;
@@ -870,7 +779,7 @@ namespace Flux.ViewModels
                 {
                     var close_response = await TryEnqueueRequestAsync(
                         (c, ct) => c.LogFSFindCloseAsync(new LogFSFindCloseRequest(find_first_result.Value.Finder)),
-                        r => new(r.retval, r.ErrClass, r.ErrNum), OSAI_RequestPriority.Immediate, ct); 
+                        r => new(r.retval, r.ErrClass, r.ErrNum), FLUX_RequestPriority.Immediate, ct); 
                 }
             }
 
@@ -927,7 +836,7 @@ namespace Flux.ViewModels
         {
             var rename_response = await TryEnqueueRequestAsync(
                 (c, ct) => Client.Value.LogFSRenameAsync(new LogFSRenameRequest($"{folder}\\{old_filename}", $"{folder}\\{new_filename}")),
-                r => new(r.retval, r.ErrClass, r.ErrNum), OSAI_RequestPriority.Immediate, ct);
+                r => new(r.retval, r.ErrClass, r.ErrNum), FLUX_RequestPriority.Immediate, ct);
             return rename_response.Ok;
         }
 
