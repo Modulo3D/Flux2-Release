@@ -12,7 +12,7 @@ namespace Flux.ViewModels
         public UnloadFilamentConditionViewModel UnloadFilamentCondition { get; }
         public UnloadFilamentOperationViewModel(MaterialViewModel material) : base(material)
         {
-            UnloadFilamentCondition = new UnloadFilamentConditionViewModel(this);
+            UnloadFilamentCondition = new UnloadFilamentConditionViewModel(Flux, this);
             UnloadFilamentCondition.Initialize();
         }
 

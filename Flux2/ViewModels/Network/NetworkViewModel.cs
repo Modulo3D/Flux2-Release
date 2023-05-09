@@ -8,12 +8,12 @@
         }
 
         public WiFiAvailableNetwork Network { get; }
-        public ReactiveCommandBaseRC Connect { get; }
+        public ReactiveCommand<Unit, Unit> Connect { get; }
 
         public NetworkViewModel(NetworksViewModel networks, WiFiAvailableNetwork network)
         {
             Network = network;
-            Connect = ReactiveCommandBaseRC.CreateFromTask(async () => await networks.Connect.Execute(this));
+            Connect = ReactiveCommandRC.CreateFromTask(async () => await networks.Connect.Execute(this));
         }
     }*/
 }

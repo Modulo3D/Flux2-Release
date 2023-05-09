@@ -32,7 +32,7 @@ namespace Flux.ViewModels
         public IObservableCache<IFluxMCodeQueueViewModel, QueuePosition> QueuedMCodes { get; private set; }
 
         [RemoteCommand]
-        public ReactiveCommandBaseRC DeleteAllCommand { get; }
+        public ReactiveCommand<Unit, Unit> DeleteAllCommand { get; }
 
         private Optional<DirectoryInfo[]> _RemovableDrivePaths;
         public Optional<DirectoryInfo[]> RemovableDrivePaths
@@ -73,7 +73,7 @@ namespace Flux.ViewModels
             var can_delete_all = AvaiableMCodes.Connect()
                 .TrueForAll(mcode => mcode.WhenAnyValue(m => m.CanDelete), d => d);
 
-            DeleteAllCommand = ReactiveCommandBaseRC.CreateFromTask(ClearMCodeStorageAsync, this, can_delete_all);
+            DeleteAllCommand = ReactiveCommandRC.CreateFromTask(ClearMCodeStorageAsync, this, can_delete_all);
 
             this.WhenAnyValue(v => v.RemovableDrivePaths)
                 .SubscribeRC(ExploreDrives, this);
@@ -296,7 +296,7 @@ namespace Flux.ViewModels
                     if (!analyzer.HasValue)
                         continue;
 
-                    AvaiableMCodes.AddOrUpdate(new MCodeStorageViewModel(this, mcode.Key, analyzer.Value));
+                    AvaiableMCodes.AddOrUpdate(new MCodeStorageViewModel(Flux, this, mcode.Key, analyzer.Value));
 
                     void report_load(double percentage)
                     {
@@ -348,9 +348,6 @@ namespace Flux.ViewModels
         }
         public async Task<bool> PrepareMCodeAsync(IFluxMCodeStorageViewModel mcode, Action<double> report_progress = default)
         {
-            using var prepare_mcode_cts = new CancellationTokenSource(TimeSpan.FromSeconds(0.5));
-            await PrepareMCodeSemaphore.WaitAsync(prepare_mcode_cts.Token);
-
             report_progress_internal(0);
             var mcode_vm = Optional<IFluxMCodeStorageViewModel>.None;
             try
@@ -389,7 +386,6 @@ namespace Flux.ViewModels
             {
                 IsPreparingFile = false;
                 report_progress_internal(0);
-                PrepareMCodeSemaphore.Release();
             }
 
             void report_progress_internal(double percentage)
@@ -517,6 +513,9 @@ namespace Flux.ViewModels
         }
         public async Task<bool> AddToQueueAsync(IFluxMCodeStorageViewModel mcode)
         {
+            using var prepare_mcode_cts = new CancellationTokenSource(TimeSpan.FromSeconds(0.5));
+            await PrepareMCodeSemaphore.WaitAsync(prepare_mcode_cts.Token);
+
             try
             {
                 Flux.StatusProvider.StartWithLowNozzles = false;
@@ -549,6 +548,10 @@ namespace Flux.ViewModels
             {
                 Console.WriteLine(ex);
                 return false;
+            }
+            finally 
+            {
+                PrepareMCodeSemaphore.Release();
             }
         }
         public async Task<bool> DeleteFromQueueAsync(IFluxMCodeQueueViewModel mcode)
@@ -623,7 +626,7 @@ namespace Flux.ViewModels
             if (!job_queue.HasValue)
                 yield break;
             foreach (var job in job_queue.Value.Values)
-                yield return new MCodeQueueViewModel(this, job);
+                yield return new MCodeQueueViewModel(Flux, this, job);
         }
     }
 }

@@ -13,13 +13,13 @@ namespace Flux.ViewModels
     public class StartupViewModel : FluxRoutableViewModel<StartupViewModel>
     {
         [RemoteCommand]
-        public ReactiveCommandBaseRC ResetPrinterCommand { get; private set; }
+        public ReactiveCommand<Unit, Unit> ResetPrinterCommand { get; private set; }
         [RemoteCommand]
-        public ReactiveCommandBaseRC StartupCommand { get; private set; }
+        public ReactiveCommand<Unit, Unit> StartupCommand { get; private set; }
         [RemoteCommand]
-        public Optional<ReactiveCommandBaseRC> MagazineCommand { get; private set; }
+        public Optional<ReactiveCommand<Unit, Unit>> MagazineCommand { get; private set; }
         [RemoteCommand]
-        public ReactiveCommandBaseRC SettingsCommand { get; private set; }
+        public ReactiveCommand<Unit, Unit> SettingsCommand { get; private set; }
 
         private readonly ObservableAsPropertyHelper<double> _ConnectionProgress;
         [RemoteOutput(true)]
@@ -57,12 +57,12 @@ namespace Flux.ViewModels
             _ConnectionProgress = Flux.ConnectionProvider.WhenAnyValue(v => v.ConnectionProgress)
                 .ToPropertyRC(this, v => v.ConnectionProgress);
 
-            StartupCommand = ReactiveCommandBaseRC.CreateFromTask(StartupAsync, this, can_home);
-            SettingsCommand = ReactiveCommandBaseRC.Create(NavigateToSettingsAsync, this);
-            ResetPrinterCommand = ReactiveCommandBaseRC.Create(ResetPrinter, this);
+            StartupCommand = ReactiveCommandRC.CreateFromTask(StartupAsync, this, can_home);
+            SettingsCommand = ReactiveCommandRC.Create(NavigateToSettingsAsync, this);
+            ResetPrinterCommand = ReactiveCommandRC.Create(ResetPrinter, this);
 
             if (Flux.ConnectionProvider.VariableStoreBase.HasToolChange)
-                MagazineCommand = ReactiveCommandBaseRC.Create(NavigateToMagazineAsync, this);
+                MagazineCommand = ReactiveCommandRC.Create(NavigateToMagazineAsync, this);
         }
 
         private void NavigateToSettingsAsync()

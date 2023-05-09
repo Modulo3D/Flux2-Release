@@ -118,17 +118,17 @@ namespace Flux.ViewModels
             if (!extruders.HasValue)
                 yield break;
             for (ushort position = 0; position < extruders.Value.machine_extruders; position++)
-                yield return new FeederViewModel(this, position, extruders.Value.mixing_extruders);
+                yield return new FeederViewModel(Flux, this, position, extruders.Value.mixing_extruders);
         }
         private IEnumerable<IFluxToolNozzleViewModel> CreateToolNozzles(IFluxFeederViewModel feeder)
         {
-            yield return new ToolNozzleViewModel(this, (FeederViewModel)feeder);
+            yield return new ToolNozzleViewModel(Flux, this, (FeederViewModel)feeder);
         }
         private IEnumerable<IFluxMaterialViewModel> CreateToolMaterials(IFluxFeederViewModel feeder)
         {
             for (ushort position = 0; position < feeder.MixingCount; position++)
             {
-                var material = new MaterialViewModel(this, (FeederViewModel)feeder, (ushort)(position + (feeder.Position * feeder.MixingCount)));
+                var material = new MaterialViewModel(Flux, this, (FeederViewModel)feeder, (ushort)(position + (feeder.Position * feeder.MixingCount)));
                 material.Initialize();
                 yield return material;
             }

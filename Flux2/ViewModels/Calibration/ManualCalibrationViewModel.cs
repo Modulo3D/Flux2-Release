@@ -23,7 +23,7 @@ namespace Flux.ViewModels
     {
         FluxViewModel Flux { get; }
         CalibrationViewModel Calibration { get; }
-        Optional<ReactiveCommandBaseRC> CancelCalibrationCommand { get; }
+        Optional<ReactiveCommand<Unit, Unit>> CancelCalibrationCommand { get; }
     }
 
     public abstract class ManualCalibrationPhaseViewModel<TManualCalibrationPhase> : RemoteControl<TManualCalibrationPhase>, IManualCalibrationPhaseViewModel
@@ -33,15 +33,15 @@ namespace Flux.ViewModels
         public CalibrationViewModel Calibration { get; }
 
         [RemoteCommand]
-        public Optional<ReactiveCommandBaseRC> CancelCalibrationCommand { get; protected set; }
+        public Optional<ReactiveCommand<Unit, Unit>> CancelCalibrationCommand { get; protected set; }
     
         private readonly ObservableAsPropertyHelper<Optional<ushort>> _SelectedTool;
         [RemoteOutput(true)]
         public Optional<ushort> SelectedTool => _SelectedTool.Value;
 
-        public ManualCalibrationPhaseViewModel(CalibrationViewModel calibration)
+        public ManualCalibrationPhaseViewModel(FluxViewModel flux, CalibrationViewModel calibration) : base(flux.RemoteContext)
         {
-            Flux = calibration.Flux;
+            Flux = flux;
             Calibration = calibration;
 
             _SelectedTool = Flux.ConnectionProvider
@@ -55,7 +55,7 @@ namespace Flux.ViewModels
         public virtual void Initialize()
         { 
             var can_cancel = GetCanCancelCalibration();
-            CancelCalibrationCommand = ReactiveCommandBaseRC.CreateFromTask(ExitAsync, (TManualCalibrationPhase)this, can_cancel);
+            CancelCalibrationCommand = ReactiveCommandRC.CreateFromTask(ExitAsync, (TManualCalibrationPhase)this, can_cancel);
         }
         public abstract IObservable<bool> GetCanCancelCalibration();
 
@@ -75,7 +75,7 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public bool HasSafeStart => _HasSafeStart?.Value ?? false;
 
-        public PrepareManualCalibrationViewModel(CalibrationViewModel calibration) : base(calibration)
+        public PrepareManualCalibrationViewModel(FluxViewModel flux, CalibrationViewModel calibration) : base(flux, calibration)
         {
             SourceListRC.Create(this, v => v.Conditions);
 
@@ -110,11 +110,11 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public string ProbeStateBrush => _ProbeStateBrush.Value;
         [RemoteCommand]
-        public ReactiveCommandBaseRC SelectToolCommand { get; }
+        public ReactiveCommand<Unit, Unit> SelectToolCommand { get; }
         public PerformManualCalibrationViewModel ManualCalibration { get; }
 
-        public ManualCalibrationItemViewModel(PerformManualCalibrationViewModel calibration, ushort position, IObservable<bool> not_executing) 
-            : base($"{typeof(ManualCalibrationItemViewModel).GetRemoteElementClass()};{position}")
+        public ManualCalibrationItemViewModel(FluxViewModel flux, PerformManualCalibrationViewModel calibration, ushort position, IObservable<bool> not_executing) 
+            : base(flux.RemoteContext, $"{typeof(ManualCalibrationItemViewModel).GetRemoteElementClass()};{position}")
         {
             ManualCalibration = calibration;
             Position = position;
@@ -148,7 +148,7 @@ namespace Flux.ViewModels
                 can_safe_cycle,
                 (temp, offset, ne, tool, idle) => temp.HasValue && offset.HasValue && ne && idle && tool != Position);
 
-            SelectToolCommand = ReactiveCommandBaseRC.CreateFromTask(SelectToolAsync, this, can_execute);
+            SelectToolCommand = ReactiveCommandRC.CreateFromTask(SelectToolAsync, this, can_execute);
         }
         private async Task SelectToolAsync()
         {
@@ -227,7 +227,7 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public string AxisPosition => _AxisPosition.Value;
 
-        public PerformManualCalibrationViewModel(CalibrationViewModel calibration) : base(calibration)
+        public PerformManualCalibrationViewModel(FluxViewModel flux, CalibrationViewModel calibration) : base(flux, calibration)
         {
             _CurrentTemperature = this.WhenAnyValue(v => v.SelectedTool)
                .Select(t =>
@@ -266,13 +266,13 @@ namespace Flux.ViewModels
             var move_up_not_executing = MoveUpButtons.Connect()
                 .AddKey(b => b.Name)
                 .Transform(m => m.Command, true)
-                .TrueForAll(c => c.WhenAnyValue(v => v.IsExecuting), e => !e)
+                .TrueForAll(c => c.IsExecuting, e => !e)
                 .StartWith(false);
 
             var move_down_not_executing = MoveDownButtons.Connect()
                 .AddKey(b => b.Name)
                 .Transform(m => m.Command, true)
-                .TrueForAll(c => c.WhenAnyValue(v => v.IsExecuting), e => !e)
+                .TrueForAll(c => c.IsExecuting, e => !e)
                 .StartWith(false);
 
             var not_executing = Observable.CombineLatest(
@@ -361,7 +361,7 @@ namespace Flux.ViewModels
                 })
                 .ToOptional();
 
-            return new CmdButton($"moveZ;{(distance > 0 ? $"+{distance:0.00mm}" : $"{distance:0.00mm}")}", () => move_tool(distance), can_execute);
+            return new CmdButton(Flux, $"moveZ;{(distance > 0 ? $"+{distance:0.00mm}" : $"{distance:0.00mm}")}", () => move_tool(distance), can_execute);
 
             async Task move_tool(double distance)
             {
@@ -375,20 +375,20 @@ namespace Flux.ViewModels
                 yield break;
 
             for (ushort extruder = 0; extruder < extruders.Value.machine_extruders; extruder++)
-                yield return new ManualCalibrationItemViewModel(this, extruder, not_executing);
+                yield return new ManualCalibrationItemViewModel(Flux, this, extruder, not_executing);
         }
         public override IObservable<bool> GetCanCancelCalibration()
         {
             var move_up_not_executing = MoveUpButtons.Connect()
                 .AddKey(b => b.Name)
                 .Transform(m => m.Command, true)
-                .TrueForAll(c => c.WhenAnyValue(v => v.IsExecuting), e => !e)
+                .TrueForAll(c => c.IsExecuting, e => !e)
                 .StartWith(false);
 
             var move_down_not_executing = MoveDownButtons.Connect()
                 .AddKey(b => b.Name)
                 .Transform(m => m.Command, true)
-                .TrueForAll(c => c.WhenAnyValue(v => v.IsExecuting), e => !e)
+                .TrueForAll(c => c.IsExecuting, e => !e)
                 .StartWith(false);
 
             var not_executing = Observable.CombineLatest(
@@ -413,10 +413,10 @@ namespace Flux.ViewModels
         [RemoteContent(true)]
         public IManualCalibrationPhaseViewModel ManualCalibrationPhase => _ManualCalibrationPhase.Value;
 
-        public ManualCalibrationViewModel(CalibrationViewModel calibration) : base(calibration.Flux)
+        public ManualCalibrationViewModel(FluxViewModel flux, CalibrationViewModel calibration) : base(flux)
         {
-            PrepareManualCalibration = new PrepareManualCalibrationViewModel(calibration);
-            PerformManualCalibration = new PerformManualCalibrationViewModel(calibration);
+            PrepareManualCalibration = new PrepareManualCalibrationViewModel(Flux, calibration);
+            PerformManualCalibration = new PerformManualCalibrationViewModel(Flux, calibration);
 
             PrepareManualCalibration.Initialize();
             PerformManualCalibration.Initialize();

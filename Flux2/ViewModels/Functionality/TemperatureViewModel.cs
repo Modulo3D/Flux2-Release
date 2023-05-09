@@ -22,9 +22,9 @@ namespace Flux.ViewModels
     {
         public FluxViewModel Flux { get; }
         [RemoteCommand]
-        public ReactiveCommandBaseRC ShutTargetCommand { get; }
+        public ReactiveCommand<Unit, Unit> ShutTargetCommand { get; }
         [RemoteCommand]
-        public ReactiveCommandBaseRC SelectTargetCommand { get; }
+        public ReactiveCommand<Unit, Unit> SelectTargetCommand { get; }
 
         private double _TargetTemperature = 0;
         [RemoteInput(step: 10, min: 0, max: 500, converter: typeof(TemperatureConverter))]
@@ -44,8 +44,8 @@ namespace Flux.ViewModels
         [RemoteOutput(false)]
         public ushort Position { get; }
 
-        public TemperatureViewModel(TemperaturesViewModel temperatures, ushort position, IFLUX_Variable<FLUX_Temp, double> temp_var)
-            : base($"{typeof(TemperatureViewModel).GetRemoteElementClass()};{temp_var.Name}")
+        public TemperatureViewModel(FluxViewModel flux, TemperaturesViewModel temperatures, ushort position, IFLUX_Variable<FLUX_Temp, double> temp_var)
+            : base(flux.RemoteContext, $"{typeof(TemperatureViewModel).GetRemoteElementClass()};{temp_var.Name}")
         {
             Position = position;
             Flux = temperatures.Flux;
@@ -55,8 +55,8 @@ namespace Flux.ViewModels
                 .WhenAnyValue(s => s.StatusEvaluation)
                 .Select(s => s.CanSafeCycle);
 
-            ShutTargetCommand = ReactiveCommandBaseRC.CreateFromTask(async () => { await temp_var.WriteAsync(0); }, this, can_safe_cycle);
-            SelectTargetCommand = ReactiveCommandBaseRC.CreateFromTask(async () => { await temp_var.WriteAsync(TargetTemperature); }, this, can_safe_cycle);
+            ShutTargetCommand = ReactiveCommandRC.CreateFromTask(async () => { await temp_var.WriteAsync(0); }, this, can_safe_cycle);
+            SelectTargetCommand = ReactiveCommandRC.CreateFromTask(async () => { await temp_var.WriteAsync(TargetTemperature); }, this, can_safe_cycle);
 
             _Temperature = temp_var.ValueChanged
                 .ToPropertyRC(this, v => v.Temperature);

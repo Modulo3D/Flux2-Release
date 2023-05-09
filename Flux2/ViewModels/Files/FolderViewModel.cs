@@ -9,19 +9,19 @@ namespace Flux.ViewModels
     public class FolderViewModel : FSViewModel<FolderViewModel>
     {
         [RemoteCommand]
-        public ReactiveCommandBaseRC OpenFolderCommand { get; }
+        public ReactiveCommand<Unit, Unit> OpenFolderCommand { get; }
         [RemoteCommand]
-        public ReactiveCommandBaseRC ModifyFolderCommand { get; }
+        public ReactiveCommand<Unit, Unit> ModifyFolderCommand { get; }
 
-        public FolderViewModel(FilesViewModel files, Optional<FolderViewModel> folder, FLUX_File file) : base(files, folder, file)
+        public FolderViewModel(FluxViewModel flux, FilesViewModel files, Optional<FolderViewModel> folder, FLUX_File file) : base(flux, files, folder, file)
         {
-            OpenFolderCommand = ReactiveCommandBaseRC.Create(() =>
+            OpenFolderCommand = ReactiveCommandRC.Create(() =>
             {
                 Files.Folder = this;
             }, this)
             .DisposeWith(Disposables);
 
-            ModifyFolderCommand = ReactiveCommandBaseRC.CreateFromTask(() => files.ModifyFSAsync(this), this)
+            ModifyFolderCommand = ReactiveCommandRC.CreateFromTask(() => files.ModifyFSAsync(this), this)
                 .DisposeWith(Disposables);
         }
     }

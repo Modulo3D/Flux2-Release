@@ -30,8 +30,8 @@ namespace Flux.ViewModels
         [RemoteOutput(false)]
         public int ErrCode { get; set; }
 
-        public FluxMessage(string title, string text, MessageLevel level, DateTime timestamp, int errCode)
-            : base($"{typeof(FluxMessage).GetRemoteElementClass()};{errCode}:{timestamp.Serialize()}")
+        public FluxMessage(FluxViewModel flux, string title, string text, MessageLevel level, DateTime timestamp, int errCode)
+            : base(flux.RemoteContext, $"{typeof(FluxMessage).GetRemoteElementClass()};{errCode}:{timestamp.Serialize()}")
         {
             TimeStamp = timestamp;
             ErrCode = errCode;
@@ -39,8 +39,8 @@ namespace Flux.ViewModels
             Title = title;
             Text = text;
         }
-        public FluxMessage(int errCode, SYSTEMTIMECNDEX systime, MSGTEXTarray message_text_array, MessageLevel level)
-            : base($"{typeof(FluxMessage).GetRemoteElementClass()};{errCode}:{ParseTimeStamp(systime)}")
+        public FluxMessage(FluxViewModel flux, int errCode, SYSTEMTIMECNDEX systime, MSGTEXTarray message_text_array, MessageLevel level)
+            : base(flux.RemoteContext, $"{typeof(FluxMessage).GetRemoteElementClass()};{errCode}:{ParseTimeStamp(systime)}")
         {
             Level = level;
             ErrCode = errCode;
@@ -207,7 +207,7 @@ namespace Flux.ViewModels
         public MessageCounter MessageCounter => _MessageCounter.Value;
 
         [RemoteCommand]
-        public ReactiveCommandBaseRC ResetMessagesCommand { get; private set; }
+        public ReactiveCommand<Unit, Unit> ResetMessagesCommand { get; private set; }
 
         public MessagesViewModel(FluxViewModel flux) : base(flux)
         {
@@ -263,7 +263,7 @@ namespace Flux.ViewModels
                     return new MessageCounter(debugCount, infoCount, warningCount, errorCount, emergCount);
                 }).ToPropertyRC(this, v => v.MessageCounter);
 
-            ResetMessagesCommand = ReactiveCommandBaseRC.Create(Messages.Clear, this);
+            ResetMessagesCommand = ReactiveCommandRC.Create(Messages.Clear, this);
         }
 
         // LOG MESSAGES
@@ -319,7 +319,7 @@ namespace Flux.ViewModels
         }
         public void LogMessage(string title, string text, MessageLevel level, DateTime timestamp, int errCode)
         {
-            LogMessage(new FluxMessage(title, text, level, timestamp, errCode));
+            LogMessage(new FluxMessage(Flux, title, text, level, timestamp, errCode));
         }
 
         public void LogMessage<TRData, TWData>(IFLUX_Variable<TRData, TWData> plc_var, bool reading)

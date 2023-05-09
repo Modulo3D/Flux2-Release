@@ -9,7 +9,7 @@ namespace Flux.ViewModels
     public interface IHomePhaseViewModel : IRemoteControl
     {
         FluxViewModel Flux { get; }
-        ReactiveCommandBaseRC CancelPrintCommand { get; }
+        ReactiveCommand<Unit, Unit> CancelPrintCommand { get; }
     }
 
     public abstract class HomePhaseViewModel<THomePhase> : RemoteControl<THomePhase>, IHomePhaseViewModel
@@ -17,12 +17,12 @@ namespace Flux.ViewModels
     {
         public FluxViewModel Flux { get; }
         [RemoteCommand]
-        public ReactiveCommandBaseRC CancelPrintCommand { get; }
-        public HomePhaseViewModel(FluxViewModel flux)
+        public ReactiveCommand<Unit, Unit> CancelPrintCommand { get; }
+        public HomePhaseViewModel(FluxViewModel flux) :base(flux.RemoteContext)
         {
             Flux = flux;
             var can_cancel = Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation).Select(s => s.CanSafeStop);
-            CancelPrintCommand = ReactiveCommandBaseRC.CreateFromTask(async () => { await Flux.ConnectionProvider.CancelPrintAsync(false); }, (THomePhase)this, can_cancel);
+            CancelPrintCommand = ReactiveCommandRC.CreateFromTask(async () => { await Flux.ConnectionProvider.CancelPrintAsync(false); }, (THomePhase)this, can_cancel);
         }
         public virtual void Initialize()
         {

@@ -15,7 +15,7 @@ namespace Flux.ViewModels
         private readonly ObservableAsPropertyHelper<string> _InvalidItemBrush;
         public override string InvalidItemBrush => _InvalidItemBrush.Value;
 
-        public InvalidProbeViewModel(FeederEvaluator eval) : base(eval)
+        public InvalidProbeViewModel(FluxViewModel flux, FeederEvaluator eval) : base(flux, eval)
         {
             _InvalidItemBrush = eval.WhenAnyValue(e => e.Offset)
                 .ConvertMany(o => o.WhenAnyValue(o => o.ProbeStateBrush))
@@ -55,7 +55,7 @@ namespace Flux.ViewModels
             InvalidValues = Flux.StatusProvider.FeederEvaluators.Connect().RemoveKey()
                 .AutoRefresh(line => line.IsInvalidProbe)
                 .Filter(line => line.IsInvalidProbe)
-                .Transform(line => (IInvalidValueViewModel)new InvalidProbeViewModel(line))
+                .Transform(line => (IInvalidValueViewModel)new InvalidProbeViewModel(Flux, line))
                 .AsObservableListRC(this);
         }
 

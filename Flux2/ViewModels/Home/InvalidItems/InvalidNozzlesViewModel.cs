@@ -15,7 +15,7 @@ namespace Flux.ViewModels
         private readonly ObservableAsPropertyHelper<string> _InvalidItemBrush;
         public override string InvalidItemBrush => _InvalidItemBrush.Value;
 
-        public InvalidNozzleViewModel(FeederEvaluator eval) : base(eval)
+        public InvalidNozzleViewModel(FluxViewModel flux, FeederEvaluator eval) : base(flux, eval)
         {
             _InvalidItemBrush = Observable.CombineLatest(
                eval.ToolNozzle.WhenAnyValue(m => m.CurrentDocument),
@@ -58,7 +58,7 @@ namespace Flux.ViewModels
             InvalidItems = Flux.StatusProvider.FeederEvaluators.Connect().RemoveKey()
                 .AutoRefresh(line => line.ToolNozzle.IsInvalid)
                 .Filter(line => line.ToolNozzle.IsInvalid)
-                .Transform(line => (IInvalidItemViewModel)new InvalidNozzleViewModel(line))
+                .Transform(line => (IInvalidItemViewModel)new InvalidNozzleViewModel(Flux, line))
                 .AsObservableListRC(this);
         }
 

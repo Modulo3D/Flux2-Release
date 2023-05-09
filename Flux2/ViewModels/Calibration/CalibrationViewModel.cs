@@ -24,9 +24,9 @@ namespace Flux.ViewModels
 
 
         [RemoteCommand]
-        public ReactiveCommandBaseRC ProbeOffsetsCommand { get; private set; }
-        public ReactiveCommandBaseRC IncreaseGlobalZOffsetCommand { get; private set; }
-        public ReactiveCommandBaseRC DecreaseGlobalZOffsetCommand { get; private set; }
+        public ReactiveCommand<Unit, Unit> ProbeOffsetsCommand { get; private set; }
+        public ReactiveCommand<Unit, Unit> IncreaseGlobalZOffsetCommand { get; private set; }
+        public ReactiveCommand<Unit, Unit> DecreaseGlobalZOffsetCommand { get; private set; }
 
         private Optional<double> _GlobalZOffset;
         [RemoteInput(step: 0.01, converter: typeof(MillimeterConverter))]
@@ -80,7 +80,7 @@ namespace Flux.ViewModels
             Offsets = Flux.Feeders.Feeders.Connect()
                 .AutoRefresh(f => f.FeederState)
                 .Filter(f => f.FeederState != EFeederState.FEEDER_EMPTY)
-                .Transform(f => (IFluxOffsetViewModel)new OffsetViewModel(this, f))
+                .Transform(f => (IFluxOffsetViewModel)new OffsetViewModel(Flux, this, f))
                 .DisposeMany()
                 .AsObservableCacheRC(this);
 
@@ -118,12 +118,12 @@ namespace Flux.ViewModels
                 .Throttle(TimeSpan.FromSeconds(1))
                 .SubscribeRC(_ => user_settings.PersistLocalSettings(), this);
 
-            IncreaseGlobalZOffsetCommand = ReactiveCommandBaseRC.Create(() => { ModifyOffset(o => o + 0.01f); }, this, is_idle);
-            DecreaseGlobalZOffsetCommand = ReactiveCommandBaseRC.Create(() => { ModifyOffset(o => o - 0.01f); }, this, is_idle);
+            IncreaseGlobalZOffsetCommand = ReactiveCommandRC.Create(() => { ModifyOffset(o => o + 0.01f); }, this, is_idle);
+            DecreaseGlobalZOffsetCommand = ReactiveCommandRC.Create(() => { ModifyOffset(o => o - 0.01f); }, this, is_idle);
 
             Observable.CombineLatest(
-                IncreaseGlobalZOffsetCommand.WhenAnyValue(v => v.IsExecuting),
-                DecreaseGlobalZOffsetCommand.WhenAnyValue(v => v.IsExecuting),
+                IncreaseGlobalZOffsetCommand.IsExecuting,
+                DecreaseGlobalZOffsetCommand.IsExecuting,
                 (iz, dz) => (iz, dz))
                 .PairWithPreviousValue()
                 .Where(t =>
@@ -134,7 +134,7 @@ namespace Flux.ViewModels
                 .Throttle(TimeSpan.FromSeconds(1))
                 .SubscribeRC(_ => Flux.SettingsProvider.PersistLocalSettings(), this);
 
-            ProbeOffsetsCommand = ReactiveCommandBaseRC.CreateFromTask(async () =>
+            ProbeOffsetsCommand = ReactiveCommandRC.CreateFromTask(async () =>
             {
                 var tool_z_probe_unit = Flux.ConnectionProvider.GetArrayUnit(m => m.AXIS_PROBE, "tool_z");
                 var has_tool_z_probe = Flux.ConnectionProvider.HasVariable(m => m.AXIS_PROBE, tool_z_probe_unit);
@@ -167,7 +167,7 @@ namespace Flux.ViewModels
                 .Transform(f => (IRemoteControl)f)
                 .AsObservableCacheRC(this);
 
-            ManualCalibration = new Lazy<ManualCalibrationViewModel>(() => new ManualCalibrationViewModel(this));
+            ManualCalibration = new Lazy<ManualCalibrationViewModel>(() => new ManualCalibrationViewModel(Flux, this));
         }
 
         private void ModifyOffset(Func<double, double> edit_func)

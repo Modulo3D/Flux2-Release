@@ -31,17 +31,17 @@ namespace Flux.ViewModels
         public ConditionState State => _State.Value;
 
         [RemoteCommand]
-        public Optional<ReactiveCommandBaseRC> ActionCommand { get; private set; }
+        public Optional<ReactiveCommand<Unit, Unit>> ActionCommand { get; private set; }
 
         public IObservable<ConditionState> StateChanged { get; private set; }
 
         public FluxViewModel Flux { get; }
         public ConditionsProvider Conditions { get; }
 
-        public ConditionViewModel(ConditionsProvider conditions, string name = "") 
-            : base(string.IsNullOrEmpty(name) ? name : $"{typeof(TConditionViewModel).GetRemoteElementClass()};{name}")
+        public ConditionViewModel(FluxViewModel flux, ConditionsProvider conditions, string name = "") 
+            : base(flux.RemoteContext, string.IsNullOrEmpty(name) ? name : $"{typeof(TConditionViewModel).GetRemoteElementClass()};{name}")
         {
-            Flux = conditions.Flux;
+            Flux = flux;
             Conditions = conditions;
         }
 
@@ -53,7 +53,7 @@ namespace Flux.ViewModels
                 .ValueOr(() => false);
 
             ActionCommand = GetExecuteAction(is_idle).Convert(e =>
-                ReactiveCommandBaseRC.CreateFromTask(e.action, (TConditionViewModel)this, e.can_execute));
+                ReactiveCommandRC.CreateFromTask(e.action, (TConditionViewModel)this, e.can_execute));
 
             _State = GetState(is_idle)
                 .StartWith(ConditionState.Default)
@@ -78,7 +78,7 @@ namespace Flux.ViewModels
             get => _Value;
             set => this.RaiseAndSetIfChanged(ref _Value, value);
         }
-        protected InputConditionViewModel(ConditionsProvider conditions, string name = "") : base(conditions, name)
+        protected InputConditionViewModel(FluxViewModel flux, ConditionsProvider conditions, string name = "") : base(flux, conditions, name)
         {
         }
         protected sealed override IObservable<ConditionState> GetState(IObservable<bool> is_idle)
@@ -90,7 +90,7 @@ namespace Flux.ViewModels
 
     public class FeelerGaugeConditionViewModel : InputConditionViewModel<FeelerGaugeConditionViewModel, double>
     {
-        public FeelerGaugeConditionViewModel(ConditionsProvider conditions) : base(conditions)
+        public FeelerGaugeConditionViewModel(FluxViewModel flux, ConditionsProvider conditions) : base(flux, conditions)
         {
         }
 
@@ -124,8 +124,8 @@ namespace Flux.ViewModels
     {
         public IFLUX_Variable<bool, bool> LockClosed { get; }
         public IFLUX_Variable<bool, bool> OpenLock { get; }
-        public LockClosedConditionViewModel(ConditionsProvider conditions, IFLUX_Variable<bool, bool> lock_closed, IFLUX_Variable<bool, bool> open_lock)
-            : base(conditions, open_lock.Unit.Alias)
+        public LockClosedConditionViewModel(FluxViewModel flux, ConditionsProvider conditions, IFLUX_Variable<bool, bool> lock_closed, IFLUX_Variable<bool, bool> open_lock) 
+            : base(flux, conditions, open_lock.Unit.Alias)
         {
             OpenLock = open_lock;
             LockClosed = lock_closed;
@@ -157,8 +157,8 @@ namespace Flux.ViewModels
     {
         public IFLUX_Variable<bool, bool> LockClosed { get; }
         public IFLUX_Variable<bool, bool> OpenLock { get; }
-        public LockToggleConditionViewModel(ConditionsProvider conditions, IFLUX_Variable<bool, bool> lock_closed, IFLUX_Variable<bool, bool> open_lock)
-            : base(conditions, open_lock.Unit.Alias)
+        public LockToggleConditionViewModel(FluxViewModel flux, ConditionsProvider conditions, IFLUX_Variable<bool, bool> lock_closed, IFLUX_Variable<bool, bool> open_lock)
+            : base(flux, conditions, open_lock.Unit.Alias)
         {
             OpenLock = open_lock;
             LockClosed = lock_closed;
@@ -189,7 +189,7 @@ namespace Flux.ViewModels
     public class ClampConditionViewModel : ConditionViewModel<ClampConditionViewModel>
     {
         public IFLUX_Variable<bool, bool> OpenClamp { get; }
-        public ClampConditionViewModel(ConditionsProvider conditions, IFLUX_Variable<bool, bool> clamp) : base(conditions, clamp.Unit.Alias)
+        public ClampConditionViewModel(FluxViewModel flux, ConditionsProvider conditions, IFLUX_Variable<bool, bool> clamp) : base(flux, conditions, clamp.Unit.Alias)
         {
             OpenClamp = clamp;
         }
@@ -235,8 +235,7 @@ namespace Flux.ViewModels
         IFLUX_Variable<FLUX_Temp, double> HeaterTemp { get; }
         Optional<IFLUX_Variable<bool, bool>> LockClosed { get; }
         Optional<IFLUX_Variable<bool, bool>> OpenLock { get; }
-        public HeaterHotConditionViewModel(ConditionsProvider conditions,
-            IFLUX_Variable<FLUX_Temp, double> chamber_temp) : base(conditions, chamber_temp.Unit.Alias)
+        public HeaterHotConditionViewModel(FluxViewModel flux, ConditionsProvider conditions, IFLUX_Variable<FLUX_Temp, double> chamber_temp) : base(flux, conditions, chamber_temp.Unit.Alias)
         {
             HeaterTemp = chamber_temp;
 
@@ -272,17 +271,13 @@ namespace Flux.ViewModels
     }
     public class ChamberHotConditionViewModel : HeaterHotConditionViewModel<ChamberHotConditionViewModel>
     {
-        public ChamberHotConditionViewModel(ConditionsProvider conditions,
-            IFLUX_Variable<FLUX_Temp, double> chamber_temp)
-            : base(conditions, chamber_temp)
+        public ChamberHotConditionViewModel(FluxViewModel flux, ConditionsProvider conditions, IFLUX_Variable<FLUX_Temp, double> chamber_temp) : base(flux, conditions, chamber_temp)
         {
         }
     }
     public class PlateHotConditionViewModel : HeaterHotConditionViewModel<PlateHotConditionViewModel>
     {
-        public PlateHotConditionViewModel(ConditionsProvider conditions,
-            IFLUX_Variable<FLUX_Temp, double> plate_temp)
-            : base(conditions, plate_temp)
+        public PlateHotConditionViewModel(FluxViewModel flux, ConditionsProvider conditions, IFLUX_Variable<FLUX_Temp, double> plate_temp) : base(flux, conditions, plate_temp)
         {
         }
     }
@@ -290,8 +285,7 @@ namespace Flux.ViewModels
         where THeaterConditionViewModel : HeaterColdConditionViewModel<THeaterConditionViewModel>
     {
         IFLUX_Variable<FLUX_Temp, double> HeaterTemp { get; }
-        public HeaterColdConditionViewModel(ConditionsProvider conditions,
-            IFLUX_Variable<FLUX_Temp, double> chamber_temp) : base(conditions, chamber_temp.Unit.Alias)
+        public HeaterColdConditionViewModel(FluxViewModel flux, ConditionsProvider conditions, IFLUX_Variable<FLUX_Temp, double> chamber_temp) : base(flux, conditions, chamber_temp.Unit.Alias)
         {
             HeaterTemp = chamber_temp;
         }
@@ -320,17 +314,13 @@ namespace Flux.ViewModels
     }
     public class ChamberColdConditionViewModel : HeaterColdConditionViewModel<ChamberColdConditionViewModel>
     {
-        public ChamberColdConditionViewModel(ConditionsProvider conditions,
-            IFLUX_Variable<FLUX_Temp, double> chamber_temp)
-            : base(conditions, chamber_temp)
+        public ChamberColdConditionViewModel(FluxViewModel flux, ConditionsProvider conditions, IFLUX_Variable<FLUX_Temp, double> chamber_temp) : base(flux, conditions, chamber_temp)
         {
         }
     }
     public class PlateColdConditionViewModel : HeaterColdConditionViewModel<PlateColdConditionViewModel>
     {
-        public PlateColdConditionViewModel(ConditionsProvider conditions,
-            IFLUX_Variable<FLUX_Temp, double> plate_temp)
-            : base(conditions, plate_temp)
+        public PlateColdConditionViewModel(FluxViewModel flux, ConditionsProvider conditions, IFLUX_Variable<FLUX_Temp, double> plate_temp) : base(flux, conditions, plate_temp)
         {
         }
     }
@@ -338,9 +328,7 @@ namespace Flux.ViewModels
     {
         public IFLUX_Variable<Pressure, Unit> PressurePresence { get; }
         public IFLUX_Variable<double, double> PressureLevel { get; }
-        public PressureConditionViewModel(ConditionsProvider conditions,
-            IFLUX_Variable<Pressure, Unit> pressure_presence,
-            IFLUX_Variable<double, double> pressure_level) : base(conditions)
+        public PressureConditionViewModel(FluxViewModel flux, ConditionsProvider conditions, IFLUX_Variable<Pressure, Unit> pressure_presence, IFLUX_Variable<double, double> pressure_level) : base(flux, conditions)
         {
             PressureLevel = pressure_level;
             PressurePresence = pressure_presence;
@@ -364,10 +352,7 @@ namespace Flux.ViewModels
         public IFLUX_Variable<Pressure, Unit> VacuumPresence { get; }
         public IFLUX_Variable<double, double> VacuumLevel { get; }
         public IFLUX_Variable<bool, bool> EnableVacuum { get; }
-        public VacuumConditionViewModel(ConditionsProvider conditions,
-            IFLUX_Variable<Pressure, Unit> vacuum_presence,
-            IFLUX_Variable<double, double> vacuum_level,
-            IFLUX_Variable<bool, bool> enable_vacuum) : base(conditions)
+        public VacuumConditionViewModel(FluxViewModel flux, ConditionsProvider conditions, IFLUX_Variable<Pressure, Unit> vacuum_presence, IFLUX_Variable<double, double> vacuum_level, IFLUX_Variable<bool, bool> enable_vacuum) : base(flux, conditions)
         {
             VacuumLevel = vacuum_level;
             EnableVacuum = enable_vacuum;
@@ -399,7 +384,7 @@ namespace Flux.ViewModels
     public class NotInChangeConditionViewModel : ConditionViewModel<NotInChangeConditionViewModel>
     {
         public IFLUX_Variable<bool, bool> InChange { get; }
-        public NotInChangeConditionViewModel(ConditionsProvider conditions, IFLUX_Variable<bool, bool> in_change) : base(conditions)
+        public NotInChangeConditionViewModel(FluxViewModel flux, ConditionsProvider conditions, IFLUX_Variable<bool, bool> in_change) : base(flux, conditions)
         {
             InChange = in_change;
         }
@@ -424,7 +409,7 @@ namespace Flux.ViewModels
             set => this.RaiseAndSetIfChanged(ref _IsHomed, value);
         }
         public Optional<IFLUX_Variable<double, double>> ZPlateHeight { get; }
-        public ProbeConditionViewModel(ConditionsProvider conditions, Optional<IFLUX_Variable<double, double>> z_plate_height) : base(conditions)
+        public ProbeConditionViewModel(FluxViewModel flux, ConditionsProvider conditions, Optional<IFLUX_Variable<double, double>> z_plate_height) : base(flux, conditions)
         {
             ZPlateHeight = z_plate_height;
         }
@@ -502,7 +487,7 @@ namespace Flux.ViewModels
 
     public class DebugConditionViewModel : ConditionViewModel<DebugConditionViewModel>
     {
-        public DebugConditionViewModel(ConditionsProvider conditions) : base(conditions)
+        public DebugConditionViewModel(FluxViewModel flux, ConditionsProvider conditions) : base(flux, conditions)
         {
         }
 
@@ -520,7 +505,7 @@ namespace Flux.ViewModels
 
     public class MessageConditionViewModel : ConditionViewModel<MessageConditionViewModel>
     {
-        public MessageConditionViewModel(ConditionsProvider conditions) : base(conditions)
+        public MessageConditionViewModel(FluxViewModel flux, ConditionsProvider conditions) : base(flux, conditions)
         {
         }
 
@@ -544,7 +529,7 @@ namespace Flux.ViewModels
 
     public class NetworkConditionViewModel : ConditionViewModel<NetworkConditionViewModel>
     {
-        public NetworkConditionViewModel(ConditionsProvider conditions) : base(conditions)
+        public NetworkConditionViewModel(FluxViewModel flux, ConditionsProvider conditions) : base(flux, conditions)
         {
         }
 
@@ -567,7 +552,7 @@ namespace Flux.ViewModels
     public class LoadFilamentConditionViewModel : ConditionViewModel<LoadFilamentConditionViewModel>
     {
         public LoadFilamentOperationViewModel LoadFilament { get; }
-        public LoadFilamentConditionViewModel(LoadFilamentOperationViewModel load_filament) : base(load_filament.Flux.ConditionsProvider)
+        public LoadFilamentConditionViewModel(FluxViewModel flux, LoadFilamentOperationViewModel load_filament) : base(flux, load_filament.Flux.ConditionsProvider)
         {
             LoadFilament = load_filament;
         }
@@ -605,7 +590,7 @@ namespace Flux.ViewModels
     public class UnloadFilamentConditionViewModel : ConditionViewModel<UnloadFilamentConditionViewModel>
     {
         public UnloadFilamentOperationViewModel UnloadFilament { get; }
-        public UnloadFilamentConditionViewModel(UnloadFilamentOperationViewModel unload_filament) : base(unload_filament.Flux.ConditionsProvider)
+        public UnloadFilamentConditionViewModel(FluxViewModel flux, UnloadFilamentOperationViewModel unload_filament) : base(flux, unload_filament.Flux.ConditionsProvider)
         {
             UnloadFilament = unload_filament;
         }

@@ -54,14 +54,14 @@ namespace Flux.ViewModels
         public ushort MixingCount { get; }
 
         // CONSTRUCTOR
-        public FeederViewModel(FeedersViewModel feeders, ushort position, ushort mixing_count) 
-            : base($"{typeof(FeederViewModel).GetRemoteElementClass()};{position}")
+        public FeederViewModel(FluxViewModel flux, FeedersViewModel feeders, ushort position, ushort mixing_count) 
+            : base(flux.RemoteContext, $"{typeof(FeederViewModel).GetRemoteElementClass()};{position}")
         {
             Feeders = feeders;
             Flux = feeders.Flux;
             Position = position;
             MixingCount = mixing_count;
-            ToolNozzle = new ToolNozzleViewModel(feeders, this);
+            ToolNozzle = new ToolNozzleViewModel(Flux, feeders, this);
 
             var extruders = Flux.SettingsProvider
                 .WhenAnyValue(v => v.ExtrudersCount);

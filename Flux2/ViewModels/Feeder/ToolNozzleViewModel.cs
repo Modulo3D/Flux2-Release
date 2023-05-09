@@ -36,13 +36,13 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public string ToolNozzleBrush => _ToolNozzleBrush.Value;
 
-        public ReactiveCommandBaseRC ChangeCommand { get; private set; }
+        public ReactiveCommand<Unit, Unit> ChangeCommand { get; private set; }
 
         private readonly ObservableAsPropertyHelper<Optional<string>> _DocumentLabel;
         [RemoteOutput(true)]
         public override Optional<string> DocumentLabel => _DocumentLabel.Value;
 
-        public ToolNozzleViewModel(FeedersViewModel feeders, FeederViewModel feeder) : base(feeders, feeder, feeder.Position, s => s.NFCToolNozzles, async (db, tn) =>
+        public ToolNozzleViewModel(FluxViewModel flux, FeedersViewModel feeders, FeederViewModel feeder) : base(flux, feeders, feeder, feeder.Position, s => s.NFCToolNozzles, async (db, tn) =>
         {
             return (await tn.GetDocumentAsync<Tool>(db, tn => tn.ToolGuid),
                 await tn.GetDocumentAsync<Nozzle>(db, tn => tn.NozzleGuid));
@@ -107,7 +107,7 @@ namespace Flux.ViewModels
                     return true;
                 });
 
-            ChangeCommand = ReactiveCommandBaseRC.CreateFromTask(ChangeAsync, this, can_load_unload_tool);
+            ChangeCommand = ReactiveCommandRC.CreateFromTask(ChangeAsync, this, can_load_unload_tool);
         }
 
         public Task ChangeAsync()

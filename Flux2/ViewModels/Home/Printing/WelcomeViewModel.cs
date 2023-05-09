@@ -9,7 +9,7 @@ namespace Flux.ViewModels
     public class WelcomeViewModel : HomePhaseViewModel<WelcomeViewModel>
     {
         [RemoteCommand]
-        public ReactiveCommandBaseRC SelectPartProgramCommand { get; }
+        public ReactiveCommand<Unit, Unit> SelectPartProgramCommand { get; }
 
         private readonly ObservableAsPropertyHelper<string> _PrinterName;
         [RemoteOutput(true)]
@@ -17,7 +17,7 @@ namespace Flux.ViewModels
 
         public WelcomeViewModel(FluxViewModel flux) : base(flux)
         {
-            SelectPartProgramCommand = ReactiveCommandBaseRC.CreateFromTask(SelectFileAsync, this);
+            SelectPartProgramCommand = ReactiveCommandRC.CreateFromTask(SelectFileAsync, this);
 
             _PrinterName = Flux.SettingsProvider
                 .WhenAnyValue(s => s.Printer)

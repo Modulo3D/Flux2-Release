@@ -39,20 +39,20 @@ namespace Flux.ViewModels
         public bool CurrentIndex => _CurrentIndex.Value;
 
         [RemoteCommand]
-        public ReactiveCommandBaseRC DeleteMCodeQueueCommand { get; }
+        public ReactiveCommand<Unit, Unit> DeleteMCodeQueueCommand { get; }
 
         [RemoteCommand]
-        public ReactiveCommandBaseRC MoveUpMCodeQueueCommand { get; }
+        public ReactiveCommand<Unit, Unit> MoveUpMCodeQueueCommand { get; }
 
         [RemoteCommand]
-        public ReactiveCommandBaseRC MoveDownMCodeQueueCommand { get; }
+        public ReactiveCommand<Unit, Unit> MoveDownMCodeQueueCommand { get; }
 
         private readonly ObservableAsPropertyHelper<DateTime> _EndTime;
         [RemoteOutput(true, typeof(DateTimeConverter<RelativeDateTimeFormat>))]
         public DateTime EndTime => _EndTime.Value;
 
-        public MCodeQueueViewModel(MCodesViewModel mcodes, FluxJob job)
-            : base($"{typeof(MCodeQueueViewModel).GetRemoteElementClass()};{job.QueuePosition}")
+        public MCodeQueueViewModel(FluxViewModel flux, MCodesViewModel mcodes, FluxJob job)
+            : base(flux.RemoteContext, $"{typeof(MCodeQueueViewModel).GetRemoteElementClass()};{job.QueuePosition}")
         {
             FluxJob = job;
             MCodes = mcodes;
@@ -119,9 +119,9 @@ namespace Flux.ViewModels
             var can_delete = Observable.CombineLatest(can_safe_cycle, this.WhenAnyValue(v => v.QueuePosition), CanDeleteQueue);
             var can_move_down = Observable.CombineLatest(is_idle, this.WhenAnyValue(v => v.QueuePosition), last_queue_pos, CanMoveDownQueue);
 
-            DeleteMCodeQueueCommand = ReactiveCommandBaseRC.CreateFromTask(async () => { await MCodes.DeleteFromQueueAsync(this); }, this, can_delete);
-            MoveUpMCodeQueueCommand = ReactiveCommandBaseRC.CreateFromTask(async () => { await MCodes.MoveInQueueAsync(this, i => (short)(i - 1)); }, this, can_move_up);
-            MoveDownMCodeQueueCommand = ReactiveCommandBaseRC.CreateFromTask(async () => { await MCodes.MoveInQueueAsync(this, i => (short)(i + 1)); }, this, can_move_down);
+            DeleteMCodeQueueCommand = ReactiveCommandRC.CreateFromTask(async () => { await MCodes.DeleteFromQueueAsync(this); }, this, can_delete);
+            MoveUpMCodeQueueCommand = ReactiveCommandRC.CreateFromTask(async () => { await MCodes.MoveInQueueAsync(this, i => (short)(i - 1)); }, this, can_move_up);
+            MoveDownMCodeQueueCommand = ReactiveCommandRC.CreateFromTask(async () => { await MCodes.MoveInQueueAsync(this, i => (short)(i + 1)); }, this, can_move_down);
         }
 
         private bool CanDeleteQueue(bool is_idle, QueuePosition queue_position)

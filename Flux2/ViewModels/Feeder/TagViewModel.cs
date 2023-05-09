@@ -45,7 +45,7 @@ namespace Flux.ViewModels
         public Optional<double> RemainingWeight => _RemainingWeight.Value;
 
         [RemoteCommand]
-        public ReactiveCommandBaseRC UpdateTagCommand { get; internal set; }
+        public ReactiveCommand<Unit, Unit> UpdateTagCommand { get; internal set; }
 
         public NFCSlot<TNFCTag> NFCSlot { get; }
         INFCSlot IFluxTagViewModel.NFCSlot => NFCSlot;
@@ -53,13 +53,13 @@ namespace Flux.ViewModels
         IFluxFeederViewModel IFluxTagViewModel.Feeder => Feeder;
         IFluxFeedersViewModel IFluxTagViewModel.Feeders => Feeders;
 
-        public TagViewModel(
+        public TagViewModel(FluxViewModel flux,
             FeedersViewModel feeders, FeederViewModel feeder, ushort position,
             Func<IFluxFeedersViewModel, INFCStorage<TNFCTag>> get_tag_storage,
             Func<ILocalDatabase, TNFCTag, Task<TDocument>> find_document,
             Func<ExtrusionKey, CardId> get_card_id,
             Func<TNFCTag, Guid> check_tag, bool watch_odometer_for_pause) 
-            : base($"{typeof(TTagViewModel).GetRemoteElementClass()};{position}")
+            : base(flux.RemoteContext, $"{typeof(TTagViewModel).GetRemoteElementClass()};{position}")
         {
             Feeder = feeder;
             Feeders = feeders;
@@ -93,7 +93,7 @@ namespace Flux.ViewModels
                 .SelectAsync()
                 .ToPropertyRC((TTagViewModel)this, vm => vm.Document);
 
-            UpdateTagCommand = ReactiveCommandBaseRC.CreateFromTask(async () => 
+            UpdateTagCommand = ReactiveCommandRC.CreateFromTask(async () => 
             { 
                 await Flux.UseReader(this, (h, s, c) => 
                     s.UpdateTagAsync(h, c), r => r == NFCTagRW.Success); 

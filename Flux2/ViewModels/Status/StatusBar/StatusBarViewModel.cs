@@ -30,10 +30,10 @@ namespace Flux.ViewModels
         }
 
         [RemoteCommand]
-        public ReactiveCommandBaseRC ShowMessagesCommand { get; }
+        public ReactiveCommand<Unit, Unit> ShowMessagesCommand { get; }
 
         [RemoteCommand]
-        public ReactiveCommandBaseRC ShowWebcamCommand { get; }
+        public ReactiveCommand<Unit, Unit> ShowWebcamCommand { get; }
 
         public StatusBarViewModel(FluxViewModel flux) : base(flux)
         {
@@ -43,8 +43,8 @@ namespace Flux.ViewModels
                 .Filter(v => v.State != StatusBarState.Hidden)
                 .AsObservableCacheRC(this);
 
-            ShowMessagesCommand = ReactiveCommandBaseRC.Create(() => { Content = Flux.Messages; }, this);
-            ShowWebcamCommand = ReactiveCommandBaseRC.Create(() => { Content = Flux.Webcam; }, this);
+            ShowMessagesCommand = ReactiveCommandRC.Create(() => { Content = Flux.Messages; }, this);
+            ShowWebcamCommand = ReactiveCommandRC.Create(() => { Content = Flux.Webcam; }, this);
             Content = Flux.Messages;
 
             var conditions = Flux.ConditionsProvider.GetConditions<StatusBarConditionAttribute>();

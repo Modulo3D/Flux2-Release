@@ -15,7 +15,7 @@ namespace Flux.ViewModels
         private readonly ObservableAsPropertyHelper<string> _InvalidItemBrush;
         public override string InvalidItemBrush => _InvalidItemBrush.Value;
 
-        public PurgeNozzleViewModel(FeederEvaluator eval) : base(eval)
+        public PurgeNozzleViewModel(FluxViewModel flux, FeederEvaluator eval) : base(flux, eval)
         {
             var material = eval.Feeder.WhenAnyValue(f => f.SelectedMaterial);
             var target_temp = eval.WhenAnyValue(e => e.TargetTemperature);
@@ -78,7 +78,7 @@ namespace Flux.ViewModels
             InvalidValues = Flux.StatusProvider.FeederEvaluators.Connect().RemoveKey()
                 .AutoRefresh(line => line.HasColdNozzle)
                 .Filter(line => line.HasColdNozzle)
-                .Transform(line => (IInvalidValueViewModel)new PurgeNozzleViewModel(line))
+                .Transform(line => (IInvalidValueViewModel)new PurgeNozzleViewModel(Flux, line))
                 .AsObservableListRC(this);
         }
 

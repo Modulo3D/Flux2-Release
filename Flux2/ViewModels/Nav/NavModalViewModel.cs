@@ -11,7 +11,7 @@ namespace Flux.ViewModels
         where TFluxRoutableViewModel : IFluxRoutableViewModel
     {
         [RemoteCommand]
-        public ReactiveCommandBaseRC NavigateBackCommand { get; }
+        public ReactiveCommand<Unit, Unit> NavigateBackCommand { get; }
 
         [RemoteContent(false)]
         public TFluxRoutableViewModel Content { get; }
@@ -23,7 +23,7 @@ namespace Flux.ViewModels
             : base(flux, string.IsNullOrEmpty(route.Name) ? $"{typeof(TFluxRoutableViewModel).GetRemoteElementClass()}" : route.Name)
         {
             Content = route;
-            NavigateBackCommand = ReactiveCommandBaseRC.Create(
+            NavigateBackCommand = ReactiveCommandRC.Create(
                 () => Flux.Navigator.NavigateBack(), this,
                 can_navigate_back.ObservableOr(() => true));
         }

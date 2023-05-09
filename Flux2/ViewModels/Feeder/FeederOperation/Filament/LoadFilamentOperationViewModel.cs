@@ -13,7 +13,7 @@ namespace Flux.ViewModels
         public LoadFilamentConditionViewModel LoadFilamentCondition { get; }
         public LoadFilamentOperationViewModel(MaterialViewModel material) : base(material)
         {
-            LoadFilamentCondition = new LoadFilamentConditionViewModel(this);
+            LoadFilamentCondition = new LoadFilamentConditionViewModel(Flux, this);
             LoadFilamentCondition.Initialize();
         }
 

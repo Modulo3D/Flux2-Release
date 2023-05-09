@@ -15,7 +15,7 @@ namespace Flux.ViewModels
         private readonly ObservableAsPropertyHelper<string> _InvalidItemBrush;
         public override string InvalidItemBrush => _InvalidItemBrush.Value;
 
-        public LowMaterialViewModel(FeederEvaluator eval) : base(eval)
+        public LowMaterialViewModel(FluxViewModel flux, FeederEvaluator eval) : base(flux, eval)
         {
             _InvalidItemBrush = Observable.CombineLatest(
                eval.Material.WhenAnyValue(m => m.CurrentWeight),
@@ -69,7 +69,7 @@ namespace Flux.ViewModels
             InvalidValues = Flux.StatusProvider.FeederEvaluators.Connect().RemoveKey()
                 .AutoRefresh(line => line.Material.HasLowWeight)
                 .Filter(line => line.Material.HasLowWeight)
-                .Transform(line => (IInvalidValueViewModel)new LowMaterialViewModel(line))
+                .Transform(line => (IInvalidValueViewModel)new LowMaterialViewModel(Flux, line))
                 .AsObservableListRC(this);
 
             _StartWithInvalidValuesEnabled = Flux.StatusProvider.FeederEvaluators.Connect()

@@ -289,7 +289,7 @@ namespace Flux.ViewModels
                 .ObservableOr(() => true)
                 .ToOptional();
 
-            AddModal(flux, Flux.Functionality.Magazine);
+            AddModal(Flux.Functionality.Magazine);
 
             var can_shutdown = Observable.CombineLatest(
                 IS_IDLE,
@@ -329,6 +329,7 @@ namespace Flux.ViewModels
 
             AddCommand(
                 new ToggleButton(
+                    flux,
                     "debug",
                     () =>
                     {
@@ -349,18 +350,18 @@ namespace Flux.ViewModels
                     advanced_mode_source));
 
 
-            AddModal(flux, Flux.Temperatures);          
+            AddModal(Flux.Temperatures);          
             AddCommand("resetPrinter", Flux.ConnectionProvider.StartConnection, visible: advanced_mode);
             AddCommand("vacuumPump", m => m.ENABLE_VACUUM, can_execute: IS_IDLE, visible: advanced_mode);
             AddCommand("openClamp", m => m.OPEN_HEAD_CLAMP, can_execute: IS_IDLE, visible: advanced_mode);
             AddCommand("reloadDatabase", () => Flux.DatabaseProvider.InitializeAsync(), visible: advanced_mode);
             AddCommand("swFilamentSensor", Flux.SettingsProvider.UserSettings, s => s.PauseOnEmptyOdometer, visible: advanced_mode);
 
-            AddModal(flux, () => new MemoryViewModel(Flux), visible: advanced_mode);
-            AddModal(flux, () => new FilesViewModel(Flux), visible: advanced_mode);
-            AddModal(flux, () => new MoveViewModel(Flux), visible: advanced_mode);
+            AddModal(() => new MemoryViewModel(Flux), visible: advanced_mode);
+            AddModal(() => new FilesViewModel(Flux), visible: advanced_mode);
+            AddModal(() => new MoveViewModel(Flux), visible: advanced_mode);
 
-            AddModal(flux, () => new NFCViewModel(Flux), visible: advanced_mode);
+            AddModal(() => new NFCViewModel(Flux), visible: advanced_mode);
         }
 
         //private byte[] array { get; set; }
@@ -425,7 +426,7 @@ namespace Flux.ViewModels
                     Clear();
 
                     if (variable_store.CanMeshProbePlate)
-                        AddModal(flux, () => new HeightmapViewModel(Flux));
+                        AddModal(() => new HeightmapViewModel(Flux));
 
                     AddCommand(
                         "maintenancePosition",
@@ -504,9 +505,9 @@ namespace Flux.ViewModels
                 .Select(o => o.ConvertOr(o => o.AdvancedSettings, () => false))
                 .ToOptional();
 
-            Manage = AddModal(flux, () => new ManageViewModel(flux));
-            Settings = AddModal(flux, () => new SettingsViewModel(flux));
-            Routines = AddModal(flux, () => new RoutinesViewModel(flux));
+            Manage = AddModal(() => new ManageViewModel(flux));
+            Settings = AddModal(() => new SettingsViewModel(flux));
+            Routines = AddModal(() => new RoutinesViewModel(flux));
         }
     }
 }

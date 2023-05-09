@@ -31,9 +31,9 @@ namespace Flux.ViewModels
         }
 
         [RemoteCommand]
-        public ReactiveCommandBaseRC ExitFolderCommand { get; }
+        public ReactiveCommand<Unit, Unit> ExitFolderCommand { get; }
         [RemoteCommand]
-        public ReactiveCommandBaseRC CreateFSCommand { get; }
+        public ReactiveCommand<Unit, Unit> CreateFSCommand { get; }
 
         public Subject<Unit> UpdateFolder { get; }
 
@@ -41,12 +41,12 @@ namespace Flux.ViewModels
         {
             UpdateFolder = new Subject<Unit>();
 
-            ExitFolderCommand = ReactiveCommandBaseRC.Create(() =>
+            ExitFolderCommand = ReactiveCommandRC.Create(() =>
             {
                 Folder = Folder.Convert(f => f.Folder);
             }, this);
 
-            CreateFSCommand = ReactiveCommandBaseRC.CreateFromTask(CreateFSAsync, this);
+            CreateFSCommand = ReactiveCommandRC.CreateFromTask(CreateFSAsync, this);
 
             var folderContent = Observable.CombineLatest(
                 UpdateFolder.StartWith(Unit.Default).ObserveOn(RxApp.MainThreadScheduler),
@@ -161,11 +161,11 @@ namespace Flux.ViewModels
                 switch (file.Type)
                 {
                     case FLUX_FileType.File:
-                        var file_vm = new FileViewModel(this, file_list.folder, file);
+                        var file_vm = new FileViewModel(Flux, this, file_list.folder, file);
                         yield return file_vm;
                         break;
                     case FLUX_FileType.Directory:
-                        var folder_vm = new FolderViewModel(this, file_list.folder, file);
+                        var folder_vm = new FolderViewModel(Flux, this, file_list.folder, file);
                         yield return folder_vm;
                         break;
                 }

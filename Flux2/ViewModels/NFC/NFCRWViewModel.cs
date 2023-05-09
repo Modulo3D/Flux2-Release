@@ -37,7 +37,7 @@ namespace Flux.ViewModels
         [RemoteOutput(true, typeof(ToStringConverter))]
         public Optional<CardId> CardId => _CardId.Value;
 
-        public NFCRWViewModel() 
+        public NFCRWViewModel(FluxViewModel flux) : base(flux.RemoteContext)
         {
             _CardBrush = this.WhenAnyValue(x => x.CardInfo)
                 .Select(v => v.HasValue ? FluxColors.Active : FluxColors.Inactive)

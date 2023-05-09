@@ -39,8 +39,8 @@ namespace Flux.ViewModels
         public FilesViewModel Files { get; }
         public Optional<FolderViewModel> Folder { get; }
 
-        public FSViewModel(FilesViewModel files, Optional<FolderViewModel> folder, FLUX_File file)
-            : base($"{typeof(TFSViewModel).GetRemoteElementClass()};{file.Name}")
+        public FSViewModel(FluxViewModel flux, FilesViewModel files, Optional<FolderViewModel> folder, FLUX_File file)
+            : base(flux.RemoteContext, $"{typeof(TFSViewModel).GetRemoteElementClass()};{file.Name}")
         {
             Files = files;
             Folder = folder;
@@ -61,24 +61,24 @@ namespace Flux.ViewModels
     public class FileViewModel : FSViewModel<FileViewModel>
     {
         [RemoteCommand]
-        public ReactiveCommandBaseRC EditFileCommand { get; }
+        public ReactiveCommand<Unit, Unit> EditFileCommand { get; }
         [RemoteCommand]
-        public ReactiveCommandBaseRC ModifyFileCommand { get; }
+        public ReactiveCommand<Unit, Unit> ModifyFileCommand { get; }
         [RemoteCommand]
-        public Optional<ReactiveCommandBaseRC> ExecuteFileCommand { get; }
+        public Optional<ReactiveCommand<Unit, Unit>> ExecuteFileCommand { get; }
 
-        public FileViewModel(FilesViewModel files, Optional<FolderViewModel> folder, FLUX_File file) : base(files, folder, file)
+        public FileViewModel(FluxViewModel flux, FilesViewModel files, Optional<FolderViewModel> folder, FLUX_File file) : base(flux, files, folder, file)
         {
-            EditFileCommand = ReactiveCommandBaseRC.CreateFromTask(() => files.EditFileAsync(this), this)
+            EditFileCommand = ReactiveCommandRC.CreateFromTask(() => files.EditFileAsync(this), this)
                 .DisposeWith(Disposables);
 
-            ModifyFileCommand = ReactiveCommandBaseRC.CreateFromTask(() => files.ModifyFSAsync(this), this)
+            ModifyFileCommand = ReactiveCommandRC.CreateFromTask(() => files.ModifyFSAsync(this), this)
                 .DisposeWith(Disposables);
 
             if (folder.ConvertOr(f => f.FSFullPath.Contains(files.Flux.ConnectionProvider.MacroPath), () => false) ||
                 folder.ConvertOr(f => f.FSFullPath.Contains(files.Flux.ConnectionProvider.StoragePath), () => false))
             {
-                ExecuteFileCommand = ReactiveCommandBaseRC.CreateFromTask(() => files.ExecuteFileAsync(this), this)
+                ExecuteFileCommand = ReactiveCommandRC.CreateFromTask(() => files.ExecuteFileAsync(this), this)
                     .DisposeWith(Disposables);
             }
         }

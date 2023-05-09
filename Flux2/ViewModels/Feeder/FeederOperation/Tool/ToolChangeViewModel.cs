@@ -18,9 +18,9 @@
             }
         }
 
-        public ReactiveCommandBaseRC ToggleClampCommand { get; }
-        public ReactiveCommandBaseRC OpenTopLockCommand { get; }
-        public ReactiveCommandBaseRC PreheatCommand { get; set; }
+        public ReactiveCommand<Unit, Unit> ToggleClampCommand { get; }
+        public ReactiveCommand<Unit, Unit> OpenTopLockCommand { get; }
+        public ReactiveCommand<Unit, Unit> PreheatCommand { get; set; }
 
         public abstract bool CanToggleClamp { get; }
         public abstract bool CanOpenTopLock { get; }
@@ -33,9 +33,9 @@
             var can_open_lock = Observable.CombineLatest(is_idle, Observable.Return(CanOpenTopLock), (i, c) => i && c);
             var can_preheat = Observable.CombineLatest(is_idle, Observable.Return(CanPreheat), (i, c) => i && c);
 
-            PreheatCommand = ReactiveCommandBaseRC.CreateFromTask(PreheatAsync, can_preheat);
-            ToggleClampCommand = ReactiveCommandBaseRC.CreateFromTask(async () => { await Flux.ConnectionProvider.ToggleVariableAsync(m => m.OPEN_HEAD_CLAMP); }, can_toggle_clamp);
-            OpenTopLockCommand = ReactiveCommandBaseRC.CreateFromTask(async () => { await Flux.ConnectionProvider.ToggleVariableAsync(m => m.OPEN_LOCK, "top"); }, can_open_lock);
+            PreheatCommand = ReactiveCommandRC.CreateFromTask(PreheatAsync, can_preheat);
+            ToggleClampCommand = ReactiveCommandRC.CreateFromTask(async () => { await Flux.ConnectionProvider.ToggleVariableAsync(m => m.OPEN_HEAD_CLAMP); }, can_toggle_clamp);
+            OpenTopLockCommand = ReactiveCommandRC.CreateFromTask(async () => { await Flux.ConnectionProvider.ToggleVariableAsync(m => m.OPEN_LOCK, "top"); }, can_open_lock);
         }
 
         private async Task PreheatAsync()

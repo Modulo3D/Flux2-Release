@@ -43,8 +43,8 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public abstract string InvalidItemBrush { get; }
 
-        public InvalidItemViewModel(FeederEvaluator eval)
-            : base($"{typeof(TInvalidItemViewModel).GetRemoteElementClass()};{eval.Feeder.Position}")
+        public InvalidItemViewModel(FluxViewModel flux, FeederEvaluator eval)
+            : base(flux.RemoteContext, $"{typeof(TInvalidItemViewModel).GetRemoteElementClass()};{eval.Feeder.Position}")
         {
             Evaluation = eval;
 
@@ -69,7 +69,7 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public Optional<string> Item => _Item.Value;
 
-        public InvalidValueViewModel(FeederEvaluator eval) : base(eval)
+        public InvalidValueViewModel(FluxViewModel flux, FeederEvaluator eval) : base(flux, eval)
         {
             _Item = GetItem(eval)
                 .ToProperty(this, e => e.Item)
@@ -81,18 +81,18 @@ namespace Flux.ViewModels
 
     public interface IInvalidFeedersViewModel : IHomePhaseViewModel
     {
-        public ReactiveCommandBaseRC ChangeItemsCommand { get; }
+        public ReactiveCommand<Unit, Unit> ChangeItemsCommand { get; }
     }
 
     public abstract class InvalidFeedersViewModel<TInvalidFederViewModel> : HomePhaseViewModel<TInvalidFederViewModel>, IInvalidFeedersViewModel
         where TInvalidFederViewModel : InvalidFeedersViewModel<TInvalidFederViewModel>
     {
         [RemoteCommand]
-        public ReactiveCommandBaseRC ChangeItemsCommand { get; }
+        public ReactiveCommand<Unit, Unit> ChangeItemsCommand { get; }
 
         public InvalidFeedersViewModel(FluxViewModel flux) : base(flux)
         {
-            ChangeItemsCommand = ReactiveCommandBaseRC.CreateFromTask(ChangeItemsAsync, (TInvalidFederViewModel)this);
+            ChangeItemsCommand = ReactiveCommandRC.CreateFromTask(ChangeItemsAsync, (TInvalidFederViewModel)this);
         }
 
         public abstract Task ChangeItemsAsync();
@@ -117,7 +117,7 @@ namespace Flux.ViewModels
 
     public interface IInvalidValuesViewModel : IInvalidFeedersViewModel
     {
-        Optional<ReactiveCommandBaseRC> StartWithInvalidValuesCommand { get; }
+        Optional<ReactiveCommand<Unit, Unit>> StartWithInvalidValuesCommand { get; }
         IObservableList<IInvalidValueViewModel> InvalidValues { get; }
         bool CanStartWithInvalidValues { get; }
     }
@@ -129,7 +129,7 @@ namespace Flux.ViewModels
         [RemoteContent(true, comparer:(nameof(IInvalidValueViewModel.Position)))]
         public IObservableList<IInvalidValueViewModel> InvalidValues { get; protected set; }
         [RemoteCommand]
-        public Optional<ReactiveCommandBaseRC> StartWithInvalidValuesCommand { get; protected set; }
+        public Optional<ReactiveCommand<Unit, Unit>> StartWithInvalidValuesCommand { get; protected set; }
 
         [RemoteOutput(true)]
         public abstract bool CanStartWithInvalidValues { get; }
@@ -145,7 +145,7 @@ namespace Flux.ViewModels
             if (CanStartWithInvalidValues)
             { 
                 var can_start = this.WhenAnyValue(v => v.StartWithInvalidValuesEnabled);
-                StartWithInvalidValuesCommand = ReactiveCommandBaseRC.Create(StartWithInvalidValues, (TInvalidValuesViewModel)this, can_start);
+                StartWithInvalidValuesCommand = ReactiveCommandRC.Create(StartWithInvalidValues, (TInvalidValuesViewModel)this, can_start);
             }
         }
 

@@ -105,7 +105,7 @@ namespace Flux.ViewModels
                 .DisposeWith(Disposables);
         }
 
-        protected override async Task OnMessageReceivedAsync(IWebSocketContext context, byte[] buffer, IWebSocketReceiveResult result)
+        protected override Task OnMessageReceivedAsync(IWebSocketContext context, byte[] buffer, IWebSocketReceiveResult result)
         {
             try
             {
@@ -123,7 +123,7 @@ namespace Flux.ViewModels
 
                     var control_list = control_item.Value.RemoteContents.Lookup(control_list_path);
                     if (!control_list.HasValue)
-                        return;
+                        return Task.CompletedTask;
 
                     control_item = control_list.Value.LookupControl(control_item_path);
                 }
@@ -137,7 +137,7 @@ namespace Flux.ViewModels
                         var input_value = interact_path[1];
                         var input = control_item.Value.RemoteInputs.Lookup(input_name);
                         if (!input.HasValue)
-                            return;
+                            return Task.CompletedTask;
 
                         var value = input_value.Trim('\'');
                         input.Value.SetValue(value);
@@ -147,21 +147,9 @@ namespace Flux.ViewModels
                         var command_name = interact_path[0];
                         var command = control_item.Value.RemoteCommands.Lookup(command_name);
                         if (!command.HasValue)
-                            return;
+                            return Task.CompletedTask;
 
-                        if (command_name == "selectMCodeStorage")
-                        {
-                            Parallel.For(0, 100, async i =>
-                            {
-                                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(0.5));
-                                await command.Value.ExecuteAsync(cts.Token);
-                            });
-                        }
-                        else
-                        {
-                            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
-                            await command.Value.ExecuteAsync(cts.Token);
-                        }
+                        Flux.RemoteContext.InvokeCommand(command.Value.CommandGuid);
                     }
                 }
                 catch (Exception ex)
@@ -173,6 +161,8 @@ namespace Flux.ViewModels
             {
                 Flux.Messages.LogException(this, ex);
             }
+
+            return Task.CompletedTask;
         }
         protected override void Dispose(bool disposing)
         {

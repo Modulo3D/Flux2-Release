@@ -92,12 +92,13 @@ namespace Flux.ViewModels
     {
         public static double MaxZBedHeight = 10.0;
 
+
         [RemoteCommand]
-        public Optional<ReactiveCommandBaseRC> LeftButtonCommand { get; private set; }
+        public Optional<ReactiveCommand<Unit, Unit>> LeftButtonCommand { get; private set; }
         [RemoteCommand]
-        public Optional<ReactiveCommandBaseRC> RightButtonCommand { get; private set; }
+        public Optional<ReactiveCommand<Unit, Unit>> RightButtonCommand { get; private set; }
         [RemoteCommand]
-        public ReactiveCommandBaseRC OpenStatusBarCommand { get; private set; }
+        public ReactiveCommand<Unit, Unit> OpenStatusBarCommand { get; private set; }
 
         public HomeViewModel Home { get; private set; }
         public WebcamViewModel Webcam { get; private set; }
@@ -163,7 +164,7 @@ namespace Flux.ViewModels
 
         public ILogger<IFlux> Logger { get; }
 
-        public FluxViewModel(ILogger<IFlux> logger)
+        public FluxViewModel(ILogger<IFlux> logger) : base(new RemoteContext())
         {
             Logger = logger;
 
@@ -251,13 +252,13 @@ namespace Flux.ViewModels
 
                     // COMMANDS
                     if (ConnectionProvider.HasVariable(s => s.CHAMBER_LIGHT))
-                        RightButtonCommand = ReactiveCommandBaseRC.CreateFromTask(async () => { await ConnectionProvider.ToggleVariableAsync(m => m.CHAMBER_LIGHT); }, this);
+                        RightButtonCommand = ReactiveCommandRC.CreateFromTask(async () => { await ConnectionProvider.ToggleVariableAsync(m => m.CHAMBER_LIGHT); }, this);
 
                     if (ConnectionProvider.HasVariable(s => s.OPEN_LOCK, main_lock_unit))
-                        LeftButtonCommand = ReactiveCommandBaseRC.CreateFromTask(async () => { await ConnectionProvider.ToggleVariableAsync(m => m.OPEN_LOCK, main_lock_unit); }, this, is_idle);
+                        LeftButtonCommand = ReactiveCommandRC.CreateFromTask(async () => { await ConnectionProvider.ToggleVariableAsync(m => m.OPEN_LOCK, main_lock_unit); }, this, is_idle);
 
                     var status_bar_nav = new NavModalViewModel<StatusBarViewModel>(this, StatusBar);
-                    OpenStatusBarCommand = ReactiveCommandBaseRC.Create(() => { Navigator.Navigate(status_bar_nav); }, this);
+                    OpenStatusBarCommand = ReactiveCommandRC.Create(() => { Navigator.Navigate(status_bar_nav); }, this);
 
                     ConnectionProvider.Initialize();
                     StatusProvider.Initialize();
@@ -366,7 +367,7 @@ namespace Flux.ViewModels
         {
             var reading = true;
 
-            using var dialog = new ContentDialog(this, new NFCRWViewModel());
+            using var dialog = new ContentDialog(this, new NFCRWViewModel(this));
             var dialog_result = Task.Run(async () =>
             {
                 var result = await dialog.ShowAsync();
@@ -396,7 +397,7 @@ namespace Flux.ViewModels
         {
             var reading = true;
 
-            using var dialog = new ContentDialog(this, new NFCRWViewModel());
+            using var dialog = new ContentDialog(this, new NFCRWViewModel(this));
             var dialog_result = Task.Run(async () =>
             {
                 var result = await dialog.ShowAsync();
@@ -507,7 +508,7 @@ namespace Flux.ViewModels
         {
             var reading = true;
 
-            using var dialog = new ContentDialog(this, new NFCRWViewModel());
+            using var dialog = new ContentDialog(this, new NFCRWViewModel(this));
             var dialog_result = Task.Run(async () =>
             {
                 var result = await dialog.ShowAsync();
@@ -537,7 +538,7 @@ namespace Flux.ViewModels
         {
             var reading = true;
 
-            using var dialog = new ContentDialog(this, new NFCRWViewModel());
+            using var dialog = new ContentDialog(this, new NFCRWViewModel(this));
             var dialog_result = Task.Run(async () =>
             {
                 var result = await dialog.ShowAsync();

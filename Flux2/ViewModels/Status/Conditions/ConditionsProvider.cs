@@ -23,7 +23,7 @@ namespace Flux.ViewModels
                 var clamp = Flux.ConnectionProvider.GetVariable(m => m.OPEN_HEAD_CLAMP);
                 if (clamp.HasValue && !_ClampCondition.HasValue)
                 { 
-                    _ClampCondition = new ClampConditionViewModel(this, clamp.Value);
+                    _ClampCondition = new ClampConditionViewModel(Flux, this, clamp.Value);
                     _ClampCondition.Value.Initialize();
                 }
                 return _ClampCondition;
@@ -51,7 +51,7 @@ namespace Flux.ViewModels
                             var open_lock = Flux.ConnectionProvider.GetVariable(c => c.OPEN_LOCK, lock_closed.Key.Alias);
                             if (open_lock.HasValue)
                             {
-                                var lock_closed_condition = new LockClosedConditionViewModel(this, lock_closed.Value, open_lock.Value);
+                                var lock_closed_condition = new LockClosedConditionViewModel(Flux, this, lock_closed.Value, open_lock.Value);
                                 lock_closed_condition.Initialize();
                                 _LockClosedConditions.AddOrUpdate(lock_closed_condition);
                             }
@@ -79,7 +79,7 @@ namespace Flux.ViewModels
                             var open_lock = Flux.ConnectionProvider.GetVariable(c => c.OPEN_LOCK, lock_closed.Key.Alias);
                             if (open_lock.HasValue)
                             {
-                                var lock_closed_condition = new LockToggleConditionViewModel(this, lock_closed.Value, open_lock.Value);
+                                var lock_closed_condition = new LockToggleConditionViewModel(Flux, this, lock_closed.Value, open_lock.Value);
                                 lock_closed_condition.Initialize();
                                 _LockToggleConditions.AddOrUpdate(lock_closed_condition);
                             }
@@ -104,7 +104,7 @@ namespace Flux.ViewModels
                         return _ChamberHotConditions;
                     foreach (var chamber in temp_chamber.Value.Variables.KeyValues)
                     {
-                        var chamber_condition = new ChamberHotConditionViewModel(this, chamber.Value);
+                        var chamber_condition = new ChamberHotConditionViewModel(Flux, this, chamber.Value);
                         chamber_condition.Initialize();
                         _ChamberHotConditions.AddOrUpdate(chamber_condition);
                     }
@@ -127,7 +127,7 @@ namespace Flux.ViewModels
                         return _PlateHotConditions;
                     foreach (var plate in temp_plate.Value.Variables.KeyValues)
                     {
-                        var plate_condition = new PlateHotConditionViewModel(this, plate.Value);
+                        var plate_condition = new PlateHotConditionViewModel(Flux, this, plate.Value);
                         plate_condition.Initialize();
                         _PlateHotConditions.AddOrUpdate(plate_condition);
                     }
@@ -151,7 +151,7 @@ namespace Flux.ViewModels
                         return _ChamberColdConditions;
                     foreach (var chamber in temp_chamber.Value.Variables.KeyValues)
                     {
-                        var chamber_condition = new ChamberColdConditionViewModel(this, chamber.Value);
+                        var chamber_condition = new ChamberColdConditionViewModel(Flux, this, chamber.Value);
                         chamber_condition.Initialize();
                         _ChamberColdConditions.AddOrUpdate(chamber_condition);
                     }
@@ -175,7 +175,7 @@ namespace Flux.ViewModels
                         return _PlateColdConditions;
                     foreach (var plate in temp_plate.Value.Variables.KeyValues)
                     {
-                        var plate_condition = new PlateColdConditionViewModel(this, plate.Value);
+                        var plate_condition = new PlateColdConditionViewModel(Flux, this, plate.Value);
                         plate_condition.Initialize();
                         _PlateColdConditions.AddOrUpdate(plate_condition);
                     }
@@ -196,7 +196,7 @@ namespace Flux.ViewModels
                 var pressure_level = Flux.ConnectionProvider.GetVariable(m => m.PRESSURE_LEVEL);
                 if (pressure_presence.HasValue && pressure_level.HasValue && !_PressureCondition.HasValue)
                 { 
-                    _PressureCondition = new PressureConditionViewModel(this, pressure_presence.Value, pressure_level.Value);
+                    _PressureCondition = new PressureConditionViewModel(Flux, this, pressure_presence.Value, pressure_level.Value);
                     _PressureCondition.Value.Initialize();
                 }
                 return _PressureCondition;
@@ -217,7 +217,7 @@ namespace Flux.ViewModels
                 var vacuum_level = Flux.ConnectionProvider.GetVariable(m => m.VACUUM_LEVEL);
                 if (vacuum_presence.HasValue && vacuum_level.HasValue && enable_vacuum.HasValue && !_VacuumCondition.HasValue)
                 { 
-                    _VacuumCondition = new VacuumConditionViewModel(this, vacuum_presence.Value, vacuum_level.Value, enable_vacuum.Value);
+                    _VacuumCondition = new VacuumConditionViewModel(Flux, this, vacuum_presence.Value, vacuum_level.Value, enable_vacuum.Value);
                     _VacuumCondition.Value.Initialize();
                 }
                 return _VacuumCondition;
@@ -234,7 +234,7 @@ namespace Flux.ViewModels
                 var in_change = Flux.ConnectionProvider.GetVariable(m => m.IN_CHANGE);
                 if (in_change.HasValue && !_NotInChange.HasValue)
                 { 
-                    _NotInChange = new NotInChangeConditionViewModel(this, in_change.Value);
+                    _NotInChange = new NotInChangeConditionViewModel(Flux, this, in_change.Value);
                     _NotInChange.Value.Initialize();
                 }
                 return _NotInChange;
@@ -250,7 +250,7 @@ namespace Flux.ViewModels
                 var z_plate_height = Flux.ConnectionProvider.GetVariable(m => m.Z_BED_HEIGHT);
                 if (_ProbeCondition == null)
                 { 
-                    _ProbeCondition = new ProbeConditionViewModel(this, z_plate_height);
+                    _ProbeCondition = new ProbeConditionViewModel(Flux, this, z_plate_height);
                     _ProbeCondition.Initialize();
                 }
                 return _ProbeCondition;
@@ -265,7 +265,7 @@ namespace Flux.ViewModels
             {
                 if (_FeelerGaugeCondition == null)
                 {
-                    _FeelerGaugeCondition = new FeelerGaugeConditionViewModel(this);
+                    _FeelerGaugeCondition = new FeelerGaugeConditionViewModel(Flux, this);
                     _FeelerGaugeCondition.Initialize();
                 }
                 return _FeelerGaugeCondition;
@@ -281,7 +281,7 @@ namespace Flux.ViewModels
             {
                 if (_DebugCondition == default)
                 { 
-                    _DebugCondition = new DebugConditionViewModel(this);
+                    _DebugCondition = new DebugConditionViewModel(Flux, this);
                     _DebugCondition.Initialize();
                 }
                 return _DebugCondition;
@@ -296,7 +296,7 @@ namespace Flux.ViewModels
             {
                 if (_MessageCondition == default)
                 { 
-                    _MessageCondition = new MessageConditionViewModel(this);
+                    _MessageCondition = new MessageConditionViewModel(Flux, this);
                     _MessageCondition.Initialize();
                 }
                 return _MessageCondition;
@@ -311,7 +311,7 @@ namespace Flux.ViewModels
             {
                 if (_NetworkCondition == default)
                 { 
-                    _NetworkCondition = new NetworkConditionViewModel(this);
+                    _NetworkCondition = new NetworkConditionViewModel(Flux, this);
                     _NetworkCondition.Initialize();
                 }
                 return _NetworkCondition;
