@@ -105,7 +105,7 @@ namespace Flux.ViewModels
             MovePrinterExtrudeCommand = ReactiveCommandRC.CreateFromTask(() => moveAsync(variable_store.FeederAxis, MovePrinterDistance), this, can_move_e);
             MovePrinterRetractCommand = ReactiveCommandRC.CreateFromTask(() => moveAsync(variable_store.FeederAxis, -MovePrinterDistance), this, can_move_e);
 
-            StopPrinterCommand = ReactiveCommandRC.CreateFromTask(Flux.ConnectionProvider.StopAsync, this);
+            StopPrinterCommand = ReactiveCommandRC.CreateFromTask(async () => { await Flux.ConnectionProvider.StopAsync(); }, this);
         }
     }
 }

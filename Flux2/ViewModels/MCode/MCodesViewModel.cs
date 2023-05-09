@@ -73,7 +73,7 @@ namespace Flux.ViewModels
             var can_delete_all = AvaiableMCodes.Connect()
                 .TrueForAll(mcode => mcode.WhenAnyValue(m => m.CanDelete), d => d);
 
-            DeleteAllCommand = ReactiveCommandRC.CreateFromTask(ClearMCodeStorageAsync, this, can_delete_all);
+            DeleteAllCommand = ReactiveCommandRC.CreateFromTask(async () => { await ClearMCodeStorageAsync(); }, this, can_delete_all);
 
             this.WhenAnyValue(v => v.RemovableDrivePaths)
                 .SubscribeRC(ExploreDrives, this);

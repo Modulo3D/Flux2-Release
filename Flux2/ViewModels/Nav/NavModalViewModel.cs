@@ -24,7 +24,7 @@ namespace Flux.ViewModels
         {
             Content = route;
             NavigateBackCommand = ReactiveCommandRC.Create(
-                () => Flux.Navigator.NavigateBack(), this,
+                () => { Flux.Navigator.NavigateBack(); }, this,
                 can_navigate_back.ObservableOr(() => true));
         }
 

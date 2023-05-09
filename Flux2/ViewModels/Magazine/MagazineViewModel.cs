@@ -26,7 +26,7 @@ namespace Flux.ViewModels
                 .Select(s => s.IsIdle);
 
             if (Flux.ConnectionProvider.VariableStoreBase.HasToolChange)
-                ResetMagazineCommand = ReactiveCommandRC.CreateFromTask(Flux.ConnectionProvider.ResetMagazineAsync, this, is_idle);
+                ResetMagazineCommand = ReactiveCommandRC.CreateFromTask(async () => { await Flux.ConnectionProvider.ResetMagazineAsync(); }, this, is_idle);
 
             var top_lock_unit = Flux.ConnectionProvider.GetArrayUnit(m => m.LOCK_CLOSED, "top");
             if (Flux.ConnectionProvider.HasVariable(m => m.LOCK_CLOSED, top_lock_unit))
