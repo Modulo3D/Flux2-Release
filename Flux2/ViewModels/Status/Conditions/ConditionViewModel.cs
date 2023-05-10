@@ -31,7 +31,7 @@ namespace Flux.ViewModels
         public ConditionState State => _State.Value;
 
         [RemoteCommand]
-        public Optional<ReactiveCommand<Unit, Unit>> ActionCommand { get; private set; }
+        public Optional<ReactiveCommandBaseRC<Unit, Unit>> ActionCommand { get; private set; }
 
         public IObservable<ConditionState> StateChanged { get; private set; }
 
@@ -39,7 +39,7 @@ namespace Flux.ViewModels
         public ConditionsProvider Conditions { get; }
 
         public ConditionViewModel(FluxViewModel flux, ConditionsProvider conditions, string name = "") 
-            : base(flux.RemoteContext, string.IsNullOrEmpty(name) ? name : $"{typeof(TConditionViewModel).GetRemoteElementClass()};{name}")
+            : base(string.IsNullOrEmpty(name) ? name : $"{typeof(TConditionViewModel).GetRemoteElementClass()};{name}")
         {
             Flux = flux;
             Conditions = conditions;
@@ -53,7 +53,7 @@ namespace Flux.ViewModels
                 .ValueOr(() => false);
 
             ActionCommand = GetExecuteAction(is_idle).Convert(e =>
-                ReactiveCommandRC.CreateFromTask(e.action, (TConditionViewModel)this, e.can_execute));
+                ReactiveCommandBaseRC.CreateFromTask(e.action, (TConditionViewModel)this, e.can_execute));
 
             _State = GetState(is_idle)
                 .StartWith(ConditionState.Default)

@@ -14,11 +14,11 @@ namespace Flux.ViewModels
     public class PrintingViewModel : HomePhaseViewModel<PrintingViewModel>
     {
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> StartCommand { get; private set; }
+        public ReactiveCommandBaseRC<Unit, Unit> StartCommand { get; private set; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> HoldCommand { get; private set; }
+        public ReactiveCommandBaseRC<Unit, Unit> HoldCommand { get; private set; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> ResetCommand { get; private set; }
+        public ReactiveCommandBaseRC<Unit, Unit> ResetCommand { get; private set; }
 
         private ObservableAsPropertyHelper<Optional<string>> _SelectedMCodeName;
         [RemoteOutput(true)]
@@ -73,9 +73,9 @@ namespace Flux.ViewModels
                     e.printing.MCode.HasValue &&
                     e.status.CanSafeStop);
 
-            StartCommand = ReactiveCommandRC.CreateFromTask(StartPrintAsync, this, canStart);
-            HoldCommand = ReactiveCommandRC.CreateFromTask(PausePrintAsync, this, canHold);
-            ResetCommand = ReactiveCommandRC.CreateFromTask(CancelPrintAsync, this, canStop);
+            StartCommand = ReactiveCommandBaseRC.CreateFromTask(StartPrintAsync, this, canStart);
+            HoldCommand = ReactiveCommandBaseRC.CreateFromTask(PausePrintAsync, this, canHold);
+            ResetCommand = ReactiveCommandBaseRC.CreateFromTask(CancelPrintAsync, this, canStop);
 
             _SelectedMCodeName = Flux.StatusProvider
                 .WhenAnyValue(v => v.PrintingEvaluation)

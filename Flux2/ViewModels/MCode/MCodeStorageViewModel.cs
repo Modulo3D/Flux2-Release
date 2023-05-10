@@ -48,22 +48,17 @@ namespace Flux.ViewModels
         public IObservableCache<Material, ushort> Materials { get; }
 
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> DeleteMCodeStorageCommand { get; }
+        public ReactiveCommandBaseRC<Unit, Unit> DeleteMCodeStorageCommand { get; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> SelectMCodeStorageCommand { get; }
+        public ReactiveCommandBaseRC<Unit, Unit> CancelSelectMCodeStorageCommand { get; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> CancelSelectMCodeStorageCommand { get; }
-        [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> ToggleMCodeStorageInfoCommand { get; }
-
-        private readonly ObservableAsPropertyHelper<bool> _CanSelect;
-        public bool CanSelect => _CanSelect.Value;
+        public ReactiveCommandBaseRC<Unit, Unit> ToggleMCodeStorageInfoCommand { get; }
 
         private readonly ObservableAsPropertyHelper<bool> _CanDelete;
         public bool CanDelete => _CanDelete.Value;
 
         public MCodeStorageViewModel(FluxViewModel flux, MCodesViewModel mcodes, MCodeKey mcode_key, MCodeAnalyzer analyzer) 
-            : base(flux.RemoteContext, $"{typeof(MCodeStorageViewModel).GetRemoteElementClass()};{mcode_key}")
+            : base($"{typeof(MCodeStorageViewModel).GetRemoteElementClass()};{mcode_key}")
         {
             MCodes = mcodes;
             Analyzer = analyzer;
@@ -111,29 +106,15 @@ namespace Flux.ViewModels
                 (q, s) => !s && !q)
                 .ToPropertyRC(this, v => v.CanDelete);
 
-            var is_idle = MCodes.Flux.StatusProvider
-                .WhenAnyValue(s => s.StatusEvaluation)
-                .Select(e => e.IsIdle);
+            ToggleMCodeStorageInfoCommand = ReactiveCommandBaseRC.Create(() => { ShowInfo = !ShowInfo; }, this);
 
-            _CanSelect = Observable.CombineLatest(
-                is_idle,
-                is_selecting_file,
-                Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS),
-                Flux.StatusProvider.WhenAnyValue(e => e.PrintingEvaluation),
-                CanSelectMCode)
-                .ToPropertyRC(this, v => v.CanSelect);
-
-            ToggleMCodeStorageInfoCommand = ReactiveCommandRC.Create(() => { ShowInfo = !ShowInfo; }, this);
-
-            DeleteMCodeStorageCommand = ReactiveCommandRC.CreateFromTask(
+            DeleteMCodeStorageCommand = ReactiveCommandBaseRC.CreateFromTask(
                 async () => { await mcodes.DeleteAsync(false, this); }, this,
                 this.WhenAnyValue(v => v.CanDelete));
 
-            SelectMCodeStorageCommand = ReactiveCommandRC.CreateFromTask(
-                async () => { await mcodes.AddToQueueAsync(this); }, this,
-                this.WhenAnyValue(v => v.CanSelect));
+            AddCommand("selectMCodeStorage", mcodes.AddToQueueCommand, this);
 
-            CancelSelectMCodeStorageCommand = ReactiveCommandRC.Create(
+            CancelSelectMCodeStorageCommand = ReactiveCommandBaseRC.Create(
                 () => mcodes.CancelPrepareMCode(), this,
                 this.WhenAnyValue(v => v.IsUploading));
 
@@ -169,21 +150,6 @@ namespace Flux.ViewModels
             AddOutput("created", Analyzer.MCode.Created, typeof(DateTimeConverter<RelativeDateTimeFormat>));
         }
 
-        private bool CanSelectMCode(bool is_idle, bool selecting, Optional<FLUX_ProcessStatus> status, PrintingEvaluation printing_eval)
-        {
-            var connection_provider = Flux.ConnectionProvider;
-            /*if (!is_idle)
-                return false;*/
-            if (selecting)
-                return false;
-            if (connection_provider.VariableStoreBase.HasPrintUnloader)
-                return true;
-            if (!printing_eval.MCode.HasValue)
-                return true;
-            if (!status.ConvertOr(s => s == FLUX_ProcessStatus.IDLE, () => false))
-                return false;
-            return true;
-        }
         private ushort FindFileNumber(IQuery<IFluxMCodeStorageViewModel, MCodeKey> mcode_analyzers)
         {
             var mcodes = mcode_analyzers.Items

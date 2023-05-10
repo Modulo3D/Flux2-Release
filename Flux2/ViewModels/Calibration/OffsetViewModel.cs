@@ -93,9 +93,9 @@ namespace Flux.ViewModels
         public bool IsOffsetRoot => _IsOffsetRoot.Value;
 
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> SetProbeOffsetCommand { get; }
+        public ReactiveCommandBaseRC<Unit, Unit> SetProbeOffsetCommand { get; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> ResetProbeOffsetCommand { get; }
+        public ReactiveCommandBaseRC<Unit, Unit> ResetProbeOffsetCommand { get; }
 
         private double _XUserOffset;
         [RemoteInput(step: 0.05, converter: typeof(MillimeterConverter))]
@@ -145,7 +145,7 @@ namespace Flux.ViewModels
         public ushort Position => Feeder.Position;
 
         public OffsetViewModel(FluxViewModel flux, CalibrationViewModel calibration, IFluxFeederViewModel feeder) 
-            : base(flux.RemoteContext, $"{typeof(OffsetViewModel).GetRemoteElementClass()};{feeder.Position}")
+            : base($"{typeof(OffsetViewModel).GetRemoteElementClass()};{feeder.Position}")
         {
             Feeder = feeder;
             Flux = calibration.Flux;
@@ -231,9 +231,9 @@ namespace Flux.ViewModels
                 this.WhenAnyValue(v => v.ProbeOffsetKey),
                 (i, p) => i && p.HasValue);
 
-            ResetProbeOffsetCommand = ReactiveCommandRC.Create(ResetProbeOffset, this, has_probe_offset_key);
+            ResetProbeOffsetCommand = ReactiveCommandBaseRC.Create(ResetProbeOffset, this, has_probe_offset_key);
 
-            SetProbeOffsetCommand = ReactiveCommandRC.CreateFromTask(SetProbeOffsetAsync, this, has_probe_offset_key);
+            SetProbeOffsetCommand = ReactiveCommandBaseRC.CreateFromTask(SetProbeOffsetAsync, this, has_probe_offset_key);
 
             var userOffset = this.WhenAnyValue(v => v.UserOffset);
             var probeOffset = this.WhenAnyValue(v => v.ProbeOffset);

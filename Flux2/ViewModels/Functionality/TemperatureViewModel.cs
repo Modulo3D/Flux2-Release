@@ -22,9 +22,9 @@ namespace Flux.ViewModels
     {
         public FluxViewModel Flux { get; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> ShutTargetCommand { get; }
+        public ReactiveCommandBaseRC<Unit, Unit> ShutTargetCommand { get; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> SelectTargetCommand { get; }
+        public ReactiveCommandBaseRC<Unit, Unit> SelectTargetCommand { get; }
 
         private double _TargetTemperature = 0;
         [RemoteInput(step: 10, min: 0, max: 500, converter: typeof(TemperatureConverter))]
@@ -45,7 +45,7 @@ namespace Flux.ViewModels
         public ushort Position { get; }
 
         public TemperatureViewModel(FluxViewModel flux, TemperaturesViewModel temperatures, ushort position, IFLUX_Variable<FLUX_Temp, double> temp_var)
-            : base(flux.RemoteContext, $"{typeof(TemperatureViewModel).GetRemoteElementClass()};{temp_var.Name}")
+            : base($"{typeof(TemperatureViewModel).GetRemoteElementClass()};{temp_var.Name}")
         {
             Position = position;
             Flux = temperatures.Flux;
@@ -55,8 +55,8 @@ namespace Flux.ViewModels
                 .WhenAnyValue(s => s.StatusEvaluation)
                 .Select(s => s.CanSafeCycle);
 
-            ShutTargetCommand = ReactiveCommandRC.CreateFromTask(async () => { await temp_var.WriteAsync(0); }, this, can_safe_cycle);
-            SelectTargetCommand = ReactiveCommandRC.CreateFromTask(async () => { await temp_var.WriteAsync(TargetTemperature); }, this, can_safe_cycle);
+            ShutTargetCommand = ReactiveCommandBaseRC.CreateFromTask(async () => { await temp_var.WriteAsync(0); }, this, can_safe_cycle);
+            SelectTargetCommand = ReactiveCommandBaseRC.CreateFromTask(async () => { await temp_var.WriteAsync(TargetTemperature); }, this, can_safe_cycle);
 
             _Temperature = temp_var.ValueChanged
                 .ToPropertyRC(this, v => v.Temperature);

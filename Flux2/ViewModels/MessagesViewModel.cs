@@ -31,7 +31,7 @@ namespace Flux.ViewModels
         public int ErrCode { get; set; }
 
         public FluxMessage(FluxViewModel flux, string title, string text, MessageLevel level, DateTime timestamp, int errCode)
-            : base(flux.RemoteContext, $"{typeof(FluxMessage).GetRemoteElementClass()};{errCode}:{timestamp.Serialize()}")
+            : base($"{typeof(FluxMessage).GetRemoteElementClass()};{errCode}:{timestamp.Serialize()}")
         {
             TimeStamp = timestamp;
             ErrCode = errCode;
@@ -40,7 +40,7 @@ namespace Flux.ViewModels
             Text = text;
         }
         public FluxMessage(FluxViewModel flux, int errCode, SYSTEMTIMECNDEX systime, MSGTEXTarray message_text_array, MessageLevel level)
-            : base(flux.RemoteContext, $"{typeof(FluxMessage).GetRemoteElementClass()};{errCode}:{ParseTimeStamp(systime)}")
+            : base($"{typeof(FluxMessage).GetRemoteElementClass()};{errCode}:{ParseTimeStamp(systime)}")
         {
             Level = level;
             ErrCode = errCode;
@@ -207,7 +207,7 @@ namespace Flux.ViewModels
         public MessageCounter MessageCounter => _MessageCounter.Value;
 
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> ResetMessagesCommand { get; private set; }
+        public ReactiveCommandBaseRC<Unit, Unit> ResetMessagesCommand { get; private set; }
 
         public MessagesViewModel(FluxViewModel flux) : base(flux)
         {
@@ -263,7 +263,7 @@ namespace Flux.ViewModels
                     return new MessageCounter(debugCount, infoCount, warningCount, errorCount, emergCount);
                 }).ToPropertyRC(this, v => v.MessageCounter);
 
-            ResetMessagesCommand = ReactiveCommandRC.Create(Messages.Clear, this);
+            ResetMessagesCommand = ReactiveCommandBaseRC.Create(Messages.Clear, this);
         }
 
         // LOG MESSAGES

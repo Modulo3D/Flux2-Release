@@ -11,7 +11,7 @@ namespace Flux.ViewModels
 {
     public class CmdButton : RemoteControl<CmdButton>
     {
-        public ReactiveCommand<Unit, Unit> Command { get; }
+        public ReactiveCommandBaseRC<Unit, Unit> Command { get; }
 
         private readonly ObservableAsPropertyHelper<bool> _Visible;
         public bool Visible => _Visible.Value;
@@ -19,16 +19,16 @@ namespace Flux.ViewModels
         private CmdButton(
             IFlux flux,
             string name,
-            Func<CmdButton, ReactiveCommand<Unit, Unit>> command,
+            Func<CmdButton, ReactiveCommandBaseRC<Unit, Unit>> command,
             OptionalObservable<bool> visible = default,
             OptionalObservable<Optional<bool>> active = default)
-            : base(flux.RemoteContext, $"{typeof(CmdButton).GetRemoteElementClass()}.{name}")
+            : base($"{typeof(CmdButton).GetRemoteElementClass()}.{name}")
         {
             Command = command(this);
             _Visible = visible
                 .ObservableOr(() => true)
                 .ToPropertyRC(this, v => v.Visible);
-            AddCommand("command", Command, active.ObservableOrDefault());
+            AddCommand("command", Command, Unit.Default, active.ObservableOrDefault());
         }
 
         public CmdButton(
@@ -38,7 +38,7 @@ namespace Flux.ViewModels
             OptionalObservable<bool> can_execute = default,
             OptionalObservable<bool> visible = default,
             OptionalObservable<Optional<bool>> active = default)
-            : this(flux, name, d => ReactiveCommandRC.Create(command, d, can_execute.ObservableOr(() => true)), visible, active)
+            : this(flux, name, d => ReactiveCommandBaseRC.Create(command, d, can_execute.ObservableOr(() => true)), visible, active)
         {
         }
 
@@ -49,7 +49,7 @@ namespace Flux.ViewModels
             OptionalObservable<bool> can_execute = default,
             OptionalObservable<bool> visible = default,
             OptionalObservable<Optional<bool>> active = default)
-            : this(flux, name, d => ReactiveCommandRC.CreateFromTask(command, d, can_execute.ObservableOr(() => true)), visible, active)
+            : this(flux, name, d => ReactiveCommandBaseRC.CreateFromTask(command, d, can_execute.ObservableOr(() => true)), visible, active)
         {
         }
     }

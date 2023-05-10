@@ -32,7 +32,8 @@ namespace Flux.ViewModels
         public IObservableCache<IFluxMCodeQueueViewModel, QueuePosition> QueuedMCodes { get; private set; }
 
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> DeleteAllCommand { get; }
+        public ReactiveCommandBaseRC<Unit, Unit> DeleteAllCommand { get; }
+        public ReactiveCommandBaseRC<IFluxMCodeStorageViewModel, bool> AddToQueueCommand { get; }
 
         private Optional<DirectoryInfo[]> _RemovableDrivePaths;
         public Optional<DirectoryInfo[]> RemovableDrivePaths
@@ -73,10 +74,43 @@ namespace Flux.ViewModels
             var can_delete_all = AvaiableMCodes.Connect()
                 .TrueForAll(mcode => mcode.WhenAnyValue(m => m.CanDelete), d => d);
 
-            DeleteAllCommand = ReactiveCommandRC.CreateFromTask(async () => { await ClearMCodeStorageAsync(); }, this, can_delete_all);
+            var is_selecting_file = this
+                .WhenAnyValue(f => f.IsPreparingFile)
+                .StartWith(false);
 
+            var process_status = Flux.ConnectionProvider
+                .ObserveVariable(m => m.PROCESS_STATUS)
+                .StartWithDefault();
+
+            var printing_evaluation = Flux.StatusProvider
+                .WhenAnyValue(e => e.PrintingEvaluation)
+                .StartWith(new PrintingEvaluation());
+
+            var can_select = Observable.CombineLatest(
+                is_selecting_file,
+                process_status,
+                printing_evaluation,
+                CanSelectMCode)
+                .StartWith(true);
+
+            DeleteAllCommand = ReactiveCommandBaseRC.CreateFromTask(async () => { await ClearMCodeStorageAsync(); }, this, can_delete_all);
+            AddToQueueCommand = ReactiveCommandBaseRC.CreateFromTask((Func<IFluxMCodeStorageViewModel, Task<bool>>)AddToQueueAsync, this, can_select);
             this.WhenAnyValue(v => v.RemovableDrivePaths)
                 .SubscribeRC(ExploreDrives, this);
+        }
+
+        private bool CanSelectMCode(bool selecting, Optional<FLUX_ProcessStatus> status, PrintingEvaluation printing_eval)
+        {
+            var connection_provider = Flux.ConnectionProvider;
+            if (selecting)
+                return false;
+            if (connection_provider.VariableStoreBase.HasPrintUnloader)
+                return true;
+            if (!printing_eval.MCode.HasValue)
+                return true;
+            if (!status.ConvertOr(s => s == FLUX_ProcessStatus.IDLE, () => false))
+                return false;
+            return true;
         }
 
         public void Initialize()

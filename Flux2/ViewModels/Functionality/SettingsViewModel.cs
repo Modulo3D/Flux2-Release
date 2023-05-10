@@ -93,13 +93,13 @@ namespace Flux.ViewModels
         }
 
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> SaveSettingsCommand { get; }
+        public ReactiveCommandBaseRC<Unit, Unit> SaveSettingsCommand { get; }
         
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> GenerateGuidCommand { get; }
+        public ReactiveCommandBaseRC<Unit, Unit> GenerateGuidCommand { get; }
 
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> TestNFCCommand { get; }
+        public ReactiveCommandBaseRC<Unit, Unit> TestNFCCommand { get; }
 
         public SettingsViewModel(FluxViewModel flux) : base(flux)
         {
@@ -163,15 +163,15 @@ namespace Flux.ViewModels
             user_settings.WhenAnyValue(s => s.StandbyMinutes)
                 .BindToRC(this, v => v.StandbyMinutes);
 
-            SaveSettingsCommand = ReactiveCommandRC.Create(SaveSettings, this);
-            GenerateGuidCommand = ReactiveCommandRC.Create(GenerateGuid, this);
+            SaveSettingsCommand = ReactiveCommandBaseRC.Create(SaveSettings, this);
+            GenerateGuidCommand = ReactiveCommandBaseRC.Create(GenerateGuid, this);
 
             var can_test_nfc = Observable.CombineLatest(
                 NFCFormats.SelectedValueChanged,
                 NFCTagType.SelectedValueChanged,
                 (format, tag) => format.HasValue && tag.HasValue);
 
-            TestNFCCommand = ReactiveCommandRC.CreateFromTask(TestNFCAsync, this, can_test_nfc);
+            TestNFCCommand = ReactiveCommandBaseRC.CreateFromTask(TestNFCAsync, this, can_test_nfc);
         }
 
         private async Task TestNFCAsync()

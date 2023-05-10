@@ -30,7 +30,7 @@ namespace Flux.ViewModels
         public string StateBrush => _StateBrush.Value;
 
         public StatusBarItemViewModel(FluxViewModel flux, string condition, IEnumerable<IConditionViewModel> conditions) 
-            : base(flux.RemoteContext, $"{typeof(StatusBarItemViewModel).GetRemoteElementClass()}.{condition}")
+            : base($"{typeof(StatusBarItemViewModel).GetRemoteElementClass()}.{condition}")
         {
             Flux = flux;
             _Notifies = GetItemNotifies()

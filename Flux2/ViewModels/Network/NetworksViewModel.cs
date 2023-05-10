@@ -16,7 +16,7 @@
 
         public WiFiReconnectionKind ReconnectionKind { get; set; }
 
-        public ReactiveCommand<NetworkViewModel, Unit> Connect { get; }
+        public ReactiveCommandBaseRC<NetworkViewModel, Unit> Connect { get; }
 
         public NetworksViewModel(FluxViewModel flux)
             : base(flux, "network", "RETE", Files.ConnectionIcon)

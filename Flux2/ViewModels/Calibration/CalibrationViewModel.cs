@@ -24,9 +24,9 @@ namespace Flux.ViewModels
 
 
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> ProbeOffsetsCommand { get; private set; }
-        public ReactiveCommand<Unit, Unit> IncreaseGlobalZOffsetCommand { get; private set; }
-        public ReactiveCommand<Unit, Unit> DecreaseGlobalZOffsetCommand { get; private set; }
+        public ReactiveCommandBaseRC<Unit, Unit> ProbeOffsetsCommand { get; private set; }
+        public ReactiveCommandBaseRC<Unit, Unit> IncreaseGlobalZOffsetCommand { get; private set; }
+        public ReactiveCommandBaseRC<Unit, Unit> DecreaseGlobalZOffsetCommand { get; private set; }
 
         private Optional<double> _GlobalZOffset;
         [RemoteInput(step: 0.01, converter: typeof(MillimeterConverter))]
@@ -118,12 +118,12 @@ namespace Flux.ViewModels
                 .Throttle(TimeSpan.FromSeconds(1))
                 .SubscribeRC(_ => user_settings.PersistLocalSettings(), this);
 
-            IncreaseGlobalZOffsetCommand = ReactiveCommandRC.Create(() => { ModifyOffset(o => o + 0.01f); }, this, is_idle);
-            DecreaseGlobalZOffsetCommand = ReactiveCommandRC.Create(() => { ModifyOffset(o => o - 0.01f); }, this, is_idle);
+            IncreaseGlobalZOffsetCommand = ReactiveCommandBaseRC.Create(() => { ModifyOffset(o => o + 0.01f); }, this, is_idle);
+            DecreaseGlobalZOffsetCommand = ReactiveCommandBaseRC.Create(() => { ModifyOffset(o => o - 0.01f); }, this, is_idle);
 
             Observable.CombineLatest(
-                IncreaseGlobalZOffsetCommand.IsExecuting,
-                DecreaseGlobalZOffsetCommand.IsExecuting,
+                IncreaseGlobalZOffsetCommand.WhenAnyValue(v => v.IsExecuting),
+                DecreaseGlobalZOffsetCommand.WhenAnyValue(v => v.IsExecuting),
                 (iz, dz) => (iz, dz))
                 .PairWithPreviousValue()
                 .Where(t =>
@@ -134,7 +134,7 @@ namespace Flux.ViewModels
                 .Throttle(TimeSpan.FromSeconds(1))
                 .SubscribeRC(_ => Flux.SettingsProvider.PersistLocalSettings(), this);
 
-            ProbeOffsetsCommand = ReactiveCommandRC.CreateFromTask(async () =>
+            ProbeOffsetsCommand = ReactiveCommandBaseRC.CreateFromTask(async () =>
             {
                 var tool_z_probe_unit = Flux.ConnectionProvider.GetArrayUnit(m => m.AXIS_PROBE, "tool_z");
                 var has_tool_z_probe = Flux.ConnectionProvider.HasVariable(m => m.AXIS_PROBE, tool_z_probe_unit);

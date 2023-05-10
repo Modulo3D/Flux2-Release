@@ -55,7 +55,7 @@ namespace Flux.ViewModels
 
         // CONSTRUCTOR
         public FeederViewModel(FluxViewModel flux, FeedersViewModel feeders, ushort position, ushort mixing_count) 
-            : base(flux.RemoteContext, $"{typeof(FeederViewModel).GetRemoteElementClass()};{position}")
+            : base($"{typeof(FeederViewModel).GetRemoteElementClass()};{position}")
         {
             Feeders = feeders;
             Flux = feeders.Flux;

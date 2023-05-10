@@ -29,17 +29,17 @@ namespace Flux.ViewModels
         private Stack<IFluxRoutableViewModel> PreviousViewModels { get; }
 
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> HomeCommand { get; }
+        public ReactiveCommandBaseRC<Unit, Unit> HomeCommand { get; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> MCodesCommand { get; }
+        public ReactiveCommandBaseRC<Unit, Unit> MCodesCommand { get; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> FeedersCommand { get; }
+        public ReactiveCommandBaseRC<Unit, Unit> FeedersCommand { get; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> CalibrationCommand { get; }
+        public ReactiveCommandBaseRC<Unit, Unit> CalibrationCommand { get; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> FunctionalityCommand { get; }
+        public ReactiveCommandBaseRC<Unit, Unit> FunctionalityCommand { get; }
 
-        public FluxNavigatorViewModel(FluxViewModel flux) : base(flux.RemoteContext)
+        public FluxNavigatorViewModel(FluxViewModel flux)
         {
             Flux = flux;
             SourceListRC.Create(this, v => v.Routes);
@@ -164,7 +164,7 @@ namespace Flux.ViewModels
             FluxViewModel flux,
             string name = "",
             OptionalObservable<bool> show_navbar = default) 
-            : base(flux.RemoteContext, string.IsNullOrEmpty(name) ? $"{typeof(TFluxRoutableViewModel).GetRemoteElementClass()}" : name)
+            : base(string.IsNullOrEmpty(name) ? $"{typeof(TFluxRoutableViewModel).GetRemoteElementClass()}" : name)
         {
             Flux = flux;
             ShowNavBar = show_navbar.ObservableOr(() => false);

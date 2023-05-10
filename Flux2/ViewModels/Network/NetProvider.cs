@@ -100,7 +100,7 @@ namespace Flux.ViewModels
             Flux.InitializeRemoteView();
             Flux.WhenAnyValue(f => f.RemoteControlData)
                 .DistinctUntilChanged()
-                //.ThrottleMax(TimeSpan.FromMilliseconds(50), TimeSpan.FromMilliseconds(200))
+                .ThrottleMax(TimeSpan.FromMilliseconds(50), TimeSpan.FromMilliseconds(200))
                 .Subscribe(async d => await SendRemoteControlDataAsync(d))
                 .DisposeWith(Disposables);
         }
@@ -149,7 +149,8 @@ namespace Flux.ViewModels
                         if (!command.HasValue)
                             return Task.CompletedTask;
 
-                        Flux.RemoteContext.InvokeCommand(command.Value.CommandGuid);
+                        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+                        command.Value.ExecuteAsync(cts.Token);
                     }
                 }
                 catch (Exception ex)

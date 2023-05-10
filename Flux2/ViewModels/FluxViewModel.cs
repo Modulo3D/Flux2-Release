@@ -94,11 +94,11 @@ namespace Flux.ViewModels
 
 
         [RemoteCommand]
-        public Optional<ReactiveCommand<Unit, Unit>> LeftButtonCommand { get; private set; }
+        public Optional<ReactiveCommandBaseRC<Unit, Unit>> LeftButtonCommand { get; private set; }
         [RemoteCommand]
-        public Optional<ReactiveCommand<Unit, Unit>> RightButtonCommand { get; private set; }
+        public Optional<ReactiveCommandBaseRC<Unit, Unit>> RightButtonCommand { get; private set; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> OpenStatusBarCommand { get; private set; }
+        public ReactiveCommandBaseRC<Unit, Unit> OpenStatusBarCommand { get; private set; }
 
         public HomeViewModel Home { get; private set; }
         public WebcamViewModel Webcam { get; private set; }
@@ -164,7 +164,7 @@ namespace Flux.ViewModels
 
         public ILogger<IFlux> Logger { get; }
 
-        public FluxViewModel(ILogger<IFlux> logger) : base(new RemoteContext())
+        public FluxViewModel(ILogger<IFlux> logger)
         {
             Logger = logger;
 
@@ -252,13 +252,13 @@ namespace Flux.ViewModels
 
                     // COMMANDS
                     if (ConnectionProvider.HasVariable(s => s.CHAMBER_LIGHT))
-                        RightButtonCommand = ReactiveCommandRC.CreateFromTask(async () => { await ConnectionProvider.ToggleVariableAsync(m => m.CHAMBER_LIGHT); }, this);
+                        RightButtonCommand = ReactiveCommandBaseRC.CreateFromTask(async () => { await ConnectionProvider.ToggleVariableAsync(m => m.CHAMBER_LIGHT); }, this);
 
                     if (ConnectionProvider.HasVariable(s => s.OPEN_LOCK, main_lock_unit))
-                        LeftButtonCommand = ReactiveCommandRC.CreateFromTask(async () => { await ConnectionProvider.ToggleVariableAsync(m => m.OPEN_LOCK, main_lock_unit); }, this, is_idle);
+                        LeftButtonCommand = ReactiveCommandBaseRC.CreateFromTask(async () => { await ConnectionProvider.ToggleVariableAsync(m => m.OPEN_LOCK, main_lock_unit); }, this, is_idle);
 
                     var status_bar_nav = new NavModalViewModel<StatusBarViewModel>(this, StatusBar);
-                    OpenStatusBarCommand = ReactiveCommandRC.Create(() => { Navigator.Navigate(status_bar_nav); }, this);
+                    OpenStatusBarCommand = ReactiveCommandBaseRC.Create(() => { Navigator.Navigate(status_bar_nav); }, this);
 
                     ConnectionProvider.Initialize();
                     StatusProvider.Initialize();

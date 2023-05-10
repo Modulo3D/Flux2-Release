@@ -31,9 +31,9 @@ namespace Flux.ViewModels
         }
 
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> ExitFolderCommand { get; }
+        public ReactiveCommandBaseRC<Unit, Unit> ExitFolderCommand { get; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> CreateFSCommand { get; }
+        public ReactiveCommandBaseRC<Unit, Unit> CreateFSCommand { get; }
 
         public Subject<Unit> UpdateFolder { get; }
 
@@ -41,12 +41,12 @@ namespace Flux.ViewModels
         {
             UpdateFolder = new Subject<Unit>();
 
-            ExitFolderCommand = ReactiveCommandRC.Create(() =>
+            ExitFolderCommand = ReactiveCommandBaseRC.Create(() =>
             {
                 Folder = Folder.Convert(f => f.Folder);
             }, this);
 
-            CreateFSCommand = ReactiveCommandRC.CreateFromTask(CreateFSAsync, this);
+            CreateFSCommand = ReactiveCommandBaseRC.CreateFromTask(CreateFSAsync, this);
 
             var folderContent = Observable.CombineLatest(
                 UpdateFolder.StartWith(Unit.Default).ObserveOn(RxApp.MainThreadScheduler),
