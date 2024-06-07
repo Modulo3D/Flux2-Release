@@ -1,23 +1,39 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
+using System;
+using System.Diagnostics;
 using System.Linq;
 using System.Net;
+using System.Net.NetworkInformation;
+using System.Net.Sockets;
+using System.Reactive.Disposables;
 using System.Reactive.Linq;
+using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
-    public class SettingsProvider : ReactiveObject, IFluxSettingsProvider
+    public class SettingsProvider : ReactiveObjectRC<SettingsProvider>, IFluxSettingsProvider
     {
         public FluxViewModel Flux { get; }
 
-        private ObservableAsPropertyHelper<Optional<Printer>> _Printer;
+        private readonly ObservableAsPropertyHelper<Optional<Printer>> _Printer;
         public Optional<Printer> Printer => _Printer.Value;
 
-        private ObservableAsPropertyHelper<Optional<IPAddress>> _HostAddress;
-        public Optional<IPAddress> HostAddress => _HostAddress.Value;
+        private readonly ObservableAsPropertyHelper<Optional<IPEndPoint>> _FluxEndpoint;
+        public Optional<IPEndPoint> FluxEndPoint => _FluxEndpoint.Value;
+
+        private readonly ObservableAsPropertyHelper<Optional<IPEndPoint>> _PLCEndPoint;
+        public Optional<IPEndPoint> PLCEndPoint => _PLCEndPoint.Value;
+        
+        private readonly ObservableAsPropertyHelper<Optional<int>> _PassthroughPort;
+        public Optional<int> PassthroughPort => _PassthroughPort.Value;
+
+        private readonly ObservableAsPropertyHelper<Optional<int>> _VPNPort;
+        public Optional<int> VPNPort => _VPNPort.Value;
 
         private LocalSettingsProvider<FluxCoreSettings> _CoreSettings;
         public LocalSettingsProvider<FluxCoreSettings> CoreSettings
@@ -41,8 +57,21 @@ namespace Flux.ViewModels
             }
         }
 
-        private ObservableAsPropertyHelper<Optional<ushort>> _ExtrudersCount;
-        public Optional<ushort> ExtrudersCount => _ExtrudersCount.Value;
+        private LocalSettingsProvider<FluxMemorySettings> _MemorySettings;
+        public LocalSettingsProvider<FluxMemorySettings> MemorySettings
+        {
+            get
+            {
+                if (_MemorySettings == default)
+                    _MemorySettings = new LocalSettingsProvider<FluxMemorySettings>(Files.MemorySettings);
+                return _MemorySettings;
+            }
+        }
+
+        private readonly ObservableAsPropertyHelper<Optional<(ushort machine_extruders, ushort mixing_extruders)>> _ExtrudersCount;
+        public Optional<(ushort machine_extruders, ushort mixing_extruders)> ExtrudersCount => _ExtrudersCount.Value;
+
+        public IObservableCache<IPAddress, string> HostAddressCache { get; }
 
         public SettingsProvider(FluxViewModel flux)
         {
@@ -52,121 +81,81 @@ namespace Flux.ViewModels
                 Flux.DatabaseProvider.WhenAnyValue(v => v.Database),
                 CoreSettings.Local.WhenAnyValue(s => s.PrinterID),
                 FindPrinter)
-                .ToProperty(this, v => v.Printer);
+                .SelectAsync()
+                .ToPropertyRC(this, v => v.Printer);
 
-            var host = Dns.GetHostEntry(Dns.GetHostName());
-            _HostAddress = CoreSettings.Local.WhenAnyValue(s => s.HostID)
-                .Convert(id => host.AddressList.ElementAtOrDefault(id))
-                .ToProperty(this, v => v.HostAddress);
+            HostAddressCache = NetworkInterface.GetAllNetworkInterfaces()
+                .AsObservableChangeSet(nic => nic.Id)
+                .Transform(nic => nic.GetIPProperties().ToOptional())
+                .Transform(ip => ip.Convert(ip => ip.UnicastAddresses))
+                .Transform(i => i.Convert(i => i.Select(a => a.Address)))
+                .Transform(a => a.Convert(a => a.FirstOrOptional(a => a.AddressFamily == AddressFamily.InterNetwork)))
+                .Filter(ip => ip.HasValue)
+                .Transform(ip => ip.Value)
+                .AsObservableCacheRC(this);
+
+            _FluxEndpoint = Observable.CombineLatest(
+                HostAddressCache.Connect().QueryWhenChanged(),
+                CoreSettings.Local.WhenAnyValue(s => s.HostID),
+                CoreSettings.Local.WhenAnyValue(s => s.HostPort),
+                (host_address_cache, host_id, host_port) =>
+                {
+                    if (!host_id.HasValue)
+                        return Optional<IPEndPoint>.None;
+                    if (!host_port.HasValue)
+                        return Optional<IPEndPoint>.None;
+                    var flux_address = host_address_cache.Lookup(host_id.Value);
+                    if (!flux_address.HasValue)
+                        return Optional<IPEndPoint>.None;
+                    return new IPEndPoint(flux_address.Value, host_port.Value);
+                })
+                .ToPropertyRC(this, v => v.FluxEndPoint);
+
+            _PassthroughPort = CoreSettings.Local.WhenAnyValue(s => s.PassthroughPort)
+               .ToPropertyRC(this, v => v.PassthroughPort);
+
+            _VPNPort = CoreSettings.Local.WhenAnyValue(s => s.VPNPort)
+               .ToPropertyRC(this, v => v.VPNPort);
+
+            _PLCEndPoint = CoreSettings.Local.WhenAnyValue(s => s.PLCAddress)
+                .Convert(address => address.ParseAsIPv4EndPoint())
+                .ToPropertyRC(this, v => v.PLCEndPoint);
 
             _ExtrudersCount = this.WhenAnyValue(v => v.Printer)
-                .Select(GetExtruderCount)
-                .ToProperty(this, v => v.ExtrudersCount);
+                .Convert(p =>
+                {
+                    var machine_extruder_count = p[p => p.MachineExtruderCount];
+                    var mixing_extruder_count = p[p => p.MixingExtruderCount];
+                    return (machine_extruder_count, mixing_extruder_count);
+                })
+                .ToPropertyRC(this, v => v.ExtrudersCount);
+
+            UserSettings.Local.WhenAnyValue(s => s.StandbyMinutes)
+                .SubscribeRC(async s =>
+                {
+                    var seconds = (int)TimeSpan.FromMinutes(s.Value).TotalSeconds;
+                    await ProcessUtils.RunLinuxCommandsAsync("DISPLAY=:0 xset s reset", $"DISPLAY=:0 xset s {seconds}");
+                }, this);
         }
 
-        private Optional<Printer> FindPrinter(Optional<ILocalDatabase> database, Optional<int> printer_id)
+        private async Task<Optional<Printer>> FindPrinter(Optional<ILocalDatabase> database, Optional<int> printer_id)
         {
             if (!database.HasValue)
                 return default;
             if (!printer_id.HasValue)
                 return default;
-            var printers = database.Value.FindById<Printer>(printer_id.Value);
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var printers = await database.Value.FindByIdAsync<Printer>(printer_id.Value, cts.Token);
             if (!printers.HasDocuments)
                 return default;
-            return printers.Documents.FirstOrDefault();
-        }
-
-        public async Task<bool> ResetMagazineAsync()
-        {
-            if (!ExtrudersCount.HasValue)
-            {
-                Flux.Messages.LogMessage("Errore resetta magazzino", $"Stampante non configurata", MessageLevel.ERROR, 0);
-                return false;
-            }
-
-            var enable_drivers = Flux.ConnectionProvider.VariableStore.GetVariables(m => m.ENABLE_DRIVERS);
-            if (enable_drivers.HasValue)
-            {
-                foreach (var variable in enable_drivers.Value.Items)
-                {
-                    if (!await Flux.ConnectionProvider.WriteVariableAsync(variable, false))
-                    {
-                        Flux.Messages.LogMessage("Errore resetta magazzino", $"Asse {variable.Unit} non disabilitato", MessageLevel.ERROR, 0);
-                        return false;
-                    }
-                }
-            }
-
-            var result = await Flux.ShowConfirmDialogAsync("Riponi l'utensile selezionato", "Se è presente un utensile sul carrello, riporlo manualmente prima di continuare");
-            if (result != ContentDialogResult.Primary)
-                return true;
-
-            if (!await Flux.ConnectionProvider.ResetClampAsync())
-            {
-                Flux.Messages.LogMessage("Errore resetta magazzino", "Pinza non resettata", MessageLevel.ERROR, 0);
-                return false;
-            }
-
-            if (!await Flux.ConnectionProvider.WriteVariableAsync(m => m.IN_CHANGE, false))
-            {
-                Flux.Messages.LogMessage("Errore resetta magazzino", "Utensile non deselezionato", MessageLevel.ERROR, 0);
-                return false;
-            }
-
-            var tool_on_trailer = Flux.ConnectionProvider.VariableStore.GetVariables(m => m.MEM_TOOL_ON_TRAILER);
-            if (tool_on_trailer.HasValue)
-            {
-                foreach (var variable in tool_on_trailer.Value.Items)
-                {
-                    if (!await Flux.ConnectionProvider.WriteVariableAsync(variable, false))
-                    {
-                        Flux.Messages.LogMessage("Errore resetta magazzino", "Tool sul carrello", MessageLevel.ERROR, 0);
-                        return false;
-                    }
-                }
-            }
-
-            var tool_on_magazine = Flux.ConnectionProvider.VariableStore.GetVariables(m => m.MEM_TOOL_IN_MAGAZINE);
-            if (tool_on_magazine.HasValue)
-            {
-                foreach (var variable in tool_on_magazine.Value.Items)
-                {
-                    if (!await Flux.ConnectionProvider.WriteVariableAsync(variable, false))
-                    {
-                        Flux.Messages.LogMessage("Errore resetta magazzino", "Tool nel magazzino", MessageLevel.ERROR, 0);
-                        return false;
-                    }
-                }
-            }
-
-            for (ushort extruder = 0; extruder < ExtrudersCount.Value; extruder++)
-            {
-                var extr_key = Flux.ConnectionProvider.VariableStore.GetArrayUnit(m => m.MEM_TOOL_IN_MAGAZINE, extruder);
-                if (!extr_key.HasValue)
-                    return false;
-
-                if (!await Flux.ConnectionProvider.WriteVariableAsync(m => m.MEM_TOOL_IN_MAGAZINE, extr_key.Value, true))
-                {
-                    Flux.Messages.LogMessage("Errore resetta magazzino", "Tool non nel magazzino", MessageLevel.ERROR, 0);
-                    return false;
-                }
-            }
-
-            return await Flux.ConnectionProvider.ResetAsync();
+            return printers.FirstOrDefault();
         }
 
         // GET EXTRUDERS
-        private Optional<ushort> GetExtruderCount(Optional<Printer> printer)
-        {
-            if (!printer.HasValue)
-                return default;
-            return printer.Value["machine_extruder_count"].TryGetValue<ushort>();
-        }
-
         public bool PersistLocalSettings()
         {
-            var result = CoreSettings.PersistLocalSettings() && UserSettings.PersistLocalSettings();
-            Flux.Messages.LogMessage("Salvataggio impostazioni", result ? "Impostazioni salvate" : "Errore di salvataggio", result ? MessageLevel.DEBUG : MessageLevel.ERROR, 0);
+            var result = CoreSettings.PersistLocalSettings() && UserSettings.PersistLocalSettings() && MemorySettings.PersistLocalSettings();
+            // Flux.Messages.LogMessage("Salvataggio impostazioni", result ? "Impostazioni salvate" : "Errore di salvataggio", result ? MessageLevel.DEBUG : MessageLevel.ERROR, 0);
             return result;
         }
     }

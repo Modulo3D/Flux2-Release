@@ -1,929 +1,699 @@
 ﻿using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using OSAI;
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
+using System.Net;
 using System.Reactive.Linq;
 using System.Runtime.CompilerServices;
-using System.ServiceModel;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Xml.Linq;
+using GreenSuperGreen.Queues;
+using static System.Runtime.InteropServices.JavaScript.JSType;
+using System.Reflection.Metadata;
+using System.Reactive.Disposables;
 
 namespace Flux.ViewModels
 {
-    public class OSAI_Connection : FLUX_Connection<OSAI_VariableStore, OPENcontrolPortTypeClient, OSAI_MemoryBuffer>
+    public readonly struct OSAI_Request<TData> : IFLUX_Request<OPENcontrolPortTypeClient, OSAI_Response<TData>>
     {
-        public const ushort AxisNum = 4;
-        public ushort ProcessNumber => 1;
+        public TimeSpan Timeout { get; }
+        public FLUX_RequestPriority Priority { get; }
+        public CancellationToken Cancellation { get; }
+        public TaskCompletionSource<OSAI_Response<TData>> Response { get; }
+        public Func<TData, OSAI_Err> Retval { get; }
+        public Func<OPENcontrolPortTypeClient, CancellationToken, Task<TData>> Request { get; }
+        public OSAI_Request(
+            Func<OPENcontrolPortTypeClient, CancellationToken, Task<TData>> request,
+            Func<TData, OSAI_Err> retval,
+            FLUX_RequestPriority priority,
+            CancellationToken ct, 
+            TimeSpan timeout = default)
+        {
+            Retval = retval;
+            Timeout = timeout;
+            Request = request;
+            Cancellation = ct;
+            Priority = priority;
+            Response = new TaskCompletionSource<OSAI_Response<TData>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
+        public override string ToString() => $"{nameof(OSAI_Request<TData>)} Method:{Request.Method}";
+        public async Task<bool> TrySendAsync(OPENcontrolPortTypeClient client, CancellationToken ct)
+        {
+            try
+            {
+                var response    = await Request(client, ct);
+                var retval      = Retval(response);
+                return Response.TrySetResult(new OSAI_Response<TData>(response, retval));
+            }
+            catch (Exception ex)
+            {
+                Response.TrySetResult(default);
+                return false;
+            }
+        }
 
-        public FluxViewModel Flux { get; }
-        private OSAI_MemoryBuffer _MemoryBuffer;
-        public override OSAI_MemoryBuffer MemoryBuffer
+        public bool TrySetCanceled()
+        {
+            return Response.TrySetResult(default);
+        }
+    }
+
+    public readonly record struct OSAI_Err(ushort Err, uint ErrClass, uint ErrNum);
+    public readonly record struct OSAI_Response<TData>(Optional<TData> Content, OSAI_Err Err) : IFLUX_Response
+    {
+        public bool Ok
         {
             get
             {
-                if (_MemoryBuffer == default)
-                    _MemoryBuffer = new OSAI_MemoryBuffer(this);
-                return _MemoryBuffer;
+                var ok = (Content.HasValue, Err.Err, Err.ErrClass, Err.ErrNum) switch
+                {
+                    (false, _, _, _) => false,
+                    (_, 0, 5, 17) => true,
+                    (_, 0, _, _) => false,
+                    _ => true
+                };
+
+                //if (!ok)
+                //    Console.WriteLine(this);
+
+                return ok;
             }
         }
 
-        public override string InnerQueuePath => "PROGRAMS\\QUEUE\\INNER";
+        public override string ToString()
+        {
+            if (!Content.HasValue)
+                return $"{nameof(OSAI_Response<TData>)} Task cancellata";
+            if (Err.Err == 0)
+                return $"Errore {Err.ErrClass}, {Err.ErrNum}";
+            return "OK";
+        }
+    }
+
+    public class OSAI_Connection : FLUX_Connection<OSAI_Connection, OSAI_ConnectionProvider, OSAI_VariableStore, OPENcontrolPortTypeClient>
+    {
+        public const ushort AxisNum = 4;
+        public const ushort ProcessNumber = 1;
+
+        public override string RootPath => "DEVICE";
+        public override string MacroPath => "MACRO";
         public override string QueuePath => "PROGRAMS\\QUEUE";
+        public override string EventPath => "PROGRAMS\\EVENTS";
         public override string StoragePath => "PROGRAMS\\STORAGE";
+        public override string JobEventPath => CombinePaths(EventPath, "JOB");
+        public override string InnerQueuePath => CombinePaths(QueuePath, "INNER");
+        public override string MessageEventPath => CombinePaths(EventPath, "LOG");
+        public override string ExtrusionEventPath => CombinePaths(EventPath, "EXTR");
+        public override string ExtrusionHistoryPath => CombinePaths(EventPath, "EXTR_HISTORY");
+        public override string CombinePaths(params string[] paths) => string.Join("\\", paths.Where(x => !string.IsNullOrEmpty(x)));
+
+        public FluxViewModel Flux { get; }
 
         // MEMORY VARIABLES
-        public OSAI_Connection(FluxViewModel flux, OSAI_VariableStore variable_store, string address) : base(variable_store, new OPENcontrolPortTypeClient(OPENcontrolPortTypeClient.EndpointConfiguration.OPENcontrol, address))
+        public override Optional<Message> ParseMessage(MessageLevel level, string message)
+        {
+            return default;
+        }
+        public OSAI_Connection(FluxViewModel flux, OSAI_ConnectionProvider connection_provider) : base(connection_provider)
         {
             Flux = flux;
         }
+        public async Task<OSAI_Response<TData>> TryEnqueueRequestAsync<TData>(
+            Func<OPENcontrolPortTypeClient, CancellationToken, Task<TData>> request, 
+            Func<TData, OSAI_Err> retval, 
+            FLUX_RequestPriority priority,
+            CancellationToken ct,
+            TimeSpan timeout = default)
+        {
+            var osai_request = new OSAI_Request<TData>((c, ct) => request(c, ct), retval, priority, ct, timeout);
+            return await TryEnqueueRequestAsync<OSAI_Request<TData>, OSAI_Response<TData>>(osai_request);
+        }
+        public async Task<Optional<TData>> TryEnqueueRequestAsync<TResponse, TData>(
+            Func<OPENcontrolPortTypeClient, CancellationToken, Task<TResponse>> request,
+            Func<TResponse, TData> get_value,
+            Func<TResponse, OSAI_Err> retval,
+            FLUX_RequestPriority priority,
+            CancellationToken ct,
+            TimeSpan timeout = default)
+        {
+            try
+            {
+                var osai_request = new OSAI_Request<TResponse>((c, ct) => request(c, ct), retval, priority, ct, timeout);
+                var response = await TryEnqueueRequestAsync<OSAI_Request<TResponse>, OSAI_Response<TResponse>>(osai_request);
+
+                if (!response.Ok)
+                    return default;
+                if (!response.Content.HasValue)
+                    return default;
+
+                return get_value(response.Content.Value);
+            }
+            catch(Exception ex)
+            {
+                return default;
+            }
+        }
+
+        // CONNECT
+        protected override async Task CloseAsyncInternal(OPENcontrolPortTypeClient client)
+        {
+            await client.CloseAsync();
+        }
+        protected override OPENcontrolPortTypeClient ConnectAsyncInternal(string plc_address)
+        {
+            return new OPENcontrolPortTypeClient(OPENcontrolPortTypeClient.EndpointConfiguration.OPENcontrol, plc_address);
+        }
 
         // MEMORY R/W
-        public async Task<bool> WriteVariableAsync(OSAI_BitIndexAddress address, bool value)
+        private async Task<bool> WriteVariableAsync<TOSAI_Address, TData, TResponse>(
+            TOSAI_Address address, TData value, CancellationToken ct, 
+            Func<OPENcontrolPortTypeClient, TOSAI_Address, TData, Task<TResponse>> write,
+            Func<TResponse, OSAI_Err> retval)
         {
-            try
-            {
-                var write_request = new WriteVarWordBitRequest((ushort)address.VarCode, ProcessNumber, address.Index, address.BitIndex, value ? (ushort)1 : (ushort)0);
-                var write_response = await Client.WriteVarWordBitAsync(write_request);
-
-                if (!ProcessResponse(
-                    write_response.retval,
-                    write_response.ErrClass,
-                    write_response.ErrNum))
-                    return false;
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
+            var response = await TryEnqueueRequestAsync((c, ct) => write(c, address, value), retval, FLUX_RequestPriority.Immediate, ct);
+            return response.Ok;
+        }
+        public Task<bool> WriteVariableAsync(OSAI_BitIndexAddress address, bool value, CancellationToken ct)
+        {
+            return WriteVariableAsync(address, value, ct,
+                (c, a, v) => c.WriteVarWordBitAsync(new WriteVarWordBitRequest((ushort)a.VarCode, ProcessNumber, a.Index, a.BitIndex, v ? (ushort)1 : (ushort)0)),
+                r => new (r.retval, r.ErrClass, r.ErrNum));
+        }
+        public Task<bool> WriteVariableAsync(OSAI_IndexAddress address, short value, CancellationToken ct)
+        {
+            return WriteVariableAsync(address, value, ct,
+                (c, a, v) => c.WriteVarWordAsync(new WriteVarWordRequest((ushort)a.VarCode, ProcessNumber, a.Index, 1, new unsignedshortarray { ShortConverter.Convert(v) })),
+                r => new (r.retval, r.ErrClass, r.ErrNum));
+        }
+        public async Task<bool> WriteVariableAsync(OSAI_IndexAddress address, string value, CancellationToken ct)
+        {
+            if (value.Length > 128)
                 return false;
-            }
+
+            return await WriteVariableAsync(address, value, ct,
+                (c, a, v) => c.WriteVarTextAsync(new WriteVarTextRequest((ushort)a.VarCode, ProcessNumber, a.Index, (ushort)v.Length, v)),
+                r => new (r.retval, r.ErrClass, r.ErrNum));
         }
-        public async Task<bool> WriteVariableAsync(OSAI_IndexAddress address, short value)
+        public Task<bool> WriteVariableAsync(OSAI_IndexAddress address, ushort value, CancellationToken ct)
         {
-            try
-            {
-                var write_request = new WriteVarWordRequest((ushort)address.VarCode, ProcessNumber, address.Index, 1, new unsignedshortarray { ShortConverter.Convert(value) });
-                var write_response = await Client.WriteVarWordAsync(write_request);
+            return WriteVariableAsync(address, value, ct,
+                (c, a, v) => c.WriteVarWordAsync(new WriteVarWordRequest((ushort)a.VarCode, ProcessNumber, a.Index, 1, new unsignedshortarray { v })),
+                r => new (r.retval, r.ErrClass, r.ErrNum));
+        }
+        public Task<bool> WriteVariableAsync(OSAI_IndexAddress address, double value, CancellationToken ct)
+        {
+            return WriteVariableAsync(address, value, ct,
+                (c, a, v) => c.WriteVarDoubleAsync(new WriteVarDoubleRequest((ushort)a.VarCode, ProcessNumber, a.Index, 1, new doublearray { v })),
+                r => new(r.retval, r.ErrClass, r.ErrNum));
+        }
+        public Task<bool> WriteVariableAsync(OSAI_IndexAddress address, ushort bit_index, bool value, CancellationToken ct)
+        {
+            return WriteVariableAsync(address, value, ct,
+                (c, a, v) => c.WriteVarWordBitAsync(new WriteVarWordBitRequest((ushort)a.VarCode, ProcessNumber, a.Index, bit_index, v ? (ushort)1 : (ushort)0)),
+                r => new(r.retval, r.ErrClass, r.ErrNum));
+        }
 
-                if (!ProcessResponse(
-                    write_response.retval,
-                    write_response.ErrClass,
-                    write_response.ErrNum))
-                    return false;
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
+        public Task<bool> WriteVariableAsync(OSAI_NamedAddress address, bool value, CancellationToken ct)
+        {
+            return WriteVariableAsync(address, value, ct,
+                (c, a, v) => c.WriteNamedVarDoubleAsync(new WriteNamedVarDoubleRequest(ProcessNumber, a.Name, 1, a.Index, -1, -1, new doublearray() { v ? 1.0 : 0.0 })),
+                r => new(r.retval, r.ErrClass, r.ErrNum));
+        }
+        public Task<bool> WriteVariableAsync(OSAI_NamedAddress address, short value, CancellationToken ct)
+        {
+            return WriteVariableAsync(address, value, ct,
+                (c, a, v) => c.WriteNamedVarDoubleAsync(new WriteNamedVarDoubleRequest(ProcessNumber, a.Name, 1, a.Index, -1, -1, new doublearray() { v })),
+                r => new(r.retval, r.ErrClass, r.ErrNum));
+          
+        }
+        public Task<bool> WriteVariableAsync(OSAI_NamedAddress address, ushort value, CancellationToken ct)
+        {
+            return WriteVariableAsync(address, value, ct,
+                (c, a, v) => c.WriteNamedVarDoubleAsync(new WriteNamedVarDoubleRequest(ProcessNumber, a.Name, 1, a.Index, -1, -1, new doublearray() { v })),
+                r => new(r.retval, r.ErrClass, r.ErrNum));
+        }
+        public Task<bool> WriteVariableAsync(OSAI_NamedAddress address, double value, CancellationToken ct)
+        {
+            return WriteVariableAsync(address, value, ct,
+                (c, a, v) => c.WriteNamedVarDoubleAsync(new WriteNamedVarDoubleRequest(ProcessNumber, a.Name, 1, a.Index, -1, -1, new doublearray() { v })),
+                r => new(r.retval, r.ErrClass, r.ErrNum));
+        }
+        public async Task<bool> WriteVariableAsync(OSAI_NamedAddress address, string value, ushort lenght, CancellationToken ct)
+        {
+            if (value.Length > lenght)
                 return false;
-            }
-        }
-        public async Task<bool> WriteVariableAsync(OSAI_IndexAddress address, string value)
-        {
-            try
-            {
-                if (value.Length > 128)
-                    return false;
 
-                var write_request = new WriteVarTextRequest((ushort)address.VarCode, ProcessNumber, address.Index, (ushort)value.Length, value);
-                var write_response = await Client.WriteVarTextAsync(write_request);
+            var bytes_array = Encoding.ASCII.GetBytes(value);
 
-                if (!ProcessResponse(
-                    write_response.retval,
-                    write_response.ErrClass,
-                    write_response.ErrNum))
-                    return false;
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return false;
-            }
-        }
-        public async Task<bool> WriteVariableAsync(OSAI_IndexAddress address, ushort value)
-        {
-            try
-            {
-                var write_request = new WriteVarWordRequest((ushort)address.VarCode, ProcessNumber, address.Index, 1, new unsignedshortarray { value });
-                var write_response = await Client.WriteVarWordAsync(write_request);
-
-                if (!ProcessResponse(
-                    write_response.retval,
-                    write_response.ErrClass,
-                    write_response.ErrNum))
-                    return false;
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return false;
-            }
-        }
-        public async Task<bool> WriteVariableAsync(OSAI_IndexAddress address, double value)
-        {
-            try
-            {
-                var write_request = new WriteVarDoubleRequest((ushort)address.VarCode, ProcessNumber, address.Index, 1, new doublearray { value });
-                var write_response = await Client.WriteVarDoubleAsync(write_request);
-
-                if (!ProcessResponse(
-                    write_response.retval,
-                    write_response.ErrClass,
-                    write_response.ErrNum))
-                    return false;
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return false;
-            }
-        }
-        public async Task<bool> WriteVariableAsync(OSAI_IndexAddress address, ushort bit_index, bool value)
-        {
-            try
-            {
-                var write_request = new WriteVarWordBitRequest((ushort)address.VarCode, ProcessNumber, address.Index, bit_index, value ? (ushort)1 : (ushort)0);
-                var write_response = await Client.WriteVarWordBitAsync(write_request);
-
-                if (!ProcessResponse(
-                    write_response.retval,
-                    write_response.ErrClass,
-                    write_response.ErrNum))
-                    return false;
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return false;
-            }
+            return await WriteVariableAsync(address, bytes_array, ct,
+                (c, a, v) => c.WriteNamedVarByteArrayAsync(new WriteNamedVarByteArrayRequest(ProcessNumber, a.Name, (ushort)v.Length, 0, -1, -1, v)),
+                r => new(r.retval, r.ErrClass, r.ErrNum));
         }
 
-        public async Task<bool> WriteVariableAsync(OSAI_NamedAddress address, bool value)
+        private Task<Optional<TData>> ReadVariableAsync<TOSAI_Address, TData, TResponse>(
+            TOSAI_Address address, CancellationToken ct,
+            Func<OPENcontrolPortTypeClient, TOSAI_Address, Task<TResponse>> read,
+            Func<TResponse, TOSAI_Address, TData> get_value,
+            Func<TResponse, OSAI_Err> retval)
         {
-            try
-            {
-                var write_named_variable_request = new WriteNamedVarDoubleRequest(ProcessNumber, address.Name, 1, address.Index, -1, -1, new doublearray() { value ? 1.0 : 0.0 });
-                var write_named_variable_response = await Client.WriteNamedVarDoubleAsync(write_named_variable_request);
-
-                if (!ProcessResponse(
-                    write_named_variable_response.retval,
-                    write_named_variable_response.ErrClass,
-                    write_named_variable_response.ErrNum))
-                    return false;
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return false;
-            }
+            return TryEnqueueRequestAsync((c, ct) => read(c, address), v => get_value(v, address), retval, FLUX_RequestPriority.Immediate, ct);
         }
-        public async Task<bool> WriteVariableAsync(OSAI_NamedAddress address, short value)
+        public Task<Optional<bool>> ReadBoolAsync(OSAI_BitIndexAddress address, CancellationToken ct)
         {
-            try
-            {
-                var write_named_variable_request = new WriteNamedVarDoubleRequest(ProcessNumber, address.Name, 1, address.Index, -1, -1, new doublearray() { value });
-                var write_named_variable_response = await Client.WriteNamedVarDoubleAsync(write_named_variable_request);
-
-                if (!ProcessResponse(
-                    write_named_variable_response.retval,
-                    write_named_variable_response.ErrClass,
-                    write_named_variable_response.ErrNum))
-                    return false;
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return false;
-            }
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadVarWordAsync(new ReadVarWordRequest((ushort)a.VarCode, ProcessNumber, a.Index, 1)),
+                (r, a) => r.Value[0].IsBitSet(a.BitIndex),
+                r => new (r.retval, r.ErrClass, r.ErrNum));
         }
-        public async Task<bool> WriteVariableAsync(OSAI_NamedAddress address, double value)
+        public Task<Optional<ushort>> ReadUShortAsync(OSAI_IndexAddress address, CancellationToken ct)
         {
-            try
-            {
-                var write_named_variable_request = new WriteNamedVarDoubleRequest(ProcessNumber, address.Name, 1, address.Index, -1, -1, new doublearray() { value });
-                var write_named_variable_response = await Client.WriteNamedVarDoubleAsync(write_named_variable_request);
-
-                if (!ProcessResponse(
-                    write_named_variable_response.retval,
-                    write_named_variable_response.ErrClass,
-                    write_named_variable_response.ErrNum))
-                    return false;
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return false;
-            }
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadVarWordAsync(new ReadVarWordRequest((ushort)a.VarCode, ProcessNumber, a.Index, 1)),
+                (r, a) => r.Value[0],
+                r => new(r.retval, r.ErrClass, r.ErrNum));
         }
-        public async Task<bool> WriteVariableAsync(OSAI_NamedAddress address, string value, ushort lenght)
+        public Task<Optional<short>> ReadShortAsync(OSAI_IndexAddress address, CancellationToken ct)
         {
-            try
-            {
-                if (value.Length > lenght)
-                    return false;
-
-                var bytes_array = Encoding.ASCII.GetBytes(value);
-                var write_named_variable_request = new WriteNamedVarByteArrayRequest(ProcessNumber, address.Name, (ushort)bytes_array.Length, 0, -1, -1, bytes_array);
-                var write_named_variable_response = await Client.WriteNamedVarByteArrayAsync(write_named_variable_request);
-
-                if (!ProcessResponse(
-                    write_named_variable_response.retval,
-                    write_named_variable_response.ErrClass,
-                    write_named_variable_response.ErrNum))
-                    return false;
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return false;
-            }
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadVarWordAsync(new ReadVarWordRequest((ushort)a.VarCode, ProcessNumber, a.Index, 1)),
+                (r, a) => ShortConverter.Convert(r.Value[0]),
+                r => new(r.retval, r.ErrClass, r.ErrNum));
+        }
+        public Task<Optional<string>> ReadTextAsync(OSAI_IndexAddress address, CancellationToken ct)
+        {
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadVarTextAsync(new ReadVarTextRequest((ushort)a.VarCode, ProcessNumber, a.Index, 128)),
+                (r, a) => r.Text,
+                r => new(r.retval, r.ErrClass, r.ErrNum));
+        }
+        public Task<Optional<double>> ReadDoubleAsync(OSAI_IndexAddress address, CancellationToken ct)
+        {
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadVarDoubleAsync(new ReadVarDoubleRequest((ushort)a.VarCode, ProcessNumber, a.Index, 1)),
+                (r, a) => r.Value[0],
+                r => new(r.retval, r.ErrClass, r.ErrNum));
+        }
+        public Task<Optional<bool>> ReadBoolAsync(OSAI_IndexAddress address, ushort bit_index, CancellationToken ct)
+        {
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadVarWordAsync(new ReadVarWordRequest((ushort)a.VarCode, ProcessNumber, a.Index, 1)),
+                (r, a) => r.Value[0].IsBitSet(bit_index),
+                r => new(r.retval, r.ErrClass, r.ErrNum));
         }
 
-        public async Task<Optional<bool>> ReadBoolAsync(OSAI_BitIndexAddress address)
+        public Task<Optional<bool>> ReadNamedBoolAsync(OSAI_NamedAddress address, CancellationToken ct)
         {
-            try
-            {
-                var read_request = new ReadVarWordRequest((ushort)address.VarCode, ProcessNumber, address.Index, 1);
-                var read_response = await Client.ReadVarWordAsync(read_request);
-
-                if (!ProcessResponse(
-                    read_response.retval,
-                    read_response.ErrClass,
-                    read_response.ErrNum))
-                    return default;
-
-                return read_response.Value[0].IsBitSet(address.BitIndex);
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return default;
-            }
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadNamedVarDoubleAsync(new ReadNamedVarDoubleRequest(ProcessNumber, a.Name, 1, a.Index, -1, -1)),
+                (r, a) => r.Value[0] == 1.0,
+                r => new(r.retval, r.ErrClass, r.ErrNum));
         }
-        public async Task<Optional<ushort>> ReadUshortAsync(OSAI_IndexAddress address)
+        public Task<Optional<short>> ReadNamedShortAsync(OSAI_NamedAddress address, CancellationToken ct)
         {
-            try
-            {
-                var read_request = new ReadVarWordRequest((ushort)address.VarCode, ProcessNumber, address.Index, 1);
-                var read_response = await Client.ReadVarWordAsync(read_request);
-
-                if (!ProcessResponse(
-                    read_response.retval,
-                    read_response.ErrClass,
-                    read_response.ErrNum))
-                    return default;
-
-                return read_response.Value[0];
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return default;
-            }
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadNamedVarDoubleAsync(new ReadNamedVarDoubleRequest(ProcessNumber, a.Name, 1, a.Index, -1, -1)),
+                (r, a) => (short)r.Value[0],
+                r => new(r.retval, r.ErrClass, r.ErrNum));
         }
-        public async Task<Optional<short>> ReadShortAsync(OSAI_IndexAddress address)
+        public Task<Optional<ushort>> ReadNamedUShortAsync(OSAI_NamedAddress address, CancellationToken ct)
         {
-            try
-            {
-                var read_request = new ReadVarWordRequest((ushort)address.VarCode, ProcessNumber, address.Index, 1);
-                var read_response = await Client.ReadVarWordAsync(read_request);
-
-                if (!ProcessResponse(
-                    read_response.retval,
-                    read_response.ErrClass,
-                    read_response.ErrNum))
-                    return default;
-
-                return ShortConverter.Convert(read_response.Value[0]);
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return default;
-            }
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadNamedVarDoubleAsync(new ReadNamedVarDoubleRequest(ProcessNumber, a.Name, 1, a.Index, -1, -1)),
+                (r, a) => (ushort)r.Value[0],
+                r => new(r.retval, r.ErrClass, r.ErrNum));
         }
-        public async Task<Optional<string>> ReadTextAsync(OSAI_IndexAddress address)
+        public Task<Optional<double>> ReadNamedDoubleAsync(OSAI_NamedAddress address, CancellationToken ct)
         {
-            try
-            {
-                var read_request = new ReadVarTextRequest((ushort)address.VarCode, ProcessNumber, address.Index, 128);
-                var read_response = await Client.ReadVarTextAsync(read_request);
-
-                if (!ProcessResponse(
-                    read_response.retval,
-                    read_response.ErrClass,
-                    read_response.ErrNum))
-                    return default;
-
-                return read_response.Text;
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return default;
-            }
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadNamedVarDoubleAsync(new ReadNamedVarDoubleRequest(ProcessNumber, a.Name, 1, a.Index, -1, -1)),
+                (r, a) => r.Value[0],
+                r => new(r.retval, r.ErrClass, r.ErrNum));
         }
-        public async Task<Optional<double>> ReadDoubleAsync(OSAI_IndexAddress address)
+        public Task<Optional<string>> ReadNamedStringAsync(OSAI_NamedAddress address, ushort lenght, CancellationToken ct)
         {
-            try
-            {
-                var read_request = new ReadVarDoubleRequest((ushort)address.VarCode, ProcessNumber, address.Index, 1);
-                var read_response = await Client.ReadVarDoubleAsync(read_request);
-
-                if (!ProcessResponse(
-                    read_response.retval,
-                    read_response.ErrClass,
-                    read_response.ErrNum))
-                    return default;
-
-                return read_response.Value[0];
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return default;
-            }
-        }
-        public async Task<Optional<bool>> ReadBoolAsync(OSAI_IndexAddress address, ushort bit_index)
-        {
-            try
-            {
-                var read_request = new ReadVarWordRequest((ushort)address.VarCode, ProcessNumber, address.Index, 1);
-                var read_response = await Client.ReadVarWordAsync(read_request);
-
-                if (!ProcessResponse(
-                    read_response.retval,
-                    read_response.ErrClass,
-                    read_response.ErrNum))
-                    return default;
-
-                return read_response.Value[0].IsBitSet(bit_index);
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return default;
-            }
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadNamedVarByteArrayAsync(new ReadNamedVarByteArrayRequest(ProcessNumber, a.Name, lenght, a.Index, -1, -1)),
+                (r, a) => Encoding.ASCII.GetString(r.Value),
+                r => new(r.retval, r.ErrClass, r.ErrNum));
         }
 
-        public async Task<Optional<bool>> ReadNamedBoolAsync(OSAI_NamedAddress address)
+        public Task<Optional<TOut>> ReadBoolAsync<TOut>(OSAI_BitIndexAddress address, Func<bool, TOut> convert_func, CancellationToken ct)
         {
-            try
-            {
-                var read_named_variable_request = new ReadNamedVarDoubleRequest(ProcessNumber, address.Name, 1, address.Index, -1, -1);
-                var read_named_variable_response = await Client.ReadNamedVarDoubleAsync(read_named_variable_request);
-
-                if (!ProcessResponse(
-                    read_named_variable_response.retval,
-                    read_named_variable_response.ErrClass,
-                    read_named_variable_response.ErrNum,
-                    address.ToString()))
-                    return default;
-
-                return read_named_variable_response.Value[0] == 1.0 ? true : false;
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return default;
-            }
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadVarWordAsync(new ReadVarWordRequest((ushort)a.VarCode, ProcessNumber, a.Index, 1)),
+                (r, a) => convert_func(r.Value[0].IsBitSet(a.BitIndex)),
+                r => new(r.retval, r.ErrClass, r.ErrNum));
         }
-        public async Task<Optional<short>> ReadNamedShortAsync(OSAI_NamedAddress address)
+        public Task<Optional<TOut>> ReadUShortAsync<TOut>(OSAI_IndexAddress address, Func<ushort, TOut> convert_func, CancellationToken ct)
         {
-            try
-            {
-                var read_named_variable_request = new ReadNamedVarDoubleRequest(ProcessNumber, address.Name, 1, address.Index, -1, -1);
-                var read_named_variable_response = await Client.ReadNamedVarDoubleAsync(read_named_variable_request);
-
-                if (!ProcessResponse(
-                    read_named_variable_response.retval,
-                    read_named_variable_response.ErrClass,
-                    read_named_variable_response.ErrNum,
-                    address.ToString()))
-                    return default;
-
-                return (short)read_named_variable_response.Value[0];
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return default;
-            }
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadVarWordAsync(new ReadVarWordRequest((ushort)a.VarCode, ProcessNumber, a.Index, 1)),
+                (r, a) => convert_func(r.Value[0]),
+                r => new(r.retval, r.ErrClass, r.ErrNum));
         }
-        public async Task<Optional<double>> ReadNamedDoubleAsync(OSAI_NamedAddress address)
+        public Task<Optional<TOut>> ReadShortAsync<TOut>(OSAI_IndexAddress address, Func<short, TOut> convert_func, CancellationToken ct)
         {
-            try
-            {
-                var read_named_variable_request = new ReadNamedVarDoubleRequest(ProcessNumber, address.Name, 1, address.Index, -1, -1);
-                var read_named_variable_response = await Client.ReadNamedVarDoubleAsync(read_named_variable_request);
-
-                if (!ProcessResponse(
-                    read_named_variable_response.retval,
-                    read_named_variable_response.ErrClass,
-                    read_named_variable_response.ErrNum,
-                    address.ToString()))
-                    return default;
-
-                return read_named_variable_response.Value[0];
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return default;
-            }
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadVarWordAsync(new ReadVarWordRequest((ushort)a.VarCode, ProcessNumber, a.Index, 1)),
+                (r, a) => convert_func(ShortConverter.Convert(r.Value[0])),
+                r => new(r.retval, r.ErrClass, r.ErrNum));
         }
-        public async Task<Optional<string>> ReadNamedStringAsync(OSAI_NamedAddress address, ushort lenght)
+        public Task<Optional<TOut>> ReadTextAsync<TOut>(OSAI_IndexAddress address, Func<string, TOut> convert_func, CancellationToken ct)
         {
-            try
-            {
-                var read_named_variable_request = new ReadNamedVarByteArrayRequest(ProcessNumber, address.Name, lenght, address.Index, -1, -1);
-                var read_named_variable_response = await Client.ReadNamedVarByteArrayAsync(read_named_variable_request);
-
-                if (!ProcessResponse(
-                    read_named_variable_response.retval,
-                    read_named_variable_response.ErrClass,
-                    read_named_variable_response.ErrNum,
-                    address.ToString()))
-                    return default;
-
-                return Encoding.ASCII.GetString(read_named_variable_response.Value);
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return default;
-            }
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadVarTextAsync(new ReadVarTextRequest((ushort)a.VarCode, ProcessNumber, a.Index, 1)),
+                (r, a) => convert_func(r.Text),
+                r => new(r.retval, r.ErrClass, r.ErrNum));
+        }
+        public Task<Optional<TOut>> ReadDoubleAsync<TOut>(OSAI_IndexAddress address, Func<double, TOut> convert_func, CancellationToken ct)
+        {
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadVarDoubleAsync(new ReadVarDoubleRequest((ushort)a.VarCode, ProcessNumber, a.Index, 1)),
+                (r, a) => convert_func(r.Value[0]),
+                r => new(r.retval, r.ErrClass, r.ErrNum));
+        }
+        public Task<Optional<TOut>> ReadBoolAsync<TOut>(OSAI_IndexAddress address, ushort bit_index, Func<bool, TOut> convert_func, CancellationToken ct)
+        {
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadVarWordAsync(new ReadVarWordRequest((ushort)a.VarCode, ProcessNumber, a.Index, 1)),
+                (r, a) => convert_func(r.Value[0].IsBitSet(bit_index)),
+                r => new(r.retval, r.ErrClass, r.ErrNum));
         }
 
-        public async Task<(OSAI_CloseResponse response, CommunicationState state)> CloseAsync()
+        public Task<Optional<TOut>> ReadNamedBoolAsync<TOut>(OSAI_NamedAddress address, Func<bool, TOut> convert_func, CancellationToken ct)
         {
-            try
-            {
-                await Client.CloseAsync();
-                return (OSAI_CloseResponse.CLOSE_SUCCESS, CommunicationState.Closed);
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return (OSAI_CloseResponse.CLOSE_EXCEPTION, CommunicationState.Faulted);
-            }
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadNamedVarDoubleAsync(new ReadNamedVarDoubleRequest(ProcessNumber, a.Name, 1, a.Index, -1, -1)),
+                (r, a) => convert_func(r.Value[0] == 1.0),
+                r => new(r.retval, r.ErrClass, r.ErrNum));
+        }
+        public Task<Optional<TOut>> ReadNamedShortAsync<TOut>(OSAI_NamedAddress address, Func<short, TOut> convert_func, CancellationToken ct)
+        {
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadNamedVarDoubleAsync(new ReadNamedVarDoubleRequest(ProcessNumber, a.Name, 1, a.Index, -1, -1)),
+                (r, a) => convert_func((short)r.Value[0]),
+                r => new(r.retval, r.ErrClass, r.ErrNum));
+        }
+        public Task<Optional<TOut>> ReadNamedUShortAsync<TOut>(OSAI_NamedAddress address, Func<ushort, TOut> convert_func, CancellationToken ct)
+        {
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadNamedVarDoubleAsync(new ReadNamedVarDoubleRequest(ProcessNumber, a.Name, 1, a.Index, -1, -1)),
+                (r, a) => convert_func((ushort)r.Value[0]),
+                r => new(r.retval, r.ErrClass, r.ErrNum));
+        }
+        public Task<Optional<TOut>> ReadNamedDoubleAsync<TOut>(OSAI_NamedAddress address, Func<double, TOut> convert_func, CancellationToken ct)
+        {
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadNamedVarDoubleAsync(new ReadNamedVarDoubleRequest(ProcessNumber, a.Name, 1, a.Index, -1, -1)),
+                (r, a) => convert_func(r.Value[0]),
+                r => new(r.retval, r.ErrClass, r.ErrNum));
+        }
+        public Task<Optional<TOut>> ReadNamedStringAsync<TOut>(OSAI_NamedAddress address, ushort lenght, Func<string, TOut> convert_func, CancellationToken ct)
+        {
+            return ReadVariableAsync(address, ct,
+                (c, a) => c.ReadNamedVarByteArrayAsync(new ReadNamedVarByteArrayRequest(ProcessNumber, a.Name, lenght, a.Index, -1, -1)),
+                (r, a) => convert_func(Encoding.ASCII.GetString(r.Value)),
+                r => new(r.retval, r.ErrClass, r.ErrNum));
         }
 
         // BASIC FUNCTIONS
-        public bool ProcessResponse(ushort retval, uint ErrClass, uint ErrNum, string @params = default, [CallerMemberName] string callerMember = null)
+        public override Task<bool> InitializeVariablesAsync(CancellationToken ct)
         {
-            if (retval == 0)
-            {
-                Debug.WriteLine($"Errore in {callerMember} {@params}, classe: {ErrClass}, Codice {ErrNum}");
-                return false;
-            }
-            return true;
+            return Task.FromResult(true);
         }
-
         // WAIT MEMORY
-        public async Task<bool> WaitBootPhaseAsync(Func<OSAI_BootPhase, bool> phase_func, TimeSpan dueTime, TimeSpan sample, TimeSpan timeout)
+        public async Task<bool> WaitBootPhaseAsync(Func<OSAI_BootPhase, bool> phase_func, TimeSpan dueTime, TimeSpan sample, TimeSpan throttle, TimeSpan timeout)
         {
             var read_boot_phase = Observable.Timer(dueTime, sample)
                 .SelectMany(t => ReadVariableAsync(c => c.BOOT_PHASE));
 
             return await WaitUtils.WaitForOptionalAsync(read_boot_phase,
-                phase => phase_func(phase), timeout);
+                throttle, phase => phase_func(phase), timeout);
         }
-        public async Task<bool> WaitProcessModeAsync(Func<OSAI_ProcessMode, bool> status_func, TimeSpan dueTime, TimeSpan sample, TimeSpan timeout)
+        public async Task<bool> WaitProcessModeAsync(Func<OSAI_ProcessMode, bool> status_func, TimeSpan dueTime, TimeSpan sample, TimeSpan throttle, TimeSpan timeout)
         {
             var read_boot_mode = Observable.Timer(dueTime, sample)
                 .SelectMany(t => ReadVariableAsync(c => c.PROCESS_MODE));
 
             return await WaitUtils.WaitForOptionalAsync(read_boot_mode,
-                process => status_func(process), timeout);
+                throttle, process => status_func(process), timeout);
         }
 
         // BASIC OPERATIONS
-        public async Task<bool> ShutdownAsync()
+        public Task<Optional<FLUX_AxisPosition>> GetAxesPositionAsync(OSAI_AxisPositionSelect select, CancellationToken ct)
+        {
+            return TryEnqueueRequestAsync(
+                (c, ct) => c.GetAxesPositionAsync(new GetAxesPositionRequest(ProcessNumber, 0, (ushort)select, AxisNum)),
+                r => (FLUX_AxisPosition)r.IntPos.ToImmutableDictionary(p => (char)p.AxisName, p => p.position),
+                r => new(r.retval, r.ErrClass, r.ErrNum), FLUX_RequestPriority.Immediate, ct);
+        }
+        public async Task<bool> AxesRefAsync(CancellationToken ct, params char[] axes)
+        {
+            var response = await TryEnqueueRequestAsync(
+                (c, ct) => c.AxesRefAsync(new AxesRefRequest(ProcessNumber, (ushort)axes.Length, string.Join("", axes))),
+                r => new(r.retval, r.ErrClass, r.ErrNum), FLUX_RequestPriority.Immediate, ct);
+
+            return response.Ok;
+        }
+
+        // CONTROL
+        public override async Task<bool> StopAsync(CancellationToken ct)
+        {
+            var response = await TryEnqueueRequestAsync(
+                (c, ct) => c.ResetAsync(new ResetRequest(ProcessNumber)),
+                r => new(r.retval, r.ErrClass, r.ErrNum), FLUX_RequestPriority.Immediate, ct);
+
+            return response.Ok;
+        }
+        public override async Task<bool> CancelAsync(CancellationToken ct)
+        {
+            var reset_response = await StopAsync(ct);
+            if (!reset_response)
+                return false;
+
+            var wait_idle = await ConnectionProvider.WaitProcessStatusAsync(
+                s => s == FLUX_ProcessStatus.IDLE,
+                TimeSpan.FromSeconds(0.1),
+                TimeSpan.FromSeconds(0.1),
+                TimeSpan.FromSeconds(0.2),
+                TimeSpan.FromSeconds(5));
+
+            if (!wait_idle)
+                return false;
+
+            using var paramacro_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            return await ExecuteParamacroAsync(new[]
+            {
+                GetExecuteMacroGCode(InnerQueuePath, "cancel.g"),
+                GetExecuteMacroGCode(MacroPath, "end_print")
+            }, paramacro_cts.Token);
+        }
+        public override async Task<bool> PauseAsync(CancellationToken ct)
+        {
+            return await WriteVariableAsync("!REQ_HOLD", true, ct);
+        }
+        protected async Task<bool> DeselectParamacroAsync()
+        {
+            using var deselect_part_program_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+            var deselect_part_program_response = await TryEnqueueRequestAsync(
+                (c, ct) => Client.Value.SelectPartProgramFromDriveAsync(new SelectPartProgramFromDriveRequest(ProcessNumber, $"")),
+                r => new(r.retval, r.ErrClass, r.ErrNum), FLUX_RequestPriority.Immediate, deselect_part_program_cts.Token);
+
+            return deselect_part_program_response.Ok;
+        }
+        public override async Task<bool> ExecuteParamacroAsync(GCodeString paramacro, CancellationToken put_ct, bool can_cancel = false)
         {
             try
             {
-                var shutdown_request = new BootShutDownRequest();
-                var shutdown_response = await Client.BootShutDownAsync(shutdown_request);
+                if (!paramacro.HasValue)
+                    return false;
 
-                if (!ProcessResponse(
-                    shutdown_response.retval,
-                    shutdown_response.ErrClass,
-                    shutdown_response.ErrNum))
+                if (!await DeselectParamacroAsync())
+                    return false;
+
+                // put file
+                var put_paramacro_response = await PutFileAsync(
+                    StoragePath,
+                    "paramacro.mcode", true,
+                    put_ct, get_paramacro_gcode().ToOptional());
+
+                if (put_paramacro_response == false)
+                    return false;
+
+                // Set PLC to Cycle
+
+                var select_part_program_response = await TryEnqueueRequestAsync(
+                    (c, ct) => Client.Value.SelectPartProgramFromDriveAsync(new SelectPartProgramFromDriveRequest(ProcessNumber, CombinePaths(StoragePath, "paramacro.mcode"))),
+                    r => new(r.retval, r.ErrClass, r.ErrNum), FLUX_RequestPriority.Immediate, put_ct);
+
+                if (!select_part_program_response.Ok)
+                    return false;
+
+                var cycle_response = await TryEnqueueRequestAsync(
+                    (c, ct) => Client.Value.CycleAsync(new CycleRequest(ProcessNumber, 1)),
+                    r => new(r.retval, r.ErrClass, r.ErrNum), FLUX_RequestPriority.Immediate, put_ct);
+
+                if (!cycle_response.Ok)
                     return false;
 
                 return true;
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return false;
-            }
-        }
-        public async Task<bool> HoldAsync(bool on)
-        {
-            try
-            {
-                var hold_request = new HoldRequest(ProcessNumber, on ? (ushort)0 : (ushort)1);
-                var hold_response = await Client.HoldAsync(hold_request);
 
-                if (!ProcessResponse(
-                    hold_response.retval,
-                    hold_response.ErrClass,
-                    hold_response.ErrNum))
-                    return false;
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return false;
-            }
-        }
-        public override async Task<bool> ResetAsync()
-        {
-            try
-            {
-                var reset_request = new ResetRequest(ProcessNumber);
-                var reset_response = await Client.ResetAsync(reset_request);
-
-                if (!ProcessResponse(
-                    reset_response.retval,
-                    reset_response.ErrClass,
-                    reset_response.ErrNum))
-                    return false;
-
-                return await WaitProcessStatusAsync(
-                    status => status == FLUX_ProcessStatus.IDLE,
-                    TimeSpan.FromSeconds(0.1),
-                    TimeSpan.FromSeconds(0.1),
-                    TimeSpan.FromSeconds(5));
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return false;
-            }
-        }
-        public override async Task<bool> CycleAsync(bool start, bool wait, CancellationToken ct = default)
-        {
-            try
-            {
-                var cycle_request = new CycleRequest(ProcessNumber, start ? (ushort)1 : (ushort)0);
-                var cycle_response = await Client.CycleAsync(cycle_request);
-
-                if (!ProcessResponse(
-                    cycle_response.retval,
-                    cycle_response.ErrClass,
-                    cycle_response.ErrNum))
-                    return false;
-
-                if (wait && ct != CancellationToken.None)
+                IEnumerable<string> get_paramacro_gcode()
                 {
-                    if (!await WaitProcessStatusAsync(
-                           status => status == FLUX_ProcessStatus.CYCLE,
-                           TimeSpan.FromSeconds(0),
-                           TimeSpan.FromSeconds(0.1),
-                           TimeSpan.FromSeconds(5)))
-                        return false;
-
-                    if (!await WaitProcessStatusAsync(
-                        status => status == FLUX_ProcessStatus.IDLE,
-                        TimeSpan.FromSeconds(0),
-                        TimeSpan.FromSeconds(0.1),
-                        ct))
-                        return false;
+                    foreach (var line in paramacro)
+                        yield return line.TrimEnd();
                 }
-
-                return true;
             }
-            catch (Exception ex)
+            catch
             {
-                Debug.WriteLine(ex);
                 return false;
             }
         }
-
-        public override async Task<bool> DeselectPartProgramAsync(bool from_drive, bool wait, CancellationToken ct = default)
-        {
-            try
-            {
-                if (from_drive)
-                {
-                    var select_part_program_request = new SelectPartProgramFromDriveRequest(ProcessNumber, "");
-                    var select_part_program_response = await Client.SelectPartProgramFromDriveAsync(select_part_program_request);
-
-                    if (!ProcessResponse(
-                        select_part_program_response.retval,
-                        select_part_program_response.ErrClass,
-                        select_part_program_response.ErrNum))
-                        return false;
-                }
-                else
-                {
-                    var select_part_program_request = new SelectPartProgramRequest(ProcessNumber, "");
-                    var select_part_program_response = await Client.SelectPartProgramAsync(select_part_program_request);
-
-                    if (!ProcessResponse(
-                        select_part_program_response.retval,
-                        select_part_program_response.ErrClass,
-                        select_part_program_response.ErrNum))
-                        return false;
-                }
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return false;
-            }
-        }
-        public override async Task<bool> HoldAsync()
-        {
-            return await WriteVariableAsync(VariableStore.REQ_HOLD, true);
-        }
-        public override async Task<bool> SelectPartProgramAsync(string filename, bool from_drive, bool wait, CancellationToken ct = default)
-        {
-            try
-            {
-                if (from_drive)
-                {
-                    var select_part_program_request = new SelectPartProgramFromDriveRequest(ProcessNumber, $"{StoragePath}\\{filename}");
-                    var select_part_program_response = await Client.SelectPartProgramFromDriveAsync(select_part_program_request);
-
-                    if (!ProcessResponse(
-                        select_part_program_response.retval,
-                        select_part_program_response.ErrClass,
-                        select_part_program_response.ErrNum))
-                        return false;
-                }
-                else
-                {
-                    var select_part_program_request = new SelectPartProgramRequest(ProcessNumber, $"{StoragePath}\\{filename}");
-                    var select_part_program_response = await Client.SelectPartProgramAsync(select_part_program_request);
-
-                    if (!ProcessResponse(
-                        select_part_program_response.retval,
-                        select_part_program_response.ErrClass,
-                        select_part_program_response.ErrNum))
-                        return false;
-                }
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return false;
-            }
-        }
-
         // FILES
-        public override async Task<bool> DeleteFileAsync(string folder, string filename, bool wait, CancellationToken ct = default)
-        {
-            try
-            {
-                var remove_file_request = new LogFSRemoveFileRequest(folder, filename);
-                var remove_file_response = await Client.LogFSRemoveFileAsync(remove_file_request);
-
-                if (remove_file_response.ErrClass == 5 &&
-                    remove_file_response.ErrNum == 17)
-                    return true;
-
-                if (!ProcessResponse(
-                    remove_file_response.retval,
-                    remove_file_response.ErrClass,
-                    remove_file_response.ErrNum))
-                    return false;
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return false;
-            }
-        }
-        public override async Task<Optional<FLUX_FileList>> ListFilesAsync(string folder, CancellationToken ct = default)
-        {
-            try
-            {
-                var find_first_result = await Client.LogFSFindFirstOrDefaultAsync($"{folder}\\*");
-
-                if (!ProcessResponse(
-                    find_first_result.Body.retval,
-                    find_first_result.Body.ErrClass,
-                    find_first_result.Body.ErrNum))
-                    return default;
-
-                var files_data = new FLUX_FileList(folder);
-
-                // empty 
-                if (find_first_result.Body.Finder == 0xFFFFFFFF)
-                    return files_data;
-
-                if (!string.IsNullOrEmpty(find_first_result.Body.FindData.FileName))
-                    files_data.Files.Add(new FLUX_File() { Type = FLUX_FileType.File, Name = find_first_result.Body.FindData.FileName });
-
-                var handle = find_first_result.Body.Finder;
-
-                Optional<LogFSFindNextResponse> find_next_result;
-                do
-                {
-                    find_next_result = await Client.LogFSFindNextAsync(handle);
-                    if (!find_next_result.HasValue)
-                        return files_data;
-
-                    if (!ProcessResponse(
-                        find_next_result.Value.Body.retval,
-                        find_next_result.Value.Body.ErrClass,
-                        find_next_result.Value.Body.ErrNum))
-                        return files_data;
-
-                    if (!string.IsNullOrEmpty(find_next_result.Value.Body.FindData.FileName))
-                        files_data.Files.Add(new FLUX_File() { Type = FLUX_FileType.File, Name = find_next_result.Value.Body.FindData.FileName });
-                }
-                while (find_next_result.ConvertOr(r => r.Body.Found, () => false));
-
-                var close_request = new LogFSFindCloseRequest(find_first_result.Body.Finder);
-                var close_response = await Client.LogFSFindCloseAsync(close_request);
-
-                if (!ProcessResponse(
-                    find_next_result.Value.Body.retval,
-                    find_next_result.Value.Body.ErrClass,
-                    find_next_result.Value.Body.ErrNum))
-                    return files_data;
-
-                return files_data;
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return default;
-            }
-        }
         public override async Task<bool> PutFileAsync(
             string folder,
             string filename,
+            bool is_paramacro,
             CancellationToken ct,
-            Optional<IEnumerable<string>> source,
-            Optional<IEnumerable<string>> end = default,
-            Optional<uint> source_blocks = default,
+            GCodeString source = default,
+            GCodeString start = default,
+            GCodeString end = default,
+            Optional<BlockNumber> source_blocks = default,
             Action<double> report_progress = default)
         {
             ushort file_id;
             uint block_number = 0;
-            uint skipped_blocks = 0;
             ushort transaction = 0;
+            var tmp_guid = Guid.NewGuid();
 
             try
             {
-                var remove_file_request = new LogFSRemoveFileRequest(folder, "file_upload.tmp");
-                var remove_file_response = await Client.LogFSRemoveFileAsync(remove_file_request);
-
-                var create_file_request = new LogFSCreateFileRequest($"{folder}\\file_upload.tmp");
-                var create_file_response = await Client.LogFSCreateFileAsync(create_file_request);
-
-                if (!ProcessResponse(
-                    create_file_response.retval,
-                    create_file_response.ErrClass,
-                    create_file_response.ErrNum))
+                if (!Client.HasValue)
                     return false;
 
-                var open_file_request = new LogFSOpenFileRequest($"{folder}\\file_upload.tmp", true, 0, 0);
-                var open_file_response = await Client.LogFSOpenFileAsync(open_file_request);
+                // upload a paramacro
+                if (is_paramacro)
+                {
+                    var path_name = CombinePaths(folder, filename);
 
-                if (!ProcessResponse(
-                    open_file_response.retval,
-                    open_file_response.ErrClass,
-                    open_file_response.ErrNum))
+                    using var delete_paramacro_ctk = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    var remove_paramacro_response = await DeleteAsync(folder, filename, delete_paramacro_ctk.Token);
+                    if (!remove_paramacro_response)
+                        return false;
+
+                    var gcode = GCodeString.Create(start, source, end, Environment.NewLine).ToString();
+                    var put_file_request = new PutFileRequest(gcode, (uint)gcode.Length, path_name);
+                    var put_file_response = await Client.Value.PutFileAsync(put_file_request);
+
+                    if (put_file_response.retval == 0)
+                        return false;
+
+                    return true;
+                }
+
+                // upload a partprogram
+                using var delete_temp_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                var remove_file_response = await DeleteAsync(folder, $"file_upload_{tmp_guid}.tmp", delete_temp_cts.Token);
+                if (!remove_file_response)
+                    return false;
+
+                var create_file_request = new LogFSCreateFileRequest($"{folder}\\file_upload_{tmp_guid}.tmp");
+                var create_file_response = await Client.Value.LogFSCreateFileAsync(create_file_request);
+
+                if (create_file_response.retval == 0)
+                    return false;
+
+                var open_file_request = new LogFSOpenFileRequest($"{folder}\\file_upload_{tmp_guid}.tmp", true, 0, 0);
+                var open_file_response = await Client.Value.LogFSOpenFileAsync(open_file_request);
+
+                if (open_file_response.retval == 0)
                     return false;
                 file_id = open_file_response.FileID;
 
 
-                // Write recovery
-                var recovery = await ReadVariableAsync(c => c.MCODE_RECOVERY);
-                if (recovery.HasValue)
+                // Write actual gcode
+                var chunk_size = 10000;
+                if (source.HasValue)
                 {
-                    skipped_blocks = ((OSAI_MCodeRecovery)recovery.Value).BlockNumber;
-                    using (var recovery_writer = new StringWriter())
+                    foreach (var chunk in get_full_source().AsChunks(chunk_size))
                     {
-                        recovery_writer.WriteLine("; recovery");
-                        foreach (var line in GenerateRecoveryLines((OSAI_MCodeRecovery)recovery.Value))
-                            recovery_writer.WriteLine(line);
-                        recovery_writer.WriteLine("");
+                        using var gcode_writer = new StringWriter();
+                        foreach (var line in chunk)
+                            gcode_writer.WriteLine(line);
+                        gcode_writer.WriteLine("");
 
-                        var byte_data = Encoding.UTF8.GetBytes(recovery_writer.ToString());
+                        var byte_data = Encoding.UTF8.GetBytes(gcode_writer.ToString());
                         var write_record_request = new LogFSWriteRecordRequest(file_id, transaction++, (uint)byte_data.Length, byte_data);
-                        var write_record_response = await Client.LogFSWriteRecordAsync(write_record_request);
+                        var write_record_response = await Client.Value.LogFSWriteRecordAsync(write_record_request);
 
-                        if (!ProcessResponse(
-                            write_record_response.retval,
-                            write_record_response.ErrClass,
-                            write_record_response.ErrNum))
+                        if (write_record_response.retval == 0)
                         {
                             var close_file_request = new LogFSCloseFileRequest(file_id, (ushort)(transaction - 1));
-                            var close_file_response = await Client.LogFSCloseFileAsync(close_file_request);
-
-                            ProcessResponse(
-                                close_file_response.retval,
-                                close_file_response.ErrClass,
-                                close_file_response.ErrNum);
+                            var close_file_response = await Client.Value.LogFSCloseFileAsync(close_file_request);
 
                             return false;
                         }
                     }
                 }
 
-                // Write actual gcode
-                var chunk_counter = 0;
-                var chunk_size = 10000;
-                var actual_blocks_count = source_blocks.Convert(s => s - skipped_blocks);
-                if (source.HasValue)
+                var byte_data_newline = Encoding.UTF8.GetBytes(Environment.NewLine);
+                var write_record_request_newline = new LogFSWriteRecordRequest(file_id, transaction++, (uint)byte_data_newline.Length, byte_data_newline);
+                var write_record_response_newline = await Client.Value.LogFSWriteRecordAsync(write_record_request_newline);
+
+                if (write_record_response_newline.retval == 0)
                 {
-                    foreach (var chunk in source.Value.UIntSkip(skipped_blocks).AsChunks(chunk_size))
+                    var close_file_request = new LogFSCloseFileRequest(file_id, (ushort)(transaction - 1));
+                    var close_file_response = await Client.Value.LogFSCloseFileAsync(close_file_request);
+                    return false;
+                }
+
+                IEnumerable<string> get_full_source()
+                {
+                    if (start.HasValue)
                     {
-                        using (var gcode_writer = new StringWriter())
+                        foreach (var line in start)
+                            yield return line;
+                    }
+
+                    long current_block = 0;
+                    if (source.HasValue)
+                    {
+                        foreach (var line in source)
                         {
-                            foreach (var line in chunk)
-                            {
-                                gcode_writer.WriteLine($"N{skipped_blocks + block_number} {line}");
-                                block_number++;
-                            }
-                            gcode_writer.WriteLine("");
+                            yield return $"N{block_number++} {line}";
 
-                            var byte_data = Encoding.UTF8.GetBytes(gcode_writer.ToString());
-                            var write_record_request = new LogFSWriteRecordRequest(file_id, transaction++, (uint)byte_data.Length, byte_data);
-                            var write_record_response = await Client.LogFSWriteRecordAsync(write_record_request);
+                            if (!source_blocks.HasValue)
+                                continue;
 
-                            if (!ProcessResponse(
-                                write_record_response.retval,
-                                write_record_response.ErrClass,
-                                write_record_response.ErrNum))
-                            {
-                                var close_file_request = new LogFSCloseFileRequest(file_id, (ushort)(transaction - 1));
-                                var close_file_response = await Client.LogFSCloseFileAsync(close_file_request);
+                            if (source_blocks.Value == 0)
+                                continue;
 
-                                ProcessResponse(
-                                    close_file_response.retval,
-                                    close_file_response.ErrClass,
-                                    close_file_response.ErrNum);
-
-                                return false;
-                            }
+                            var progress = (double)current_block++ / source_blocks.Value * 100;
+                            if (progress - (int)progress < 0.001)
+                                report_progress?.Invoke((int)progress);
                         }
                     }
 
-                    chunk_counter += chunk_size;
-                    if (actual_blocks_count.HasValue)
+                    if (end.HasValue)
                     {
-                        var percentage = (double)chunk_counter / actual_blocks_count.Value * 100;
-                        report_progress?.Invoke(Math.Max(0, Math.Min(100, percentage)));
+                        foreach (var line in end)
+                            yield return line;
                     }
-                }
 
-                var byte_data_newline = Encoding.UTF8.GetBytes(Environment.NewLine);
-                var write_record_request_newline = new LogFSWriteRecordRequest(file_id, transaction++, (uint)byte_data_newline.Length, byte_data_newline);
-                var write_record_response_newline = await Client.LogFSWriteRecordAsync(write_record_request_newline);
-
-                if (!ProcessResponse(
-                    write_record_response_newline.retval,
-                    write_record_response_newline.ErrClass,
-                    write_record_response_newline.ErrNum))
-                {
-                    var close_file_request = new LogFSCloseFileRequest(file_id, (ushort)(transaction - 1));
-                    var close_file_response = await Client.LogFSCloseFileAsync(close_file_request);
-                    return false;
+                    yield return "";
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                Debug.WriteLine(ex);
                 return false;
             }
 
@@ -933,217 +703,413 @@ namespace Flux.ViewModels
                     return false;
 
                 var close_file_request = new LogFSCloseFileRequest(file_id, transaction++);
-                var close_file_response = await Client.LogFSCloseFileAsync(close_file_request);
-                if (!ProcessResponse(
-                    close_file_response.retval,
-                    close_file_response.ErrClass,
-                    close_file_response.ErrNum))
+                var close_file_response = await Client.Value.LogFSCloseFileAsync(close_file_request);
+                if (close_file_response.retval == 0)
                     return false;
 
-                var remove_file_request = new LogFSRemoveFileRequest(folder, filename);
-                var remove_file_response = await Client.LogFSRemoveFileAsync(remove_file_request);
+                Console.WriteLine("1");
 
-                var rename_request = new LogFSRenameRequest($"{folder}\\file_upload.tmp", $"{folder}\\{filename}");
-                var rename_responde = await Client.LogFSRenameAsync(rename_request);
-                if (!ProcessResponse(
-                    rename_responde.retval,
-                    rename_responde.ErrClass,
-                    rename_responde.ErrNum))
+                using var delete_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                var remove_file_response = await DeleteAsync(folder, filename, delete_cts.Token);
+                if (!remove_file_response)
                     return false;
+
+                Console.WriteLine("2");
+
+                var old_path = CombinePaths(folder, $"file_upload_{tmp_guid}.tmp");
+                var new_path = CombinePaths(folder, filename);
+                using var rename_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                var rename_response = await RenameAsync(old_path, new_path, rename_cts.Token); ;
+                if (!rename_response)
+                    return false;
+
+
+                Console.WriteLine("3");
 
                 return true;
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                Debug.WriteLine(ex);
                 return false;
             }
         }
-
-        public IEnumerable<string> GenerateRecoveryLines(OSAI_MCodeRecovery recovery)
+        public override async Task<bool> ClearFolderAsync(string folder, CancellationToken ct)
         {
-            yield return $"#!REQ_HOLD = 0.0";
-            yield return $"#!IS_HOLD = 0.0";
-            yield return $"G500 T{recovery.ToolNumber + 1}";
-            yield return $"M4999 [{{WIRE_ENDSTOP_1_RESET}}, {recovery.ToolNumber + 1}, 0, 1]";
+            if (folder == StoragePath)
+                if (!await DeselectParamacroAsync())
+                    return false;
 
-            for (int tool = 0; tool < recovery.Temperatures.Count; tool++)
+            var file_list = await ListFilesAsync(folder, ct);
+            if (!file_list.HasValue)
+                return false;
+
+            foreach (var file in file_list.Value.Files)
+                if (!await DeleteAsync(folder, file.Name, ct))
+                    continue;
+
+            return true;
+        }
+        public override Task<Stream> GetFileStreamAsync(string folder, string name, CancellationToken ct)
+        {
+            throw new NotImplementedException();
+        }
+        public override async Task<bool> DeleteAsync(string folder, string filename, CancellationToken ct)
+        {
+            var remove_file_response = await TryEnqueueRequestAsync(
+                (c, ct) => c.LogFSRemoveFileAsync(new LogFSRemoveFileRequest($"{folder}\\", filename)),
+                r => new(r.retval, r.ErrClass, r.ErrNum), FLUX_RequestPriority.Immediate, ct);
+            return remove_file_response.Ok;
+        }
+        public override async Task<bool> CreateFolderAsync(string folder, string name, CancellationToken ct)
+        {
+            var create_dir_response = await TryEnqueueRequestAsync(
+                (c, ct) => c.LogFSCreateDirAsync(new LogFSCreateDirRequest($"{folder}\\{name}")),
+                r => new(r.retval, r.ErrClass, r.ErrNum), FLUX_RequestPriority.Immediate, ct);
+            return create_dir_response.Ok;
+        }
+        public override async Task<Optional<FLUX_FileList>> ListFilesAsync(string folder, CancellationToken ct)
+        {
+            var files_data = new FLUX_FileList(folder);
+            Optional<LogFSFindFirstResponseBody> find_first_result = default;
+
+            try
             {
-                var current_tool_temp = recovery.Temperatures
-                    .Lookup($"{tool}")
-                    .ValueOr(() => 0);
+                if (!Client.HasValue)
+                    return default;
 
-                if (current_tool_temp > 50)
+                find_first_result = await TryEnqueueRequestAsync(
+                    (c, ct) => c.LogFSFindFirstOrDefaultAsync($"{folder}\\*"),
+                    r => r.Body, r => new(r.Body.retval, r.Body.ErrClass, r.Body.ErrNum), FLUX_RequestPriority.Immediate, ct);
+
+                if (!find_first_result.HasValue)
+                    return files_data;
+
+                // empty 
+                if (find_first_result.Value.Finder == 0xFFFFFFFF)
+                    return files_data;
+
+                var file = ParseFILEINFDATA(find_first_result.Value.FindData);
+                if (file.HasValue)
+                    files_data.Files.Add(file.Value);
+
+                var handle = find_first_result.Value.Finder;
+
+                Optional<LogFSFindNextResponseBody> find_next_result;
+                do
                 {
-                    var hold_temp = $"{current_tool_temp:0}".Replace(",", ".");
-                    yield return $"M4104 [{tool + 1}, {hold_temp}, 0]";
+                    find_next_result = await TryEnqueueRequestAsync(
+                        (c, ct) => c.LogFSFindNextAsync(handle),
+                        r => r.Body, r => new(r.Body.retval, r.Body.ErrClass, r.Body.ErrNum), FLUX_RequestPriority.Immediate, ct); 
+                    
+                    if (!find_next_result.HasValue)
+                        return files_data;
+
+                    file = ParseFILEINFDATA(find_next_result.Value.FindData);
+                    if (file.HasValue)
+                        files_data.Files.Add(file.Value);
+                }
+                while (find_next_result.ConvertOr(r => r.Found, () => false));
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex);
+                return default;
+            }
+            finally
+            {
+                if (find_first_result.HasValue)
+                {
+                    var close_response = await TryEnqueueRequestAsync(
+                        (c, ct) => c.LogFSFindCloseAsync(new LogFSFindCloseRequest(find_first_result.Value.Finder)),
+                        r => new(r.retval, r.ErrClass, r.ErrNum), FLUX_RequestPriority.Immediate, ct); 
                 }
             }
 
-            var recovery_tool_temp = recovery.Temperatures
-                .Lookup($"{recovery.ToolNumber}")
-                .ValueOr(() => 0);
+            return files_data;
 
-            if (recovery_tool_temp > 50)
-            {
-                var hold_temp_t = $"{recovery_tool_temp:0}".Replace(",", ".");
-                yield return $"M4104 [{recovery.ToolNumber + 1}, {hold_temp_t}, 1]";
-            }
-
-            var x_pos = $"{recovery.Positions.Lookup("X").ValueOr(() => 0):0.000}".Replace(",", ".");
-            var y_pos = $"{recovery.Positions.Lookup("Y").ValueOr(() => 0):0.000}".Replace(",", ".");
-            var z_pos = $"{recovery.Positions.Lookup("Z").ValueOr(() => 0):0.000}".Replace(",", ".");
-            var e_pos = $"{recovery.Positions.Lookup("E").ValueOr(() => 0):0.000}".Replace(",", ".");
-
-            yield return $"G1 X{x_pos} Y{y_pos} F15000";
-            yield return $"G1 Z{z_pos} F5000";
-
-            yield return $"G92 A0";
-            yield return $"G1 A1 F2000";
-
-            yield return $"G92 A{e_pos}";
+          
         }
-
-        // AXIS MANAGEMENT
-        public async Task<bool> AxesRefAsync(params char[] axes)
+        static Optional<FLUX_File> ParseFILEINFDATA(FILEFINDDATA data)
         {
-            try
-            {
-                var axes_ref_request = new AxesRefRequest(ProcessNumber, (ushort)axes.Length, string.Join("", axes));
-                var axes_ref_response = await Client.AxesRefAsync(axes_ref_request);
+            if (string.IsNullOrEmpty(data.FileName))
+                return default;
 
-                if (!ProcessResponse(
-                    axes_ref_response.retval,
-                    axes_ref_response.ErrClass,
-                    axes_ref_response.ErrNum))
-                    return false;
+            var file_name = data.FileName;
+            var file_attributes = (OSAI_FileAttributes)data.FileAttributes;
+            var file_size = (ulong)data.FileSizeHigh << 32 | data.FileSizeLow;
+            var has_directory_flag = file_attributes.HasFlag(OSAI_FileAttributes.FILE_ATTRIBUTE_DIRECTORY);
+            var file_type = has_directory_flag ? FLUX_FileType.Directory : FLUX_FileType.File;
 
-                return true;
-            }
-            catch (Exception ex)
+            var file_date = DateTime.FromFileTime((long)data.HighDateLastWriteTime << 32 | data.LowDateLastWriteTime);
+
+            return new FLUX_File()
             {
-                Debug.WriteLine(ex);
+                Name = file_name,
+                Type = file_type,
+                Date = file_date,
+                Size = file_size,
+            };
+        }
+        public override Task<bool> PutFileStreamAsync(string folder, string name, Stream data, CancellationToken ct)
+        {
+            throw new NotImplementedException();
+        }
+        public override async Task<Optional<string>> GetFileAsync(string folder, string filename, CancellationToken ct)
+        {
+            if (!Client.HasValue)
+                return default;
+
+            var path_name = CombinePaths(folder, filename);
+
+            var file_size_request = new LogFSGetFileSizeRequest(path_name);
+            var file_size_response = await Client.Value.LogFSGetFileSizeAsync(file_size_request);
+
+            if (file_size_response.retval == 0)
+                return default;
+
+            var get_file_request = new GetFileRequest(path_name, file_size_response.Size);
+            var get_file_response = await Client.Value.GetFileAsync(get_file_request);
+
+            if (get_file_response.retval == 0)
+                return default;
+
+            return get_file_response.Data;
+        }
+        public override async Task<bool> RenameAsync(string old_path, string new_path, CancellationToken ct)
+        {
+            // aspetto che fabio accenda la macchina e mi richiami
+
+            // Delete if exists
+            var file_parts = new_path.Split("\\", StringSplitOptions.RemoveEmptyEntries);
+
+            var folder = string.Join("\\", file_parts.SkipLast(1));
+            var filename = file_parts.LastOrDefault();
+
+            Console.WriteLine("Renaming file");
+            Console.WriteLine(old_path);
+            Console.WriteLine(new_path);
+
+            var delete_cts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+            var delete_result = await DeleteAsync(folder, filename, delete_cts.Token);
+            if (!delete_result)
+            {
+                Console.WriteLine("Il file esiste già ma non è stato cancellato");
                 return false;
             }
-        }
-        public override Task<bool> ClearFolderAsync(string folder, bool wait, CancellationToken ct = default) => DeleteFileAsync(folder, "*", wait, ct);
 
-        public override Optional<IEnumerable<string>> GetHomingGCode(params char[] axis)
+            var rename_response = await TryEnqueueRequestAsync(
+                (c, ct) => Client.Value.LogFSRenameAsync(new LogFSRenameRequest(old_path, new_path)),
+                r => new(r.retval, r.ErrClass, r.ErrNum), FLUX_RequestPriority.Immediate, ct);
+
+            Console.WriteLine(rename_response);
+
+            return rename_response.Ok;
+        }
+
+        // GENERIC GCODE
+        public override GCodeString GetParkToolGCode()
+            {
+                return "(CLS, MACRO\\change_tool, 0)";
+            }
+        public override GCodeString GetProbePlateGCode()
         {
+            return "(CLS, MACRO\\probe_plate)";
+        }
+        public override GCodeString GetLowerPlateGCode()
+        {
+            return "(CLS, MACRO\\lower_plate)";
+        }
+        public override GCodeString GetRaisePlateGCode()
+        {
+            return "(CLS, MACRO\\raise_plate)";
+        }
+        public override GCodeString GetSetLowCurrentGCode()
+        {
+            throw new NotImplementedException();
+        }
+        public override GCodeString GetProbeMagazineGCode()
+        {
+            throw new NotImplementedException();
+        }
+        public override GCodeString GetCenterPositionGCode()
+        {
+            return new[] { "(CLS, MACRO\\center_position)" };
+        }
+        public override GCodeString GetExitPartProgramGCode()
+        {
+            return new[] { "(REL)" };
+        }
+        public override GCodeString GetBeginPartProgramGCode()
+        {
+            return GCodeString.Create(
+                base.GetBeginPartProgramGCode(),
+                 "; preprocessing",
+                "(GTO, end_preprocess)",
+
+                "M4140[0, 0]",
+                "M4141[0, 0]",
+                "M4104[0, 0, 0]",
+                "M4999[0, 0, 0, 0]",
+
+                "(CLS, MACRO\\probe_plate)",
+                "(CLS, MACRO\\end_print)",
+                "(CLS, MACRO\\home_printer)",
+                "(CLS, MACRO\\change_tool, 0)",
+
+                "G92 A0",
+                "G1 X0 Y0 Z0 F1000",
+
+                "\"end_preprocess\"",
+                "(PAS)");
+        }
+        public override GCodeString GetHomingGCode(params char[] axis)
+        {
+            return "(CLS, MACRO\\home_printer)";
+        }
+        public override GCodeString GetManualCalibrationPositionGCode()
+        {
+            throw new NotImplementedException();
+        }
+        public override GCodeString GetSelectToolGCode(ArrayIndex position)
+        {
+            return $"(CLS, MACRO\\change_tool, {position.GetArrayBaseIndex()})";
+        }
+        public override GCodeString GetCancelLoadFilamentGCode(ArrayIndex position)
+        {
+            return new[] { $"M4104 [{position.GetArrayBaseIndex()}, 0, 0]" };
+        }
+        public override GCodeString GetWriteCurrentJobGCode(Optional<JobKey> job_key)
+        {
+            var job_key_str = job_key.ConvertOr(k => k.ToString(), () => "");
+            return GCodeString.Create(
+                $"LS0 = \"{job_key_str}\"",
+                "M4001[7, 0, 0, 0]");
+        }
+        public override GCodeString GetCancelUnloadFilamentGCode(ArrayIndex position)
+        {
+            return new[] { $"M4104 [{position.GetArrayBaseIndex()}, 0, 0]" };
+        }
+        public override GCodeString GetDeleteFileGCode(string folder, string filename)
+        {
+            return GCodeString.Create(
+                "ERR = 1",
+                $"(DEL, \"{CombinePaths(folder, filename)}\")",
+                "ERR = 0");
+        }
+        public override GCodeString GetExecuteMacroGCode(string folder, string filename)
+        {
+            return new[] { $"(CLS, {folder}\\{filename})" };
+        }
+        public override GCodeString GetLogEventGCode(FluxJob job, FluxEventType event_type)
+        {
+            var event_path = CombinePaths(JobEventPath, $"{job.MCodeKey};{job.JobKey}");
+            var event_type_str = event_type.ToEnumString();
+
+            return GCodeString.Create(
+
+                // get event path
+                $"LS0 = \"{event_path}\"",
+
+                // get current date
+                $"(GDT, D2, T0, SC0.10, SC11.11)",
+                "SC10.1 = \";\"",
+
+                // append file
+                $"(OPN, 1, ?LS0, A, A)",
+                $"(WRT, 1, \"{event_type_str};\", SC0.22)",
+                "(CLO, 1)");
+        }
+        public override GCodeString GetProbeToolGCode(ArrayIndex position, double temperature)
+        {
+            return $"(CLS, MACRO\\probe_tool, {position.GetArrayBaseIndex()}, {temperature})";
+        }
+        public override GCodeString GetFilamentSensorSettingsGCode(ArrayIndex position, bool enabled)
+        {
+            return $"M4999 [{{FILAMENT_ENDSTOP_1_RESET}}, {position.GetArrayBaseIndex()}, 0, {(enabled ? 1 : 0)}]";
+        }
+        public override GCodeString GetMovementGCode(FLUX_AxisMove axis_move, FLUX_AxisTransform transform)
+        {
+            var inverse_transform_move = transform.InverseTransformMove(axis_move);
+            if (!inverse_transform_move.HasValue)
+                return default;
+
+            return $"G1 {inverse_transform_move.Value.GetAxisPosition(m => m.Relative ? ">>" : "")} {axis_move.GetFeedrate('F')}";
+        }
+        public override GCodeString GetSetToolOffsetGCode(ArrayIndex position, double x, double y, double z)
+        {
+            var x_offset = (x + y) / 2;
+            var y_offset = (x - y) / 2;
+            return new[] { $"(UTO, 0, X({x_offset}), Y({y_offset}), Z({z}))" };
+        }
+        public override GCodeString GetWriteExtrusionKeyGCode(ArrayIndex position, Optional<ExtrusionKey> extr_key)
+        {
+            var extr_key_str = extr_key.ConvertOr(k => k.ToString(), () => "");
+            return GCodeString.Create(
+                $"E0 = 3 + {position.GetZeroBaseIndex()}",
+                $"LS0 = \"{extr_key_str}\"",
+                $"M4001[7, E0, 0, 0]");
+        }
+        public override GCodeString GetWriteExtrusionMMGCode(ArrayIndex position, double distance_mm)
+        {
+            return $"!EXTR_MM({position.GetZeroBaseIndex()}) = {distance_mm}";
+        }
+        public override GCodeString GetStartPartProgramGCode(string folder, string filename, Optional<FluxJobRecovery> recovery)
+        {
+            var feeder_axis = VariableStoreBase.FeederAxis;
+
+            var feeder_g92_offset = recovery.Convert(r => r.AxisPosition.Lookup(feeder_axis)).ValueOr(() => 0.0);
+            var start_block = recovery.Convert(r => r.BlockNumber).ValueOr(() => new BlockNumber(0, BlockType.None));
+
             return new[]
             {
-                "G400",
-                "(UAO, 0)",
-                "G201 X(@PRBP_XPOS) Y(@PRBP_YPOS) Z400 F10000"
+                $"LS0 = \"{folder}\"",
+                $"LS1 = \"{filename}\"",
+                $"M4026[0, 1, {start_block}, {$"{feeder_g92_offset:0.##}".Replace(",", ".")}]"
             };
         }
-        public override Optional<IEnumerable<string>> GetParkToolGCode()
-        {
-            return new[] { $"G500 T0" };
-        }
-        public override Optional<IEnumerable<string>> GetProbePlateGCode()
-        {
-            return new[] { "G401" };
-        }
-        public override Optional<IEnumerable<string>> GetLowerPlateGCode()
-        {
-            return new[] { "G0 Z400" };
-        }
-        public override Optional<IEnumerable<string>> GetRaisePlateGCode()
+        public override GCodeString GetSetExtruderMixingGCode(ArrayIndex machine_extruder, ArrayIndex mixing_extruder)
         {
             throw new NotImplementedException();
         }
-        public override Optional<IEnumerable<string>> GetGotoReaderGCode(ushort position)
+        public override GCodeString GetResetPositionGCode(FLUX_AxisPosition axis_position, FLUX_AxisTransform transform)
         {
-            return new[] { $"G501 T{position + 1}" };
-        }
-        public override Optional<IEnumerable<string>> GetSelectToolGCode(ushort position)
-        {
-            return new[] { $"G500 T{position + 1}" };
-        }
-        public override Optional<IEnumerable<string>> GetGotoPurgePositionGCode(ushort position)
-        {
-            return new[]
-            {
-                $"G500 T{position + 1}" ,
-                "(UAO, 0)",
-                "G201 X(@PURGE_XPOS) Y(@PURGE_YPOS) F10000"
-            };
-        }
-        public override Optional<IEnumerable<string>> GetStartPartProgramGCode(string file_name)
-        {
-            throw new NotImplementedException();
-        }
-        public override Optional<IEnumerable<string>> GetSetToolTemperatureGCode(ushort position, double temperature)
-        {
-            throw new NotImplementedException();
-        }
-        public override Optional<IEnumerable<string>> GetProbeToolGCode(ushort position, Nozzle nozzle, double temperature)
-        {
-            return new[] { $"G402 T{position + 1} S{temperature}" };
-        }
-        public override Optional<IEnumerable<string>> GetPurgeToolGCode(ushort position, Nozzle nozzle, double temperature)
-        {
-            return new[] { $"G507 T{position + 1} S{temperature}" };
-        }
-        public override Optional<IEnumerable<string>> GetLoadFilamentGCode(ushort position, Nozzle nozzle, double temperature)
-        {
-            return new[] { $"G505 T{position + 1} S{temperature}" };
-        }
-        public override Optional<IEnumerable<string>> GetUnloadFilamentGCode(ushort position, Nozzle nozzle, double temperature)
-        {
-            return new[] { $"G506 T{position + 1} S{temperature}" };
-        }
-        public override Optional<IEnumerable<string>> GetRelativeXMovementGCode(double distance, double feedrate) => new[] { $"G1 X>>{distance / 2} Y>>{distance / 2} F{feedrate}".Replace(",", ".") };
-        public override Optional<IEnumerable<string>> GetRelativeYMovementGCode(double distance, double feedrate) => new[] { $"G1 X>>{distance / 2} Y>>{distance / 2} F{feedrate}".Replace(",", ".") };
-        public override Optional<IEnumerable<string>> GetRelativeZMovementGCode(double distance, double feedrate) => new[] { $"G1 Z>>{distance} F{feedrate}".Replace(",", ".") };
-        public override Optional<IEnumerable<string>> GetRelativeEMovementGCode(double distance, double feedrate) => new[] { $"G1 A>>{distance} F{feedrate}".Replace(",", ".") };
+            var inverse_transform_position = transform.InverseTransformPosition(axis_position, false);
+            if (!inverse_transform_position.HasValue)
+                return default;
 
-        public override Task<Optional<string>> DownloadFileAsync(string folder, string filename, CancellationToken ct)
+            return $"G92 {inverse_transform_position.Value.GetAxisPosition()}";
+        }
+        protected override GCodeString GetSetToolTemperatureGCodeInner(ArrayIndex position, double temperature, bool wait)
         {
-            throw new NotImplementedException();
+            return $"M4104 [{position.GetArrayBaseIndex()}, {temperature}, {(wait ? 1 : 0)}]";
+        }
+        protected override GCodeString GetSetPlateTemperatureGCodeInner(ArrayIndex position, double temperature, bool wait)
+        {
+            return $"M4141 [{temperature}, {(wait ? 1 : 0)}]";
+        }
+        protected override GCodeString GetSetChamberTemperatureGCodeInner(ArrayIndex position, double temperature, bool wait)
+        {
+            return $"M4140 [{temperature}, {(wait ? 1 : 0)}]";
         }
 
-        public override Task<bool> CreateFolderAsync(string folder, string name, CancellationToken ct)
+        public override GCodeString GetLogExtrusionGCode(ArrayIndex position, Optional<ExtrusionKey> extr_key, FluxJob job)
         {
-            throw new NotImplementedException();
+            return default;
+        }
+        public override GCodeString GetPausePrependGCode(Optional<JobKey> job_key)
+        {
+            return default;
         }
 
-        public override Optional<IEnumerable<string>> GetSetToolOffsetGCode(ushort position, double x, double y, double z)
+        public override GCodeString GetGotoMaintenancePositionGCode()
         {
-            throw new NotImplementedException();
+            return $"(CLS, MACRO\\goto_maintenance_position)";
         }
 
-        public override async Task<bool> CancelPrintAsync(bool hard_cancel)
+        public override GCodeString GetLogExtrusionCommentGCode(ArrayIndex position, Optional<ExtrusionKey> extr_key, FluxJob job, FluxEventType event_type)
         {
-            using var put_cancel_print_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            using var wait_cancel_print_cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            return await ExecuteParamacroAsync(new[] { "G508" }, put_cancel_print_cts.Token, true, wait_cancel_print_cts.Token);
-        }
-
-        public override Task<bool> RenameFileAsync(string folder, string old_filename, string new_filename, bool wait, CancellationToken ct = default)
-        {
-            throw new NotImplementedException();
-        }
-
-        public override Optional<IEnumerable<string>> GetSetLowCurrentGCode()
-        {
-            throw new NotImplementedException();
-        }
-
-        public override Optional<IEnumerable<string>> GetProbeMagazineGCode()
-        {
-            throw new NotImplementedException();
-        }
-
-        public override Optional<IEnumerable<string>> GetCancelLoadFilamentGCode(ushort position)
-        {
-            throw new NotImplementedException();
-        }
-
-        public override Optional<IEnumerable<string>> GetCancelUnloadFilamentGCode(ushort position)
-        {
-            throw new NotImplementedException();
+            // TODO
+            return "";
         }
     }
 }

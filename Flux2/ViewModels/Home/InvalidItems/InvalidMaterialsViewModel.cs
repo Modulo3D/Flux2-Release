@@ -1,6 +1,6 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Linq;
@@ -12,13 +12,10 @@ namespace Flux.ViewModels
 {
     public class InvalidMaterialViewModel : InvalidItemViewModel<InvalidMaterialViewModel>
     {
-        public override string CurrentValueName => "MATERIALE CARICATO";
-        public override string ExpectedValueName => "MATERIALE RICHIESTO";
-
-        private ObservableAsPropertyHelper<string> _InvalidItemBrush;
+        private readonly ObservableAsPropertyHelper<string> _InvalidItemBrush;
         public override string InvalidItemBrush => _InvalidItemBrush.Value;
 
-        public InvalidMaterialViewModel(FeederEvaluator eval) : base($"{typeof(InvalidMaterialViewModel).GetRemoteControlName()}??{eval.Feeder.Position}", eval)
+        public InvalidMaterialViewModel(FluxViewModel flux, FeederEvaluator eval) : base(flux, eval)
         {
             _InvalidItemBrush = Observable.CombineLatest(
                 eval.Material.WhenAnyValue(m => m.CurrentDocument),
@@ -34,8 +31,7 @@ namespace Flux.ViewModels
                             return FluxColors.Error;
                     return FluxColors.Warning;
                 })
-                .ToProperty(this, v => v.InvalidItemBrush)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.InvalidItemBrush);
         }
 
         public override IObservable<Optional<string>> GetCurrentValue(FeederEvaluator item)
@@ -46,16 +42,13 @@ namespace Flux.ViewModels
         public override IObservable<Optional<string>> GetExpectedValue(FeederEvaluator item)
         {
             return item.WhenAnyValue(e => e.Material.ExpectedDocumentQueue)
-                .Convert(f => string.Join(Environment.NewLine, f.Values.Select(f => f.Name).Distinct()));
+                .Convert(d => d.Values.DistinctBy(f => f.Name))
+                .Convert(f => string.Join(Environment.NewLine, f.Select(f => f.Name)));
         }
     }
 
-    [RemoteControl]
     public class InvalidMaterialsViewModel : InvalidItemsViewModel<InvalidMaterialsViewModel>
     {
-        public override string Title => "MATERIALI NON VALIDI";
-        public override string ChangeName => "CAMBIA MATERIALE";
-
         public InvalidMaterialsViewModel(FluxViewModel flux) : base(flux)
         {
         }
@@ -65,9 +58,8 @@ namespace Flux.ViewModels
             InvalidItems = Flux.StatusProvider.FeederEvaluators.Connect().RemoveKey()
                .AutoRefresh(line => line.Material.IsInvalid)
                .Filter(line => line.Material.IsInvalid)
-               .Transform(line => (IInvalidItemViewModel)new InvalidMaterialViewModel(line))
-               .Sort(EvaluationComparer)
-               .AsObservableList();
+               .Transform(line => (IInvalidItemViewModel)new InvalidMaterialViewModel(Flux, line))
+               .AsObservableListRC(this);
         }
 
         public override Task ChangeItemsAsync()

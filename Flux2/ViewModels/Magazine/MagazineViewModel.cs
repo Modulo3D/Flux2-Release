@@ -1,6 +1,6 @@
 ﻿using DynamicData;
-using DynamicData.Binding;
-using Modulo3DStandard;
+using DynamicData.Kernel;
+using Modulo3DNet;
 using ReactiveUI;
 using System.Reactive;
 using System.Reactive.Linq;
@@ -9,37 +9,28 @@ namespace Flux.ViewModels
 {
     public class MagazineViewModel : FluxRoutableViewModel<MagazineViewModel>
     {
+        [RemoteContent(true)]
         public IObservableCache<MagazineItemViewModel, ushort> Magazine { get; private set; }
 
-        [RemoteContent(true)]
-        public IObservableList<MagazineItemViewModel> SortedMagazine { get; private set; }
-
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> ResetMagazineCommand { get; internal set; }
+        public Optional<ReactiveCommandBaseRC<Unit, Unit>> ResetMagazineCommand { get; internal set; }
 
-        public MagazineViewModel(FluxViewModel flux) : base(flux, Observable.Return(true).ToOptional())
+        public MagazineViewModel(FluxViewModel flux) : base(flux)
         {
             Magazine = Flux.Feeders.Feeders.Connect()
                 .Transform(f => new MagazineItemViewModel(Flux, f))
-                .AsObservableCache();
+                .AsObservableCacheRC(this);
 
-            var comparer = SortExpressionComparer<MagazineItemViewModel>.Ascending(m => m.Feeder.Position);
+            var is_idle = Flux.StatusProvider
+                .WhenAnyValue(s => s.StatusEvaluation)
+                .Select(s => s.IsIdle);
 
-            SortedMagazine = Magazine.Connect()
-                .RemoveKey()
-                .Sort(comparer)
-                .AsObservableList();
+            if (Flux.ConnectionProvider.VariableStoreBase.HasToolChange)
+                ResetMagazineCommand = ReactiveCommandBaseRC.CreateFromTask(async () => { await Flux.ConnectionProvider.ResetMagazineAsync(); }, this, is_idle);
 
-            var is_idle = Flux.StatusProvider.IsIdle
-                .ValueOrDefault();
-
-            ResetMagazineCommand = ReactiveCommand.CreateFromTask(async () => { await Flux.SettingsProvider.ResetMagazineAsync(); }, is_idle);
-
-            if (Flux.ConnectionProvider.VariableStore.HasVariable(m => m.OPEN_HEAD_CLAMP))
-                AddCommand("toggleClamp", ReactiveCommand.CreateFromTask(async () => { await Flux.ConnectionProvider.ToggleVariableAsync(c => c.OPEN_HEAD_CLAMP); }));
-
-            if (Flux.ConnectionProvider.VariableStore.HasVariable(m => m.LOCK_CLOSED, "top"))
-                AddCommand("toggleTopLock", ReactiveCommand.CreateFromTask(async () => { await Flux.ConnectionProvider.ToggleVariableAsync(c => c.OPEN_LOCK, "top"); }));
+            var top_lock_unit = Flux.ConnectionProvider.GetArrayUnit(m => m.OPEN_LOCK, "top.lock");
+            if (Flux.ConnectionProvider.HasVariable(m => m.OPEN_LOCK, top_lock_unit))
+                AddCommand("toggleTopLock", ReactiveCommandBaseRC.CreateFromTask(async () => { await Flux.ConnectionProvider.ToggleVariableAsync(c => c.OPEN_LOCK, top_lock_unit); }, this), Unit.Default);
         }
     }
 }

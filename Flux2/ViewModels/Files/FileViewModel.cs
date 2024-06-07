@@ -1,13 +1,8 @@
 ﻿using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
-using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Reactive;
 using System.Reactive.Disposables;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
@@ -19,8 +14,22 @@ namespace Flux.ViewModels
         Optional<FolderViewModel> Folder { get; }
     }
 
-    public abstract class FSViewModel<TViewModel> : RemoteControl<TViewModel>, IFSViewModel
-        where TViewModel : FSViewModel<TViewModel>
+    public class FileEditorDialog : Dialog<FileEditorDialog, DialogResult>
+    {
+        public FileEditorDialog(IFlux flux, RemoteText title) : base(flux, title)
+        {
+        }
+
+        protected override OptionalObservable<bool> CanConfirm { get; } = OptionalObservable.Some(true);
+        protected override OptionalObservable<bool> CanCancel { get; } = OptionalObservable.Some(true);
+        protected override OptionalObservable<bool> CanClose { get; } = default;
+
+        public override Optional<DialogResult> Confirm() => DialogResult.Primary;
+        public override Optional<DialogResult> Cancel() => DialogResult.Secondary;
+    }
+
+    public abstract class FSViewModel<TFSViewModel> : RemoteControl<TFSViewModel>, IFSViewModel
+        where TFSViewModel : FSViewModel<TFSViewModel>
     {
 
         [RemoteOutput(false)]
@@ -30,22 +39,17 @@ namespace Flux.ViewModels
         public FilesViewModel Files { get; }
         public Optional<FolderViewModel> Folder { get; }
 
-        public FSViewModel(FilesViewModel files, Optional<FolderViewModel> folder, FLUX_File file) : base($"{typeof(TViewModel).GetRemoteControlName()}??{file.Name}")
+        public FSViewModel(FluxViewModel flux, FilesViewModel files, Optional<FolderViewModel> folder, FLUX_File file)
+            : base($"{typeof(TFSViewModel).GetRemoteElementClass()};{file.Name}")
         {
             Files = files;
             Folder = folder;
             FSName = file.Name;
-            FSPath = Folder.ConvertOr(f => $"{f.FSPath}/{f.FSName}".TrimStart('/'), () => "");
-            FSFullPath = Folder.ConvertOr(f => $"{f.FSPath}/{f.FSName}/{FSName}".TrimStart('/'), () => FSName);
+            FSPath = Folder.ConvertOr(f => files.Flux.ConnectionProvider.CombinePaths(f.FSPath, f.FSName).TrimStart(), () => "");
+            FSFullPath = Folder.ConvertOr(f => files.Flux.ConnectionProvider.CombinePaths(f.FSPath, f.FSName, FSName).TrimStart(), () => FSName);
         }
 
-        public override string ToString() => $"{FSPath}/{FSName}";
-    }
-
-    public enum FLUX_FileAccess : uint
-    {
-        ReadOnly = 0,
-        ReadWrite = 1,
+        public override string ToString() => Files.Flux.ConnectionProvider.CombinePaths(FSPath, FSName);
     }
 
     public enum FLUX_FileModify : uint
@@ -57,17 +61,26 @@ namespace Flux.ViewModels
     public class FileViewModel : FSViewModel<FileViewModel>
     {
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> EditFileCommand { get; }
+        public ReactiveCommandBaseRC<Unit, Unit> EditFileCommand { get; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> ModifyFileCommand { get; }
+        public ReactiveCommandBaseRC<Unit, Unit> ModifyFileCommand { get; }
+        [RemoteCommand]
+        public Optional<ReactiveCommandBaseRC<Unit, Unit>> ExecuteFileCommand { get; }
 
-        public FileViewModel(FilesViewModel files, Optional<FolderViewModel> folder, FLUX_File file) : base(files, folder, file)
+        public FileViewModel(FluxViewModel flux, FilesViewModel files, Optional<FolderViewModel> folder, FLUX_File file) : base(flux, files, folder, file)
         {
-            EditFileCommand = ReactiveCommand.CreateFromTask(() => files.EditFileAsync(this))
+            EditFileCommand = ReactiveCommandBaseRC.CreateFromTask(() => files.EditFileAsync(this), this)
                 .DisposeWith(Disposables);
 
-            ModifyFileCommand = ReactiveCommand.CreateFromTask(() => files.ModifyFSAsync(this))
+            ModifyFileCommand = ReactiveCommandBaseRC.CreateFromTask(() => files.ModifyFSAsync(this), this)
                 .DisposeWith(Disposables);
+
+            if (folder.ConvertOr(f => f.FSFullPath.Contains(files.Flux.ConnectionProvider.MacroPath), () => false) ||
+                folder.ConvertOr(f => f.FSFullPath.Contains(files.Flux.ConnectionProvider.StoragePath), () => false))
+            {
+                ExecuteFileCommand = ReactiveCommandBaseRC.CreateFromTask(() => files.ExecuteFileAsync(this), this)
+                    .DisposeWith(Disposables);
+            }
         }
     }
 }

@@ -1,22 +1,22 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
-using System.Reactive.Linq;
+using System.Reactive;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
     public class FluxNavigatorViewModel : RemoteControl<FluxNavigatorViewModel>, IFluxNavigatorViewModel
     {
-        private ObservableAsPropertyHelper<bool> _ShowNavBar;
+        private readonly ObservableAsPropertyHelper<bool> _ShowNavBar;
         [RemoteOutput(true)]
         public bool ShowNavBar => _ShowNavBar.Value;
 
         public FluxViewModel Flux { get; }
-        public SourceCache<INavButton, IFluxRoutableViewModel> Routes { get; }
+        public SourceList<INavButton> Routes { get; private set; }
 
         private Optional<IFluxRoutableViewModel> _CurrentViewModel;
         [RemoteContent(true)]
@@ -28,38 +28,62 @@ namespace Flux.ViewModels
 
         private Stack<IFluxRoutableViewModel> PreviousViewModels { get; }
 
-        public FluxNavigatorViewModel(FluxViewModel flux) : base("navigator")
+        [RemoteCommand]
+        public ReactiveCommandBaseRC<Unit, Unit> HomeCommand { get; }
+        [RemoteCommand]
+        public ReactiveCommandBaseRC<Unit, Unit> MCodesCommand { get; }
+        [RemoteCommand]
+        public ReactiveCommandBaseRC<Unit, Unit> FeedersCommand { get; }
+        [RemoteCommand]
+        public ReactiveCommandBaseRC<Unit, Unit> CalibrationCommand { get; }
+        [RemoteCommand]
+        public ReactiveCommandBaseRC<Unit, Unit> FunctionalityCommand { get; }
+
+        public FluxNavigatorViewModel(FluxViewModel flux)
         {
             Flux = flux;
+            SourceListRC.Create(this, v => v.Routes);
             PreviousViewModels = new Stack<IFluxRoutableViewModel>();
-            Routes = new SourceCache<INavButton, IFluxRoutableViewModel>(n => n.Route);
 
-            var home = new NavButton(Flux, Flux.Home, true);
-            var storage = new NavButton(Flux, Flux.MCodes, true);
-            var feeders = new NavButton(Flux, Flux.Feeders, true);
-            var calibration = new NavButton(Flux, Flux.Calibration, true);
-            var functionality = new NavButton(Flux, Flux.Functionality, true);
+            var home = new NavButton<HomeViewModel>(flux, Flux.Home, reset: true);
+            var storage = new NavButton<MCodesViewModel>(flux, Flux.MCodes, reset: true);
+            var feeders = new NavButton<FeedersViewModel>(flux, Flux.Feeders, reset: true);
+            var calibration = new NavButton<CalibrationViewModel>(flux, Flux.Calibration, reset: true);
+            var functionality = new NavButton<FunctionalityViewModel>(flux, Flux.Functionality, reset: true);
 
 
             _ShowNavBar = this.WhenAnyValue(v => v.CurrentViewModel)
                 .ConvertMany(vm => vm.ShowNavBar)
                 .ValueOr(() => false)
-                .ToProperty(this, v => v.ShowNavBar);
+                .ToPropertyRC(this, v => v.ShowNavBar);
 
-            Routes.AddOrUpdate(home);
-            Routes.AddOrUpdate(storage);
-            Routes.AddOrUpdate(feeders);
-            Routes.AddOrUpdate(calibration);
-            Routes.AddOrUpdate(functionality);
+            Routes.Add(home);
+            Routes.Add(storage);
+            Routes.Add(feeders);
+            Routes.Add(calibration);
+            Routes.Add(functionality);
 
-            AddCommand("home", home.Command);
-            AddCommand("mCodes", storage.Command);
-            AddCommand("feeders", feeders.Command);
-            AddCommand("calibration", calibration.Command);
-            AddCommand("functionality", functionality.Command);
+            HomeCommand = home.Command;
+            MCodesCommand = storage.Command;
+            FeedersCommand = feeders.Command;
+            CalibrationCommand = calibration.Command;
+            FunctionalityCommand = functionality.Command;
+
+            this.WhenAnyValue(v => v.CurrentViewModel)
+                .PairWithPreviousValue()
+                .SubscribeRC(async v =>
+                {
+                    if (v.NewValue.HasValue)
+                    {
+                        await v.NewValue.Value.OnNavigatedFromAsync(v.OldValue);
+                        if (v.OldValue.HasValue)
+                            await v.OldValue.Value.OnNavigateToAsync(v.NewValue.Value);
+                    }
+                }, this);
         }
 
-        public void Navigate(IFluxRoutableViewModel route, bool reset = false)
+        public void Navigate<TFluxRoutableViewModel>(TFluxRoutableViewModel route, bool reset = false)
+            where TFluxRoutableViewModel : IFluxRoutableViewModel
         {
             try
             {
@@ -69,36 +93,48 @@ namespace Flux.ViewModels
                 }
                 else
                 {
-                    if (CurrentViewModel.HasValue && (!PreviousViewModels.TryPeek(out var previous) || previous != route))
+                    if (CurrentViewModel.HasValue && (!PreviousViewModels.TryPeek(out var previous) || !ReferenceEquals(previous, route)))
                         PreviousViewModels.Push(CurrentViewModel.Value);
                 }
 
-                CurrentViewModel = route.ToOptional();
+                CurrentViewModel = ((IFluxRoutableViewModel)route).ToOptional();
             }
             catch (Exception ex)
             {
-                Flux.Messages.LogException(this, ex);
+                // Flux.Messages.LogException(this, ex);
             }
         }
 
-        public void NavigateModal(
-            IFluxRoutableViewModel route,
-            Optional<IObservable<bool>> navigate_back = default,
-            Optional<IObservable<bool>> show_navbar = default)
+        public void NavigateModal<TFluxRoutableViewModel>(
+            TFluxRoutableViewModel route,
+            OptionalObservable<bool> navigate_back = default)
+            where TFluxRoutableViewModel : IFluxRoutableViewModel
         {
-            Navigate(new NavModalViewModel(Flux, route, navigate_back, show_navbar), false);
+            Navigate(new NavModalViewModel<TFluxRoutableViewModel>(Flux, route, navigate_back), false);
+        }
+        public void NavigateModal<TFluxRoutableViewModel>(
+            Lazy<TFluxRoutableViewModel> lazy_route,
+            OptionalObservable<bool> navigate_back = default)
+            where TFluxRoutableViewModel : IFluxRoutableViewModel
+        {
+            Navigate(new NavModalViewModel<TFluxRoutableViewModel>(Flux, lazy_route.Value, navigate_back), false);
         }
 
-        public void NavigateBack()
+        public bool NavigateBack()
         {
             try
             {
                 if (PreviousViewModels.TryPop(out var previous))
+                { 
                     CurrentViewModel = previous.ToOptional();
+                    return true;
+                }
+                return false;
             }
             catch (Exception ex)
             {
-                Flux.Messages.LogException(this, ex);
+                // Flux.Messages.LogException(this, ex);
+                return false;
             }
         }
 
@@ -111,13 +147,13 @@ namespace Flux.ViewModels
             }
             catch (Exception ex)
             {
-                Flux.Messages.LogException(this, ex);
+                // Flux.Messages.LogException(this, ex);
             }
         }
     }
 
-    public abstract class FluxRoutableViewModel<TViewModel> : RemoteControl<TViewModel>, IFluxRoutableViewModel
-        where TViewModel : FluxRoutableViewModel<TViewModel>
+    public abstract class FluxRoutableViewModel<TFluxRoutableViewModel> : RemoteControl<TFluxRoutableViewModel>, IFluxRoutableViewModel
+        where TFluxRoutableViewModel : FluxRoutableViewModel<TFluxRoutableViewModel>
     {
         public FluxViewModel Flux { get; }
         public string UrlPathSegment { get; }
@@ -126,19 +162,21 @@ namespace Flux.ViewModels
 
         public FluxRoutableViewModel(
             FluxViewModel flux,
-            Optional<IObservable<bool>> show_navbar = default,
-            Optional<string> name = default) : base(name)
+            string name = "",
+            OptionalObservable<bool> show_navbar = default) 
+            : base(string.IsNullOrEmpty(name) ? $"{typeof(TFluxRoutableViewModel).GetRemoteElementClass()}" : name)
         {
             Flux = flux;
-            UrlPathSegment = this.GetRemoteControlName();
-            ShowNavBar = show_navbar.ValueOr(() => Observable.Return(false));
+            ShowNavBar = show_navbar.ObservableOr(() => false);
+            UrlPathSegment = typeof(TFluxRoutableViewModel).GetRemoteElementClass();
         }
 
-        public virtual Task OnNavigatedFromAsync()
+        public virtual Task OnNavigatedFromAsync(Optional<IFluxRoutableViewModel> from)
         {
             return Task.CompletedTask;
         }
-        public virtual Task OnNavigateToAsync()
+
+        public virtual Task OnNavigateToAsync(IFluxRoutableViewModel to)
         {
             return Task.CompletedTask;
         }
@@ -149,8 +187,8 @@ namespace Flux.ViewModels
     {
         public FluxRoutableNavBarViewModel(
             FluxViewModel flux,
-            Optional<string> name = default)
-            : base(flux, Observable.Return(true).ToOptional(), name)
+            string name = "")
+            : base(flux, name, OptionalObservable.Some(true))
         {
         }
     }

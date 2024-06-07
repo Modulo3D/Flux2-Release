@@ -1,12 +1,14 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Modulo3DDatabase;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reactive.Disposables;
 using System.Reactive.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
@@ -19,15 +21,18 @@ namespace Flux.ViewModels
         public bool IsInvalid { get; }
     }
 
-    public abstract class TagViewModelEvaluator<TNFCTag, TTagDocument, TDocument, TState> : ReactiveObject, ITagViewModelEvaluator
-        where TNFCTag : INFCOdometerTag<TNFCTag>
-        where TDocument : IDocument
+    public abstract class TagViewModelEvaluator<TTagViewModelEvaluator, TNFCTag, TTagDocument, TDocument, TState> : 
+        ReactiveObjectRC<TTagViewModelEvaluator>, ITagViewModelEvaluator
+        where TTagViewModelEvaluator : TagViewModelEvaluator<TTagViewModelEvaluator, TNFCTag, TTagDocument, TDocument, TState>
+        where TNFCTag : INFCOdometerTag<TNFCTag>, new()
+        where TDocument : IDocument, new()
     {
+        public FluxViewModel Flux { get; }
         public FeederEvaluator FeederEvaluator { get; }
-        public abstract IFluxTagViewModel<TNFCTag, TTagDocument, TState> TagViewModel { get; }
+        public abstract Optional<IFluxTagViewModel<TNFCTag, TTagDocument, TState>> TagViewModel { get; }
 
-        private ObservableAsPropertyHelper<Optional<Dictionary<QueueKey, TDocument>>> _ExpectedDocumentQueue;
-        public Optional<Dictionary<QueueKey, TDocument>> ExpectedDocumentQueue => _ExpectedDocumentQueue.Value;
+        private ObservableAsPropertyHelper<Optional<DocumentQueue<TDocument>>> _ExpectedDocumentQueue;
+        public Optional<DocumentQueue<TDocument>> ExpectedDocumentQueue => _ExpectedDocumentQueue.Value;
 
         private ObservableAsPropertyHelper<Optional<TDocument>> _CurrentDocument;
         public Optional<TDocument> CurrentDocument => _CurrentDocument.Value;
@@ -44,98 +49,122 @@ namespace Flux.ViewModels
         private ObservableAsPropertyHelper<bool> _HasLowWeight;
         public bool HasLowWeight => _HasLowWeight.Value;
 
-        public TagViewModelEvaluator(FeederEvaluator feeder_eval)
+        private ObservableAsPropertyHelper<bool> _HasEmptyWeight;
+        public bool HasEmptyWeight => _HasEmptyWeight.Value;
+
+        public TagViewModelEvaluator(FluxViewModel flux, FeederEvaluator feeder_eval)
         {
-            FeederEvaluator = feeder_eval;
+            Flux = flux;
+            FeederEvaluator = feeder_eval; 
         }
 
         public void Initialize()
         {
-            var partprogram = FeederEvaluator.Status.Flux.ConnectionProvider.ObserveVariable(c => c.PART_PROGRAM);
-            var queue_pos = FeederEvaluator.Status.Flux.ConnectionProvider.ObserveVariable(c => c.QUEUE_POS);
+            var queue = Flux.StatusProvider.WhenAnyValue(c => c.JobQueue);
+            var queue_pos = Flux.ConnectionProvider.ObserveVariable(c => c.QUEUE_POS);
 
-            var queue_key = Observable.CombineLatest(partprogram, queue_pos, (pp, q) => 
-                pp.Convert(pp => q.Convert(q => new QueueKey(pp.MCodeGuid, q))));
-
-            var db_changed = FeederEvaluator.Status.Flux.DatabaseProvider.WhenAnyValue(v => v.Database);
-            var eval_changed = FeederEvaluator.WhenAnyValue(e => e.FeederReportQueue);
+            var db_changed = Flux.DatabaseProvider.WhenAnyValue(v => v.Database);
+            var report_queue = FeederEvaluator.WhenAnyValue(e => e.FeederReportQueue);
 
             _ExpectedDocumentQueue = Observable.CombineLatest(
-                queue_key,
+                queue,
+                queue_pos,
                 db_changed,
-                eval_changed,
-                (p, db, f) => GetExpectedDocumentQueue(p, db, f, GetDocumentId))
-                .ToProperty(this, v => v.ExpectedDocumentQueue);
+                report_queue,
+                GetExpectedDocumentQueueAsync)
+                .SelectAsync()
+                .ToPropertyRC((TTagViewModelEvaluator)this, v => v.ExpectedDocumentQueue);
 
-            _CurrentDocument = TagViewModel.WhenAnyValue(t => t.Document)
-                .Select(GetCurrentDocument)
-                .ToProperty(this, v => v.CurrentDocument);
+            _CurrentDocument = this.WhenAnyValue(v => v.TagViewModel)
+                .ConvertMany(t => t.WhenAnyValue(t => t.Document))
+                .Convert(GetCurrentDocument)
+                .ToPropertyRC((TTagViewModelEvaluator)this, v => v.CurrentDocument);
 
             _IsInvalid = Observable.CombineLatest(
-                TagViewModel.WhenAnyValue(f => f.Document),
-                TagViewModel.WhenAnyValue(f => f.State),
-                eval_changed,
+                this.WhenAnyValue(v => v.TagViewModel)
+                    .ConvertMany(t => t.WhenAnyValue(t => t.Document)),
+                this.WhenAnyValue(v => v.TagViewModel)
+                    .ConvertMany(t => t.WhenAnyValue(t => t.State)),
+                report_queue,
                 GetInvalid)
-                .ToProperty(this, e => e.IsInvalid);
+                .ToPropertyRC((TTagViewModelEvaluator)this, e => e.IsInvalid);
 
             _ExpectedWeight = FeederEvaluator.WhenAnyValue(f => f.ExtrusionQueue)
                 .Convert(e => e.Values.Sum(e => e.WeightG))
-                .ToProperty(this, v => v.ExpectedWeight);
+                .ToPropertyRC((TTagViewModelEvaluator)this, v => v.ExpectedWeight);
 
-            _CurrentWeight = TagViewModel.Odometer.WhenAnyValue(v => v.Value)
-                .ToProperty(this, v => v.CurrentWeight);
+            _CurrentWeight = this.WhenAnyValue(v => v.TagViewModel)
+                .ConvertMany(t => t.Odometer.WhenAnyValue(t => t.CurrentValue))
+                .ToPropertyRC((TTagViewModelEvaluator)this, v => v.CurrentWeight);
 
             _HasLowWeight = Observable.CombineLatest(
                 this.WhenAnyValue(v => v.ExpectedWeight),
                 this.WhenAnyValue(v => v.CurrentWeight),
-                eval_changed,
+                report_queue,
                 LowWeight)
-                .ToProperty(this, v => v.HasLowWeight);
+                .ToPropertyRC((TTagViewModelEvaluator)this, v => v.HasLowWeight);
+
+            _HasEmptyWeight = Observable.CombineLatest(
+               this.WhenAnyValue(v => v.CurrentWeight),
+               report_queue,
+               EmptyWeight)
+               .ToPropertyRC((TTagViewModelEvaluator)this, v => v.HasEmptyWeight);
         }
 
         public abstract int GetDocumentId(FeederReport feeder_report);
         public abstract Optional<TDocument> GetCurrentDocument(TTagDocument tag_document);
-        public abstract bool GetInvalid(TTagDocument document, TState state, Optional<Dictionary<QueueKey, FeederReport>> report);
+        public abstract bool GetInvalid(Optional<TTagDocument> document, Optional<TState> state, Optional<FeederReportQueue> report);
 
-        private Optional<Dictionary<QueueKey, TDocument>> GetExpectedDocumentQueue(Optional<QueueKey> queue_key, Optional<ILocalDatabase> database, Optional<Dictionary<QueueKey, FeederReport>> feered_queue, Func<FeederReport, int> get_id)
+        private async Task<Optional<DocumentQueue<TDocument>>> GetExpectedDocumentQueueAsync(
+            Optional<JobQueue> job_queue,
+            Optional<QueuePosition> queue_position,
+            Optional<ILocalDatabase> database,
+            Optional<FeederReportQueue> feeder_queue)
         {
             try
             {
-                if (!queue_key.HasValue)
+                if (!job_queue.HasValue)
                     return default;
+
+                if (!queue_position.HasValue)
+                    return default;
+
+                if (queue_position.Value < 0)
+                    return default;
+
                 if (!database.HasValue)
                     return default;
-                if (!feered_queue.HasValue)
+                if (!feeder_queue.HasValue)
                     return default;
 
-                var document_queue = new Dictionary<QueueKey, TDocument>();
-                foreach (var feeder_queue in feered_queue.Value)
+                var document_queue = new DocumentQueue<TDocument>();
+                foreach (var feeder_report in feeder_queue.Value)
                 {
-                    if (feeder_queue.Key.MCodeGuid != queue_key.Value.MCodeGuid)
+                    var job = job_queue.Value
+                        .Lookup(queue_position.Value);
+                    if (!job.HasValue)
                         continue;
 
-                    if (feeder_queue.Key.QueuePosition < queue_key.Value.QueuePosition)
+                    if (job.Value.QueuePosition < queue_position.Value)
                         continue;
 
-                    var feeder_report = feered_queue.Value.Lookup(feeder_queue.Key);
-                    if (!feeder_report.HasValue)
-                        continue;
+                    var document_id = GetDocumentId(feeder_report.Value);
 
-                    var document_id = get_id(feeder_report.Value);
-                    var result = database.Value.FindById<TDocument>(document_id);
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    var result = await database.Value.FindByIdAsync<TDocument>(document_id, cts.Token);
                     if (!result.HasDocuments)
                         continue;
 
-                    document_queue.Add(feeder_queue.Key, result.Documents.First());
+                    document_queue.Add(feeder_report.Key, result.First());
                 }
                 return document_queue;
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 return default;
             }
         }
-        private bool LowWeight(Optional<double> expected, Optional<double> current, Optional<Dictionary<QueueKey, FeederReport>> feeder_queue)
+        private bool LowWeight(Optional<double> expected, Optional<double> current, Optional<FeederReportQueue> feeder_queue)
         {
             try
             {
@@ -149,18 +178,33 @@ namespace Flux.ViewModels
                     return true;
                 return current.Value < expected.Value;
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 return false;
             }
         }
+        private bool EmptyWeight(Optional<double> current, Optional<FeederReportQueue> feeder_queue)
+        {
+            if (!feeder_queue.HasValue)
+                return true;
+            if (feeder_queue.Value.Count == 0)
+                return false;
+            if (!current.HasValue)
+                return true;
+            return false;
+        }
     }
 
-    public class MaterialEvaluator : TagViewModelEvaluator<NFCMaterial, Optional<Material>, Material, MaterialState>
+    public class MaterialEvaluator : TagViewModelEvaluator<MaterialEvaluator, NFCMaterial, Optional<Material>, Material, MaterialState>
     {
-        public override IFluxTagViewModel<NFCMaterial, Optional<Material>, MaterialState> TagViewModel => FeederEvaluator.Feeder.Material;
-        public MaterialEvaluator(FeederEvaluator feeder_eval) : base(feeder_eval)
+        private readonly ObservableAsPropertyHelper<Optional<IFluxTagViewModel<NFCMaterial, Optional<Material>, MaterialState>>> _TagViewModel;
+        public override Optional<IFluxTagViewModel<NFCMaterial, Optional<Material>, MaterialState>> TagViewModel => _TagViewModel.Value;
+
+        public MaterialEvaluator(FluxViewModel flux, FeederEvaluator feeder_eval) : base(flux, feeder_eval)
         {
+            _TagViewModel = FeederEvaluator.Feeder.WhenAnyValue(f => f.SelectedMaterial)
+                .Convert(m => (IFluxTagViewModel<NFCMaterial, Optional<Material>, MaterialState>)m)
+                .ToPropertyRC(this, v => v.TagViewModel);
         }
         public override Optional<Material> GetCurrentDocument(Optional<Material> tag_document)
         {
@@ -170,7 +214,7 @@ namespace Flux.ViewModels
         {
             return feeder_report.MaterialId;
         }
-        public override bool GetInvalid(Optional<Material> document, MaterialState state, Optional<Dictionary<QueueKey, FeederReport>> report_queue)
+        public override bool GetInvalid(Optional<Optional<Material>> document, Optional<MaterialState> state, Optional<FeederReportQueue> report_queue)
         {
             if (!report_queue.HasValue)
                 return true;
@@ -178,24 +222,26 @@ namespace Flux.ViewModels
             if (report_queue.Value.Count == 0)
                 return false;
 
-            if (!document.HasValue)
+            if (!document.HasValue || !document.Value.HasValue)
                 return true;
 
-            if (!state.IsLoaded())
+            if (!state.HasValue || !state.Value.IsLoaded())
                 return true;
 
             foreach (var report in report_queue.Value)
-                if (report.Value.MaterialId != document.Value.Id)
+                if (report.Value.MaterialId != document.Value.Value.Id)
                     return true;
 
             return false;
         }
     }
 
-    public class ToolNozzleEvaluator : TagViewModelEvaluator<NFCToolNozzle, (Optional<Tool> tool, Optional<Nozzle> nozzle), Nozzle, ToolNozzleState>
+    public class ToolNozzleEvaluator : TagViewModelEvaluator<ToolNozzleEvaluator, NFCToolNozzle, (Optional<Tool> tool, Optional<Nozzle> nozzle), Nozzle, ToolNozzleState>
     {
-        public override IFluxTagViewModel<NFCToolNozzle, (Optional<Tool> tool, Optional<Nozzle> nozzle), ToolNozzleState> TagViewModel => FeederEvaluator.Feeder.ToolNozzle;
-        public ToolNozzleEvaluator(FeederEvaluator feeder_eval) : base(feeder_eval)
+        public override Optional<IFluxTagViewModel<NFCToolNozzle, (Optional<Tool> tool, Optional<Nozzle> nozzle), ToolNozzleState>> TagViewModel =>
+            ((IFluxTagViewModel<NFCToolNozzle, (Optional<Tool> tool, Optional<Nozzle> nozzle), ToolNozzleState>)FeederEvaluator.Feeder.ToolNozzle).ToOptional();
+
+        public ToolNozzleEvaluator(FluxViewModel flux, FeederEvaluator feeder_eval) : base(flux, feeder_eval)
         {
         }
         public override int GetDocumentId(FeederReport feeder_report)
@@ -206,38 +252,43 @@ namespace Flux.ViewModels
         {
             return tag_document.nozzle;
         }
-        public override bool GetInvalid((Optional<Tool> tool, Optional<Nozzle> nozzle) document, ToolNozzleState state, Optional<Dictionary<QueueKey, FeederReport>> report_queue)
+        public override bool GetInvalid(Optional<(Optional<Tool> tool, Optional<Nozzle> nozzle)> document, Optional<ToolNozzleState> state, Optional<FeederReportQueue> report_queue)
         {
             if (!report_queue.HasValue)
                 return true;
-
             if (report_queue.Value.Count == 0)
                 return false;
 
-            if (!document.tool.HasValue)
+            if (!document.HasValue)
                 return true;
 
-            if (!document.nozzle.HasValue)
+            if (!document.Value.tool.HasValue)
                 return true;
 
-            if (!state.IsLoaded())
+            if (!document.Value.nozzle.HasValue)
+                return true;
+
+            if (!state.HasValue || !state.Value.IsLoaded())
                 return true;
 
             foreach (var report in report_queue.Value)
-                if (report.Value.NozzleId != document.nozzle.Value.Id)
+                if (report.Value.NozzleId != document.Value.nozzle.Value.Id)
                     return true;
 
             return false;
         }
     }
 
-    public class FeederEvaluator : ReactiveObject
+    public class FeederEvaluator : ReactiveObjectRC<FeederEvaluator>
     {
-        public StatusProvider Status { get; }
+        private FluxViewModel Flux { get; }
         public IFluxFeederViewModel Feeder { get; }
 
-        private ObservableAsPropertyHelper<Optional<Dictionary<QueueKey, FeederReport>>> _FeederReportQueue;
-        public Optional<Dictionary<QueueKey, FeederReport>> FeederReportQueue => _FeederReportQueue.Value;
+        private ObservableAsPropertyHelper<Optional<FeederReportQueue>> _FeederReportQueue;
+        public Optional<FeederReportQueue> FeederReportQueue => _FeederReportQueue.Value;
+
+        private ObservableAsPropertyHelper<Optional<ExtrusionQueue<ExtrusionG>>> _ExtrusionQueue;
+        public Optional<ExtrusionQueue<ExtrusionG>> ExtrusionQueue => _ExtrusionQueue.Value;
 
         public MaterialEvaluator Material { get; }
         public ToolNozzleEvaluator ToolNozzle { get; }
@@ -251,73 +302,54 @@ namespace Flux.ViewModels
         private ObservableAsPropertyHelper<bool> _HasColdNozzle;
         public bool HasColdNozzle => _HasColdNozzle.Value;
 
-        private ObservableAsPropertyHelper<Optional<Dictionary<QueueKey, Extrusion>>> _ExtrusionQueue;
-        public Optional<Dictionary<QueueKey, Extrusion>> ExtrusionQueue => _ExtrusionQueue.Value;
+        private ObservableAsPropertyHelper<Optional<double>> _TargetTemperature;
+        public Optional<double> TargetTemperature => _TargetTemperature.Value;
 
-        public FeederEvaluator(StatusProvider status, IFluxFeederViewModel feeder)
+        public FeederEvaluator(FluxViewModel flux, IFluxFeederViewModel feeder)
         {
-            Status = status;
+            Flux = flux;
             Feeder = feeder;
-            Material = new MaterialEvaluator(this);
-            ToolNozzle = new ToolNozzleEvaluator(this);
+            Material = new MaterialEvaluator(flux, this);
+            ToolNozzle = new ToolNozzleEvaluator(flux, this);
         }
 
         public void Initialize()
         {
-            var queue_pos = Status.Flux.ConnectionProvider
+            var queue_pos = Flux.ConnectionProvider
                 .ObserveVariable(c => c.QUEUE_POS)
-                .StartWithEmpty()
-                .DistinctUntilChanged();
+                .StartWithDefault();
 
-            bool compare_queue(Optional<Dictionary<QueuePosition, Guid>> q1, Optional<Dictionary<QueuePosition, Guid>> q2)
-            {
-                try
-                {
-                    if (q1.HasValue != q2.HasValue)
-                        return false;
-                    if (q1.HasValue && q2.HasValue)
-                    {
-                        foreach (var qi in q2.Value)
-                        {
-                            if (!q1.Value.TryGetValue(qi.Key, out var guid))
-                                return false;
-                            if (qi.Value != guid)
-                                return false;
-                        }
-                        return true;
-                    }
-                    return false;
-                }
-                catch (Exception ex)
-                {
-                    return false;
-                }
-            }
+            var queue = Flux.StatusProvider
+                .WhenAnyValue(s => s.JobQueue);
 
-            var queue = Status.Flux.ConnectionProvider
-                .ObserveVariable(c => c.QUEUE)
-                .StartWithEmpty()
-                .DistinctUntilChanged(compare_queue);
-
-            var mcodes = Status.Flux.MCodes.AvaiableMCodes
-                .Connect()
-                .QueryWhenChanged();
+            var mcode_analyzers = Flux.MCodes.AvaiableMCodes.Connect()
+                 .QueryWhenChanged(m => m.KeyValues.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.Analyzer))
+                 .StartWith(new Dictionary<MCodeKey, MCodeAnalyzer>())
+                 .DistinctUntilChanged();
 
             _FeederReportQueue = Observable.CombineLatest(
                 queue_pos,
                 queue,
-                mcodes,
+                mcode_analyzers,
                 GetFeederReportQueue)
-                .ToProperty(this, e => e.FeederReportQueue);
+                .ToPropertyRC(this, e => e.FeederReportQueue);
 
-            _ExtrusionQueue = Status.WhenAnyValue(s => s.PrintingEvaluation)
-                .Select(e => e.ExtrusionSetQueue)
-                .Convert(e => e.ToDictionary(kvp => kvp.Key, kvp => kvp.Value[Feeder.Position]))
-                .ToProperty(this, v => v.ExtrusionQueue);
+            _ExtrusionQueue = Observable.CombineLatest(
+                Flux.DatabaseProvider
+                    .WhenAnyValue(d => d.Database),
+                this.WhenAnyValue(f => f.FeederReportQueue),
+                Feeder.ToolNozzle.NFCSlot.WhenAnyValue(t => t.Nfc),
+                Feeder.WhenAnyValue(v => v.SelectedMaterial)
+                    .ConvertMany(m => m.NFCSlot.WhenAnyValue(m => m.Nfc)),
+                Flux.Feeders.OdometerManager
+                    .WhenAnyValue(c => c.ExtrusionSetQueue),
+                GetExtrusionQueue)
+                .SelectAsync()
+                .ToPropertyRC(this, v => v.ExtrusionQueue);
 
-            _Offset = Status.Flux.Calibration.Offsets.Connect()
+            _Offset = Flux.Calibration.Offsets.Connect()
                 .QueryWhenChanged(FindOffset)
-                .ToProperty(this, v => v.Offset);
+                .ToPropertyRC(this, v => v.Offset);
 
             var eval_changed = this.WhenAnyValue(e => e.FeederReportQueue);
 
@@ -329,44 +361,118 @@ namespace Flux.ViewModels
                 valid_probe,
                 eval_changed,
                 InvalidProbe)
-                .ToProperty(this, e => e.IsInvalidProbe);
+                .ToPropertyRC(this, e => e.IsInvalidProbe);
+
+            var material = Feeder.WhenAnyValue(f => f.SelectedMaterial);
+            var tool_material = material.Convert(m => m.ToolMaterial);
+
+            _TargetTemperature = Flux.StatusProvider.WhenAnyValue(s => s.PrintingEvaluation)
+                .Select(TargetTemp)
+                .ToPropertyRC(this, v => v.TargetTemperature);
 
             _HasColdNozzle = Observable.CombineLatest(
-                Status.WhenAnyValue(s => s.PrintingEvaluation),
-                Feeder.ToolNozzle.WhenAnyValue(t => t.Temperature),
-                Feeder.ToolMaterial.WhenAnyValue(t => t.ExtrusionTemp),
+                Flux.StatusProvider.WhenAnyValue(s => s.PrintingEvaluation),
+                Feeder.ToolNozzle.WhenAnyValue(t => t.NozzleTemperature),
                 ColdNozzle)
-                .ToProperty(this, e => e.HasColdNozzle);
+                .ToPropertyRC(this, e => e.HasColdNozzle);
 
             Material.Initialize();
             ToolNozzle.Initialize();
         }
 
-        private bool ColdNozzle(PrintingEvaluation evaluation, Optional<FLUX_Temp> plc_temp, Optional<double> extrusion_temp)
+        private async Task<Optional<ExtrusionQueue<ExtrusionG>>> GetExtrusionQueue(
+            Optional<ILocalDatabase> database,
+            Optional<FeederReportQueue> feeder_report_queue,
+            NFCReading<NFCToolNozzle> tool_nozzle, 
+            Optional<NFCReading<NFCMaterial>> material,
+            Optional<ExtrusionSetQueue<ExtrusionMM>> extrusions)
         {
-            if (!evaluation.Recovery.ConvertOr(r => r.IsSelected, () => false))
-                return false;
-            if (!evaluation.Recovery.ConvertOr(r =>  r.ToolNumber == Feeder.Position, () => false))
-                return false;
-            if (!extrusion_temp.HasValue)
-                return true;
-            if (!plc_temp.HasValue)
-                return true;
-            if (plc_temp.Value.Target > 150)
-                return Math.Abs(plc_temp.Value.Current - plc_temp.Value.Target) > 10;
-            return Math.Abs(plc_temp.Value.Current - extrusion_temp.Value) > 15;
+            if (!database.HasValue)
+                return default;
+
+            if (!feeder_report_queue.HasValue)
+                return default;
+
+            var material_document = await material.Convert(m => m.Tag).ConvertAsync(t => t.GetDocumentAsync<Material>(database.Value, tn => tn.MaterialGuid));
+            if (!material_document.HasValue)
+                return default;
+
+            if (!extrusions.HasValue)
+                return default;
+
+            var total_extrusion_queue = new ExtrusionQueue<ExtrusionG>();
+            foreach (var feeder_report in feeder_report_queue.Value)
+                total_extrusion_queue.Add(feeder_report.Key, ExtrusionG.CreateTotalExtrusion(feeder_report.Key, feeder_report.Value, material_document.Value));
+
+            var extrusion_key = ExtrusionKey.Create(tool_nozzle, material);
+            var extrusion_queue_mm = extrusions.Value.LookupOptional(extrusion_key);
+            if (!extrusion_queue_mm.HasValue)
+                return total_extrusion_queue;
+
+            var extrusion_queue_g = new ExtrusionQueue<ExtrusionG>();
+            foreach (var extrusion in extrusion_queue_mm.Value)
+                extrusion_queue_g.Add(extrusion.Key, ExtrusionG.CreateExtrusion(material_document.Value, extrusion.Value));
+
+            foreach (var extrusion in extrusion_queue_g)
+                if (total_extrusion_queue.ContainsKey(extrusion.Key))
+                    total_extrusion_queue[extrusion.Key] -= extrusion.Value;
+
+            return total_extrusion_queue.ToOptional();
         }
 
+        private bool ColdNozzle(PrintingEvaluation evaluation, Optional<FLUX_Temp> plc_temp)
+        {
+            var tool_index = evaluation.Recovery
+                .Convert(r => r.ToolIndex);
+            if (!tool_index.HasValue)
+                return false;
+
+            var temperature = evaluation.Recovery
+                .Convert(pp => pp.ToolTemperatures)
+                .Convert(tt => tt.LookupOptional(tool_index));
+            if (!temperature.HasValue)
+                return false;
+
+            var variable_store = Flux.ConnectionProvider.VariableStoreBase;
+            var tool_number = tool_index.Value.GetZeroBaseIndex();
+
+            if (tool_number != Feeder.Position)
+                return false;
+            if (!plc_temp.HasValue)
+                return true;
+            if (plc_temp.Value.Target == 0)
+                return true;
+            return temperature.Value - plc_temp.Value.Current > 10;
+        }
+        private Optional<double> TargetTemp(PrintingEvaluation evaluation)
+        {
+            var tool_index = evaluation.Recovery
+                .Convert(pp => pp.ToolIndex);
+            if (!tool_index.HasValue)
+                return default;
+
+            var temperature = evaluation.Recovery
+                .Convert(pp => pp.ToolTemperatures)
+                .Convert(tt => tt.LookupOptional(tool_index));
+            if (!temperature.HasValue)
+                return default;
+
+            var variable_store = Flux.ConnectionProvider.VariableStoreBase;
+            var tool_number = tool_index.Value.GetZeroBaseIndex();
+
+            if (tool_number != Feeder.Position)
+                return default;
+            return temperature.Value;
+        }
         private Optional<IFluxOffsetViewModel> FindOffset(IQuery<IFluxOffsetViewModel, ushort> offsets)
         {
             return offsets.LookupOptional(Feeder.Position);
         }
 
-        private bool InvalidProbe(Optional<bool> is_probed, Optional<Dictionary<QueueKey, FeederReport>> report_queue)
+        private bool InvalidProbe(Optional<bool> is_probed, Optional<FeederReportQueue> report_queue)
         {
             if (!report_queue.HasValue)
                 return true;
-
             if (report_queue.Value.Count == 0)
                 return false;
 
@@ -376,36 +482,38 @@ namespace Flux.ViewModels
             return !is_probed.Value;
         }
 
-        private Optional<Dictionary<QueueKey, FeederReport>> GetFeederReportQueue(Optional<QueuePosition> queue_pos, Optional<Dictionary<QueuePosition, Guid>> queue, IQuery<IFluxMCodeStorageViewModel, Guid> mcodes)
+        private Optional<FeederReportQueue> GetFeederReportQueue(Optional<QueuePosition> queue_pos, Optional<JobQueue> job_queue, Dictionary<MCodeKey, MCodeAnalyzer> mcode_analyzers)
         {
             try
             {
+                if (!job_queue.HasValue)
+                    return default;
+
                 if (!queue_pos.HasValue)
                     return default;
-                if (!queue.HasValue)
-                    return default;
 
-                var feeder_report_queue = new Dictionary<QueueKey, FeederReport>();
-                foreach (var mcode_queue in queue.Value)
+                var feeder_report_queue = new FeederReportQueue();
+                if (queue_pos.Value < 0)
+                    return feeder_report_queue;
+
+                foreach (var job in job_queue.Value.Values)
                 {
-                    if (mcode_queue.Key < queue_pos.Value)
+                    if (job.QueuePosition < queue_pos.Value)
                         continue;
 
-                    var mcode_vm = mcodes.Lookup(mcode_queue.Value);
-                    if (!mcode_vm.HasValue)
+                    var mcode_analyzer = mcode_analyzers.Lookup(job.MCodeKey);
+                    if (!mcode_analyzer.HasValue)
                         continue;
 
-                    var analyzer = mcode_vm.Value.Analyzer;
-                    var feeder_report = analyzer.MCode.FeederReports.Lookup(Feeder.Position);
+                    var feeder_report = mcode_analyzer.Value.MCode.FeederReports.Lookup(Feeder.Position);
                     if (!feeder_report.HasValue)
                         continue;
 
-                    var queue_key = new QueueKey(analyzer.MCode.MCodeGuid, mcode_queue.Key);
-                    feeder_report_queue.Add(queue_key, feeder_report.Value);
+                    feeder_report_queue.Add(job.JobKey, feeder_report.Value);
                 }
                 return feeder_report_queue;
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 return default;
             }

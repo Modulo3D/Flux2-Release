@@ -1,6 +1,6 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Reactive.Disposables;
@@ -11,14 +11,11 @@ namespace Flux.ViewModels
 {
     public class InvalidProbeViewModel : InvalidValueViewModel<InvalidProbeViewModel>
     {
-        public override string ItemName => "CALIBRAZIONE";
-        public override string CurrentValueName => "TASTATURA CORRENTE";
-        public override string ExpectedValueName => "TASTATURA RICHIESTA";
 
-        private ObservableAsPropertyHelper<string> _InvalidItemBrush;
+        private readonly ObservableAsPropertyHelper<string> _InvalidItemBrush;
         public override string InvalidItemBrush => _InvalidItemBrush.Value;
 
-        public InvalidProbeViewModel(FeederEvaluator eval) : base($"{typeof(InvalidProbeViewModel).GetRemoteControlName()}??{eval.Feeder.Position}", eval)
+        public InvalidProbeViewModel(FluxViewModel flux, FeederEvaluator eval) : base(flux, eval)
         {
             _InvalidItemBrush = eval.WhenAnyValue(e => e.Offset)
                 .ConvertMany(o => o.WhenAnyValue(o => o.ProbeStateBrush))
@@ -46,10 +43,8 @@ namespace Flux.ViewModels
 
     public class InvalidProbesViewModel : InvalidValuesViewModel<InvalidProbesViewModel>
     {
+        public override bool StartWithInvalidValuesEnabled => false;
         public override bool CanStartWithInvalidValues => false;
-        public override string Title => "TASTATURE NON VALIDE";
-        public override string ChangeName => "ESEGUI TASTATURA";
-
         public InvalidProbesViewModel(FluxViewModel flux) : base(flux)
         {
         }
@@ -60,9 +55,8 @@ namespace Flux.ViewModels
             InvalidValues = Flux.StatusProvider.FeederEvaluators.Connect().RemoveKey()
                 .AutoRefresh(line => line.IsInvalidProbe)
                 .Filter(line => line.IsInvalidProbe)
-                .Transform(line => (IInvalidValueViewModel)new InvalidProbeViewModel(line))
-                .Sort(EvaluationComparer)
-                .AsObservableList();
+                .Transform(line => (IInvalidValueViewModel)new InvalidProbeViewModel(Flux, line))
+                .AsObservableListRC(this);
         }
 
         public override Task ChangeItemsAsync()

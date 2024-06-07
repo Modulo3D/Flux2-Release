@@ -16,7 +16,7 @@
 
         public WiFiReconnectionKind ReconnectionKind { get; set; }
 
-        public ReactiveCommand<NetworkViewModel, Unit> Connect { get; }
+        public ReactiveCommandBaseRC<NetworkViewModel, Unit> Connect { get; }
 
         public NetworksViewModel(FluxViewModel flux)
             : base(flux, "network", "RETE", Files.ConnectionIcon)
@@ -24,10 +24,10 @@
             ReconnectionKind = WiFiReconnectionKind.Automatic;
 
             Networks = _Networks.Connect()
-                .AsObservableList();
+                .AsObservableListRC();
 
             Connect = ReactiveCommand.CreateFromTask<NetworkViewModel>(ConnectAsync);
-            Connect.ThrownExceptions.Subscribe(ex => { });
+            Connect.ThrownExceptions.SubscribeRC(ex => { });
 
             Task.Run(RefreshAsync);
         }
@@ -51,7 +51,7 @@
                     SecondaryButtonText = "Annulla"
                 };
 
-                if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+                if (await dialog.ShowAsync() == DialogResult.Primary)
                 {
                     var users = await User.FindAllAsync();
 

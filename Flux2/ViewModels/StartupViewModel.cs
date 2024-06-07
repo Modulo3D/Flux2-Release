@@ -1,9 +1,10 @@
 ﻿using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Linq;
 using System.Reactive;
+using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
 
@@ -11,101 +12,69 @@ namespace Flux.ViewModels
 {
     public class StartupViewModel : FluxRoutableViewModel<StartupViewModel>
     {
-        private ObservableAsPropertyHelper<bool> _IsHomeX;
-        [RemoteOutput(true)]
-        public bool IsHomeX => _IsHomeX.Value;
-
-        private ObservableAsPropertyHelper<bool> _IsHomeY;
-        [RemoteOutput(true)]
-        public bool IsHomeY => _IsHomeY.Value;
-
-        private ObservableAsPropertyHelper<bool> _IsHomeZ;
-        [RemoteOutput(true)]
-        public bool IsHomeZ => _IsHomeZ.Value;
-
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> ResetPrinterCommand { get; private set; }
+        public ReactiveCommandBaseRC<Unit, Unit> ResetPrinterCommand { get; private set; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> StartupCommand { get; private set; }
+        public ReactiveCommandBaseRC<Unit, Unit> StartupCommand { get; private set; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> MagazineCommand { get; private set; }
+        public Optional<ReactiveCommandBaseRC<Unit, Unit>> MagazineCommand { get; private set; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> SettingsCommand { get; private set; }
+        public ReactiveCommandBaseRC<Unit, Unit> SettingsCommand { get; private set; }
 
-        private ObservableAsPropertyHelper<double> _ConnectionProgress;
+        private readonly ObservableAsPropertyHelper<double> _ConnectionProgress;
         [RemoteOutput(true)]
         public double ConnectionProgress => _ConnectionProgress.Value;
 
         public StartupViewModel(FluxViewModel flux) : base(flux)
         {
-            // TODO
-
-            var endstop_0 = Flux.ConnectionProvider.VariableStore.GetArrayUnit(m => m.AXIS_ENDSTOP, 0);
-            var endstop_1 = Flux.ConnectionProvider.VariableStore.GetArrayUnit(m => m.AXIS_ENDSTOP, 1);
-            var endstop_2 = Flux.ConnectionProvider.VariableStore.GetArrayUnit(m => m.AXIS_ENDSTOP, 2);
-            if (!endstop_0.HasValue || !endstop_1.HasValue || !endstop_2.HasValue)
-                return;
-
-            _IsHomeX = Flux.ConnectionProvider.ObserveVariable(m => m.AXIS_ENDSTOP, endstop_0.Value)
-                .ConvertOr(v => !v, () => false)
-                .ToProperty(this, v => v.IsHomeX);
-
-            _IsHomeY = Flux.ConnectionProvider.ObserveVariable(m => m.AXIS_ENDSTOP, endstop_1.Value)
-                .ConvertOr(v => !v, () => false)
-                .ToProperty(this, v => v.IsHomeY);
-
-            _IsHomeZ = Flux.ConnectionProvider.ObserveVariable(m => m.AXIS_ENDSTOP, endstop_2.Value)
-                .ConvertOr(v => !v, () => false)
-                .ToProperty(this, v => v.IsHomeZ);
-
             var startup = Observable.CombineLatest(
                 Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation),
-                Flux.ConnectionProvider.WhenAnyValue(c => c.IsInitializing),
-                (e, initializing) => (e.IsHomed, initializing))
+                Flux.ConnectionProvider.WhenAnyValue(c => c.IsConnecting),
+                (status, connecting) => (status, connecting))
+                .Throttle(TimeSpan.FromSeconds(0.5))
                 .DistinctUntilChanged();
 
-            startup.Where(t =>
-                t.initializing.HasValue &&
-                (t.initializing.Value ||
-                (t.IsHomed.HasValue && !t.IsHomed.Value)))
+            startup.Where(t => t.connecting || (!t.status.IsHomed && t.status.IsIdle))
                 .ObserveOn(RxApp.MainThreadScheduler)
-                .Subscribe(t => Flux.Navigator.Navigate(this));
+                .SubscribeRC(t => Flux.Navigator?.Navigate(this), this);
 
-            startup.Where(t =>
-                t.initializing.HasValue &&
-                (!t.initializing.Value &&
-                (t.IsHomed.HasValue && t.IsHomed.Value)))
+
+            startup
+                .PairWithPreviousValue()
+                .Where(t => t.OldValue.connecting || !t.OldValue.status.IsHomed)
+                .Where(t => !t.NewValue.connecting && t.NewValue.status.IsHomed)
                 .ObserveOn(RxApp.MainThreadScheduler)
-                .Subscribe(_ => Flux.Navigator.NavigateHome());
-
-            var can_reset = Flux.StatusProvider.IsIdle
-                .ValueOr(() => true);
+                .SubscribeRC(_ => 
+                {
+                    if(!Flux.Navigator.CurrentViewModel.HasValue || 
+                       Flux.Navigator.CurrentViewModel.Value is StartupViewModel)
+                       Flux.Navigator?.NavigateHome(); 
+                }, this);
 
             var can_home = Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation)
-                .Select(s => s.CanSafeCycle && s.IsHomed.HasValue && !s.IsHomed.Value);
+                .Select(s => s.CanSafeCycle && !s.IsHomed);
 
             _ConnectionProgress = Flux.ConnectionProvider.WhenAnyValue(v => v.ConnectionProgress)
-                .ToProperty(this, v => v.ConnectionProgress);
+                .ToPropertyRC(this, v => v.ConnectionProgress);
 
-            ResetPrinterCommand = ReactiveCommand.Create(ResetPrinter, can_reset);
-            StartupCommand = ReactiveCommand.CreateFromTask(StartupAsync, can_home);
-            MagazineCommand = ReactiveCommand.Create(MagazineAsync);
-            SettingsCommand = ReactiveCommand.Create(SettingsAsync);
+            StartupCommand = ReactiveCommandBaseRC.CreateFromTask(StartupAsync, this, can_home);
+            SettingsCommand = ReactiveCommandBaseRC.Create(NavigateToSettingsAsync, this);
+            ResetPrinterCommand = ReactiveCommandBaseRC.Create(ResetPrinter, this);
+
+            if (Flux.ConnectionProvider.VariableStoreBase.HasToolChange)
+                MagazineCommand = ReactiveCommandBaseRC.Create(NavigateToMagazineAsync, this);
         }
 
-        private void SettingsAsync()
+        private void NavigateToSettingsAsync()
         {
             var functionality = Flux.Functionality;
             Flux.Navigator.NavigateModal(functionality);
         }
 
-        private void MagazineAsync()
+        private void NavigateToMagazineAsync()
         {
-            var navigate_back = Flux.StatusProvider.ClampClosed.IsValidChanged
-                .ValueOr(() => true)
-                .ToOptional();
-
-            Flux.Navigator.NavigateModal(Flux.Magazine, navigate_back: navigate_back);
+            var magazine = Flux.Functionality.Magazine.Value;
+            Flux.Navigator.NavigateModal(magazine);
         }
 
         public void ResetPrinter()
@@ -115,7 +84,7 @@ namespace Flux.ViewModels
 
         private async Task StartupAsync()
         {
-            var home_response = await Flux.ConnectionProvider.HomeAsync();
+            var home_response = await Flux.ConnectionProvider.HomeAsync(true);
             if (home_response == false)
                 return;
         }

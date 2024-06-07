@@ -1,10 +1,8 @@
 ﻿using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
-using System;
 using System.Reactive;
 using System.Reactive.Linq;
-using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
@@ -13,20 +11,25 @@ namespace Flux.ViewModels
         public FluxViewModel Flux { get; }
         public IFluxFeederViewModel Feeder { get; }
 
-        public ReactiveCommand<Unit, Unit> RaiseMagazineCommand { get; }
-
-        private ObservableAsPropertyHelper<string> _ToolNozzeBrush;
+        private readonly ObservableAsPropertyHelper<string> _ToolNozzeBrush;
         [RemoteOutput(true)]
         public string ToolNozzeBrush => _ToolNozzeBrush.Value;
 
-        private ObservableAsPropertyHelper<string> _Nozzle;
+        private readonly ObservableAsPropertyHelper<string> _Nozzle;
         [RemoteOutput(true)]
         public string Nozzle => _Nozzle.Value;
 
         [RemoteOutput(false)]
         public ushort Position => Feeder.Position;
 
-        public MagazineItemViewModel(FluxViewModel flux, IFluxFeederViewModel feeder) : base($"{typeof(MagazineItemViewModel).GetRemoteControlName()}??{feeder.Position}")
+        [RemoteCommand]
+        public ReactiveCommandBaseRC<Unit, Unit> ResetHeaterFaultCommand { get; }
+
+        [RemoteCommand]
+        public Optional<ReactiveCommandBaseRC<Unit, Unit>> RaisePistonCommand { get; }
+
+        public MagazineItemViewModel(FluxViewModel flux, IFluxFeederViewModel feeder) 
+            : base($"{typeof(MagazineItemViewModel).GetRemoteElementClass()};{feeder.Position}")
         {
             Flux = flux;
             Feeder = feeder;
@@ -48,29 +51,10 @@ namespace Flux.ViewModels
                 .Select(d => d.nozzle.ToString())
                 .ToProperty(this, v => v.Nozzle);
 
-            var can_raise = Flux.ConnectionProvider.ObserveVariable(m => m.OPEN_HEAD_CLAMP)
-                .ValueOr(() => false);
-            RaiseMagazineCommand = ReactiveCommand.CreateFromTask(RaiseMagazineAsync, can_raise);
-
-            if (Flux.ConnectionProvider.VariableStore.HasVariable(m => m.RAISE_PNEUMATIC_PISTON))
-                AddCommand("raiseMagazine", RaiseMagazineCommand);
-        }
-
-        private async Task RaiseMagazineAsync()
-        {
-            var lower_key = Flux.ConnectionProvider.VariableStore.GetArrayUnit(m => m.LOWER_PNEUMATIC_PISTON, Feeder.Position);
-            if (!lower_key.HasValue)
-                return;
-
-            var raise_key = Flux.ConnectionProvider.VariableStore.GetArrayUnit(m => m.RAISE_PNEUMATIC_PISTON, Feeder.Position);
-            if (!raise_key.HasValue)
-                return;
-
-            await Flux.ConnectionProvider.WriteVariableAsync(m => m.LOWER_PNEUMATIC_PISTON, lower_key.Value, false);
-            await Flux.ConnectionProvider.WriteVariableAsync(m => m.RAISE_PNEUMATIC_PISTON, lower_key.Value, true);
-
-            await Task.Delay(TimeSpan.FromSeconds(1));
-            await Flux.ConnectionProvider.WriteVariableAsync(m => m.RAISE_PNEUMATIC_PISTON, raise_key.Value, false);
+            // TODO
+            ResetHeaterFaultCommand = ReactiveCommandBaseRC.Create(() => 
+            {
+            }, this, Observable.Return(false));
         }
     }
 }

@@ -1,19 +1,23 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Modulo3DStandard;
+using EmbedIO.Routing;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
+using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
-    public abstract class DialogOption<TViewModel, TValue> : RemoteControl<TViewModel>, IDialogOption<TValue>
+    /*public abstract class DialogOption<TViewModel, TValue> : RemoteControl<TViewModel>, IDialogOption<TValue>
         where TViewModel : DialogOption<TViewModel, TValue>
     {
         [RemoteOutput(false)]
@@ -23,7 +27,7 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public abstract bool HasValue { get; }
 
-        public DialogOption(string name, string title) : base($"{typeof(TViewModel).GetRemoteControlName()}??{name}")
+        public DialogOption(string name, string title) : base($"{name}")
         {
             Title = title;
         }
@@ -31,35 +35,33 @@ namespace Flux.ViewModels
 
     public class ComboOption<TValue, TKey> : DialogOption<ComboOption<TValue, TKey>, Optional<TValue>>
     {
-        public SelectableCache<TValue, TKey> Items { get; }
+        public OptionalSelectableCache<TValue, TKey> Items { get; }
         [RemoteOutput(true)]
         public override Optional<TValue> Value
         {
-            get => Items?.SelectedValue ?? default;
+            get => Items?.SelectedValue.Convert(v => v) ?? default;
             set => throw new Exception();
         }
-        private ObservableAsPropertyHelper<bool> _HasValue;
+        private readonly ObservableAsPropertyHelper<bool> _HasValue;
         [RemoteOutput(true)]
         public override bool HasValue => _HasValue.Value;
 
-        public ComboOption(string name, string title, IObservableCache<TValue, TKey> items_source, Optional<TKey> key = default, Action<Optional<TKey>> selection_changed = default, Type converter = default) : base(name, title)
+        public ComboOption(string name, string title, Func<CompositeDisposable, IObservableCache<TValue, TKey>> items_source, Optional<TKey> key = default, Action<Optional<TKey>> selection_changed = default, Type converter = default) : base(name, title)
         {
-            Items = SelectableCache.Create(items_source.Connect().Transform(v => v.ToOptional()))
-                .DisposeWith(Disposables);
+            Items = OptionalSelectableCache.Create(items_source(Disposables).Connect().Transform(v => v.ToOptional()));
 
             if (key.HasValue)
-                Items.StartAutoSelect(q => q.KeyValues.FirstOrOptional(kvp => kvp.Key.Equals(key.Value)).Convert(kvp => kvp.Key));
+                Items.AutoSelect = Observable.Return(key).ToOptional();
             else
-                Items.StartAutoSelect(q => q.KeyValues.FirstOrOptional(kvp => kvp.Value.HasValue).Convert(kvp => kvp.Key));
+                Items.AutoSelect = Items.ItemsChanged.KeyOf(i => i.HasValue).ToOptional();
 
             Items.SelectedKeyChanged
-                .Subscribe(v => selection_changed?.Invoke(v))
-                .DisposeWith(Disposables);
+                .StartWithDefault()
+                .SubscribeRC(v => selection_changed?.Invoke(v), this);
 
             _HasValue = Items.SelectedValueChanged
                .Select(v => v.HasValue)
-               .ToProperty(this, v => v.HasValue)
-               .DisposeWith(Disposables);
+               .ToPropertyRC(this, v => v.HasValue);
 
             AddInput("items", Items, converter: converter);
         }
@@ -67,13 +69,13 @@ namespace Flux.ViewModels
 
     public static class ComboOption
     {
-        public static ComboOption<TValue, TKey> Create<TValue, TKey>(string name, string title, IObservableCache<TValue, TKey> items_source, Optional<TKey> key = default, Action<Optional<TKey>> selection_changed = default, Type converter = default)
+        public static ComboOption<TValue, TKey> Create<TValue, TKey>(string name, string title, Func<CompositeDisposable, IObservableCache<TValue, TKey>> items_source, Optional<TKey> key = default, Action<Optional<TKey>> selection_changed = default, Type converter = default)
         {
-            return new ComboOption<TValue, TKey>(name, title, items_source, key, selection_changed, converter: converter);
+            return new ComboOption<TValue, TKey>(name, title, d => items_source(d), key, selection_changed, converter: converter);
         }
         public static ComboOption<TValue, TKey> Create<TValue, TKey>(string name, string title, IEnumerable<TValue> items_source, Func<TValue, TKey> add_key, Optional<TKey> key = default, Action<Optional<TKey>> selection_changed = default, Type converter = default)
         {
-            return new ComboOption<TValue, TKey>(name, title, items_source.AsObservableChangeSet().AddKey(add_key).AsObservableCache(), key, selection_changed, converter: converter);
+            return new ComboOption<TValue, TKey>(name, title, d => items_source.AsObservableChangeSet().AddKey(add_key).AsObservableCache().DisposeWith(d), key, selection_changed, converter: converter);
         }
     }
 
@@ -104,11 +106,11 @@ namespace Flux.ViewModels
             get => _Value;
             set => this.RaiseAndSetIfChanged(ref _Value, value);
         }
-        private ObservableAsPropertyHelper<bool> _HasValue;
+        private readonly ObservableAsPropertyHelper<bool> _HasValue;
         [RemoteOutput(true)]
         public override bool HasValue => _HasValue.Value;
 
-        public NumericOption(string name, string title, double value, double step, double min = double.MinValue, double max = double.MaxValue, Type converter = default, Func<double, bool> has_value = default) : base(name, title)
+        public NumericOption(string name, string title, double value, double step, double min = double.MinValue, double max = double.MaxValue, Action<double> value_changed = default, Type converter = default, Func<double, bool> has_value = default) : base(name, title)
         {
             Min = min;
             Max = max;
@@ -116,89 +118,15 @@ namespace Flux.ViewModels
             Value = value;
             AddInput("value", this.WhenAnyValue(v => v.Value), SetValue, step: step, converter: converter);
 
+            this.WhenAnyValue(v => v.Value)
+                .SubscribeRC(v => value_changed?.Invoke(v), this);
+
             _HasValue = this.WhenAnyValue(v => v.Value)
                .Select(v => has_value?.Invoke(v) ?? true)
-               .ToProperty(this, v => v.HasValue)
-               .DisposeWith(Disposables);
-        }
-        void SetValue(double value) => Value = value;
-    }
-
-    public class ContentDialog : RemoteControl<ContentDialog>, IContentDialog
-    {
-        public IFlux Flux { get; }
-
-        [RemoteOutput(false)]
-        public string Title { get; }
-
-        [RemoteCommand()]
-        public Optional<ReactiveCommand<Unit, Unit>> CloseCommand { get; }
-
-        [RemoteCommand()]
-        public Optional<ReactiveCommand<Unit, Unit>> ConfirmCommand { get; }
-
-        [RemoteCommand()]
-        public Optional<ReactiveCommand<Unit, Unit>> CancelCommand { get; }
-
-        public TaskCompletionSource<ContentDialogResult> ShowAsyncSource { get; private set; }
-
-        public ContentDialog(
-            IFlux flux,
-            string title, 
-            Func<Task> close = default,
-            IObservable<bool> can_close = default,
-            Func<Task> confirm = default,
-            IObservable<bool> can_confirm = default,
-            Func<Task> cancel = default,
-            IObservable<bool> can_cancel = default) : base("dialog")
-        {
-            Flux = flux;
-            Title = title;
-
-            if (can_close != default)
-            {
-                CloseCommand = ReactiveCommand.CreateFromTask(async () =>
-                {
-                    if(close != default)
-                        await close.Invoke();
-                    ShowAsyncSource.SetResult(ContentDialogResult.None);
-                }, can_close).DisposeWith(Disposables);
-            }
-
-            if (can_confirm != default)
-            {
-                ConfirmCommand = ReactiveCommand.CreateFromTask(async () =>
-                {
-                    if (confirm != default)
-                        await confirm.Invoke();
-                    ShowAsyncSource.SetResult(ContentDialogResult.Primary);
-                }, can_confirm).DisposeWith(Disposables);
-            }
-
-            if (can_cancel != default)
-            {
-                CancelCommand = ReactiveCommand.CreateFromTask(async () =>
-                {
-                    if (cancel != default)
-                        await cancel.Invoke();
-                    ShowAsyncSource.SetResult(ContentDialogResult.Secondary);
-                }, can_cancel).DisposeWith(Disposables);
-            }
-
-            ShowAsyncSource = new TaskCompletionSource<ContentDialogResult>();
+               .ToPropertyRC(this, v => v.HasValue);
         }
 
-        public async Task<ContentDialogResult> ShowAsync()
-        {
-            Flux.ContentDialog = this;
-            return await ShowAsyncSource.Task;
-        }
-
-        public override void Dispose()
-        {
-            base.Dispose();
-            Flux.ContentDialog = default;
-        }
+        private void SetValue(double value) => Value = value;
     }
 
     public class ProgressBar : DialogOption<ProgressBar, double>
@@ -247,9 +175,10 @@ namespace Flux.ViewModels
         }
         [RemoteOutput(false)]
         public bool Multiline { get; }
+        [RemoteOutput(false)]
+        public bool Relaxed { get; }
 
-
-        private ObservableAsPropertyHelper<bool> _HasValue;
+        private readonly ObservableAsPropertyHelper<bool> _HasValue;
         [RemoteOutput(true)]
         public override bool HasValue => _HasValue.Value;
 
@@ -260,17 +189,18 @@ namespace Flux.ViewModels
 
             _HasValue = this.WhenAnyValue(v => v.Value)
                .Select(v => has_value?.Invoke(v) ?? true)
-               .ToProperty(this, v => v.HasValue)
-               .DisposeWith(Disposables);
+               .ToPropertyRC(this, v => v.HasValue);
         }
-    }
+    }*/
 
     public static class FluxColors
     {
         public static string Selected = "#00B189";
         public static string Warning = "#fec02f";
         public static string Error = "#f75a5c";
+        public static string Emergency = "#f75a5c";
         public static string Inactive = "#AAA";
+        public static string Idle = "#275ac3";
         public static string Active = "#FFF";
         public static string Empty = "#444";
     }

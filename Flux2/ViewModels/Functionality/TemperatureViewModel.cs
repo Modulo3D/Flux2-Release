@@ -1,9 +1,9 @@
 ﻿using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Reactive;
-using System.Threading.Tasks;
+using System.Reactive.Linq;
 
 namespace Flux.ViewModels
 {
@@ -22,38 +22,44 @@ namespace Flux.ViewModels
     {
         public FluxViewModel Flux { get; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> ShutTargetCommand { get; }
+        public ReactiveCommandBaseRC<Unit, Unit> ShutTargetCommand { get; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> SelectTargetCommand { get; }
+        public ReactiveCommandBaseRC<Unit, Unit> SelectTargetCommand { get; }
 
         private double _TargetTemperature = 0;
-        [RemoteInput(step: 10)]
+        [RemoteInput(step: 10, min: 0, max: 500, converter: typeof(TemperatureConverter))]
         public double TargetTemperature
         {
             get => _TargetTemperature;
             set => this.RaiseAndSetIfChanged(ref _TargetTemperature, value);
         }
 
-        private ObservableAsPropertyHelper<Optional<FLUX_Temp>> _Temperature;
+        private readonly ObservableAsPropertyHelper<Optional<FLUX_Temp>> _Temperature;
         [RemoteOutput(true, typeof(FluxTemperatureConverter))]
         public Optional<FLUX_Temp> Temperature => _Temperature.Value;
 
         [RemoteOutput(false)]
-        public string Label { get; }
+        public RemoteText Label { get; }
 
-        public TemperatureViewModel(TemperaturesViewModel temperatures, string label, string key, Func<double, Task<bool>> set_temp, IObservable<Optional<FLUX_Temp>> temperature) : base($"temperature??{key}")
+        [RemoteOutput(false)]
+        public ushort Position { get; }
+
+        public TemperatureViewModel(FluxViewModel flux, TemperaturesViewModel temperatures, ushort position, IFLUX_Variable<FLUX_Temp, double> temp_var)
+            : base($"{typeof(TemperatureViewModel).GetRemoteElementClass()};{temp_var.Name}")
         {
-            Label = label;
+            Position = position;
             Flux = temperatures.Flux;
+            Label = new RemoteText($"temp;{temp_var.Unit.Alias}", true);
 
-            var is_idle = Flux.StatusProvider.IsIdle
-                .ValueOrDefault();
+            var can_safe_cycle = Flux.StatusProvider
+                .WhenAnyValue(s => s.StatusEvaluation)
+                .Select(s => s.CanSafeCycle);
 
-            ShutTargetCommand = ReactiveCommand.CreateFromTask(async () => { await set_temp(0); }, is_idle);
-            SelectTargetCommand = ReactiveCommand.CreateFromTask(async () => { await set_temp(TargetTemperature); }, is_idle);
+            ShutTargetCommand = ReactiveCommandBaseRC.CreateFromTask(async () => { await temp_var.WriteAsync(0); }, this, can_safe_cycle);
+            SelectTargetCommand = ReactiveCommandBaseRC.CreateFromTask(async () => { await temp_var.WriteAsync(TargetTemperature); }, this, can_safe_cycle);
 
-            _Temperature = temperature
-                .ToProperty(this, v => v.Temperature);
+            _Temperature = temp_var.ValueChanged
+                .ToPropertyRC(this, v => v.Temperature);
         }
     }
 }

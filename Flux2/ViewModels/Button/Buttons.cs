@@ -1,84 +1,93 @@
 ﻿using DynamicData.Kernel;
-using Modulo3DStandard;
+using EmbedIO.Routing;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Reactive;
-using System.Reactive.Linq;
+using System.Reactive.Disposables;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
     public class CmdButton : RemoteControl<CmdButton>
     {
-        public ReactiveCommand<Unit, Unit> Command { get; }
+        public ReactiveCommandBaseRC<Unit, Unit> Command { get; }
 
-        private ObservableAsPropertyHelper<bool> _Visible;
+        private readonly ObservableAsPropertyHelper<bool> _Visible;
         public bool Visible => _Visible.Value;
 
-        public CmdButton(
+        private CmdButton(
+            IFlux flux,
             string name,
-            Action command,
-            Optional<IObservable<bool>> can_execute = default,
-            Optional<IObservable<bool>> visible = default,
-            Optional<IObservable<Optional<bool>>> active = default)
-            : base(name)
+            Func<CmdButton, ReactiveCommandBaseRC<Unit, Unit>> command,
+            OptionalObservable<bool> visible = default,
+            OptionalObservable<Optional<bool>> active = default)
+            : base($"{typeof(CmdButton).GetRemoteElementClass()}.{name}")
         {
+            Command = command(this);
             _Visible = visible
-                .ValueOr(() => Observable.Return(true))
-                .ToProperty(this, v => v.Visible);
-
-            Command = ReactiveCommand.Create(command, can_execute.ValueOr(() => Observable.Return(true)));
-            AddCommand("command", Command, active.ValueOrDefault());
+                .ObservableOr(() => true)
+                .ToPropertyRC(this, v => v.Visible);
+            AddCommand("command", Command, Unit.Default, active.ObservableOrDefault());
         }
 
         public CmdButton(
+            IFlux flux,
+            string name,
+            Action command,
+            OptionalObservable<bool> can_execute = default,
+            OptionalObservable<bool> visible = default,
+            OptionalObservable<Optional<bool>> active = default)
+            : this(flux, name, d => ReactiveCommandBaseRC.Create(command, d, can_execute.ObservableOr(() => true)), visible, active)
+        {
+        }
+
+        public CmdButton(
+            IFlux flux,
             string name,
             Func<Task> command,
-            Optional<IObservable<bool>> can_execute = default,
-            Optional<IObservable<bool>> visible = default,
-            Optional<IObservable<Optional<bool>>> active = default)
-            : base(name)
+            OptionalObservable<bool> can_execute = default,
+            OptionalObservable<bool> visible = default,
+            OptionalObservable<Optional<bool>> active = default)
+            : this(flux, name, d => ReactiveCommandBaseRC.CreateFromTask(command, d, can_execute.ObservableOr(() => true)), visible, active)
         {
-            _Visible = visible
-               .ValueOr(() => Observable.Return(true))
-               .ToProperty(this, v => v.Visible);
-
-            Command = ReactiveCommand.CreateFromTask(command, can_execute.ValueOr(() => Observable.Return(true)));
-            AddCommand("command", Command, active.ValueOrDefault());
         }
     }
 
     public class ToggleButton : CmdButton
     {
         public ToggleButton(
+            IFlux flux,
             string name,
             Action toggle,
             IObservable<Optional<bool>> is_active,
-            Optional<IObservable<bool>> can_execute = default,
-            Optional<IObservable<bool>> visible = default)
-            : base(name, toggle, can_execute, visible, is_active.ToOptional())
+            OptionalObservable<bool> can_execute = default,
+            OptionalObservable<bool> visible = default)
+            : base(flux, name, toggle, can_execute, visible, is_active.ToOptional())
         {
         }
 
         public ToggleButton(
+            IFlux flux,
             string name,
             Func<Task> toggle,
             IObservable<Optional<bool>> is_active,
-            Optional<IObservable<bool>> can_execute = default,
-            Optional<IObservable<bool>> visible = default)
-            : base(name, toggle, can_execute, visible, is_active.ToOptional())
+            OptionalObservable<bool> can_execute = default,
+            OptionalObservable<bool> visible = default)
+            : base(flux, name, toggle, can_execute, visible, is_active.ToOptional())
         {
         }
 
         public ToggleButton(
+            IFlux flux,
             string name,
-            FluxViewModel flux,
             IFLUX_Variable<bool, bool> @bool,
-            Optional<IObservable<bool>> can_execute = default,
-            Optional<IObservable<bool>> visible = default)
+            OptionalObservable<bool> can_execute = default,
+            OptionalObservable<bool> visible = default)
             : this(
+                flux,
                 name,
-                () => flux.ConnectionProvider.ToggleVariableAsync(@bool),
+                () => @bool.WriteAsync(!@bool.Value.ValueOr(() => false)),
                 @bool.ValueChanged,
                 can_execute,
                 visible)
@@ -86,31 +95,55 @@ namespace Flux.ViewModels
         }
     }
 
-    public class NavButton : CmdButton, INavButton
+    public sealed class NavButton<TFluxRoutableViewModel> : CmdButton, INavButton
+        where TFluxRoutableViewModel : IFluxRoutableViewModel
     {
         public IFlux Flux { get; }
-        public IFluxRoutableViewModel Route { get; }
 
         public NavButton(
             IFlux flux,
-            IFluxRoutableViewModel route,
-            bool reset,
-            Optional<IObservable<bool>> can_navigate = default,
-            Optional<IObservable<bool>> visible = default) :
-            base(route.Name, () => flux.Navigator.Navigate(route, reset), can_navigate, visible)
+            TFluxRoutableViewModel route,
+            OptionalObservable<bool> can_navigate = default,
+            OptionalObservable<bool> visible = default,
+            bool reset = false)
+            : base(flux, route.Name, () => flux.Navigator.Navigate(route, reset), can_navigate, visible)
         {
-            Route = route;
             Flux = flux;
         }
 
         public NavButton(
             IFlux flux,
-            NavModalViewModel modal,
-            Optional<IObservable<bool>> can_navigate = default,
-            Optional<IObservable<bool>> visible = default) :
-            base(modal.Content.Name, () => flux.Navigator.Navigate(modal, false), can_navigate, visible)
+            Lazy<TFluxRoutableViewModel> modal,
+            bool reset,
+            OptionalObservable<bool> can_navigate = default,
+            OptionalObservable<bool> visible = default) :
+            base(flux, typeof(TFluxRoutableViewModel).GetRemoteElementClass(), () => flux.Navigator.Navigate(modal.Value, reset), can_navigate, visible)
         {
-            Route = modal;
+            Flux = flux;
+        }
+    }
+    public sealed class NavButtonModal<TFluxRoutableViewModel> : CmdButton, INavButton
+        where TFluxRoutableViewModel : IFluxRoutableViewModel
+    {
+        public IFlux Flux { get; }
+
+        public NavButtonModal(
+            IFlux flux,
+            NavModalViewModel<TFluxRoutableViewModel> route,
+            OptionalObservable<bool> can_navigate = default,
+            OptionalObservable<bool> visible = default) :
+            base(flux, route.Name, () => flux.Navigator.Navigate(route, false), can_navigate, visible)
+        {
+            Flux = flux;
+        }
+
+        public NavButtonModal(
+            IFlux flux,
+            Lazy<NavModalViewModel<TFluxRoutableViewModel>> modal,
+            OptionalObservable<bool> can_navigate = default,
+            OptionalObservable<bool> visible = default) :
+            base(flux, typeof(TFluxRoutableViewModel).GetRemoteElementClass(), () => flux.Navigator.Navigate(modal.Value, false), can_navigate, visible)
+        {
             Flux = flux;
         }
     }

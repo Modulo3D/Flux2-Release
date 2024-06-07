@@ -1,6 +1,6 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
@@ -31,9 +31,9 @@ namespace Flux.ViewModels
         }
 
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> ExitFolderCommand { get; }
+        public ReactiveCommandBaseRC<Unit, Unit> ExitFolderCommand { get; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> CreateFSCommand { get; }
+        public ReactiveCommandBaseRC<Unit, Unit> CreateFSCommand { get; }
 
         public Subject<Unit> UpdateFolder { get; }
 
@@ -41,56 +41,43 @@ namespace Flux.ViewModels
         {
             UpdateFolder = new Subject<Unit>();
 
-            ExitFolderCommand = ReactiveCommand.Create(() =>
+            ExitFolderCommand = ReactiveCommandBaseRC.Create(() =>
             {
                 Folder = Folder.Convert(f => f.Folder);
-            });
+            }, this);
 
-            CreateFSCommand = ReactiveCommand.CreateFromTask(CreateFSAsync);
+            CreateFSCommand = ReactiveCommandBaseRC.CreateFromTask(CreateFSAsync, this);
 
             var folderContent = Observable.CombineLatest(
                 UpdateFolder.StartWith(Unit.Default).ObserveOn(RxApp.MainThreadScheduler),
                 flux.ConnectionProvider.WhenAnyValue(c => c.IsConnecting),
                 this.WhenAnyValue(v => v.Folder),
                 (_, _, folder) => folder)
-                .Select(f => Observable.FromAsync(() => ListFilesAsync(f)))
-                .Merge(1)
+                .SelectAsync(ListFilesAsync)
                 .Select(GetFolderContent)
-                .ToObservableChangeSet(f => f.FSName);
+                .AsObservableChangeSet(f => f.FSName);
 
             FileSystem = folderContent
                 .DisposeMany()
-                .AsObservableCache()
-                .DisposeWith(Disposables);
+                .AsObservableCacheRC(this);
         }
 
         public async Task CreateFSAsync()
         {
-            var options = ComboOption.Create("type", "Tipo di documento", Enum.GetValues<FLUX_FileType>(), b => (uint)b);
-            var name = new TextBox("name", "Nome del documento", "", false);
-
-            var result = await Flux.ShowSelectionAsync(
-                "Cosa vuoi creare?",
-                Observable.Return(true),
-                options, 
-                name);
-
-            if (result != ContentDialogResult.Primary)
+            var result = await Flux.ShowDialogAsync(f => new CreateFSDialog(f, (FLUX_FileType.Directory, "")));
+            if (result.result != DialogResult.Primary || !result.data.HasValue)
                 return;
 
-            if (!options.Value.HasValue)
-                return;
-
-            var path = Folder.ConvertOr(f => f.FSFullPath, () => "");
-            switch (options.Value.Value)
+            var path = Folder.ConvertOr(f => f.FSFullPath, () => Flux.ConnectionProvider.CombinePaths("", ""));
+            
+            using var fs_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            switch (result.data.Value.file_type)
             {
                 case FLUX_FileType.File:
-                    var file_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                    await Flux.ConnectionProvider.PutFileAsync(path, name.Value, file_cts.Token);
+                    await Flux.ConnectionProvider.PutFileAsync(path, result.data.Value.file_name, true, fs_cts.Token);
                     break;
                 case FLUX_FileType.Directory:
-                    var folder_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                    await Flux.ConnectionProvider.CreateFolderAsync(path, name.Value, folder_cts.Token);
+                    await Flux.ConnectionProvider.CreateFolderAsync(path, result.data.Value.file_name, fs_cts.Token);
                     break;
             }
 
@@ -99,105 +86,70 @@ namespace Flux.ViewModels
 
         public async Task ModifyFSAsync(IFSViewModel fs)
         {
-            var modify_option = ComboOption.Create("operations", "Operazione:", Enum.GetValues<FLUX_FileModify>(), f => (uint)f);
-            
-            var modify_dialog_result = await Flux.ShowSelectionAsync(
-                "Tipo di operazione",
-                Observable.Return(true),
-                modify_option);
-            
-            if (modify_dialog_result != ContentDialogResult.Primary)
+            var result = await Flux.ShowDialogAsync(f => new ModifyFSDialog(f, (FLUX_FileModify.Delete, fs.FSName)));
+            if (result.result != DialogResult.Primary || !result.data.HasValue)
                 return;
 
-            if (!modify_option.Value.HasValue)
-                return;
-
-            switch (modify_option.Value.Value)
+            using var fs_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            switch (result.data.Value.file_modify)
             {
                 case FLUX_FileModify.Rename:
-                    var rename_option = new TextBox("rename", "Nome del file", fs.FSName);
-
-                    var rename_dialog_result = await Flux.ShowSelectionAsync(
-                        "Rinominare il file?",
-                        Observable.Return(true),
-                        rename_option);
-
-                    if (rename_dialog_result != ContentDialogResult.Primary)
-                        return;
-
-                    var rename_file_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                    var rename_result = await Flux.ConnectionProvider.RenameFileAsync(fs.FSPath, fs.FSName, rename_option.Value, true, rename_file_cts.Token);
-
+                    var old_path = Flux.ConnectionProvider.CombinePaths(fs.FSPath, fs.FSName);
+                    var new_path = Flux.ConnectionProvider.CombinePaths(fs.FSPath, result.data.Value.file_name);
+                    var rename_result = await Flux.ConnectionProvider.RenameAsync(old_path, new_path, fs_cts.Token);
                     if (rename_result)
                         UpdateFolder.OnNext(Unit.Default);
                     break;
 
                 case FLUX_FileModify.Delete:
-                    var delete_dialog_result = await Flux.ShowConfirmDialogAsync("Cancellare il file?", $"Il file {fs.FSPath}/{fs.FSName} non potrà essere recuperato");
-                    if (delete_dialog_result != ContentDialogResult.Primary)
+                    var delete_dialog_result = await Flux.ShowDialogAsync(f => new ConfirmDialog(f, new RemoteText("fsDelete", true), new RemoteText(fs.Name, false)));
+                    if (delete_dialog_result.result != DialogResult.Primary)
                         return;
 
-                    var delete_file_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                    var delete_result = await Flux.ConnectionProvider.DeleteFileAsync(fs.FSPath, fs.FSName, true, delete_file_cts.Token);
-
+                    var delete_result = await Flux.ConnectionProvider.DeleteAsync(fs.FSPath, fs.FSName, fs_cts.Token);
                     if (delete_result)
                         UpdateFolder.OnNext(Unit.Default);
                     break;
             }
         }
 
+        public async Task ExecuteFileAsync(IFSViewModel fs)
+        {
+            using var put_macro_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            await Flux.ConnectionProvider.ExecuteParamacroAsync(c => c.GetExecuteMacroGCode(fs.FSPath, fs.FSName), put_macro_cts.Token);
+        }
+
         public async Task EditFileAsync(FileViewModel file)
         {
-            var download_cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            var file_source = await Flux.ConnectionProvider.DownloadFileAsync(file.FSPath, file.FSName, download_cts.Token);
-            if (!file_source.HasValue)
-                return;
+            //using var download_cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            //var file_source = await Flux.ConnectionProvider.GetFileAsync(file.FSPath, file.FSName, download_cts.Token);
+            //if (!file_source.HasValue)
+            //    return;
 
-            var textbox = new TextBox("source", file.FSName, file_source.Value, multiline: true);
-            var combo = ComboOption.Create("file_access", "Accesso al file",
-                Enum.GetValues<FLUX_FileAccess>(), f => (uint)f,
-                (uint)FLUX_FileAccess.ReadOnly, f =>
-                {
-                    var textbox_value = textbox.RemoteInputs.Lookup("value");
-                    if (!textbox_value.HasValue)
-                        return;
+            //var result = await Flux.ShowDialogAsync(f => new FileEditorDialog(f, new RemoteText(file.FSName, false)));
 
-                    var enabled = f.HasValue && ((FLUX_FileAccess)f.Value) == FLUX_FileAccess.ReadWrite;
-                    textbox_value.Value.IsEnabled = enabled;
-                });
+            //if (result != DialogResult.Primary)
+            //    return;
 
-            textbox.InitializeRemoteView();
-            combo.InitializeRemoteView();
+            //var source = read_source(file_source.Value)
+            //    .ToOptional();
 
-            var result = await Flux.ShowSelectionAsync(
-                "Modifica File",
-                Observable.Return(true),
-                combo.Items.SelectedValueChanged.Select(f => f.HasValue && f.Value == FLUX_FileAccess.ReadWrite),
-                combo, 
-                textbox);
-            
-            if (result != ContentDialogResult.Primary)
-                return;
+            //using var upload_cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            //await Flux.ConnectionProvider.PutFileAsync(file.FSPath, file.FSName, true, upload_cts.Token, source);
 
-            var source = read_source(file_source.Value)
-                .ToOptional();
-
-            var upload_cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            await Flux.ConnectionProvider.PutFileAsync(file.FSPath, file.FSName, upload_cts.Token, source);
-
-            IEnumerable<string> read_source(string source)
-            {
-                string line;
-                using var reader = new StringReader(textbox.Value);
-                while ((line = reader.ReadLine()) != null)
-                    yield return line;
-            }
+            //IEnumerable<string> read_source(string source)
+            //{
+            //    string line;
+            //    using var reader = new StringReader(textbox.Value);
+            //    while ((line = reader.ReadLine()) != null)
+            //        yield return line;
+            //}
         }
 
         public async Task<(Optional<FolderViewModel>, Optional<FLUX_FileList>)> ListFilesAsync(Optional<FolderViewModel> folder)
         {
-            var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            var path = folder.ConvertOr(f => f.FSFullPath, () => "");
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var path = folder.ConvertOr(f => f.FSFullPath, () => Flux.ConnectionProvider.RootPath);
             var file_list = await Flux.ConnectionProvider.ListFilesAsync(path, cts.Token);
             return (folder, file_list);
         }
@@ -211,15 +163,62 @@ namespace Flux.ViewModels
                 switch (file.Type)
                 {
                     case FLUX_FileType.File:
-                        var file_vm = new FileViewModel(this, file_list.folder, file);
+                        var file_vm = new FileViewModel(Flux, this, file_list.folder, file);
                         yield return file_vm;
                         break;
                     case FLUX_FileType.Directory:
-                        var folder_vm = new FolderViewModel(this, file_list.folder, file);
+                        var folder_vm = new FolderViewModel(Flux, this, file_list.folder, file);
                         yield return folder_vm;
                         break;
                 }
             }
         }
+    }
+    public class CreateFSDialog : InputDialog<CreateFSDialog, (FLUX_FileType file_type, string file_name)>
+    {
+        [RemoteInput()]
+        public SelectableCache<FLUX_FileType, string> FileType { get; }
+
+        private string _FSName;
+        [RemoteInput()]
+        public string FSName 
+        {
+            get => _FSName;
+            set => this.RaiseAndSetIfChanged(ref _FSName, value);
+        }
+
+        public CreateFSDialog(IFlux flux, (FLUX_FileType file_type, string file_name) startValue) : base(flux, startValue, new RemoteText("title", true))
+        {
+            var file_type = Enum.GetValues<FLUX_FileType>().AsObservableChangeSet(f => Enum.GetName(f));
+            FileType = SelectableCache.Create(file_type, Enum.GetName(startValue.file_type));
+            FSName = startValue.file_name;
+        }
+
+        public override Optional<(FLUX_FileType file_type, string file_name)> Confirm() => (FileType.SelectedValue.ValueOrDefault(), FSName);
+    }
+    public class ModifyFSDialog : InputDialog<ModifyFSDialog, (FLUX_FileModify file_modify, string file_name)>
+    {
+        [RemoteInput()]
+        public SelectableCache<FLUX_FileModify, string> FileModify { get; }
+
+        private string _FSName;
+        [RemoteInput()]
+        public string FSName
+        {
+            get => _FSName;
+            set => this.RaiseAndSetIfChanged(ref _FSName, value);
+        }
+
+        public ModifyFSDialog(IFlux flux, (FLUX_FileModify file_modify, string file_name) startValue) : base(flux, startValue, new RemoteText(startValue.file_name, false))
+        {
+            var file_modify = Enum.GetValues<FLUX_FileModify>().AsObservableChangeSet(f => Enum.GetName(f));
+            FileModify = SelectableCache.Create(file_modify, Enum.GetName(startValue.file_modify));
+            FileModify.SelectedValueChanged
+                .Where(m => m.HasValue)
+                .Where(m => m.Value == FLUX_FileModify.Delete)
+                .SubscribeRC(m => FSName = startValue.file_name, this);
+        }
+
+        public override Optional<(FLUX_FileModify file_modify, string file_name)> Confirm() => (FileModify.SelectedValue.ValueOrDefault(), FSName);
     }
 }

@@ -1,17 +1,55 @@
-﻿using DynamicData.Kernel;
-using Modulo3DStandard;
+﻿using DynamicData;
+using DynamicData.Kernel;
+using Modulo3DNet;
 using OSAI;
 using ReactiveUI;
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Reactive;
+using System.Reactive.Disposables;
 using System.Reactive.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
-    public class OSAI_MemoryBuffer : FLUX_MemoryBuffer
+
+    public class OSAI_MemoryReader : FLUX_MemoryReader<OSAI_MemoryReader, OSAI_MemoryBuffer, Unit>
     {
-        public override OSAI_Connection Connection { get; }
+        public IEnumerable<IOSAI_AsyncVariable> Variables { get; }
+        public OSAI_MemoryReader(OSAI_MemoryBuffer memory_buffer, string resource, IEnumerable<IOSAI_AsyncVariable> variables) : base(memory_buffer, resource)
+        {
+            Variables = variables;
+        }
+        public override async Task<Optional<Unit>> TryScheduleAsync()
+        {
+            var has_memory_read = true;
+            foreach (var variable in Variables)
+            {
+                var memory_updated = await variable.UpdateAsync();
+                has_memory_read = has_memory_read && memory_updated;
+            }
+            HasMemoryRead = has_memory_read;
+            return default;
+        }
+    }
+
+    public class OSAI_MemoryReaderGroup : FLUX_MemoryReaderGroup<OSAI_MemoryReaderGroup, OSAI_MemoryBuffer, OSAI_ConnectionProvider, OSAI_VariableStore>
+    {
+        public OSAI_MemoryReaderGroup(IFlux flux, OSAI_MemoryBuffer memory_buffer, FLUX_MemoryReaderGroupPeriod period) : base(flux, memory_buffer, period)
+        {
+        }
+        public void AddMemoryReader(IGrouping<OSAI_ReadPriority, IOSAI_AsyncVariable> variables)
+        {
+            MemoryReaders.AddOrUpdate(new OSAI_MemoryReader(MemoryBuffer, $"{variables.Key}", variables));
+        }
+    }
+
+    public class OSAI_MemoryBuffer : FLUX_MemoryBuffer<OSAI_MemoryBuffer, OSAI_ConnectionProvider, OSAI_VariableStore>
+    {
+        public IFlux Flux;
+        public override OSAI_ConnectionProvider ConnectionProvider { get; }
 
         private (ushort start_addr, ushort end_addr) _GD_BUFFER_RANGE;
         public (ushort start_addr, ushort end_addr) GD_BUFFER_RANGE
@@ -32,7 +70,7 @@ namespace Flux.ViewModels
                 if (_GD_BUFFER_REQ == default)
                 {
                     var count = (ushort)(GD_BUFFER_RANGE.end_addr - GD_BUFFER_RANGE.start_addr + 1);
-                    _GD_BUFFER_REQ = new ReadVarDoubleRequest((ushort)OSAI_VARCODE.GD_CODE, Connection.ProcessNumber, GD_BUFFER_RANGE.start_addr, count);
+                    _GD_BUFFER_REQ = new ReadVarDoubleRequest((ushort)OSAI_VARCODE.GD_CODE, OSAI_Connection.ProcessNumber, GD_BUFFER_RANGE.start_addr, count);
                 }
                 return _GD_BUFFER_REQ;
             }
@@ -63,7 +101,7 @@ namespace Flux.ViewModels
                 if (_GW_BUFFER_REQ == default)
                 {
                     var count = (ushort)(GW_BUFFER_RANGE.end_addr - GW_BUFFER_RANGE.start_addr + 1);
-                    _GW_BUFFER_REQ = new ReadVarWordRequest((ushort)OSAI_VARCODE.GW_CODE, Connection.ProcessNumber, GW_BUFFER_RANGE.start_addr, count);
+                    _GW_BUFFER_REQ = new ReadVarWordRequest((ushort)OSAI_VARCODE.GW_CODE, OSAI_Connection.ProcessNumber, GW_BUFFER_RANGE.start_addr, count);
                 }
                 return _GW_BUFFER_REQ;
             }
@@ -94,7 +132,7 @@ namespace Flux.ViewModels
                 if (_L_BUFFER_REQ == default)
                 {
                     var count = (ushort)(L_BUFFER_RANGE.end_addr - L_BUFFER_RANGE.start_addr + 1);
-                    _L_BUFFER_REQ = new ReadVarDoubleRequest((ushort)OSAI_VARCODE.L_CODE, Connection.ProcessNumber, L_BUFFER_RANGE.start_addr, count);
+                    _L_BUFFER_REQ = new ReadVarDoubleRequest((ushort)OSAI_VARCODE.L_CODE, OSAI_Connection.ProcessNumber, L_BUFFER_RANGE.start_addr, count);
                 }
                 return _L_BUFFER_REQ;
             }
@@ -125,7 +163,7 @@ namespace Flux.ViewModels
                 if (_MW_BUFFER_REQ == default)
                 {
                     var count = (ushort)(MW_BUFFER_RANGE.end_addr - MW_BUFFER_RANGE.start_addr + 1);
-                    _MW_BUFFER_REQ = new ReadVarWordRequest((ushort)OSAI_VARCODE.MW_CODE, Connection.ProcessNumber, MW_BUFFER_RANGE.start_addr, count);
+                    _MW_BUFFER_REQ = new ReadVarWordRequest((ushort)OSAI_VARCODE.MW_CODE, OSAI_Connection.ProcessNumber, MW_BUFFER_RANGE.start_addr, count);
                 }
                 return _MW_BUFFER_REQ;
             }
@@ -137,162 +175,215 @@ namespace Flux.ViewModels
             set => this.RaiseAndSetIfChanged(ref _MW_BUFFER, value);
         }
 
-        private bool _HasFullMemoryRead;
-        public bool HasFullMemoryRead
-        {
-            get => _HasFullMemoryRead;
-            set => this.RaiseAndSetIfChanged(ref _HasFullMemoryRead, value);
-        }
+        private ObservableAsPropertyHelper<bool> _HasFullMemoryRead;
+        public override bool HasFullMemoryRead => _HasFullMemoryRead.Value;
 
-        public OSAI_MemoryBuffer(OSAI_Connection connection)
+        private SourceCache<OSAI_MemoryReaderGroup, FLUX_MemoryReaderGroupPeriod> MemoryReaderGroups { get; set; }
+
+        public OSAI_MemoryBuffer(IFlux flux, OSAI_ConnectionProvider connection_provider)
         {
-            Connection = connection;
+            Flux = flux;
+            ConnectionProvider = connection_provider;
             GD_BUFFER_CHANGED = this.WhenAnyValue(plc => plc.GD_BUFFER);
             GW_BUFFER_CHANGED = this.WhenAnyValue(plc => plc.GW_BUFFER);
             MW_BUFFER_CHANGED = this.WhenAnyValue(plc => plc.MW_BUFFER);
             L_BUFFER_CHANGED = this.WhenAnyValue(plc => plc.L_BUFFER);
+
+            SourceCacheRC.Create(this, v => v.MemoryReaderGroups, g => g.Period);
+        }
+        public override void Initialize(OSAI_VariableStore variableStore)
+        {
+            var variables = variableStore.Variables;
+            var plc_variables = variables.Values
+                .SelectMany(var =>
+                {
+                    return var switch
+                    {
+                        IFLUX_Array array => array.Variables.Items,
+                        IFLUX_Variable variable => new[] { variable },
+                        _ => Array.Empty<IFLUX_Variable>(),
+                    };
+                })
+                .Where(v => v is IOSAI_AsyncVariable)
+                .Select(v => v as IOSAI_AsyncVariable)
+                .GroupBy(v => v.Priority)
+                .ToDictionary(group => group.Key, group => group);
+
+            DisposableThread.Start(UpdateBuffersAsync, TimeSpan.FromMilliseconds(100));
+
+            AddModelReader(plc_variables, OSAI_ReadPriority.LOW, FLUX_MemoryReaderGroupPeriod.SLOW);
+            AddModelReader(plc_variables, OSAI_ReadPriority.HIGH, FLUX_MemoryReaderGroupPeriod.FAST);
+            AddModelReader(plc_variables, OSAI_ReadPriority.MEDIUM, FLUX_MemoryReaderGroupPeriod.MEDIUM);
+            AddModelReader(plc_variables, OSAI_ReadPriority.ULTRALOW, FLUX_MemoryReaderGroupPeriod.ULTRA_SLOW);
+            AddModelReader(plc_variables, OSAI_ReadPriority.ULTRAHIGH, FLUX_MemoryReaderGroupPeriod.ULTRA_FAST);
+
+            var has_full_variables_read = MemoryReaderGroups.Connect()
+                .TrueForAll(f => f.WhenAnyValue(f => f.HasMemoryRead), r => r);
+
+            _HasFullMemoryRead = Observable.CombineLatest(
+                GD_BUFFER_CHANGED,
+                GW_BUFFER_CHANGED,
+                MW_BUFFER_CHANGED,
+                L_BUFFER_CHANGED,
+                has_full_variables_read,
+                (gd, gw, mw, l, v) => gd.HasValue && gw.HasValue && mw.HasValue && l.HasValue && v)
+                .ToProperty(this, v => v.HasFullMemoryRead)
+                .DisposeWith(Disposables);
+
+            foreach (var memory_reader_group in MemoryReaderGroups.Items)
+                memory_reader_group.Start();
+        }
+        private void AddModelReader(Dictionary<OSAI_ReadPriority, IGrouping<OSAI_ReadPriority, IOSAI_AsyncVariable>> variables, OSAI_ReadPriority priority, FLUX_MemoryReaderGroupPeriod period)
+        {
+            var priority_variables = variables.Lookup(priority);
+            if (!priority_variables.HasValue || !priority_variables.Value.Any())
+                return;
+
+            var memory_reader = MemoryReaderGroups.Lookup(period);
+            if (!memory_reader.HasValue)
+                MemoryReaderGroups.AddOrUpdate(new OSAI_MemoryReaderGroup(Flux, this, period));
+            memory_reader = MemoryReaderGroups.Lookup(period);
+            if (!memory_reader.HasValue)
+                return;
+
+            memory_reader.Value.AddMemoryReader(priority_variables.Value);
         }
         private (ushort start_addr, ushort end_addr) GetRange(OSAI_VARCODE varcode)
         {
-            var variables = Connection.VariableStore.Variables.Values
-                .Select(v => v as IOSAI_VariableBase)
-                .Where(v => v?.LogicalAddress.VarCode == varcode);
+            var variables = ConnectionProvider.VariableStore.Variables;
+            var addr_range = variables.Values
+                .SelectMany(var =>
+                {
+                    return var switch
+                    {
+                        IFLUX_Array array => array.Variables.Items,
+                        IFLUX_Variable variable => new[] { variable },
+                        _ => Array.Empty<IFLUX_Variable>(),
+                    };
+                })
+                .Where(v => v is IOSAI_ObservableVariable)
+                .Select(v => v as IOSAI_ObservableVariable)
+                .Where(v => v.Address.VarCode == varcode)
+                .Select(v => v.Address.Index);
 
-            var start_addr = variables.SelectMany(var =>
-            {
-                if (var is IOSAI_Array array)
-                    return array.Variables.Items.Select(v => v.LogicalAddress.Index);
-                return new[] { var.LogicalAddress.Index };
-            }).Min();
-
-            var end_addr = variables.SelectMany(var =>
-            {
-                if (var is IOSAI_Array array)
-                    return array.Variables.Items.Select(v => v.LogicalAddress.Index);
-                return new[] { var.LogicalAddress.Index };
-            }).Max();
-
+            var start_addr = addr_range.Min();
+            var end_addr = addr_range.Max();
             return (start_addr, end_addr);
         }
-        public async Task UpdateBufferAsync()
+        private async Task UpdateBuffersAsync()
         {
-            var gd_response = await Connection.Client.ReadVarDoubleAsync(GD_BUFFER_REQ);
-            if (Connection.ProcessResponse(
-                gd_response.retval,
-                gd_response.ErrClass,
-                gd_response.ErrNum))
-                GD_BUFFER = gd_response.Value;
+            GD_BUFFER = await UpdateDoubleBufferAsync(GD_BUFFER_REQ);
+            L_BUFFER = await UpdateDoubleBufferAsync(L_BUFFER_REQ);
 
-            var gw_response = await Connection.Client.ReadVarWordAsync(GW_BUFFER_REQ);
-            if (Connection.ProcessResponse(
-                gw_response.retval,
-                gw_response.ErrClass,
-                gw_response.ErrNum))
-                GW_BUFFER = gw_response.Value;
-
-            var l_response = await Connection.Client.ReadVarDoubleAsync(L_BUFFER_REQ);
-            if (Connection.ProcessResponse(
-                l_response.retval,
-                l_response.ErrClass,
-                l_response.ErrNum))
-                L_BUFFER = l_response.Value;
-
-            var mw_response = await Connection.Client.ReadVarWordAsync(MW_BUFFER_REQ);
-            if (Connection.ProcessResponse(
-                mw_response.retval,
-                mw_response.ErrClass,
-                mw_response.ErrNum))
-                MW_BUFFER = mw_response.Value;
+            GW_BUFFER = await UpdateWordBufferAsync(GW_BUFFER_REQ);
+            MW_BUFFER = await UpdateWordBufferAsync(MW_BUFFER_REQ);
         }
-        public IObservable<Optional<ushort>> ObserveWordVar(IOSAI_Variable variable)
+        private Task<Optional<doublearray>> UpdateDoubleBufferAsync(ReadVarDoubleRequest request)
         {
-            switch (variable.LogicalAddress.VarCode)
-            {
-                case OSAI_VARCODE.GW_CODE:
-                    return GW_BUFFER_CHANGED
-                        .Select(buffer =>
-                        {
-                            if (!buffer.HasValue)
-                                return Optional<ushort>.None;
-
-                            var start_addr = GW_BUFFER_RANGE.start_addr;
-                            var end_addr = GW_BUFFER_RANGE.end_addr;
-                            var index = variable.LogicalAddress.Index;
-                            if (index < start_addr || index > end_addr)
-                                return Optional<ushort>.None;
-
-                            var position = index - start_addr;
-                            if (buffer.Value.Count < position)
-                                return Optional<ushort>.None;
-
-                            return buffer.Value[position];
-                        });
-                case OSAI_VARCODE.MW_CODE:
-                    return MW_BUFFER_CHANGED
-                        .Select(buffer =>
-                        {
-                            if (!buffer.HasValue)
-                                return Optional<ushort>.None;
-
-                            var start_addr = MW_BUFFER_RANGE.start_addr;
-                            var end_addr = MW_BUFFER_RANGE.end_addr;
-                            var index = variable.LogicalAddress.Index;
-                            if (index < start_addr || index > end_addr)
-                                return Optional<ushort>.None;
-
-                            var position = index - start_addr;
-                            if (buffer.Value.Count < position)
-                                return Optional<ushort>.None;
-
-                            return buffer.Value[position];
-                        });
-            }
-            return Observable.Return(Optional<ushort>.None);
+            using var double_buffer_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            return ConnectionProvider.Connection.TryEnqueueRequestAsync(
+                (c, ct) => c.ReadVarDoubleAsync(request),
+                r => r.Value, r => new(r.retval, r.ErrClass, r.ErrNum),
+                FLUX_RequestPriority.Medium, double_buffer_cts.Token);
         }
-        public IObservable<Optional<double>> ObserveDWordVar(IOSAI_Variable variable)
+        private Task<Optional<unsignedshortarray>> UpdateWordBufferAsync(ReadVarWordRequest request)
         {
-            switch (variable.LogicalAddress.VarCode)
+            using var word_buffer_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            return ConnectionProvider.Connection.TryEnqueueRequestAsync(
+                (c, ct) => c.ReadVarWordAsync(request),
+                r => r.Value, r => new(r.retval, r.ErrClass, r.ErrNum),
+                FLUX_RequestPriority.Medium, word_buffer_cts.Token);
+        }
+        public static async Task UpdateVariablesAsync(IEnumerable<IOSAI_AsyncVariable> variables)
+        {
+            foreach (var variable in variables)
+                await variable.UpdateAsync();
+        }
+        public IObservable<Optional<ushort>> ObserveWordVar(IOSAI_Address address)
+        {
+            return address.VarCode switch
             {
-                case OSAI_VARCODE.GD_CODE:
-                    return GD_BUFFER_CHANGED
-                        .Select(buffer =>
-                        {
-                            if (!buffer.HasValue)
-                                return Optional<double>.None;
+                OSAI_VARCODE.GW_CODE => GW_BUFFER_CHANGED
+                    .Select(buffer =>
+                    {
+                        if (!buffer.HasValue)
+                            return Optional<ushort>.None;
 
-                            var start_addr = GD_BUFFER_RANGE.start_addr;
-                            var end_addr = GD_BUFFER_RANGE.end_addr;
-                            var index = variable.LogicalAddress.Index;
-                            if (index < start_addr || index > end_addr)
-                                return Optional<double>.None;
+                        var start_addr = GW_BUFFER_RANGE.start_addr;
+                        var end_addr = GW_BUFFER_RANGE.end_addr;
+                        var index = address.Index;
+                        if (index < start_addr || index > end_addr)
+                            return Optional<ushort>.None;
 
-                            var position = index - start_addr;
-                            if (buffer.Value.Count < position)
-                                return Optional<double>.None;
+                        var position = index - start_addr;
+                        if (buffer.Value.Count < position)
+                            return Optional<ushort>.None;
 
-                            return buffer.Value[position];
-                        });
-                case OSAI_VARCODE.L_CODE:
-                    return L_BUFFER_CHANGED
-                        .Select(buffer =>
-                        {
-                            if (!buffer.HasValue)
-                                return Optional<double>.None;
+                        return buffer.Value[position];
+                    }),
+                OSAI_VARCODE.MW_CODE => MW_BUFFER_CHANGED
+                    .Select(buffer =>
+                    {
+                        if (!buffer.HasValue)
+                            return Optional<ushort>.None;
 
-                            var start_addr = L_BUFFER_RANGE.start_addr;
-                            var end_addr = L_BUFFER_RANGE.end_addr;
-                            var index = variable.LogicalAddress.Index;
-                            if (index < start_addr || index > end_addr)
-                                return Optional<double>.None;
+                        var start_addr = MW_BUFFER_RANGE.start_addr;
+                        var end_addr = MW_BUFFER_RANGE.end_addr;
+                        var index = address.Index;
+                        if (index < start_addr || index > end_addr)
+                            return Optional<ushort>.None;
 
-                            var position = index - start_addr;
-                            if (buffer.Value.Count < position)
-                                return Optional<double>.None;
+                        var position = index - start_addr;
+                        if (buffer.Value.Count < position)
+                            return Optional<ushort>.None;
 
-                            return buffer.Value[position];
-                        });
-            }
-            return Observable.Return(Optional<double>.None);
+                        return buffer.Value[position];
+                    }),
+                _ => Observable.Return(Optional<ushort>.None),
+            };
+        }
+        public IObservable<Optional<double>> ObserveDWordVar(IOSAI_Address address)
+        {
+            return address.VarCode switch
+            {
+                OSAI_VARCODE.GD_CODE => GD_BUFFER_CHANGED
+                    .Select(buffer =>
+                    {
+                        if (!buffer.HasValue)
+                            return Optional<double>.None;
+
+                        var start_addr = GD_BUFFER_RANGE.start_addr;
+                        var end_addr = GD_BUFFER_RANGE.end_addr;
+                        var index = address.Index;
+                        if (index < start_addr || index > end_addr)
+                            return Optional<double>.None;
+
+                        var position = index - start_addr;
+                        if (buffer.Value.Count < position)
+                            return Optional<double>.None;
+
+                        return buffer.Value[position];
+                    }),
+                OSAI_VARCODE.L_CODE => L_BUFFER_CHANGED
+                    .Select(buffer =>
+                    {
+                        if (!buffer.HasValue)
+                            return Optional<double>.None;
+
+                        var start_addr = L_BUFFER_RANGE.start_addr;
+                        var end_addr = L_BUFFER_RANGE.end_addr;
+                        var index = address.Index;
+                        if (index < start_addr || index > end_addr)
+                            return Optional<double>.None;
+
+                        var position = index - start_addr;
+                        if (buffer.Value.Count < position)
+                            return Optional<double>.None;
+
+                        return buffer.Value[position];
+                    }),
+                _ => Observable.Return(Optional<double>.None),
+            };
         }
     }
 }

@@ -5,19 +5,21 @@ using EmbedIO.Routing;
 using EmbedIO.WebApi;
 using EmbedIO.WebSockets;
 using HttpMultipartParser;
-using Modulo3DStandard;
+using Microsoft.FSharp.Data.UnitSystems.SI.UnitNames;
+using Modulo3DNet;
 using ReactiveUI;
 using RestSharp;
 using Swan.Logging;
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Net;
 using System.Net.NetworkInformation;
-using System.Net.Sockets;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -36,7 +38,9 @@ namespace Flux.ViewModels
         }
     }
 
-    class RemoteControlWebSocket : WebSocketModule
+    public record struct DNATSource(string NetworkCard, int Port);
+
+    internal class RemoteControlWebSocket : WebSocketModule
     {
         public FluxViewModel Flux { get; }
         public CompositeDisposable Disposables { get; }
@@ -45,13 +49,6 @@ namespace Flux.ViewModels
         {
             Flux = flux;
             Disposables = new CompositeDisposable();
-
-            var send_data_thread = new DisposableThread(async () =>
-                {
-                    var data = flux.RemoteControlData;
-                    await SendRemoteControlDataAsync(data);
-                }, TimeSpan.FromMilliseconds(50))
-                .DisposeWith(Disposables);
         }
         private async Task SendRemoteControlDataAsync(Optional<RemoteControlData> rc)
         {
@@ -96,10 +93,25 @@ namespace Flux.ViewModels
                     other_context.WebSocket.Dispose();
                 }
             }
+
+            InitializeRemoteView();
             var data = JsonUtils.Serialize(Flux.RemoteControlData);
             await SendRemoteControlDataAsync(context, data);
         }
-        protected override async Task OnMessageReceivedAsync(IWebSocketContext context, byte[] buffer, IWebSocketReceiveResult result)
+
+        private void InitializeRemoteView()
+        {
+            if (Flux.IsRemoteViewInitialized)
+                return;
+            Flux.InitializeRemoteView();
+            Flux.WhenAnyValue(f => f.RemoteControlData)
+                .DistinctUntilChanged()
+                .ThrottleMax(TimeSpan.FromMilliseconds(50), TimeSpan.FromMilliseconds(200))
+                .Subscribe(async d => await SendRemoteControlDataAsync(d))
+                .DisposeWith(Disposables);
+        }
+
+        protected override Task OnMessageReceivedAsync(IWebSocketContext context, byte[] buffer, IWebSocketReceiveResult result)
         {
             try
             {
@@ -111,26 +123,15 @@ namespace Flux.ViewModels
                 Optional<IRemoteControl> control_item = Flux;
                 foreach (var path in control_path)
                 {
-                    var path_data = path.Split("##", StringSplitOptions.RemoveEmptyEntries);
+                    var path_data = path.Split("??", StringSplitOptions.RemoveEmptyEntries);
                     var control_list_path = path_data[0];
-                    var control_item_path = path_data[1];
+                    var control_item_path = path_data.Length > 1 ? path_data[1] : "";
 
                     var control_list = control_item.Value.RemoteContents.Lookup(control_list_path);
                     if (!control_list.HasValue)
-                        return;
+                        return Task.CompletedTask;
 
                     control_item = control_list.Value.LookupControl(control_item_path);
-                    if (!control_item.HasValue)
-                    {
-                        var sub_item_data = control_item_path.Split("??", StringSplitOptions.RemoveEmptyEntries);
-                        if (sub_item_data.Length < 2)
-                            return;
-
-                        var sub_item_path = sub_item_data[1];
-                        control_item = control_list.Value.LookupControl(sub_item_path);
-                        if (!control_item.HasValue)
-                            return;
-                    }
                 }
 
                 // catch disposed object exception
@@ -142,7 +143,7 @@ namespace Flux.ViewModels
                         var input_value = interact_path[1];
                         var input = control_item.Value.RemoteInputs.Lookup(input_name);
                         if (!input.HasValue)
-                            return;
+                            return Task.CompletedTask;
 
                         var value = input_value.Trim('\'');
                         input.Value.SetValue(value);
@@ -152,20 +153,23 @@ namespace Flux.ViewModels
                         var command_name = interact_path[0];
                         var command = control_item.Value.RemoteCommands.Lookup(command_name);
                         if (!command.HasValue)
-                            return;
+                            return Task.CompletedTask;
 
-                        //await Task.Delay(1000);
-                        await command.Value.Execute();
+                        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+                        command.Value.ExecuteAsync(cts.Token);
                     }
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
+                    // Flux.Messages.LogException(this, ex);
                 }
             }
             catch (Exception ex)
             {
-                Flux.Messages.LogException(this, ex);
+                // Flux.Messages.LogException(this, ex);
             }
+
+            return Task.CompletedTask;
         }
         protected override void Dispose(bool disposing)
         {
@@ -175,24 +179,25 @@ namespace Flux.ViewModels
         }
     }
 
-    public class NetProvider : ReactiveObject, IFluxNetProvider
+    public class NetProvider : ReactiveObjectRC<NetProvider>, IFluxNetProvider
     {
         public const int WebServerPort = 8080;
 
-        public Ping Pinger { get; }
         public RestClient Client { get; }
         public FluxViewModel Flux { get; }
+        public Ping PLCNetworkPinger { get; }
+        public Ping InterNetworkPinger { get; }
         public UdpDiscovery UdpDiscovery { get; }
 
-        private Optional<bool> _InterNetworkConnectivity;
-        public Optional<bool> InterNetworkConnectivity
+        private bool _InterNetworkConnectivity;
+        public bool InterNetworkConnectivity
         {
             get => _InterNetworkConnectivity;
             set => this.RaiseAndSetIfChanged(ref _InterNetworkConnectivity, value);
         }
 
-        private Optional<bool> _PLCNetworkConnectivity;
-        public Optional<bool> PLCNetworkConnectivity
+        private bool _PLCNetworkConnectivity;
+        public bool PLCNetworkConnectivity
         {
             get => _PLCNetworkConnectivity;
             set => this.RaiseAndSetIfChanged(ref _PLCNetworkConnectivity, value);
@@ -201,8 +206,10 @@ namespace Flux.ViewModels
         public NetProvider(FluxViewModel main)
         {
             Flux = main;
-            Pinger = new Ping();
-            Client = new RestClient();
+            Client = new RestClient(
+                configureSerialization: c => c.UseSerializer<JsonNetRestSerializer>());
+            PLCNetworkPinger = new Ping();
+            InterNetworkPinger = new Ping();
             UdpDiscovery = new UdpDiscovery();
         }
 
@@ -210,69 +217,77 @@ namespace Flux.ViewModels
         {
             InitializeWebServer();
             InitializeUDPDiscovery();
+
+            Observable.CombineLatest(
+                Flux.SettingsProvider.WhenAnyValue(s => s.PLCEndPoint),
+                Flux.SettingsProvider.WhenAnyValue(s => s.PassthroughPort),
+                (plc_endpoint, passthrough_port) =>
+                {
+                    if (!plc_endpoint.HasValue)
+                        return Optional<string[]>.None;
+                    if(!passthrough_port.HasValue)
+                        return Optional < string[]>.None;
+                    var source = new DNATSource("eth1", passthrough_port.Value);
+                    return GetEnableDNATCommands(source, plc_endpoint.Value);
+                })
+                .SubscribeRC(async dnat_commands => 
+                {
+                    if (!dnat_commands.HasValue)
+                        return;
+                    await ProcessUtils.RunLinuxCommandsAsync(dnat_commands.Value);
+                }, this);
+
+            Observable.CombineLatest(
+                Flux.SettingsProvider.WhenAnyValue(s => s.FluxEndPoint),
+                Flux.SettingsProvider.WhenAnyValue(s => s.VPNPort),
+                (flux_endpoint, vpn_port) =>
+                {
+                    if (!flux_endpoint.HasValue)
+                        return Optional<string[]>.None;
+                    if (!vpn_port.HasValue)
+                        return Optional<string[]>.None;
+                    var source = new DNATSource("eth2", vpn_port.Value);
+                    return GetEnableDNATCommands(source, flux_endpoint.Value);
+                })
+                .SubscribeRC(async dnat_commands =>
+                {
+                    if (!dnat_commands.HasValue)
+                        return;
+                    await ProcessUtils.RunLinuxCommandsAsync(dnat_commands.Value);
+                }, this);
+
+
+            DisposableThread.Start(PingPLCNetworkAsync, TimeSpan.FromSeconds(5));
+            DisposableThread.Start(PingInterNetworkAsync, TimeSpan.FromSeconds(10));
         }
 
-        public async Task UpdateNetworkStateAsync()
+        private string[] GetEnableDNATCommands(DNATSource source, IPEndPoint dest_endpoint)
+        {
+            var source_network_card = source.NetworkCard;
+            var source_port = source.Port;
+
+            var dest_address = dest_endpoint.Address;
+            var dest_port = dest_endpoint.Port;
+
+            return new[]
+            {
+                $"sudo iptables -A PREROUTING -t nat -p tcp -i {source_network_card} --dport {source_port} -j DNAT --to-destination {dest_address}:{dest_port}",
+                $"sudo iptables -A POSTROUTING -t nat -p tcp -d {dest_address} --dport {dest_port} -j MASQUERADE"
+            };
+        }
+
+        private async Task PingPLCNetworkAsync()
         {
             var core_settings = Flux.SettingsProvider.CoreSettings.Local;
-
-            PLCNetworkConnectivity = await OptionsAsync(
-                core_settings.PLCAddress,
-                TimeSpan.FromSeconds(5));
-
-            InterNetworkConnectivity = await PingAsync(
+            PLCNetworkConnectivity = await PLCNetworkPinger.PingAsync(
+                    core_settings.PLCAddress,
+                    TimeSpan.FromSeconds(5));
+        }
+        private async Task PingInterNetworkAsync()
+        {
+            InterNetworkConnectivity = await InterNetworkPinger.PingAsync(
                 "8.8.8.8",
-                TimeSpan.FromSeconds(5));
-        }
-
-        public async Task<bool> PingAsync(Optional<string> address, TimeSpan timeout)
-        {
-            for (int i = 0; i < 5; i++)
-            {
-                try
-                {
-                    if (!address.HasValue)
-                        return false;
-
-                    address = address.Value.Split(":", StringSplitOptions.RemoveEmptyEntries)
-                        .FirstOrDefault();
-
-                    var result = await Pinger.SendPingAsync(address.Value, (int)timeout.TotalMilliseconds);
-
-                    if (result.Status == IPStatus.Success)
-                        return true;
-                }
-                catch (Exception ex)
-                {
-                    return false;
-                }
-            }
-            return false;
-        }
-
-        public async Task<bool> OptionsAsync(Optional<string> address, TimeSpan timeout)
-        {
-            if (!address.HasValue)
-                return false;
-            for (int i = 0; i < 5; i++)
-            {
-                try
-                {
-                    var request = new RestRequest($"http://{address}", Method.Options);
-
-                    var cts = new CancellationTokenSource(timeout);
-                    var response = await Client.ExecuteAsync(request, cts.Token);
-
-                    if (response.StatusCode == HttpStatusCode.OK ||
-                        response.StatusCode == HttpStatusCode.NoContent)
-                        return true;
-                }
-                catch (Exception ex)
-                {
-                    return false;
-                }
-            }
-            return false;
+                TimeSpan.FromSeconds(10));
         }
 
         private void InitializeWebServer()
@@ -286,16 +301,18 @@ namespace Flux.ViewModels
                     e.Response.Headers.Add("Interface-Type", "Flux");
                     return Task.CompletedTask;
                 })
-                .WithWebApi("/api", (c, d) => WebServerUtils.SerializeJson(c, d), m => m.WithController(() => new FluxWebApiController(Flux)))
-                .WithWebApi("/settings/user", Flux.SettingsProvider.UserSettings, settings =>
+                .WithWebApi("/plc", (c, d) => WebServerUtils.SerializeData(c, d), m => m.WithController(() => new PlcWebApiController(Flux)))
+                .WithWebApi("/api", (c, d) => WebServerUtils.SerializeData(c, d), m => m.WithController(() => new FluxWebApiController(Flux)))
+                .WithWebApi("/settings/user", Flux.SettingsProvider.UserSettings, user =>
                 {
-                    settings
+                    user
                         .WithWebApiSetting(s => s.PrinterName)
+                        .WithWebApiSetting(s => s.StartupCost)
                         .WithWebApiSetting(s => s.CostHour);
                 })
-                .WithWebApi("/settings/core", Flux.SettingsProvider.CoreSettings, settings =>
+                .WithWebApi("/settings/core", Flux.SettingsProvider.CoreSettings, core =>
                 {
-                    settings
+                    core
                         .WithWebApiReadSetting(s => s.PrinterID)
                         .WithWebApiReadSetting(s => s.PrinterGuid);
                 })
@@ -328,15 +345,15 @@ namespace Flux.ViewModels
             {
                 UdpDiscovery.StartSending(() =>
                 {
-                    var address = Flux.SettingsProvider.HostAddress;
-                    if (address.HasValue)
-                        return new IPEndPoint(address.Value, WebServerPort);
-                    return new IPEndPoint(IPAddress.Loopback, WebServerPort);
+                    var flux_endpoint = Flux.SettingsProvider.FluxEndPoint;
+                    if (!flux_endpoint.HasValue)
+                        return new IPEndPoint(IPAddress.Loopback, WebServerPort);
+                    return new IPEndPoint(flux_endpoint.Value.Address, WebServerPort);
                 }, TimeSpan.FromSeconds(5));
             }
             catch (Exception ex)
             {
-                Flux.Messages.LogMessage(NetResponse.UDP_DISCOVERY_EXCEPTION, ex);
+                // Flux.Messages.LogMessage(NetResponse.UDP_DISCOVERY_EXCEPTION, ex);
             }
         }
     }
@@ -357,7 +374,7 @@ namespace Flux.ViewModels
 
                 var mcode_file = Path.GetFileName(parser.Files[0].FileName);
                 var mcode_name = Path.GetFileNameWithoutExtension(mcode_file);
-                if (!Guid.TryParse(mcode_name, out var mcode_guid))
+                if (!MCodeKey.TryParse(mcode_name, out var mcode_key))
                     return false;
 
                 var mcode_file_storage = Files.AccessFile(Directories.MCodes, mcode_file);
@@ -372,7 +389,7 @@ namespace Flux.ViewModels
             }
             catch (Exception ex)
             {
-                Flux.Messages.LogMessage(NetResponse.PUT_MCODE_EXCEPTION, ex);
+                // Flux.Messages.LogMessage(NetResponse.PUT_MCODE_EXCEPTION, ex);
                 return false;
             }
         }
@@ -392,17 +409,17 @@ namespace Flux.ViewModels
                     await Flux.DatabaseProvider.Database.Value.AccessLocalDatabaseAsync(db => receive_database_async(parser.Files[0].Data, db.Filename));
                 }
 
-                Flux.DatabaseProvider.Initialize();
+                await Flux.DatabaseProvider.InitializeAsync();
 
                 return true;
             }
             catch (Exception ex)
             {
-                Flux.Messages.LogMessage(NetResponse.PUT_MCODE_EXCEPTION, ex);
+                // Flux.Messages.LogMessage(NetResponse.PUT_MCODE_EXCEPTION, ex);
                 return false;
             }
 
-            async Task receive_database_async(Stream stream, string database_connection)
+            static async Task receive_database_async(Stream stream, string database_connection)
             {
                 if (File.Exists(database_connection))
                     File.Delete(database_connection);
@@ -414,26 +431,57 @@ namespace Flux.ViewModels
         [Route(HttpVerbs.Get, "/memory")]
         public async Task GetMemory()
         {
-            var memory = Flux.ConnectionProvider.VariableStore;
-            var variables = memory.Variables.Values.SelectMany(v =>
+            var variables = Flux.ConnectionProvider.VariableStoreBase.Variables;
+            var full_variables = variables.SelectMany(v =>
             {
-                switch (v)
+                switch (v.Value)
                 {
-                    case IOSAI_Variable pvar:
+                    case IFLUX_Variable pvar:
                         return new[] { pvar };
-                    case IOSAI_Array parr:
+                    case IFLUX_Array parr:
                         return parr.Variables.Items;
                     default:
-                        return new IOSAI_Variable[0];
+                        return new IFLUX_Variable[0];
                 }
             });
 
             var sb = new StringBuilder();
             var text_format = "{0, -35} {1,-20} {2,-10}";
-            foreach (var variable in variables)
-                sb.AppendLine(string.Format(text_format, variable.Name, variable.LogicalAddress, variable.IValue));
+            foreach (var variable in full_variables)
+                sb.AppendLine(string.Format(text_format, variable.Name, variable.Unit, variable.IValue));
 
             await HttpContext.SendStringAsync(sb.ToString(), "text/plain", Encoding.UTF8);
         }
+    }
+    public class PlcWebApiController : WebApiController
+    {
+        public FluxViewModel Flux { get; }
+        public PlcWebApiController(FluxViewModel flux)
+        {
+            Flux = flux;
+        }
+
+        [Route(HttpVerbs.Get, "/download")]
+        public Task<Optional<string>> GetFileAsync([QueryField] string folder, [QueryField] string name) => Flux.ConnectionProvider.GetFileAsync(folder, name, HttpContext.CancellationToken);
+
+        /*[Route(HttpVerbs.Post, "/upload")]
+        public Task<bool> PutFileAsync([QueryField] string folder, [QueryField] string name) => Flux.ConnectionProvider.PutFileAsync(folder, name, HttpContext.GetRequestBodyAsStringAsync(), HttpContext.CancellationToken);*/
+
+        [Route(HttpVerbs.Get, "/delete")]
+        public Task<bool> DeleteAsync([QueryField] string folder, [QueryField] string name) => Flux.ConnectionProvider.DeleteAsync(folder, name, HttpContext.CancellationToken);
+
+        [Route(HttpVerbs.Get, "/rename")]
+        public Task<bool> RenameAsync([QueryField] string old_path, [QueryField] string new_path) => Flux.ConnectionProvider.RenameAsync(old_path, new_path, HttpContext.CancellationToken);
+
+
+        [Route(HttpVerbs.Get, "/list")]
+        public Task<Optional<FLUX_FileList>> ListFilesAsync([QueryField] string folder) => Flux.ConnectionProvider.ListFilesAsync(folder, HttpContext.CancellationToken);
+
+        [Route(HttpVerbs.Get, "/clear")]
+        public Task<bool> ClearFolderAsync([QueryField] string folder) => Flux.ConnectionProvider.ClearFolderAsync(folder, HttpContext.CancellationToken);
+
+        [Route(HttpVerbs.Get, "/create")]
+        public Task<bool> CreateFolder([QueryField] string folder, [QueryField] string name) => Flux.ConnectionProvider.CreateFolderAsync(folder, name, HttpContext.CancellationToken);
+
     }
 }

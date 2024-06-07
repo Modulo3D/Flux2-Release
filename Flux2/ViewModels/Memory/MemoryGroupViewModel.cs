@@ -1,9 +1,11 @@
 ﻿using DynamicData;
+using DynamicData.Kernel;
 using DynamicData.PLinq;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Linq;
+using System.Reactive.Disposables;
 using System.Reactive.Linq;
 
 namespace Flux.ViewModels
@@ -13,28 +15,31 @@ namespace Flux.ViewModels
         [RemoteOutput(false)]
         public override string VariableName { get; }
 
-        [RemoteContent(true)]
-        public IObservableCache<IMemoryVariableBase, string> Variables { get; }
+        [RemoteContent(true, comparer: (nameof(VariableName)))]
+        public IObservableCache<IMemoryVariableBase, string> Variables { get; private set; }
 
-        private SourceCache<IMemoryVariableBase, string> VariableSource { get; }
+        private SourceCache<IMemoryVariableBase, string> VariableSource { get; set; }
 
         public MemoryGroupViewModel(FluxViewModel flux, IGrouping<string, IFLUX_VariableBase> group) : base(flux, group.Key)
         {
             VariableName = group.Key;
 
-            VariableSource = new SourceCache<IMemoryVariableBase, string>(vm => vm.VariableBase.Name);
+            SourceCacheRC.Create(this, v => v.VariableSource, vm => vm.VariableBase.Name);
             VariableSource.Edit(innerList =>
             {
                 innerList.Clear();
                 foreach (var var_base in group)
                 {
+                    var variable_store = flux.ConnectionProvider.VariableStoreBase;
+                    var attributes = variable_store.Attributes.Lookup(var_base.Name);
+
                     switch (var_base)
                     {
                         case IFLUX_Array array:
-                            innerList.AddOrUpdate(new MemoryArrayViewModel(Flux, array));
+                            innerList.AddOrUpdate(new MemoryArrayViewModel(Flux, array, attributes));
                             break;
                         case IFLUX_Variable variable:
-                            innerList.AddOrUpdate(new MemoryVariableViewModel(Flux, variable));
+                            innerList.AddOrUpdate(new MemoryVariableViewModel(Flux, variable, attributes));
                             break;
                     }
                 }
@@ -45,7 +50,7 @@ namespace Flux.ViewModels
                 {
                     bool filter(IMemoryVariableBase v) => t;
                     return (Func<IMemoryVariableBase, bool>)filter;
-                })).AsObservableCache();
+                })).AsObservableCacheRC(this);
         }
     }
 }

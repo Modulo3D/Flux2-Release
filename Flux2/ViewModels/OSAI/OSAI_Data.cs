@@ -1,5 +1,5 @@
 ﻿using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using Newtonsoft.Json;
 using OSAI;
 using System;
@@ -10,6 +10,24 @@ using System.Runtime.Serialization;
 
 namespace Flux.ViewModels
 {
+    public enum OSAI_FileAttributes : uint
+    {
+        FILE_ATTRIBUTE_VIRTUAL = 0x00000000,
+        FILE_ATTRIBUTE_READONLY = 0x00000001,
+        FILE_ATTRIBUTE_HIDDEN = 0x00000002,
+        FILE_ATTRIBUTE_SYSTEM = 0x00000004,
+        FILE_ATTRIBUTE_DIRECTORY = 0x00000010,
+        FILE_ATTRIBUTE_ARCHIVE = 0x00000020,
+        FILE_ATTRIBUTE_DEVICE = 0x00000040,
+        FILE_ATTRIBUTE_NORMAL = 0x00000080,
+        FILE_ATTRIBUTE_TEMPORARY = 0x00000100,
+        FILE_ATTRIBUTE_SPARSE_FILE = 0x00000200,
+        FILE_ATTRIBUTE_REPARSE_POINT = 0x00000400,
+        FILE_ATTRIBUTE_COMPRESSED = 0x00000800,
+        FILE_ATTRIBUTE_OFFLINE = 0x00001000,
+        FILE_ATTRIBUTE_NOT_CONTENT_INDEXED = 0x00002000,
+        FILE_ATTRIBUTE_ENCRYPTED = 0x00004000,
+    }
 
     // 1 : Programmed position
     // 2 : Interpolated position
@@ -268,32 +286,48 @@ namespace Flux.ViewModels
 
     }
 
-    public class OSAI_MCodeRecovery : IFLUX_MCodeRecovery
-    {
-        public Guid MCodeGuid { get; }
-        public bool IsSelected { get; }
-        public uint BlockNumber { get; }
-        public short ToolNumber { get; }
-        public BlockNumber StartBlock { get; }
-        public string FileName => $"{MCodeGuid}.{StartBlock}";
-        public Dictionary<VariableUnit, double> Positions { get; }
-        public Dictionary<VariableUnit, double> Temperatures { get; }
-
-        public OSAI_MCodeRecovery(Guid mcode_guid, BlockNumber start_block, bool is_selected, uint hold_block, short hold_tool, Dictionary<VariableUnit, double> hold_temp, Dictionary<VariableUnit, double> hold_pos)
-        {
-            BlockNumber = hold_block;
-            Temperatures = hold_temp;
-            IsSelected = is_selected;
-            StartBlock = start_block;
-            MCodeGuid = mcode_guid;
-            ToolNumber = hold_tool;
-            Positions = hold_pos;
-        }
-    }
-
     // MSGERROR 
     // uint     -> uint/uint    | 1508600 -> 23/1272 Asse %2 (Id %1) non sul profilo
     // uint     -> hex          | 1508600 -> 1704F8
     // hex      -> hex/hex      | 1704F8  -> 17/04F8
     // hex/hex  -> uint/uint    | 17/04F8 -> 23/1272
+
+    public static class OSAIUtils
+    {
+        public static bool IsBitSet(this ushort word, int bitIndex)
+        {
+            return (word & (1 << bitIndex)) != 0;
+        }
+
+        public static bool IsOnlyBitSet(this ushort word, int bitIndex)
+        {
+            var index = GetBitSet(word);
+            return index == bitIndex;
+        }
+
+        public static short GetBitSet(this ushort word)
+        {
+            return word switch
+            {
+                0 => -1,
+                1 => 0,
+                2 => 1,
+                4 => 2,
+                8 => 3,
+                16 => 4,
+                32 => 5,
+                64 => 6,
+                128 => 7,
+                256 => 8,
+                512 => 9,
+                1024 => 10,
+                2048 => 11,
+                4096 => 12,
+                8192 => 13,
+                16384 => 14,
+                32768 => 15,
+                _ => -1
+            };
+        }
+    }
 }

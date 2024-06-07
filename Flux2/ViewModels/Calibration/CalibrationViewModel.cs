@@ -1,7 +1,6 @@
 ﻿using DynamicData;
-using DynamicData.Binding;
 using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
@@ -17,18 +16,17 @@ namespace Flux.ViewModels
     {
         IFlux IFluxCalibrationViewModel.Flux => Flux;
 
-        public IObservableList<IFluxOffsetViewModel> SortedOffsets { get; }
-        [RemoteContent(true)]
+        [RemoteContent(true, comparer:(nameof(IFluxOffsetViewModel.Position)))]
         public IObservableCache<IFluxOffsetViewModel, ushort> Offsets { get; }
 
-        private ObservableAsPropertyHelper<Optional<ToolId>> _GroupId;
+        private readonly ObservableAsPropertyHelper<Optional<ToolId>> _GroupId;
         public Optional<ToolId> GroupId => _GroupId.Value;
 
 
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> ProbeOffsetsCommand { get; private set; }
-        public ReactiveCommand<Unit, Unit> IncreaseGlobalZOffsetCommand { get; private set; }
-        public ReactiveCommand<Unit, Unit> DecreaseGlobalZOffsetCommand { get; private set; }
+        public ReactiveCommandBaseRC<Unit, Unit> ProbeOffsetsCommand { get; private set; }
+        public ReactiveCommandBaseRC<Unit, Unit> IncreaseGlobalZOffsetCommand { get; private set; }
+        public ReactiveCommandBaseRC<Unit, Unit> DecreaseGlobalZOffsetCommand { get; private set; }
 
         private Optional<double> _GlobalZOffset;
         [RemoteInput(step: 0.01, converter: typeof(MillimeterConverter))]
@@ -38,9 +36,7 @@ namespace Flux.ViewModels
             set => this.RaiseAndSetIfChanged(ref _GlobalZOffset, value);
         }
 
-        public bool HasZProbe => Flux.ConnectionProvider.VariableStore.HasVariable(m => m.AXIS_PROBE, "tool_z");
-
-        private ManualCalibrationViewModel ManualCalibration { get; set; }
+        private Lazy<ManualCalibrationViewModel> ManualCalibration { get; set; }
 
         public CalibrationViewModel(FluxViewModel flux) : base(flux)
         {
@@ -65,7 +61,7 @@ namespace Flux.ViewModels
                 .WatchOptional(group_tool)
                 .ConvertMany(f =>
                 {
-                    return f.ToolNozzle.WhenAnyValue(n => n.Nfc)
+                    return f.ToolNozzle.NFCSlot.WhenAnyValue(n => n.Nfc)
                         .Select(nfc => (f.Position, nfc));
                 })
                 .Convert(f =>
@@ -79,66 +75,55 @@ namespace Flux.ViewModels
                     var tool_card = f.nfc.CardId.Value;
                     return new ToolId(f.Position, tool_card, tool_nfc);
                 })
-                .ToProperty(this, v => v.GroupId)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.GroupId);
 
             Offsets = Flux.Feeders.Feeders.Connect()
                 .AutoRefresh(f => f.FeederState)
                 .Filter(f => f.FeederState != EFeederState.FEEDER_EMPTY)
-                .Transform(f => (IFluxOffsetViewModel)new OffsetViewModel(this, f))
+                .Transform(f => (IFluxOffsetViewModel)new OffsetViewModel(Flux, this, f))
                 .DisposeMany()
-                .AsObservableCache()
-                .DisposeWith(Disposables);
-
-            var comparer = SortExpressionComparer<IFluxOffsetViewModel>.Ascending(o =>
-                o.Feeder.Position);
-
-            SortedOffsets = Offsets.Connect()
-                .RemoveKey()
-                .Sort(comparer)
-                .AsObservableList()
-                .DisposeWith(Disposables);
+                .AsObservableCacheRC(this);
 
             var can_safe_start = Flux.StatusProvider
-             .WhenAnyValue(s => s.StatusEvaluation)
-             .Select(e => e.CanSafeCycle);
+                 .WhenAnyValue(s => s.StatusEvaluation)
+                 .Select(e => e.CanSafeCycle);
 
             var no_error_probe = Offsets.Connect()
                 .TrueForAny(p => p.WhenAnyValue(o => o.ProbeState), s => s != FluxProbeState.ERROR_PROBE);
 
+            var no_job = Flux.StatusProvider
+                .WhenAnyValue(s => s.PrintingEvaluation)
+                .Select(p => !p.FluxJob.HasValue);
+
             var can_probe = Observable.CombineLatest(
                 can_safe_start,
                 no_error_probe,
-                (s, p) => s && p);
+                no_job,
+                (s, p, pp) => s && p && pp);
 
             var is_idle = Flux.StatusProvider
                 .WhenAnyValue(e => e.StatusEvaluation)
-                .Select(c => c.IsIdle.ValueOr(() => false));
+                .Select(c => c.IsIdle);
 
             var user_settings = Flux.SettingsProvider.UserSettings;
 
             user_settings.Local
                 .WhenAnyValue(v => v.GlobalZOffset)
-                .BindTo(this, v => v.GlobalZOffset)
-                .DisposeWith(Disposables);
+                .BindToRC(this, v => v.GlobalZOffset, this);
 
             this.WhenAnyValue(v => v.GlobalZOffset)
-                .BindTo(user_settings, v => v.Local.GlobalZOffset)
-                .DisposeWith(Disposables);
+                .BindToRC(user_settings, v => v.Local.GlobalZOffset, this);
 
             this.WhenAnyValue(v => v.GlobalZOffset)
                 .Throttle(TimeSpan.FromSeconds(1))
-                .Subscribe(_ => user_settings.PersistLocalSettings())
-                .DisposeWith(Disposables);
+                .SubscribeRC(_ => user_settings.PersistLocalSettings(), this);
 
-            IncreaseGlobalZOffsetCommand = ReactiveCommand.Create(() => { ModifyOffset(o => o + 0.01f); }, is_idle)
-                .DisposeWith(Disposables);
-            DecreaseGlobalZOffsetCommand = ReactiveCommand.Create(() => { ModifyOffset(o => o - 0.01f); }, is_idle)
-                .DisposeWith(Disposables);
+            IncreaseGlobalZOffsetCommand = ReactiveCommandBaseRC.Create(() => { ModifyOffset(o => o + 0.01f); }, this, is_idle);
+            DecreaseGlobalZOffsetCommand = ReactiveCommandBaseRC.Create(() => { ModifyOffset(o => o - 0.01f); }, this, is_idle);
 
             Observable.CombineLatest(
-                IncreaseGlobalZOffsetCommand.IsExecuting,
-                DecreaseGlobalZOffsetCommand.IsExecuting,
+                IncreaseGlobalZOffsetCommand.WhenAnyValue(v => v.IsExecuting),
+                DecreaseGlobalZOffsetCommand.WhenAnyValue(v => v.IsExecuting),
                 (iz, dz) => (iz, dz))
                 .PairWithPreviousValue()
                 .Where(t =>
@@ -147,30 +132,45 @@ namespace Flux.ViewModels
                         (!t.NewValue.iz && !t.NewValue.dz);
                 })
                 .Throttle(TimeSpan.FromSeconds(1))
-                .Subscribe(_ => Flux.SettingsProvider.PersistLocalSettings())
-                .DisposeWith(Disposables);
+                .SubscribeRC(_ => Flux.SettingsProvider.PersistLocalSettings(), this);
 
-            ProbeOffsetsCommand = ReactiveCommand.CreateFromTask(async () =>
+            ProbeOffsetsCommand = ReactiveCommandBaseRC.CreateFromTask(async () =>
             {
-                if (HasZProbe)
+                var tool_z_probe_unit = Flux.ConnectionProvider.GetArrayUnit(m => m.AXIS_PROBE, "tool_z");
+                var has_tool_z_probe = Flux.ConnectionProvider.HasVariable(m => m.AXIS_PROBE, tool_z_probe_unit);
+                if (has_tool_z_probe)
+                {
                     await ProbeOffsetsAsync(false);
+                }
                 else
-                    Flux.Navigator.Navigate(ManualCalibration);
-            }, can_probe)
-                .DisposeWith(Disposables);
+                {
+                    await Flux.ConnectionProvider.CancelPrintAsync(true);
+
+                    if (Flux.ConnectionProvider.HasVariable(c => c.Z_BED_HEIGHT))
+                        await Flux.ConnectionProvider.WriteVariableAsync(c => c.Z_BED_HEIGHT, FluxViewModel.MaxZBedHeight);
+
+                    if (Flux.ConnectionProvider.HasVariable(c => c.ENABLE_VACUUM))
+                        await Flux.ConnectionProvider.WriteVariableAsync(c => c.ENABLE_VACUUM, true);
+
+                    if (Flux.ConditionsProvider.ProbeCondition is ProbeConditionViewModel probe_condition)
+                        probe_condition.IsProbed = false;
+
+                    if (Flux.ConditionsProvider.FeelerGaugeCondition is FeelerGaugeConditionViewModel feeler_gauge_condition)
+                        feeler_gauge_condition.Value = default;
+
+                    Flux.Navigator.Navigate(ManualCalibration.Value);
+                }
+            }, this, can_probe);
 
             var offsets = Offsets.Connect()
                 .ChangeKey(f => $"{f.Feeder.Position}")
                 .Transform(f => (IRemoteControl)f)
-                .AsObservableCache()
-                .DisposeWith(Disposables);
+                .AsObservableCacheRC(this);
 
-            ManualCalibration = new ManualCalibrationViewModel(this);
-            ManualCalibration.InitializeRemoteView();
-            ManualCalibration.DisposeWith(Disposables);
+            ManualCalibration = new Lazy<ManualCalibrationViewModel>(() => new ManualCalibrationViewModel(Flux, this));
         }
 
-        void ModifyOffset(Func<double, double> edit_func)
+        private void ModifyOffset(Func<double, double> edit_func)
         {
             var old_offset = GlobalZOffset.ValueOr(() => 0.0);
             var new_offset = edit_func(old_offset);
@@ -181,89 +181,30 @@ namespace Flux.ViewModels
 
         public async Task ProbeOffsetsAsync(bool hard_probe)
         {
-            var sorted_valid_offsets = SortedOffsets.Items.Where(o => o.ProbeState != FluxProbeState.ERROR_PROBE);
+            var sorted_valid_offsets = Offsets.Items
+                .OrderBy(o => o.Feeder.Position)
+                .Where(o => o.ProbeState != FluxProbeState.ERROR_PROBE);
+
             if (!hard_probe)
             {
                 if (sorted_valid_offsets.Any(o => o.ProbeState == FluxProbeState.VALID_PROBE))
                 {
-                    var result = await Flux.ShowConfirmDialogAsync("CALIBRAZIONE UTENSILI", $"VUOI RICALIBRARE TUTTI GLI UTENSILI? {Environment.NewLine}LE CALIBRAZIONI PRECEDENTI VERRANNO PERSE.");
-                    if (result != ContentDialogResult.Primary)
+                    var result = await Flux.ShowDialogAsync(f => new ConfirmDialog(f, new RemoteText("toolCalibration", true), new RemoteText()));
+                    if (result.result != DialogResult.Primary)
                         return;
                 }
                 else
                 {
-                    var result = await Flux.ShowConfirmDialogAsync("CALIBRAZIONE UTENSILI", "VUOI CALIBRARE TUTTI GLI UTENSILI?");
-                    if (result != ContentDialogResult.Primary)
+                    var result = await Flux.ShowDialogAsync(f => new ConfirmDialog(f, new RemoteText("toolCalibrationOverride", true), new RemoteText()));
+                    if (result.result != DialogResult.Primary)
                         return;
-                }
-            }
-
-            var temp_chamber = Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_CHAMBER);
-            if (!await Flux.ConnectionProvider.WriteVariableAsync(m => m.TEMP_CHAMBER, 40) ||
-                !await WaitUtils.WaitForOptionalAsync(temp_chamber, t => t.Current >= t.Target, TimeSpan.FromMinutes(30)))
-            {
-                await Flux.ConnectionProvider.CancelPrintAsync(true);
-                Flux.Messages.LogMessage("Errore di tastatura", "Camera ancora calda o operazione annullata", MessageLevel.ERROR, 0);
-                return;
-            }
-
-            var has_plate = await Flux.ConnectionProvider.ReadVariableAsync(m => m.HAS_PLATE);
-            if (has_plate.HasValue && has_plate.Value)
-            {
-                var temp_plate = Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_PLATE);
-                if (!await Flux.ConnectionProvider.WriteVariableAsync(m => m.TEMP_PLATE, 40) ||
-                    !await WaitUtils.WaitForOptionalAsync(temp_plate, t => t.Current >= t.Target, TimeSpan.FromMinutes(30)))
-                {
-                    await Flux.ConnectionProvider.CancelPrintAsync(true);
-                    Flux.Messages.LogMessage("Errore di tastatura", "Piatto ancora caldo o operazione annullata", MessageLevel.ERROR, 0);
-                    return;
                 }
             }
 
             foreach (var offset in sorted_valid_offsets)
                 await offset.ProbeOffsetAsync();
 
-            /*var offsets_by_temp = Offsets.Items
-                .Where(o => o.Feeder.ToolMaterial.ExtrusionTemp.HasValue)
-                .OrderBy(o => o.Feeder.ToolMaterial.ExtrusionTemp.Value);
-
-            foreach (var offset_by_temp in offsets_by_temp)
-            {
-                var feeder = offset_by_temp.Feeder;
-                if (!feeder.ToolMaterial.ExtrusionTemp.HasValue)
-                    continue;
-
-                var extrusion_temp = feeder.ToolMaterial.ExtrusionTemp.Value;
-                await Flux.ConnectionProvider.SetExtruderTemperatureAsync(feeder.Position, extrusion_temp, false);
-            }
-
-            foreach (var offset_by_temp in offsets_by_temp)
-            { 
-                if (!await offset_by_temp.ProbeOffsetAsync())
-                    break;
-            }
-
-            foreach (var offset_by_temp in offsets_by_temp)
-            {
-                var feeder = offset_by_temp.Feeder;
-                await Flux.ConnectionProvider.SetExtruderTemperatureAsync(feeder.Position, 0.0, false);
-            }*/
-        }
-
-    }
-
-    public class LayerHeightComparer : IEqualityComparer<double>
-    {
-        public LayerHeightComparer()
-        {
-        }
-        public bool Equals(double x, double y)
-        {
-            return Math.Round(x, 2) == Math.Round(y, 2);
-        }
-        public int GetHashCode(double d)
-        {
-            return Math.Round(d, 2).GetHashCode();
+            await Flux.ConnectionProvider.CancelPrintAsync(true);
         }
     }
 }

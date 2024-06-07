@@ -1,10 +1,12 @@
-﻿using DynamicData;
-using DynamicData.Kernel;
-using Modulo3DStandard;
+﻿using DynamicData.Kernel;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
+using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Reactive;
+using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
 
@@ -18,8 +20,8 @@ namespace Flux.ViewModels
 
     public interface IMemoryVariableBase : IRemoteControl
     {
-        public string VariableName { get; }
-        public IFLUX_VariableBase VariableBase { get; }
+        string VariableName { get; }
+        IFLUX_VariableBase VariableBase { get; }
     }
 
     public class MemoryVariableViewModel : RemoteControl<MemoryVariableViewModel>, IMemoryVariableBase
@@ -32,155 +34,146 @@ namespace Flux.ViewModels
         public string VariableName => Variable.Name;
 
         [RemoteCommand]
-        public Optional<ReactiveCommand<Unit, Unit>> SetValueCommand { get; }
+        public Optional<ReactiveCommandBaseRC<Unit, Unit>> SetValueCommand { get; }
 
-        private ObservableAsPropertyHelper<Optional<object>> _Value;
-        [RemoteOutput(true)]
+        [RemoteCommand]
+        public Optional<ReactiveCommandBaseRC<Unit, Unit>> ToggleValueCommand { get; }
+
+        [RemoteCommand]
+        public Optional<ReactiveCommandBaseRC<Unit, Unit>> SetPositionCommand { get; }
+
+        private readonly ObservableAsPropertyHelper<Optional<object>> _Value;
+        [RemoteOutput(true, typeof(MemoryConverter))]
         public Optional<object> Value => _Value.Value;
 
+        private readonly ObservableAsPropertyHelper<bool> _HasValue;
+        [RemoteOutput(true)]
+        public bool HasValue => _HasValue.Value;
 
-        public MemoryVariableViewModel(FluxViewModel flux, IFLUX_Variable variable) : base($"{typeof(MemoryVariableViewModel).GetRemoteControlName()}??{variable.Name}")
+        public MemoryVariableViewModel(FluxViewModel flux, IFLUX_Variable variable, Optional<List<FLUX_VariableAttribute>> attributes)
+            : base($"{typeof(MemoryVariableViewModel).GetRemoteElementClass()};{variable.Name}")
         {
             Flux = flux;
             Variable = variable;
-            SetValueCommand = ReactiveCommand.CreateFromTask(SetValueAsync);
+
+            if (!variable.ReadOnly)
+            {
+                switch (Variable)
+                {
+                    case IFLUX_Variable<bool, bool> @bool:
+                        SetValueCommand = ReactiveCommandBaseRC.CreateFromTask(() => SetValueAsync(@bool,
+                            b => b ? "1" : "0", s => int.Parse(s) == 1), this);
+                        ToggleValueCommand = ReactiveCommandBaseRC.CreateFromTask(() => ToggleValueAsync(@bool), this);
+                        break;
+
+                    case IFLUX_Variable<double, double> @double:
+                        SetValueCommand = ReactiveCommandBaseRC.CreateFromTask(() => SetValueAsync(@double,
+                            d => $"{d:0.##}".Replace(",", "."), s => double.Parse(s, NumberStyles.Float, CultureInfo.InvariantCulture)), this);
+                        break;
+
+                    case IFLUX_Variable<short, short> @short:
+                        SetValueCommand = ReactiveCommandBaseRC.CreateFromTask(() => SetValueAsync(@short,
+                            s => $"{s}", s => short.Parse(s)), this);
+                        break;
+
+                    case IFLUX_Variable<ushort, ushort> @ushort:
+                        SetValueCommand = ReactiveCommandBaseRC.CreateFromTask(() => SetValueAsync(@ushort,
+                            s => $"{s}", s => ushort.Parse(s)), this);
+                        break;
+
+                    case IFLUX_Variable<string, string> @string:
+                        SetValueCommand = ReactiveCommandBaseRC.CreateFromTask(() => SetValueAsync(@string,
+                            s => s, s => s), this);
+                        break;
+                }
+            }
+
+            if(attributes.HasValue)
+            {
+                var position_attribute = attributes.Value.FirstOrOptional(a => a is FLUX_VariablePositionAttribute);
+                if(position_attribute.HasValue)
+                    SetPositionCommand = ReactiveCommandBaseRC.CreateFromTask(() => SetPositionAsync((FLUX_VariablePositionAttribute)position_attribute.Value), this);
+            }
 
             _Value = Variable.IValueChanged
-                .ToProperty(this, v => v.Value);
+                .ToPropertyRC(this, v => v.Value);
 
-
+            _HasValue = variable.IValueChanged
+                .Select(v => v.HasValue)
+                .ToPropertyRC(this, v => v.HasValue);
         }
 
-        private async Task SetValueAsync()
+        private async Task SetPositionAsync(FLUX_VariablePositionAttribute position_attribute)
         {
-            var cb_virtual_memory = ComboOption.Create("cbVirtual", "MEMORIA VIRTUALE?", Enum.GetValues<BoolSelection>(), b => (uint)b);
-            switch (Variable)
-            {
-                case IFLUX_Variable<bool, bool> @bool:
-                    var start_value = (uint)@bool.Value.ConvertOr(b => b ? BoolSelection.True : BoolSelection.False, () => BoolSelection.False);
-                    var cb_bool_value = ComboOption.Create("cbValue", "VALORE?", Enum.GetValues<BoolSelection>(), b => (uint)b, start_value);
-                        
-                    var bool_result = await Flux.ShowSelectionAsync(
-                        VariableName,
-                        Observable.Return(true),
-                        cb_virtual_memory,
-                        cb_bool_value);
+            if (Variable is not IFLUX_Variable<double, double> @double)
+                return;
 
-                    if (bool_result == ContentDialogResult.Primary &&
-                        cb_virtual_memory.HasValue)
-                    {
-                        var value = cb_bool_value.Value.ValueOr(() => BoolSelection.False) == BoolSelection.True;
-                        if (cb_virtual_memory.Value == BoolSelection.True)
-                            @bool.SetMemoryValue(value);
-                        else
-                            await Flux.ConnectionProvider.WriteVariableAsync(@bool, value);
-                    }
-                    break;
+            var axis_position = await Flux.ConnectionProvider.ReadVariableAsync(c => c.AXIS_POSITION);
+            if (!axis_position.HasValue)
+                return;
 
-                case IFLUX_Variable<double, double> @double:
-                    var tb_double_value = new TextBox("tbValue", "VALORE?", $"{@double.Value.ValueOr(() => 0):0.###}".Replace(",", "."));
-                    
-                    var double_result = await Flux.ShowSelectionAsync(
-                        VariableName,
-                        Observable.Return(true),
-                        cb_virtual_memory,
-                        tb_double_value);
+            var variable_store = Flux.ConnectionProvider.VariableStoreBase;
+            var transformed_position = variable_store.MoveTransform.InverseTransformPosition(axis_position.Value, false);
+            if (!transformed_position.HasValue)
+                return;
 
-                    if (double_result == ContentDialogResult.Primary &&
-                        cb_virtual_memory.HasValue &&
-                        double.TryParse(
-                            tb_double_value.Value,
-                            NumberStyles.Float, 
-                            CultureInfo.InvariantCulture,
-                            out var double_value))
-                    {
-                        if (cb_virtual_memory.Value == BoolSelection.True)
-                            @double.SetMemoryValue(double_value);
-                        else
-                            await Flux.ConnectionProvider.WriteVariableAsync(@double, double_value);
-                    }
-                    break;
+            var variable_position = transformed_position.Value.Axes.Dictionary.Lookup(position_attribute.Axis);
+            if(!variable_position.HasValue) 
+                return;
 
-                case IFLUX_Variable<short, short> @short:
-                    var tb_short_value = new TextBox("tbValue", "VALORE?", @short.Value.ValueOr(() => (short)0).ToString());
-                    
-                    var short_result = await Flux.ShowSelectionAsync(
-                        VariableName,
-                        Observable.Return(true),
-                        cb_virtual_memory,
-                        tb_short_value);
-
-                    if (short_result == ContentDialogResult.Primary &&
-                        cb_virtual_memory.HasValue &&
-                        short.TryParse(tb_short_value.Value, out var short_value))
-                    {
-                        if (cb_virtual_memory.Value == BoolSelection.True)
-                            @short.SetMemoryValue(short_value);
-                        else
-                            await Flux.ConnectionProvider.WriteVariableAsync(@short, short_value);
-                    }
-                    break;
-
-                case IFLUX_Variable<ushort, ushort> word:
-                    var tb_word_value = new TextBox("tbValue", "VALORE?", word.Value.ValueOr(() => (ushort)0).ToString());
-                    
-                    var word_result = await Flux.ShowSelectionAsync(
-                        VariableName,
-                        Observable.Return(true),
-                        cb_virtual_memory,
-                        tb_word_value);
-
-                    if (word_result == ContentDialogResult.Primary &&
-                        cb_virtual_memory.HasValue && 
-                        ushort.TryParse(tb_word_value.Value, out var word_value))
-                    {
-                        if (cb_virtual_memory.Value == BoolSelection.True)
-                            word.SetMemoryValue(word_value);
-                        else
-                            await Flux.ConnectionProvider.WriteVariableAsync(word, word_value);
-                    }
-                    break;
-
-
-                case IFLUX_Variable<string, string> @string:
-                    var tb_string_value = new TextBox("tbValue", "VALORE?", @string.Value.ValueOr(() => ""));
-                    
-                    var string_result = await Flux.ShowSelectionAsync(
-                        VariableName,
-                        Observable.Return(true),
-                        cb_virtual_memory,
-                        tb_string_value);
-
-                    if (string_result == ContentDialogResult.Primary &&
-                        cb_virtual_memory.HasValue)
-                    {
-                        if (cb_virtual_memory.Value == BoolSelection.True)
-                            @string.SetMemoryValue(tb_string_value.Value);
-                        else
-                            await Flux.ConnectionProvider.WriteVariableAsync(@string, tb_string_value.Value);
-                    }
-                    break;
-            }
+            var position = double.Round(variable_position.Value, 2);
+            await @double.WriteAsync(position);
         }
 
-        private async Task SetValueAsync(Func<ContentDialog, bool, Task> show_content_dialog)
+        private async Task ToggleValueAsync(IFLUX_Variable<bool, bool> variable)
         {
             try
             {
-                using var dialog = new ContentDialog(Flux, Variable.Name,
-                    cancel: () => Task.CompletedTask,
-                    confirm: () => Task.CompletedTask);
+                Optional<bool> value = await variable.ReadAsync();
+                if (!value.HasValue)
+                    return;
 
-                var cb_virtual_memory = ComboOption.Create("cbVirtual", "MEMORIA VIRTUALE?", Enum.GetValues<BoolSelection>(), b => (uint)b);
-                dialog.AddContent(cb_virtual_memory);
-                var is_virtual = cb_virtual_memory.Value.ValueOr(() => BoolSelection.False) == BoolSelection.True;
-
-                await show_content_dialog(dialog, is_virtual);
+                await variable.WriteAsync(!value.Value);
             }
             catch (Exception ex)
             {
-                Flux.Messages.LogException(this, ex);
             }
         }
+
+        private async Task SetValueAsync<TData>(IFLUX_Variable<TData, TData> variable, Func<TData, string> get_str, Func<string, Optional<TData>> get_value)
+        {
+            try
+            {
+                Optional<TData> value = await variable.ReadAsync();
+                var result = await Flux.ShowDialogAsync(f => new SetVariableDialog(f, value.Convert(get_str), variable));
+                if (result.result != DialogResult.Primary || !result.data.HasValue)
+                    return;
+
+                value = get_value(result.data.Value);
+                if (!value.HasValue)
+                    return;
+
+                await variable.WriteAsync(value.Value);
+            }
+            catch (Exception ex)
+            { 
+            }
+        }
+    }
+
+    public class SetVariableDialog : InputDialog<SetVariableDialog, string>
+    {
+        private Optional<string> _Value;
+        [RemoteInput()]
+        public Optional<string> Value
+        {
+            get => _Value;
+            set => this.RaiseAndSetIfChanged(ref _Value, value);
+        }
+        public SetVariableDialog(IFlux flux, Optional<string> startValue, IFLUX_Variable variable) : base(flux, startValue, new RemoteText(variable.Name, false))
+        {
+            Value = startValue;
+        }
+        public override Optional<string> Confirm() => Value;
     }
 }

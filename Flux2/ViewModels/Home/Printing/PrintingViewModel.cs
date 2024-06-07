@@ -1,6 +1,6 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
@@ -14,11 +14,11 @@ namespace Flux.ViewModels
     public class PrintingViewModel : HomePhaseViewModel<PrintingViewModel>
     {
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> StartCommand { get; private set; }
+        public ReactiveCommandBaseRC<Unit, Unit> StartCommand { get; private set; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> HoldCommand { get; private set; }
+        public ReactiveCommandBaseRC<Unit, Unit> HoldCommand { get; private set; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> ResetCommand { get; private set; }
+        public ReactiveCommandBaseRC<Unit, Unit> ResetCommand { get; private set; }
 
         private ObservableAsPropertyHelper<Optional<string>> _SelectedMCodeName;
         [RemoteOutput(true)]
@@ -40,7 +40,7 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public IEnumerable<string> ExpectedNozzles => _ExpectedNozzles.Value;
 
-        public PrintingViewModel(FluxViewModel flux) : base(flux, "printing")
+        public PrintingViewModel(FluxViewModel flux) : base(flux)
         {
         }
 
@@ -53,73 +53,89 @@ namespace Flux.ViewModels
 
             var canStart = eval
                 .Select(e =>
-                    e.status.IsEnabledAxis.ValueOrDefault() &&
-                    e.status.IsHomed.ValueOrDefault() &&
-                    e.printing.SelectedPartProgram.HasValue &&
+                    e.status.IsEnabledAxis &&
+                    e.status.IsHomed &&
+                    e.printing.MCode.HasValue &&
                     e.status.CanSafePrint);
 
             var canHold = eval
                 .Select(e =>
-                    e.status.IsEnabledAxis.ValueOrDefault() &&
-                    e.status.IsHomed.ValueOrDefault() &&
-                    e.printing.SelectedPartProgram.HasValue &&
-                    e.status.CanSafeHold);
+                    e.status.IsEnabledAxis &&
+                    e.status.IsHomed &&
+                    e.status.CanSafeHold &&
+                    e.printing.MCode.HasValue &&
+                    !e.printing.Recovery.HasValue);
 
             var canStop = eval
                 .Select(e =>
-                    e.status.IsEnabledAxis.ValueOrDefault() &&
-                    e.status.IsHomed.ValueOrDefault() &&
-                    e.printing.SelectedPartProgram.HasValue &&
+                    e.status.IsEnabledAxis &&
+                    e.status.IsHomed &&
+                    e.printing.MCode.HasValue &&
                     e.status.CanSafeStop);
 
-            StartCommand = ReactiveCommand.CreateFromTask(StartAsync, canStart);
-            HoldCommand = ReactiveCommand.CreateFromTask(HoldAsync, canHold);
-            ResetCommand = ReactiveCommand.CreateFromTask(ResetAsync, canStop);
+            StartCommand = ReactiveCommandBaseRC.CreateFromTask(StartPrintAsync, this, canStart);
+            HoldCommand = ReactiveCommandBaseRC.CreateFromTask(PausePrintAsync, this, canHold);
+            ResetCommand = ReactiveCommandBaseRC.CreateFromTask(CancelPrintAsync, this, canStop);
 
             _SelectedMCodeName = Flux.StatusProvider
                 .WhenAnyValue(v => v.PrintingEvaluation)
-                .Select(e => e.SelectedMCode)
+                .Select(e => e.MCode)
                 .Convert(m => m.Name)
-                .ToProperty(this, v => v.SelectedMCodeName);
+                .Throttle(TimeSpan.FromSeconds(0.25))
+                .ToPropertyRC(this, v => v.SelectedMCodeName);
 
             _PrintProgress = Flux.StatusProvider
                 .WhenAnyValue(v => v.PrintProgress)
                 .Select(p => p.Percentage)
-                .ToProperty(this, v => v.PrintProgress);
+                .ToPropertyRC(this, v => v.PrintProgress);
 
             _RemainingTime = Flux.StatusProvider
                 .WhenAnyValue(v => v.PrintProgress)
                 .Select(p => p.RemainingTime)
-                .ToProperty(this, v => v.RemainingTime);
+                .ToPropertyRC(this, v => v.RemainingTime);
 
-            _ExpectedMaterials = Flux.StatusProvider.ExpectedMaterialsQueue.Connect()
-                .QueryWhenChanged()
-                .Select(i => i.Select(i => i.Values.FirstOrOptional(i => !string.IsNullOrEmpty(i.Name))))
+            var current_job = Flux.StatusProvider
+                .WhenAnyValue(s => s.PrintingEvaluation)
+                .Select(s => s.FluxJob);
+
+            var material_queue = Flux.StatusProvider.ExpectedMaterialsQueue.Connect()
+                .QueryWhenChanged();
+
+            var materials = Observable.CombineLatest(
+                current_job, material_queue, (current_job, material_queue) =>
+                material_queue.Items.Select(m => current_job.Convert(j => m.Convert(m => m.Lookup(j.JobKey)))));
+
+            _ExpectedMaterials = materials
                 .Select(i => i.Select(i => i.ConvertOr(i => i.Name, () => "---")))
-                .ToProperty(this, v => v.ExpectedMaterials);
+                .Throttle(TimeSpan.FromSeconds(0.25))
+                .ToPropertyRC(this, v => v.ExpectedMaterials);
 
-            _ExpectedNozzles = Flux.StatusProvider.ExpectedNozzlesQueue.Connect()
-                .QueryWhenChanged()
-                .Select(i => i.Select(i => i.Values.FirstOrOptional(i => !string.IsNullOrEmpty(i.Name))))
+            var nozzle_queue = Flux.StatusProvider.ExpectedNozzlesQueue.Connect()
+                .QueryWhenChanged();
+
+            var nozzles = Observable.CombineLatest(
+                current_job, nozzle_queue, (current_job, nozzle_queue) =>
+                nozzle_queue.Items.Select(m => current_job.Convert(j => m.Convert(m => m.Lookup(j.JobKey)))));
+
+            _ExpectedNozzles = nozzles
                 .Select(i => i.Select(i => i.ConvertOr(i => i.Name, () => "---")))
-                .ToProperty(this, v => v.ExpectedNozzles);
-
-            InitializeRemoteView();
+                .Throttle(TimeSpan.FromSeconds(0.25))
+                .ToPropertyRC(this, v => v.ExpectedNozzles);
         }
 
-        public async Task ResetAsync()
+        public async Task CancelPrintAsync()
         {
             await Flux.ConnectionProvider.CancelPrintAsync(false);
         }
 
-        public async Task HoldAsync()
+        public async Task PausePrintAsync()
         {
-            await Flux.ConnectionProvider.HoldAsync(false);
+            await Flux.ConnectionProvider.PausePrintAsync(false);
         }
 
-        public async Task StartAsync()
+        public async Task StartPrintAsync()
         {
-            await Flux.ConnectionProvider.StartAsync();
+            await Flux.ConnectionProvider.StartPrintAsync(false);
         }
 
         public Task EnterPhaseAsync()

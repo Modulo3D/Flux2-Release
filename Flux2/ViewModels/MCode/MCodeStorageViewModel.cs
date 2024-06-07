@@ -1,7 +1,6 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Modulo3DDatabase;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
@@ -9,14 +8,19 @@ using System.Linq;
 using System.Reactive;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
     public class MCodeStorageViewModel : RemoteControl<MCodeStorageViewModel>, IFluxMCodeStorageViewModel
     {
+
         public MCodeAnalyzer Analyzer { get; }
 
-        private ObservableAsPropertyHelper<ushort> _FileNumber;
+        public MCodeKey MCodeKey { get; }
+
+        private readonly ObservableAsPropertyHelper<ushort> _FileNumber;
         [RemoteOutput(true)]
         public ushort FileNumber => _FileNumber.Value;
 
@@ -31,7 +35,7 @@ namespace Flux.ViewModels
             set => this.RaiseAndSetIfChanged(ref _UploadPercentage, value);
         }
 
-        private ObservableAsPropertyHelper<bool> _IsUploading;
+        private readonly ObservableAsPropertyHelper<bool> _IsUploading;
         public bool IsUploading => _IsUploading.Value;
 
         private bool _ShowInfo;
@@ -45,49 +49,47 @@ namespace Flux.ViewModels
         public IObservableCache<Material, ushort> Materials { get; }
 
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> DeleteMCodeStorageCommand { get; }
+        public ReactiveCommandBaseRC<Unit, Unit> DeleteMCodeStorageCommand { get; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> SelectMCodeStorageCommand { get; }
+        public ReactiveCommandBaseRC<Unit, Unit> CancelSelectMCodeStorageCommand { get; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> CancelSelectMCodeStorageCommand { get; }
-        [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> ToggleMCodeStorageInfoCommand { get; }
+        public ReactiveCommandBaseRC<Unit, Unit> ToggleMCodeStorageInfoCommand { get; }
 
-        private ObservableAsPropertyHelper<bool> _CanSelect;
-        public bool CanSelect => _CanSelect.Value;
-
-        private ObservableAsPropertyHelper<bool> _CanDelete;
+        private readonly ObservableAsPropertyHelper<bool> _CanDelete;
         public bool CanDelete => _CanDelete.Value;
 
-        public MCodeStorageViewModel(MCodesViewModel mcodes, MCodeAnalyzer analyzer) : base($"{typeof(MCodeStorageViewModel).GetRemoteControlName()}??{analyzer.MCode.MCodeGuid}")
+        public MCodeStorageViewModel(FluxViewModel flux, MCodesViewModel mcodes, MCodeKey mcode_key, MCodeAnalyzer analyzer) 
+            : base($"{typeof(MCodeStorageViewModel).GetRemoteElementClass()};{mcode_key}")
         {
             MCodes = mcodes;
             Analyzer = analyzer;
+            MCodeKey = mcode_key;
 
             _IsUploading = this.WhenAnyValue(v => v.UploadPercentage)
                 .Select(p => p > 0)
-                .ToProperty(this, v => v.IsUploading);
+                .ToPropertyRC(this, v => v.IsUploading);
 
-            Materials = Flux.DatabaseProvider.WhenAnyValue(v => v.Database)
-                .Select(db => FindDocuments<Material>(db, r => r.MaterialId))
+            Materials = Observable.CombineLatest(
+                Flux.DatabaseProvider.WhenAnyValue(v => v.Database),
+                this.WhenAnyValue(v => v.Analyzer),
+                (db, a) => FindDocumentsAsync<Material>(db, a, r => r.MaterialId))
+                .Select(o => o.ToObservable()).Switch()
                 .ToObservableChangeSet(t => t.position)
                 .Transform(t => t.document)
-                .AsObservableCache()
-                .DisposeWith(Disposables);
+                .AsObservableCacheRC(this);
 
-            Nozzles = Flux.DatabaseProvider.WhenAnyValue(v => v.Database)
-                .Select(db => FindDocuments<Nozzle>(db, r => r.NozzleId))
+            Nozzles = Observable.CombineLatest(
+                Flux.DatabaseProvider.WhenAnyValue(v => v.Database),
+                this.WhenAnyValue(v => v.Analyzer),
+                (db, a) => FindDocumentsAsync<Nozzle>(db, a, r => r.NozzleId))
+                .Select(o => o.ToObservable()).Switch()
                 .ToObservableChangeSet(t => t.position)
                 .Transform(t => t.document)
-                .AsObservableCache()
-                .DisposeWith(Disposables);
+                .AsObservableCacheRC(this);
 
-            _FileNumber = mcodes.AvaiableMCodes
-                .Connect()
-                .QueryWhenChanged()
-                .Select(FindFileNumber)
-                .ToProperty(this, f => f.FileNumber)
-                .DisposeWith(Disposables);
+            _FileNumber = mcodes.AvaiableMCodes.Connect()
+                .QueryWhenChanged(FindFileNumber)
+                .ToPropertyRC(this, f => f.FileNumber);
 
             var is_selecting_file = Flux.MCodes
                 .WhenAnyValue(f => f.IsPreparingFile)
@@ -100,97 +102,80 @@ namespace Flux.ViewModels
                 .StartWith(false);
 
             _CanDelete = Observable.CombineLatest(
-                is_selecting_file,
                 in_queue,
-                (s, q) => !s && !q)
-                .ToProperty(this, v => v.CanDelete)
-                .DisposeWith(Disposables);
-
-            _CanSelect = Observable.CombineLatest(
                 is_selecting_file,
-                Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS),
-                Flux.StatusProvider.WhenAnyValue(e => e.PrintingEvaluation),
-                CanSelectMCode)
-                .ToProperty(this, v => v.CanSelect)
-                .DisposeWith(Disposables);
+                (q, s) => !s && !q)
+                .ToPropertyRC(this, v => v.CanDelete);
 
-            ToggleMCodeStorageInfoCommand = ReactiveCommand.Create(() => { ShowInfo = !ShowInfo; })
-                .DisposeWith(Disposables);
+            ToggleMCodeStorageInfoCommand = ReactiveCommandBaseRC.Create(() => { ShowInfo = !ShowInfo; }, this);
 
-            DeleteMCodeStorageCommand = ReactiveCommand.CreateFromTask(
-                async () => { await mcodes.DeleteFileAsync(false, this); },
-                this.WhenAnyValue(v => v.CanDelete))
-                .DisposeWith(Disposables);
+            DeleteMCodeStorageCommand = ReactiveCommandBaseRC.CreateFromTask(
+                async () => { await mcodes.DeleteAsync(false, this); }, this,
+                this.WhenAnyValue(v => v.CanDelete));
 
-            SelectMCodeStorageCommand = ReactiveCommand.CreateFromTask(
-                async () => { await mcodes.AddToQueueAsync(this); },
-                this.WhenAnyValue(v => v.CanSelect))
-                .DisposeWith(Disposables);
+            AddCommand("selectMCodeStorage", mcodes.AddToQueueCommand, this);
 
-            CancelSelectMCodeStorageCommand = ReactiveCommand.Create(
-                () => mcodes.CancelPrepareMCode(),
-                this.WhenAnyValue(v => v.IsUploading))
-                .DisposeWith(Disposables);
+            CancelSelectMCodeStorageCommand = ReactiveCommandBaseRC.Create(
+                () => mcodes.CancelPrepareMCode(), this,
+                this.WhenAnyValue(v => v.IsUploading));
 
-            var name = analyzer.MCode.Name;
-            AddOutput("name", name);
+            var quanitites = Flux.DatabaseProvider
+                .WhenAnyValue(d => d.Database)
+                .Select(db =>
+                {
+                    return Analyzer.MCode.FeederReports
+                        .Select(f => get_material(f.Value))
+                        .Select(m => m.Result)
+                        .Where(m => m.material.HasValue)
+                        .Select(m => ExtrusionG.CreateTotalExtrusion(default, m.feeder, m.material.Value))
+                        .Select(e => e.WeightG);
 
-            var infoToggled = this.WhenAnyValue(v => v.ShowInfo);
-            AddOutput("infoToggled", infoToggled);
+                    async Task<(FeederReport feeder, Optional<Material> material)> get_material(FeederReport feeder)
+                    {
+                        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                        var result = await db
+                            .ConvertAsync(db => db.FindByIdAsync<Material>(feeder.MaterialId, cts.Token))
+                            .ConvertAsync(r => r.FirstOrOptional(m => m != null));
+                        return (feeder, result);
+                    }
+                });
 
-            var duration = analyzer.MCode.Duration;
-            AddOutput("duration", duration, typeof(TimeSpanConverter));
-
-            var quantities = analyzer.MCode.FeederReports.Select(f => new Extrusion(f.Value)).Select(e => e.WeightG);
-            AddOutput("quantities", quantities, typeof(EnumerableConverter<WeightConverter, double>));
-
-            var quality = analyzer.MCode.PrintQuality;
-            AddOutput("quality", quality);
-
-            var created = analyzer.MCode.Created;
-            AddOutput("created", created, typeof(DateTimeConverter<DateTimeFormat>));
-
-            var materials = Flux.DatabaseProvider.WhenAnyValue(v => v.Database)
-                .Select(db => FindDocuments<Material>(db, r => r.MaterialId).Select(d => d.document.Name));
-            AddOutput("materials", materials);
-
-            var nozzles = Flux.DatabaseProvider.WhenAnyValue(v => v.Database)
-                .Select(db => FindDocuments<Nozzle>(db, r => r.NozzleId).Select(d => d.document.Name));
-            AddOutput("nozzles", nozzles);
+            AddOutput("name", Analyzer.MCode.Name);
+            AddOutput("quality", Analyzer.MCode.PrintQuality);
+            AddOutput("quantities", quanitites, typeof(EnumerableConverter<WeightConverter, double>));
+            AddOutput("infoToggled", this.WhenAnyValue(v => v.ShowInfo));
+            AddOutput("pos", Nozzles.Connect().QueryWhenChanged(f => f.Keys));
+            AddOutput("nozzles", Nozzles.Connect().QueryWhenChanged(f => f.Items.Select(i => i.Name)));
+            AddOutput("materials", Materials.Connect().QueryWhenChanged(f => f.Items.Select(i => i.Name)));
+            AddOutput("duration", Analyzer.MCode.Duration, typeof(TimeSpanConverter));
+            AddOutput("created", Analyzer.MCode.Created, typeof(DateTimeConverter<RelativeDateTimeFormat>));
         }
 
-        private bool CanSelectMCode(bool selecting, Optional<FLUX_ProcessStatus> status, PrintingEvaluation printing_eval)
+        private ushort FindFileNumber(IQuery<IFluxMCodeStorageViewModel, MCodeKey> mcode_analyzers)
         {
-            if (selecting)
-                return false;
-            if (!printing_eval.SelectedMCode.HasValue && !printing_eval.Recovery.HasValue)
-                return true;
-            if (!status.ConvertOr(s => s == FLUX_ProcessStatus.IDLE, () => false))
-                return false;
-            return true;
-        }
-        private ushort FindFileNumber(IQuery<IFluxMCodeStorageViewModel, Guid> mcodes_query)
-        {
-            var mcodes = mcodes_query.Items
-                .OrderByDescending(m => m.Analyzer.MCode.Created)
-                .Select((mcode, index) => (mcode.Analyzer.MCode, index))
-                .ToDictionary(t => t.MCode.MCodeGuid, t => t.index);
+            var mcodes = mcode_analyzers.Items
+                .OrderByDescending(a => a.Analyzer.MCode.Created)
+                .Select((a, index) => (a.Analyzer.MCode.MCodeKey, index))
+                .ToDictionary(t => t.MCodeKey, t => t.index);
 
-            if (mcodes.TryGetValue(Analyzer.MCode.MCodeGuid, out var index))
-                return (ushort)index;
+            if (!mcodes.TryGetValue(Analyzer.MCode.MCodeKey, out var index))
+                return 0;
 
-            return 0;
+            return (ushort)index;
         }
-        private IEnumerable<(TDocument document, ushort position)> FindDocuments<TDocument>(Optional<ILocalDatabase> database, Func<FeederReport, int> get_id)
-            where TDocument : IDocument
+        private static async IAsyncEnumerable<(TDocument document, ushort position)> FindDocumentsAsync<TDocument>(Optional<ILocalDatabase> database, Optional<MCodeAnalyzer> analyzer, Func<FeederReport, int> get_id)
+            where TDocument : IDocument, new()
         {
             if (!database.HasValue)
                 yield break;
-            foreach (var feeder in Analyzer.MCode.FeederReports)
+            if (!analyzer.HasValue)
+                yield break;
+            foreach (var feeder in analyzer.Value.MCode.FeederReports)
             {
-                var result = database.Value.FindById<TDocument>(get_id(feeder.Value));
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                var result = await database.Value.FindByIdAsync<TDocument>(get_id(feeder.Value), cts.Token);
                 if (result.HasDocuments)
-                    yield return (result.Documents.FirstOrDefault(), feeder.Key);
+                    yield return (result.FirstOrDefault(), feeder.Key);
             }
         }
     }

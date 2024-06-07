@@ -1,26 +1,29 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Linq;
 using System.Reactive;
+using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
-    public class ToolNozzleViewModel : TagViewModel<NFCToolNozzle, (Optional<Tool> tool, Optional<Nozzle> nozzle), ToolNozzleState>, IFluxToolNozzleViewModel
+    public class ToolNozzleViewModel : TagViewModel<ToolNozzleViewModel, NFCToolNozzle, (Optional<Tool> tool, Optional<Nozzle> nozzle), ToolNozzleState>, IFluxToolNozzleViewModel
     {
-        public override int VirtualTagId => 2;
+        public override ushort VirtualTagId => 2;
 
-        public override OdometerViewModel<NFCToolNozzle> Odometer { get; }
+        private readonly ObservableAsPropertyHelper<Optional<FLUX_Temp>> _NozzleTemperature;
+        [RemoteOutput(true, typeof(FluxTemperatureConverter))]
+        public Optional<FLUX_Temp> NozzleTemperature => _NozzleTemperature.Value;
 
-        private ObservableAsPropertyHelper<Optional<FLUX_Temp>> _Temperature;
-        public Optional<FLUX_Temp> Temperature => _Temperature.Value;
-
-        private ObservableAsPropertyHelper<ToolNozzleState> _State;
+        private readonly ObservableAsPropertyHelper<ToolNozzleState> _State;
         public override ToolNozzleState State => _State.Value;
+
+        private ObservableAsPropertyHelper<Optional<IFluxMaterialViewModel>> _MaterialLoaded;
+        public Optional<IFluxMaterialViewModel> MaterialLoaded => _MaterialLoaded.Value;
 
         private bool _InMaintenance;
         public bool InMaintenance
@@ -29,45 +32,82 @@ namespace Flux.ViewModels
             set => this.RaiseAndSetIfChanged(ref _InMaintenance, value);
         }
 
-        public ReactiveCommand<Unit, Unit> ChangeCommand { get; private set; }
+        private readonly ObservableAsPropertyHelper<string> _ToolNozzleBrush;
+        [RemoteOutput(true)]
+        public string ToolNozzleBrush => _ToolNozzleBrush.Value;
 
-        public ToolNozzleViewModel(FeederViewModel feeder) : base(feeder, s => s.ToolNozzles, (db, tn) =>
+        public ReactiveCommandBaseRC<Unit, Unit> ChangeCommand { get; private set; }
+
+        private readonly ObservableAsPropertyHelper<Optional<string>> _DocumentLabel;
+        [RemoteOutput(true)]
+        public override Optional<string> DocumentLabel => _DocumentLabel.Value;
+
+        public ToolNozzleViewModel(FluxViewModel flux, FeedersViewModel feeders, FeederViewModel feeder) : base(flux, feeders, feeder, feeder.Position, s => s.NFCToolNozzles, async (db, tn) =>
         {
-            return (tn.GetDocument<Tool>(db, tn => tn.ToolGuid),
-                tn.GetDocument<Nozzle>(db, tn => tn.NozzleGuid));
-        }, t => t.ToolGuid)
+            return (await tn.GetDocumentAsync<Tool>(db, tn => tn.ToolGuid),
+                await tn.GetDocumentAsync<Nozzle>(db, tn => tn.NozzleGuid));
+        }, k => k.ToolId, t => t.ToolGuid, watch_odometer_for_pause: false)
         {
-            var multiplier = feeder.Material.WhenAnyValue(v => v.Document)
-                .Convert(m => m.GetPropertyRW("odometer_multiplier").TryGetValue<double>())
-                .ValueOr(() => 1);
+            var variable_store = Flux.ConnectionProvider.VariableStoreBase;
+            var feeder_index = ArrayIndex.FromZeroBase(Position, variable_store);
 
-            Odometer = new OdometerViewModel<NFCToolNozzle>(this, multiplier);
+            var tool_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TEMP_TOOL, feeder_index);
+            _NozzleTemperature = Flux.ConnectionProvider
+                .ObserveVariable(m => m.TEMP_TOOL, tool_key)
+                .ObservableOrDefault()
+                .ToPropertyRC(this, v => v.NozzleTemperature);
 
-            var tool_key = Flux.ConnectionProvider.VariableStore.GetArrayUnit(m => m.TEMP_TOOL, Feeder.Position);
-            _Temperature = Flux.ConnectionProvider
-                .ObserveVariable(m => m.TEMP_TOOL, tool_key.ValueOr(() => ""))
-                .ToProperty(this, v => v.Temperature);
+            _State = FindToolState()
+                .ToPropertyRC(this, v => v.State);
+
+            _ToolNozzleBrush =
+                this.WhenAnyValue(v => v.State)
+                .Select(tn =>
+                {
+                    if (tn.IsNotLoaded())
+                        return FluxColors.Empty;
+                    if (!tn.Known)
+                        return FluxColors.Error;
+                    if (!tn.Loaded)
+                        return FluxColors.Warning;
+                    if (!tn.Locked)
+                        return FluxColors.Warning;
+                    return FluxColors.Active;
+                })
+                .ToPropertyRC(this, v => v.ToolNozzleBrush);
+
+            _DocumentLabel = this.WhenAnyValue(v => v.Document.nozzle)
+                .Convert(d => d.Name)
+                .ToPropertyRC(this, v => v.DocumentLabel);
         }
 
         public override void Initialize()
         {
-            _State = FindToolState()
-                .ToProperty(this, v => v.State);
+            base.Initialize();
+
+            _MaterialLoaded = Feeder.Materials.Connect()
+                .AutoRefresh(m => m.State)
+                .QueryWhenChanged(m => m.Items.FirstOrOptional(m => m.State.IsLoaded()))
+                .ToPropertyRC(this, v => v.MaterialLoaded);
+
+            var material = Feeder.WhenAnyValue(f => f.SelectedMaterial);
 
             var can_load_unload_tool = Observable.CombineLatest(
-                Flux.StatusProvider.CanSafeCycle,
+                Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation).Select(s => s.CanSafeCycle),
                 this.WhenAnyValue(v => v.State),
-                Feeder.Material.WhenAnyValue(v => v.State),
+                material.ConvertMany(m => m.WhenAnyValue(v => v.State)),
                 (idle, tool, material) =>
                 {
                     if (!idle)
                         return false;
-                    if (!material.IsNotLoaded())
+                    if (!material.HasValue)
+                        return false;
+                    if (!material.Value.IsNotLoaded())
                         return false;
                     return true;
                 });
 
-            ChangeCommand = ReactiveCommand.CreateFromTask(ChangeAsync, can_load_unload_tool);
+            ChangeCommand = ReactiveCommandBaseRC.CreateFromTask(ChangeAsync, this, can_load_unload_tool);
         }
 
         public Task ChangeAsync()
@@ -78,169 +118,95 @@ namespace Flux.ViewModels
         }
         private IObservable<ToolNozzleState> FindToolState()
         {
-            var tool_cur = Flux.ConnectionProvider.ObserveVariable(m => m.TOOL_CUR)
-                .DistinctUntilChanged();
+            var has_tool_change = Flux.ConnectionProvider.VariableStoreBase.HasToolChange;
 
-            var in_idle = Flux.StatusProvider.IsIdle
-                .ValueOrDefault()
+            var tool_cur = Flux.ConnectionProvider
+                .ObserveVariable(m => m.TOOL_CUR);
+
+            var in_idle = Flux.StatusProvider
+                .WhenAnyValue(s => s.StatusEvaluation)
+                .Select(s => s.IsIdle)
                 .DistinctUntilChanged();
 
             var in_change = Flux.ConnectionProvider.ObserveVariable(m => m.IN_CHANGE)
-                .DistinctUntilChanged();
+                .ObservableOr(() => false);
 
             var in_change_error = Observable.CombineLatest(
                 in_idle,
                 in_change,
-                (in_idle, in_change) => in_change.Convert(in_change => in_idle && in_change))
-                .Throttle(TimeSpan.FromSeconds(1));
+                (in_idle, in_change) => in_idle && in_change);
 
-            var inserted = this.WhenAnyValue(v => v.Temperature)
-                .ConvertOr(t => t.Current > -100 && t.Current < 1000, () => false)
-                .DistinctUntilChanged();
+            var inserted = this.WhenAnyValue(v => v.NozzleTemperature)
+                .ConvertOr(t => t.Current > -100 && t.Current < 1000, () => false);
 
-            var mem_magazine_key = Flux.ConnectionProvider.VariableStore.GetArrayUnit(m => m.MEM_TOOL_IN_MAGAZINE, Feeder.Position).ValueOr(() => "");
-            var mem_magazine = Flux.ConnectionProvider.ObserveVariable(m => m.MEM_TOOL_IN_MAGAZINE, mem_magazine_key)
-                .DistinctUntilChanged();
+            var variable_store = Flux.ConnectionProvider.VariableStoreBase;
+            var feeder_index = ArrayIndex.FromZeroBase(Position, variable_store);
 
-            var mem_trailer_key = Flux.ConnectionProvider.VariableStore.GetArrayUnit(m => m.MEM_TOOL_ON_TRAILER, Feeder.Position).ValueOr(() => "");
-            var mem_trailer = Flux.ConnectionProvider.ObserveVariable(m => m.MEM_TOOL_ON_TRAILER, mem_trailer_key)
-                .DistinctUntilChanged();
+            var mem_magazine_key = Flux.ConnectionProvider.GetArrayUnit(m => m.MEM_TOOL_IN_MAGAZINE, feeder_index);
+            var mem_magazine = Flux.ConnectionProvider
+                .ObserveVariable(m => m.MEM_TOOL_IN_MAGAZINE, mem_magazine_key);
 
-            var input_magazine_key = Flux.ConnectionProvider.VariableStore.GetArrayUnit(m => m.TOOL_IN_MAGAZINE, Feeder.Position).ValueOr(() => "");
-            var input_magazine = Flux.ConnectionProvider.ObserveVariable(m => m.TOOL_IN_MAGAZINE, input_magazine_key)
-                .DistinctUntilChanged();
+            var mem_trailer_key = Flux.ConnectionProvider.GetArrayUnit(m => m.MEM_TOOL_ON_TRAILER, feeder_index);
+            var mem_trailer = Flux.ConnectionProvider
+                .ObserveVariable(m => m.MEM_TOOL_ON_TRAILER, mem_trailer_key);
 
-            var input_trailer_key = Flux.ConnectionProvider.VariableStore.GetArrayUnit(m => m.TOOL_ON_TRAILER, Feeder.Position).ValueOr(() => "");
-            var input_trailer = Flux.ConnectionProvider.ObserveVariable(m => m.TOOL_ON_TRAILER, input_trailer_key)
-                .DistinctUntilChanged();
+            var input_magazine_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TOOL_IN_MAGAZINE, feeder_index);
+            var input_magazine = Flux.ConnectionProvider
+                .ObserveVariable(m => m.TOOL_IN_MAGAZINE, input_magazine_key);
+
+            var input_trailer_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TOOL_ON_TRAILER, feeder_index);
+            var input_trailer = Flux.ConnectionProvider
+                .ObserveVariable(m => m.TOOL_ON_TRAILER, input_trailer_key);
 
             var known = this.WhenAnyValue(v => v.Document)
-                .Select(document => document.tool.HasValue && document.nozzle.HasValue)
-                .DistinctUntilChanged();
+                .Select(document => document.tool.HasValue && document.nozzle.HasValue);
 
             var printer_guid = Flux.SettingsProvider.CoreSettings.Local.PrinterGuid;
 
-            var locked = this.WhenAnyValue(v => v.Nfc)
+            var locked = NFCSlot.WhenAnyValue(v => v.Nfc)
                 .Select(nfc => nfc.Tag.ConvertOr(t => t.PrinterGuid == printer_guid, () => false));
 
-            var loaded = this.WhenAnyValue(v => v.Nfc)
-                .Select(nfc => nfc.Tag.ConvertOr(t => t.Loaded == Feeder.Position, () => false));
+            var loaded = NFCSlot.WhenAnyValue(v => v.Nfc)
+                .Select(nfc => nfc.Tag.ConvertOr(t => t.Loaded == Position, () => false));
 
             var in_mateinance = this.WhenAnyValue(v => v.InMaintenance);
 
             return Observable.CombineLatest(
-                in_change_error, inserted, mem_trailer, input_trailer, mem_magazine, input_magazine, known, locked, loaded, in_mateinance,
-                (in_change_error, inserted, mem_trailer, input_trailer, mem_magazine, input_magazine, known, locked, loaded, in_mateinance) =>
+                in_change, in_change_error, tool_cur, inserted, mem_trailer, input_trailer, mem_magazine, input_magazine, known, locked, loaded, in_mateinance,
+                (in_change, in_change_error, tool_cur, inserted, mem_trailer, input_trailer, mem_magazine, input_magazine, known, locked, loaded, in_mateinance) =>
                 {
-                    var on_trailer = mem_trailer.Convert(t => t && t == input_trailer.ValueOr(() => t)).ValueOr(() => false);
-                    var in_magazine = mem_magazine.Convert(t => t && t == input_magazine.ValueOr(() => t)).ValueOr(() => false);
-                    return new ToolNozzleState(inserted, known, locked, loaded, on_trailer, in_magazine, in_mateinance, in_change_error.ValueOr(() => false));
+                    var on_trailer = false;
+                    if (input_trailer.HasChange)
+                    {
+                        on_trailer = input_trailer.Change.ValueOr(() => false);
+                        if (mem_trailer.HasChange && mem_trailer.Change != input_trailer.Change)
+                            in_change_error = true;
+                    }
+                    else
+                    {
+                        if (mem_trailer.HasChange)
+                            on_trailer = mem_trailer.Change.ValueOr(() => false);
+                    }
+
+                    var in_magazine = false;
+                    if (input_magazine.HasChange)
+                    {
+                        in_magazine = input_magazine.Change.ValueOr(() => false);
+                        if (mem_magazine.HasChange && mem_magazine.Change != input_magazine.Change)
+                            in_change_error = true;
+                    }
+                    else
+                    {
+                        if (mem_magazine.HasChange)
+                            in_magazine = mem_magazine.Change.ValueOr(() => false);
+                    }
+
+                    if (has_tool_change && on_trailer == in_magazine)
+                        in_change_error = true;
+
+                    var selected = tool_cur.Convert(t => t.GetZeroBaseIndex()).Convert(t => Position == t).ValueOr(() => false);
+                    return new ToolNozzleState(has_tool_change, in_change, selected, inserted, known, locked, loaded, on_trailer, in_magazine, in_mateinance, in_change_error);
                 });
-        }
-
-        public async Task<(bool result, Optional<Tool> tool)> FindNewToolAsync()
-        {
-            var database = Flux.DatabaseProvider.Database;
-            if (!database.HasValue)
-                return default;
-
-            var printer = Flux.SettingsProvider.Printer;
-            if (!printer.HasValue)
-                return (false, default);
-
-            var tool_documents = CompositeQuery.Create(database.Value,
-               db => _ => db.Find(printer.Value, Tool.SchemaInstance), db => db.GetTarget)
-               .Execute()
-               .Convert<Tool>();
-
-            var tools = tool_documents.Documents
-                .OrderBy(d => d.Name)
-                .AsObservableChangeSet(t => t.Id)
-                .AsObservableCache();
-
-            var tool_option = ComboOption.Create("tool", "Utensile:", tools);
-            var tool_result = await Flux.ShowSelectionAsync(
-                $"UTENSILE N.{Feeder.Position + 1}",
-                Observable.Return(true),
-                tool_option);
-
-            if (tool_result != ContentDialogResult.Primary)
-                return default;
-
-            var tool = tool_option.Value;
-            if (!tool.HasValue)
-                return (true, default);
-
-            return (true, tool.Value);
-        }
-        public async Task<(bool result, Optional<Nozzle> nozzle, double max_weight, double cur_weight)> FindNewNozzleAsync(Tool tool)
-        {
-            var database = Flux.DatabaseProvider.Database;
-            if (!database.HasValue)
-                return default;
-
-            var nozzle_documents = CompositeQuery.Create(database.Value,
-               db => _ => db.Find(tool, Nozzle.SchemaInstance), db => db.GetTarget)
-               .Execute()
-               .Convert<Nozzle>();
-
-            if (!nozzle_documents.HasDocuments)
-                return default;
-
-            var nozzles = nozzle_documents.Documents
-                .OrderBy(d => d.Name)
-                .AsObservableChangeSet(n => n.Id)
-                .AsObservableCache();
-
-            var nozzle_weights = new[] { 20000.0, 10000.0 }
-                .AsObservableChangeSet(w => (int)w)
-                .AsObservableCache();
-
-            var nozzle_option = ComboOption.Create("nozzle", "UGELLO:", nozzles);
-            var cur_weight_option = new NumericOption("curWeight", "PESO CORRENTE:", 10000.0, 500.0, converter: typeof(WeightConverter));
-            var max_weight_option = ComboOption.Create("maxWeight", "PESO TOTALE:", nozzle_weights, selection_changed:
-            v =>
-            {
-                cur_weight_option.Min = 0f;
-                cur_weight_option.Max = v.ValueOr(() => 0);
-                cur_weight_option.Value = v.ValueOr(() => 0);
-            }, converter: typeof(WeightConverter));
-
-            var nozzle_result = await Flux.ShowSelectionAsync(
-                $"UGELLO N.{Feeder.Position + 1}",
-                Observable.Return(true),
-                nozzle_option, max_weight_option, cur_weight_option);
-
-            if (nozzle_result != ContentDialogResult.Primary)
-                return (false, default, default, default);
-
-            var nozzle = nozzle_option.Value;
-            if (!nozzle.HasValue)
-                return (true, default, default, default);
-
-            var max_weight = max_weight_option.Value;
-            if (!max_weight.HasValue)
-                return (true, default, default, default);
-
-            var cur_weight = cur_weight_option.Value;
-
-            return (true, nozzle.Value, max_weight.Value, cur_weight);
-        }
-
-        public override async Task<Optional<NFCToolNozzle>> CreateTagAsync()
-        {
-            var tool = await FindNewToolAsync();
-            if (!tool.result)
-                return default;
-
-            if (!tool.tool.HasValue)
-                return default;
-
-            var nozzle = await FindNewNozzleAsync(tool.tool.Value);
-            if (!nozzle.result)
-                return default;
-
-            return new NFCToolNozzle(tool.tool.Value, nozzle.nozzle, nozzle.max_weight, nozzle.cur_weight);
         }
     }
 }

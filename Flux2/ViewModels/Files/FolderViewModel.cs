@@ -1,29 +1,27 @@
 ﻿using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
-using System;
 using System.Reactive;
 using System.Reactive.Disposables;
-using System.Threading;
 
 namespace Flux.ViewModels
 {
     public class FolderViewModel : FSViewModel<FolderViewModel>
     {
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> OpenFolderCommand { get; }
+        public ReactiveCommandBaseRC<Unit, Unit> OpenFolderCommand { get; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> ModifyFolderCommand { get; }
+        public ReactiveCommandBaseRC<Unit, Unit> ModifyFolderCommand { get; }
 
-        public FolderViewModel(FilesViewModel files, Optional<FolderViewModel> folder, FLUX_File file) : base(files, folder, file)
+        public FolderViewModel(FluxViewModel flux, FilesViewModel files, Optional<FolderViewModel> folder, FLUX_File file) : base(flux, files, folder, file)
         {
-            OpenFolderCommand = ReactiveCommand.Create(() =>
+            OpenFolderCommand = ReactiveCommandBaseRC.Create(() =>
             {
                 Files.Folder = this;
-            })
+            }, this)
             .DisposeWith(Disposables);
 
-            ModifyFolderCommand = ReactiveCommand.CreateFromTask(() => files.ModifyFSAsync(this))
+            ModifyFolderCommand = ReactiveCommandBaseRC.CreateFromTask(() => files.ModifyFSAsync(this), this)
                 .DisposeWith(Disposables);
         }
     }

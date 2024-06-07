@@ -1,12 +1,12 @@
 ﻿using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 
 namespace Flux.ViewModels
 {
     public class WebcamViewModel : FluxRoutableViewModel<WebcamViewModel>
     {
-        private ObservableAsPropertyHelper<Optional<string>> _WebcamAddress;
+        private readonly ObservableAsPropertyHelper<Optional<string>> _WebcamAddress;
         [RemoteOutput(true)]
         public Optional<string> WebcamAddress => _WebcamAddress.Value;
 

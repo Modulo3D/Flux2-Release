@@ -1,118 +1,165 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
+using ReactiveUI;
 using System;
 using System.Linq;
+using System.Linq.Expressions;
+using System.Reactive.Disposables;
+using System.Reactive.Linq;
 using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
-    public class NavPanelViewModel<TViewModel> : FluxRoutableNavBarViewModel<TViewModel>
-        where TViewModel : NavPanelViewModel<TViewModel>
+    [RemoteControl(baseClass: typeof(NavPanelViewModel<>))]
+    public class NavPanelViewModel<TNavPanelViewModel> : FluxRoutableNavBarViewModel<TNavPanelViewModel>
+        where TNavPanelViewModel : NavPanelViewModel<TNavPanelViewModel>
     {
-        private SourceList<CmdButton> Buttons { get; }
+        private SourceList<CmdButton> Buttons { get; set; }
 
         [RemoteContent(true)]
         public IObservableList<CmdButton> VisibleButtons { get; }
 
-        public NavPanelViewModel(FluxViewModel flux, string name = default) : base(flux, $"navPanel??{typeof(TViewModel).GetRemoteControlName()}{(string.IsNullOrEmpty(name) ? "" : $"??{name}")}")
+        public NavPanelViewModel(FluxViewModel flux, string name = "") : base(flux, name)
         {
-            Buttons = new SourceList<CmdButton>();
+            SourceListRC.Create(this, v => v.Buttons);
             VisibleButtons = Buttons.Connect()
                 .AutoRefresh(v => v.Visible)
                 .Filter(v => v.Visible)
-                .AsObservableList();
+                .AsObservableListRC(this);
         }
 
-        public void AddRoute(
-            IFluxRoutableViewModel route,
-            Optional<IObservable<bool>> can_navigate = default,
-            Optional<IObservable<bool>> visible = default)
+        public void AddRoute<TFluxRoutableViewModel>(
+            TFluxRoutableViewModel route,
+            OptionalObservable<bool> can_navigate = default,
+            OptionalObservable<bool> visible = default)
+            where TFluxRoutableViewModel : IFluxRoutableViewModel
         {
-            var nav_button = new NavButton(Flux, route, false, can_navigate, visible);
-            Buttons.Add(nav_button);
+            Buttons.Add(new NavButton<TFluxRoutableViewModel>(route.Flux, route, can_navigate, visible));
         }
 
-        public void AddModal(
-            IFluxRoutableViewModel modal,
-            Optional<IObservable<bool>> can_navigate = default,
-            Optional<IObservable<bool>> visible = default,
-            Optional<IObservable<bool>> navigate_back = default,
-            Optional<IObservable<bool>> show_navbar = default)
+        public void AddModal<TFluxRoutableViewModel>(
+            TFluxRoutableViewModel route,
+            OptionalObservable<bool> can_navigate = default,
+            OptionalObservable<bool> visible = default,
+            OptionalObservable<bool> navigate_back = default)
+            where TFluxRoutableViewModel : IFluxRoutableViewModel
         {
-            var nav_modal = new NavModalViewModel(Flux, modal, navigate_back, show_navbar);
-            var nav_button = new NavButton(Flux, nav_modal, false, can_navigate, visible);
-            Buttons.Add(nav_button);
+            var modal = new NavModalViewModel<TFluxRoutableViewModel>(Flux, route, navigate_back);
+            Buttons.Add(new NavButtonModal<TFluxRoutableViewModel>(route.Flux, modal, can_navigate, visible));
+        }
+
+
+        public Lazy<TFluxRoutableViewModel> AddModal<TFluxRoutableViewModel>(
+            Func<TFluxRoutableViewModel> get_route,
+            OptionalObservable<bool> can_navigate = default,
+            OptionalObservable<bool> visible = default,
+            OptionalObservable<bool> navigate_back = default)
+            where TFluxRoutableViewModel : IFluxRoutableViewModel
+        {
+            var lazy_route = new Lazy<TFluxRoutableViewModel>(get_route);
+            var modal = new Lazy<NavModalViewModel<TFluxRoutableViewModel>>(() => new NavModalViewModel<TFluxRoutableViewModel>(Flux, lazy_route.Value, navigate_back));
+            Buttons.Add(new NavButtonModal<TFluxRoutableViewModel>(Flux, modal, can_navigate, visible));
+            return lazy_route;
+        }
+        public void AddModal<TFluxRoutableViewModel>(
+            Lazy<TFluxRoutableViewModel> lazy_route,
+            OptionalObservable<bool> can_navigate = default,
+            OptionalObservable<bool> visible = default,
+            OptionalObservable<bool> navigate_back = default)
+            where TFluxRoutableViewModel : IFluxRoutableViewModel
+        {
+            var modal = new Lazy<NavModalViewModel<TFluxRoutableViewModel>>(() => new NavModalViewModel<TFluxRoutableViewModel>(Flux, lazy_route.Value, navigate_back));
+            Buttons.Add(new NavButtonModal<TFluxRoutableViewModel>(Flux, modal, can_navigate, visible));
         }
 
         public void AddCommand(
             string name,
             Func<Task> task,
-            Optional<IObservable<bool>> can_execute = default,
-            Optional<IObservable<bool>> visible = default)
+            OptionalObservable<bool> can_execute = default,
+            OptionalObservable<bool> visible = default)
         {
-            var cmd_button = new CmdButton(name, task, can_execute, visible);
-            Buttons.Add(cmd_button);
+            Buttons.Add(new CmdButton(Flux, name, task, can_execute, visible));
         }
 
         public void AddCommand(
             string name,
             Action action,
-            Optional<IObservable<bool>> can_execute = default,
-            Optional<IObservable<bool>> visible = default)
+            OptionalObservable<bool> can_execute = default,
+            OptionalObservable<bool> visible = default)
         {
-            var cmd_button = new CmdButton(name, action, can_execute, visible);
-            Buttons.Add(cmd_button);
+            Buttons.Add(new CmdButton(Flux, name, action, can_execute, visible));
         }
 
         public void AddCommand(
             string name,
-            Func<IFLUX_ConnectionProvider, Optional<IFLUX_Variable<bool, bool>>> get_variable,
-            Optional<IObservable<bool>> can_execute = default,
-            Optional<IObservable<bool>> visible = default)
+            Func<IFLUX_VariableStore, Optional<IFLUX_Variable<bool, bool>>> get_variable,
+            OptionalObservable<bool> can_execute = default,
+            OptionalObservable<bool> visible = default)
         {
-            var memory = Flux.ConnectionProvider;
-            var variable = get_variable(memory);
+            var variable = Flux.ConnectionProvider.GetVariable(get_variable);
             if (variable.HasValue)
-                AddCommand(name, variable.Value, can_execute, visible);
+                Buttons.Add(new ToggleButton(Flux, name, variable.Value, can_execute, visible));
         }
 
         public void AddCommand(
             string name,
-            IFLUX_Variable<bool, bool> variable,
-            Optional<IObservable<bool>> can_execute = default,
-            Optional<IObservable<bool>> visible = default)
+            Func<IFLUX_VariableStore, IFLUX_Variable<bool, bool>> get_variable,
+            OptionalObservable<bool> can_execute = default,
+            OptionalObservable<bool> visible = default)
         {
-            if (variable.ReadOnly)
-                return;
-
-            var toggle_button = new ToggleButton(name, Flux, variable, can_execute, visible);
-            Buttons.Add(toggle_button);
+            var variable = Flux.ConnectionProvider.GetVariable(get_variable);
+            Buttons.Add(new ToggleButton(Flux, name, variable, can_execute, visible));
         }
 
         public void AddCommand(
             string name,
-            Func<IFLUX_ConnectionProvider, Optional<IFLUX_Array<bool, bool>>> get_array,
-            ushort position,
-            Optional<IObservable<bool>> can_execute = default,
-            Optional<IObservable<bool>> visible = default)
+            Func<IFLUX_VariableStore, Optional<IFLUX_Array<bool, bool>>> get_array,
+            VariableAlias alias,
+            OptionalObservable<bool> can_execute = default,
+            OptionalObservable<bool> visible = default)
         {
-            var memory = Flux.ConnectionProvider;
-            var array = get_array(memory);
-            if (array.HasValue)
-                AddCommand(name, array.Value, position, can_execute, visible);
+            var variable = Flux.ConnectionProvider.GetVariable(get_array, alias);
+            if (variable.HasValue)
+                Buttons.Add(new ToggleButton(Flux, name, variable.Value, can_execute, visible));
         }
 
         public void AddCommand(
             string name,
-            IFLUX_Array<bool, bool> array,
-            ushort position,
-            Optional<IObservable<bool>> can_execute = default,
-            Optional<IObservable<bool>> visible = default)
+            Func<IFLUX_VariableStore, IFLUX_Array<bool, bool>> get_array,
+            VariableAlias alias,
+            OptionalObservable<bool> can_execute = default,
+            OptionalObservable<bool> visible = default)
         {
-            var variable = array.Variables.Items.ElementAt(position);
-            AddCommand(name, variable, can_execute, visible);
+            var variable = Flux.ConnectionProvider.GetVariable(get_array, alias);
+            if (variable.HasValue)
+                Buttons.Add(new ToggleButton(Flux, name, variable.Value, can_execute, visible));
         }
+
+
+        public void AddCommand<TSettings>(
+            string name,
+            LocalSettingsProvider<TSettings> settings,
+            Expression<Func<TSettings, bool>> setting_expr,
+            OptionalObservable<bool> can_execute = default,
+            OptionalObservable<bool> visible = default)
+            where TSettings : new()
+        {
+            var setting_getter = setting_expr.GetCachedGetterDelegate();
+            var setting_setter = setting_expr.GetCachedSetterDelegate();
+            var is_active = settings.Local.WhenAnyValue(setting_expr)
+                .Select(v => v.ToOptional());
+
+            Buttons.Add(new ToggleButton(Flux, name, toggle_setting, is_active, can_execute, visible));
+
+            void toggle_setting()
+            {
+                var value = setting_getter(settings.Local);
+                setting_setter.Invoke(settings.Local, !value);
+                settings.PersistLocalSettings();
+            }
+        }
+
         public void AddCommand(CmdButton button)
         {
             Buttons.Add(button);
@@ -121,7 +168,6 @@ namespace Flux.ViewModels
         public void Clear()
         {
             Buttons.Clear();
-            RemoteCommands.Clear();
         }
     }
 }

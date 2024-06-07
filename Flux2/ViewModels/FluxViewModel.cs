@@ -1,14 +1,19 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
+using EmbedIO.Routing;
+using Flux.ViewModels;
 using Microsoft.Extensions.Hosting;
-using Modulo3DStandard;
+using Microsoft.Extensions.Logging;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Reactive;
+using System.Reactive.Disposables;
 using System.Reactive.Linq;
+using System.ServiceModel.Channels;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -23,6 +28,7 @@ namespace Flux.ViewModels
         public static FileInfo Stats => AccessFile(Directories.Storage, "Stats.json");
         public static FileInfo CoreSettings => AccessFile(Directories.Storage, "CoreSettings.json");
         public static FileInfo UserSettings => AccessFile(Directories.Storage, "UserSettings.json");
+        public static FileInfo MemorySettings => AccessFile(Directories.Storage, "MemorySettings.json");
         public static FileInfo Status => AccessFile(Directories.Storage, "Status.json");
         public static FileInfo Database => AccessFile(Directories.Storage, "Database.db");
         public static FileInfo MCode => AccessFile(Directories.Storage, "MCode.mcode");
@@ -86,26 +92,31 @@ namespace Flux.ViewModels
     [RemoteControl()]
     public class FluxViewModel : RemoteControl<FluxViewModel>, IFlux, IHostedService
     {
+        public static double MaxZBedHeight = 10.0;
+
+
         [RemoteCommand]
-        public Optional<ReactiveCommand<Unit, Unit>> LeftButtonCommand { get; private set; }
+        public Optional<ReactiveCommandBaseRC<Unit, Unit>> LeftButtonCommand { get; private set; }
         [RemoteCommand]
-        public Optional<ReactiveCommand<Unit, Unit>> RightButtonCommand { get; private set; }
+        public Optional<ReactiveCommandBaseRC<Unit, Unit>> RightButtonCommand { get; private set; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> OpenStatusBarCommand { get; private set; }
+        public ReactiveCommandBaseRC<Unit, Unit> OpenStatusBarCommand { get; private set; }
 
         public HomeViewModel Home { get; private set; }
         public WebcamViewModel Webcam { get; private set; }
         public MCodesViewModel MCodes { get; private set; }
         [RemoteContent(false)]
         public FluxNavigatorViewModel Navigator { get; private set; }
+        public LoggingProvider LoggingProvider { get; private set; }
         public StartupViewModel Startup { get; private set; }
         public FeedersViewModel Feeders { get; private set; }
-        public MagazineViewModel Magazine { get; private set; }
         public MessagesViewModel Messages { get; private set; }
         [RemoteContent(false)]
         public StatusBarViewModel StatusBar { get; private set; }
         public CalibrationViewModel Calibration { get; private set; }
         public FunctionalityViewModel Functionality { get; private set; }
+        public ConditionsProvider ConditionsProvider { get; private set; }
+        public Lazy<TemperaturesViewModel> Temperatures { get; private set; }
         public NetProvider NetProvider { get; private set; }
         public StatsProvider StatsProvider { get; private set; }
         public StatusProvider StatusProvider { get; private set; }
@@ -113,8 +124,8 @@ namespace Flux.ViewModels
         public DatabaseProvider DatabaseProvider { get; private set; }
         public IFLUX_ConnectionProvider ConnectionProvider { get; private set; }
 
-        private ObservableAsPropertyHelper<DateTime> _CurrentTime;
-        [RemoteOutput(true, typeof(DateTimeConverter<DateTimeFormat>))]
+        private readonly ObservableAsPropertyHelper<DateTime> _CurrentTime;
+        [RemoteOutput(true, typeof(DateTimeConverter<AbsoluteDateTimeFormat>))]
         public DateTime CurrentTime => _CurrentTime.Value;
 
         private ObservableAsPropertyHelper<string> _LeftIconForeground;
@@ -125,9 +136,9 @@ namespace Flux.ViewModels
         [RemoteOutput(true)]
         public string RightIconForeground => _RightIconForeground?.Value;
 
-        private ObservableAsPropertyHelper<string> _StatusText;
+        private ObservableAsPropertyHelper<RemoteText> _StatusText;
         [RemoteOutput(true)]
-        public string StatusText => _StatusText?.Value;
+        public RemoteText StatusText => _StatusText?.Value ?? default;
 
         private ObservableAsPropertyHelper<string> _StatusBrush;
         [RemoteOutput(true)]
@@ -145,16 +156,20 @@ namespace Flux.ViewModels
         IFluxNavigatorViewModel IFlux.Navigator => Navigator;
         IFluxCalibrationViewModel IFlux.Calibration => Calibration;
 
-        private Optional<IContentDialog> _ContentDialog;
-        [RemoteContent(true, "dialog")]
-        public Optional<IContentDialog> ContentDialog 
-        { 
+        private Optional<IDialog> _ContentDialog;
+        [RemoteContent(true)]
+        public Optional<IDialog> Dialog
+        {
             get => _ContentDialog;
             set => this.RaiseAndSetIfChanged(ref _ContentDialog, value);
         }
 
-        public FluxViewModel() : base("flux")
+        public ILogger<IFlux> Logger { get; }
+
+        public FluxViewModel(ILogger<IFlux> logger)
         {
+            Logger = logger;
+
             ServicePointManager.UseNagleAlgorithm = false;
             ServicePointManager.Expect100Continue = false;
 
@@ -162,75 +177,107 @@ namespace Flux.ViewModels
 
             _CurrentTime = Observable.Interval(TimeSpan.FromSeconds(5))
                 .Select(_ => DateTime.Now)
-                .ToProperty(this, v => v.CurrentTime);
+                .ToPropertyRC(this, v => v.CurrentTime);
 
             DatabaseProvider = new DatabaseProvider(this);
             SettingsProvider = new SettingsProvider(this);
 
-            DatabaseProvider.Initialize(db =>
+            DatabaseProvider.InitializeAsync(async db =>
             {
                 try
                 {
+                    NetProvider = new NetProvider(this);
+
                     var printer_id = SettingsProvider.CoreSettings.Local.PrinterID;
-                    var printer_result = db.FindById<Printer>(printer_id.ValueOr(() => 0));
-                    var printer = printer_result.Documents.FirstOrDefault().ToOptional();
-                    ConnectionProvider = printer.Convert(p => p.MachineGCodeFlavor).ValueOr(() => "") switch
+
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    var printer_result = await db.FindByIdAsync<Printer>(printer_id.ValueOr(() => 0), cts.Token);
+                    var printer = printer_result.FirstOrOptional(_ => true);
+
+                    var connection_provider = printer.ConvertOr(p => p.Id, () => -1) switch
                     {
-                        "Modulo3D (Duet)" => new RRF_ConnectionProvider(this),
-                        "Modulo3D (Osai)" => new OSAI_ConnectionProvider(this),
-                        _ => new Dummy_ConnectionProvider(this)
+                        5 => new OSAI_ConnectionProvider(this),
+                        6 => new OSAI_ConnectionProvider(this),
+                        7 => new OSAI_ConnectionProvider(this),
+                        8 => new RRF_ConnectionProvider(this, c => new RRF_VariableStoreS300(c)),
+                        9 => new RRF_ConnectionProvider(this, c => new RRF_VariableStoreS300(c)),
+                        10 => new RRF_ConnectionProvider(this, c => new RRF_VariableStoreS300C(c)),
+                        11 => new RRF_ConnectionProvider(this, c => new RRF_VariableStoreS300C(c)),
+                        12 => new RRF_ConnectionProvider(this, c => new RRF_VariableStoreMP500(c)),
+                        13 => new RRF_ConnectionProvider(this, c => new RRF_VariableStoreS300A(c)),
+                        14 => new RRF_ConnectionProvider(this, c => new RRF_VariableStoreS300A(c)),
+                        15 => new OSAI_ConnectionProvider(this),
+                        16 => new RRF_ConnectionProvider(this, c => new RRF_VariableStoreS300(c)),
+                        _ => Optional<IFLUX_ConnectionProvider>.None
                     };
 
+                    if (!connection_provider.HasValue)
+                    {
+                        Console.WriteLine("Nessuna configurazione trovata");
+                        Environment.Exit(-1);
+                        return;
+                    }
+
+                    ConnectionProvider = connection_provider.Value;
                     Messages = new MessagesViewModel(this);
-                    NetProvider = new NetProvider(this);
+
                     Feeders = new FeedersViewModel(this);
                     MCodes = new MCodesViewModel(this);
+                    ConditionsProvider = new ConditionsProvider(this);
                     StatusProvider = new StatusProvider(this);
                     Calibration = new CalibrationViewModel(this);
-                    Startup = new StartupViewModel(this);
                     Webcam = new WebcamViewModel(this);
                     StatsProvider = new StatsProvider(this);
-                    Magazine = new MagazineViewModel(this);
                     Home = new HomeViewModel(this);
                     StatusBar = new StatusBarViewModel(this);
                     Functionality = new FunctionalityViewModel(this);
                     Navigator = new FluxNavigatorViewModel(this);
+                    LoggingProvider = new LoggingProvider(this);
+                    Startup = new StartupViewModel(this);
+                    Temperatures = new Lazy<TemperaturesViewModel>(() => new TemperaturesViewModel(this));
 
-                    _LeftIconForeground = ConnectionProvider.ObserveVariable(m => m.OPEN_LOCK, "chamber")
+                    var main_lock_unit = ConnectionProvider.GetArrayUnit(m => m.OPEN_LOCK, "main.lock");
+                    _LeftIconForeground = ConnectionProvider.ObserveVariable(m => m.OPEN_LOCK, main_lock_unit)
+                        .ObservableOrDefault()
                         .Convert(l => l ? FluxColors.Active : FluxColors.Inactive)
                         .ValueOr(() => FluxColors.Empty)
-                        .ToProperty(this, v => v.LeftIconForeground);
+                        .ToPropertyRC(this, v => v.LeftIconForeground);
 
                     _RightIconForeground = ConnectionProvider.ObserveVariable(m => m.CHAMBER_LIGHT)
+                        .ObservableOrDefault()
                         .Convert(l => l ? FluxColors.Active : FluxColors.Inactive)
                         .ValueOr(() => FluxColors.Empty)
-                        .ToProperty(this, v => v.RightIconForeground);
+                        .ToPropertyRC(this, v => v.RightIconForeground);
 
-                    var is_idle = StatusProvider.IsIdle
-                        .ValueOrDefault();
+                    var is_idle = StatusProvider
+                        .WhenAnyValue(s => s.StatusEvaluation)
+                        .Select(s => s.IsIdle);
 
                     // COMMANDS
-                    if (ConnectionProvider.VariableStore.HasVariable(s => s.CHAMBER_LIGHT))
-                        RightButtonCommand = ReactiveCommand.CreateFromTask(async () => { await ConnectionProvider.ToggleVariableAsync(m => m.CHAMBER_LIGHT); });
+                    if (ConnectionProvider.HasVariable(s => s.CHAMBER_LIGHT))
+                        RightButtonCommand = ReactiveCommandBaseRC.CreateFromTask(async () => { await ConnectionProvider.ToggleVariableAsync(m => m.CHAMBER_LIGHT); }, this);
 
-                    if (ConnectionProvider.VariableStore.HasVariable(s => s.OPEN_LOCK, "chamber"))
-                        LeftButtonCommand = ReactiveCommand.CreateFromTask(async () => { await ConnectionProvider.ToggleVariableAsync(m => m.OPEN_LOCK, "chamber"); }, is_idle);
+                    if (ConnectionProvider.HasVariable(s => s.OPEN_LOCK, main_lock_unit))
+                        LeftButtonCommand = ReactiveCommandBaseRC.CreateFromTask(async () => { await ConnectionProvider.ToggleVariableAsync(m => m.OPEN_LOCK, main_lock_unit); }, this, is_idle);
 
-                    var status_bar_nav = new NavModalViewModel(this, StatusBar);
-                    OpenStatusBarCommand = ReactiveCommand.Create(() => { Navigator.Navigate(status_bar_nav); });
+                    var status_bar_nav = new NavModalViewModel<StatusBarViewModel>(this, StatusBar);
+                    OpenStatusBarCommand = ReactiveCommandBaseRC.Create(() => { Navigator.Navigate(status_bar_nav); }, this);
 
                     ConnectionProvider.Initialize();
+                    Messages.Initialize();
+
                     StatusProvider.Initialize();
                     NetProvider.Initialize();
                     MCodes.Initialize();
 
+                    StatusBar.Initialize(); 
+
                     _StatusText = Observable.CombineLatest(
                         StatusProvider.WhenAnyValue(v => v.FluxStatus),
-                        ConnectionProvider.ObserveVariable(m => m.RUNNING_MACRO),
-                        ConnectionProvider.ObserveVariable(m => m.RUNNING_MCODE),
-                        ConnectionProvider.ObserveVariable(m => m.RUNNING_GCODE),
+                        StatusProvider.WhenAnyValue(v => v.PrintingEvaluation),
                         GetStatusText)
-                        .ToProperty(this, v => v.StatusText);
+                        .Throttle(TimeSpan.FromSeconds(0.25))
+                        .ToPropertyRC(this, v => v.StatusText);
 
                     var offlineBrush = "#999999";
                     var idleBrush = "#00B189";
@@ -253,266 +300,353 @@ namespace Flux.ViewModels
                                 _ => idleBrush
                             };
                         })
-                        .ToProperty(this, v => v.StatusBrush);
+                        .Throttle(TimeSpan.FromSeconds(0.25))
+                        .ToPropertyRC(this, v => v.StatusBrush);
                 }
                 catch (Exception ex)
-                { 
-                }
-            });
-
-            Task.Run(async () =>
-            {
-                await Task.Delay(5000);
-                if (ConnectionProvider is Dummy_ConnectionProvider)
                 {
-                    if (!DatabaseProvider.Database.HasValue)
-                        Environment.Exit(1);
-
-                    var printers = DatabaseProvider.Database.Value
-                        .FindAll<Printer>().Documents
-                        .Distinct()
-                        .OrderBy(d => d.Name)
-                        .AsObservableChangeSet(m => m.Id)
-                        .AsObservableCache();
-
-                    var printer_option = ComboOption.Create($"printer", "Stampante:", printers);
-                    var result = await ShowSelectionAsync(
-                        "Seleziona un modello di stampante",
-                        default,
-                        printer_option);
-
-                    if (result != ContentDialogResult.Primary)
-                        Environment.Exit(2);
-
-                    var printer_id = printer_option.Items.SelectedKey;
-                    SettingsProvider.CoreSettings.Local.PrinterID = printer_id;
-                    SettingsProvider.CoreSettings.PersistLocalSettings();
+                    Console.WriteLine(ex);
                 }
             });
         }
 
         public Task StopAsync(CancellationToken cancellationToken)
         {
+            Dispose();
             return Task.CompletedTask;
         }
         public Task StartAsync(CancellationToken cancellationToken)
         {
             return Task.CompletedTask;
         }
-        private string GetStatusText(FLUX_ProcessStatus status, Optional<OSAI_Macro> macro, Optional<OSAI_MCode> mcode, Optional<OSAI_GCode> gcode)
+        private RemoteText GetStatusText(FLUX_ProcessStatus status, PrintingEvaluation printing_evaluation)
         {
             return status switch
             {
-                FLUX_ProcessStatus.IDLE => "LIBERA",
-                FLUX_ProcessStatus.ERROR => "ERRORE",
-                FLUX_ProcessStatus.EMERG => "EMERGENZA",
-                FLUX_ProcessStatus.NONE => "ACCENSIONE...",
-                FLUX_ProcessStatus.WAIT => "ATTESA OPERATORE",
-                FLUX_ProcessStatus.CYCLE => in_cycle(),
-                _ => "ONLINE",
+                FLUX_ProcessStatus.IDLE => new RemoteText("status.idle", true),
+                FLUX_ProcessStatus.ERROR => new RemoteText("status.error", true),
+                FLUX_ProcessStatus.EMERG => new RemoteText("status.emerg", true),
+                FLUX_ProcessStatus.CYCLE => new RemoteText("status.cycle", true),
+                FLUX_ProcessStatus.NONE => new RemoteText("status.connecting", true),
+                FLUX_ProcessStatus.WAIT => wait(),
+                _ => new RemoteText("status.online", true),
             };
 
-            string in_cycle()
+            RemoteText wait()
             {
-                if (!macro.HasValue)
-                    return "IN FUNZIONE";
-
-                switch (macro.Value)
-                {
-                    case OSAI_Macro.PROGRAM:
-                        return $"IN STAMPA";
-
-                    case OSAI_Macro.GCODE_OR_MCODE:
-                        if (!mcode.HasValue)
-                            return "IN FUNZIONE";
-                        switch (mcode.Value)
-                        {
-                            case OSAI_MCode.CHAMBER_TEMP:
-                                return "ATTESA CAMERA";
-                            case OSAI_MCode.PLATE_TEMP:
-                                return "ATTESA PIATTO";
-                            case OSAI_MCode.TOOL_TEMP:
-                                return "ATTESA ESTRUSORE";
-                            case OSAI_MCode.GCODE:
-                                if (!gcode.HasValue)
-                                    return "IN FUNZIONE";
-                                switch (gcode.Value)
-                                {
-                                    case OSAI_GCode.RAPID_MOVE:
-                                    case OSAI_GCode.INTERP_MOVE:
-                                        return "IN MOVIMENTO";
-                                    default:
-                                        return "IN FUNZIONE";
-                                }
-                            default:
-                                return "IN FUNZIONE";
-                        }
-                    case OSAI_Macro.HOME:
-                        return "AZZERAMENTO";
-                    case OSAI_Macro.PROBE_PLATE:
-                        return "TASTA PIATTO";
-                    case OSAI_Macro.PROBE_TOOL:
-                        return "TASTA UTENSILE";
-                    case OSAI_Macro.CHANGE_TOOL:
-                        return "CAMBIO UTENSILE";
-                    case OSAI_Macro.READ_TOOL:
-                        return "LEGGI UTENSILE";
-                    case OSAI_Macro.LOAD_FILAMENT:
-                        return "CARICO FILO";
-                    case OSAI_Macro.UNLOAD_FILAMENT:
-                        return "SCARICO FILO";
-                    case OSAI_Macro.PURGE_FILAMENT:
-                        return "SPURGO";
-                    case OSAI_Macro.END_PRINT:
-                        return "FINE STAMPA";
-                    case OSAI_Macro.PAUSE_PRINT:
-                        return "PAUSA";
-                    default:
-                        return "IN FUNZIONE";
-                }
+                if (printing_evaluation.Recovery.HasValue)
+                    return new RemoteText("status.paused", true);
+                return new RemoteText("status.wait", true);
             }
         }
 
-        public async Task<ContentDialogResult> ShowContentDialogAsync(Func<IFlux, IContentDialog> get_dialog)
+        public async Task<(Optional<TDialogResult> data, DialogResult result)> ShowDialogAsync<TDialogResult>(Func<IFlux, IDialog<TDialogResult>> get_dialog)
         {
             using var dialog = get_dialog(this);
             return await dialog.ShowAsync();
         }
-        public async Task<ContentDialogResult> ShowConfirmDialogAsync(string title, string content)
+        public async Task<(Optional<Unit> data, DialogResult result)> ShowModalDialogAsync<TFluxRoutableViewModel>(Func<FluxViewModel, TFluxRoutableViewModel> get_modal)
+            where TFluxRoutableViewModel : IFluxRoutableViewModel
         {
-            return await ShowContentDialogAsync(f =>
-            {
-                var dialog = new ContentDialog(f, title,
-                    can_cancel: Observable.Return(true),
-                    can_confirm: Observable.Return(true));
-                dialog.AddContent(new TextBlock("content", content));
-                return dialog;
-            });
+            using var dialog = new ModalDialog(this, f => get_modal((FluxViewModel)f));
+            return await dialog.ShowAsync();
         }
-        public async Task<ContentDialogResult> ShowProgressDialogAsync(string title, Func<IContentDialog, IDialogOption<double>, Task> operation)
+        public async Task<(Optional<Unit> data, DialogResult result)> ShowModalDialogAsync<TFluxRoutableViewModel>(Func<FluxViewModel, Lazy<TFluxRoutableViewModel>> get_modal)
+            where TFluxRoutableViewModel : IFluxRoutableViewModel
         {
-            return await ShowContentDialogAsync(f =>
-            {
-                var dialog = new ContentDialog(this, title);
-
-                var progress = new ProgressBar("progress", "PROGRESSO...");
-                dialog.AddContent(progress);
-                var operation_task = Task.Run(async () =>
-                {
-                    try
-                    {
-                        await operation(dialog, progress);
-                    }
-                    catch
-                    { }
-                });
-
-                return dialog;
-            });
+            using var dialog = new ModalDialog(this, f => get_modal((FluxViewModel)f).Value);
+            return await dialog.ShowAsync();
         }
-        public async Task<ContentDialogResult> ShowSelectionAsync(string title, IObservable<bool> can_cancel, IObservable<bool> can_confirm, params IDialogOption[] options)
+        public async Task<bool> IterateDialogAsync<TDialogResult>(Func<IFlux, IDialog<TDialogResult>> get_dialog, ushort max_iterations, Func<Task> iteration_task)
         {
-            return await ShowContentDialogAsync(f =>
+            ushort iterations = 0;
+            (Optional<TDialogResult> data, DialogResult result) result = default;
+            while (result.result != DialogResult.Primary && iterations < max_iterations)
             {
-                var dialog = new ContentDialog(f, title,
-                    can_cancel: can_cancel,
-                    can_confirm: can_confirm);
-                dialog.AddContent("options", options);
-                return dialog;
-            });
+                iterations++;
+                await iteration_task();
+                result = await ShowDialogAsync(get_dialog);
+            }
+            return result.result == DialogResult.Primary;
         }
-        public async Task<ContentDialogResult> ShowSelectionAsync(string title, IObservable<bool> can_cancel, params IDialogOption[] options)
-        {
-            return await ShowContentDialogAsync(f =>
-            {
-                var can_confirm = Observable.CombineLatest(options.Select(o => o.WhenAnyValue(o => o.HasValue)), l => l.All(l => l));
-                var dialog = new ContentDialog(f, title,
-                    can_cancel: can_cancel,
-                    can_confirm: can_confirm);
-                dialog.AddContent("options", options);
-                return dialog;
-            });
-        }
-        public async Task<(bool success, Optional<TResult> result)> ShowNFCDialog<TResult>(Optional<INFCHandle> handle, Func<Optional<INFCHandle>, Task<Optional<TResult>>> func, Func<Optional<TResult>, bool> success_func)
-        {
-            bool reading = true;
-            Optional<TResult> result = default;
 
-            using var dialog = new ContentDialog(this, "Lettura tag in corso...", can_cancel: Observable.Return(true));
+        public async Task<ValueResult<(TResult, NFCTagRW)>> ShowNFCDialog<TResult>(INFCHandle handle, Func<INFCHandle, INFCRWViewModel, Task<(TResult, NFCTagRW)>> func, Func<TResult, NFCTagRW, bool> success, int millisecond_delay = 200)
+        {
+            var reading = true;
 
+            using var dialog = new ContentDialog(this, new NFCRWViewModel(this));
             var dialog_result = Task.Run(async () =>
             {
                 var result = await dialog.ShowAsync();
                 reading = false;
-                return result == ContentDialogResult.Primary;
+                return result.result == DialogResult.Primary;
             });
 
             var reading_result = Task.Run(async () =>
             {
-                bool success = false;
+                (TResult data, NFCTagRW rw) result = (default, NFCTagRW.None);
                 do
                 {
-                    result = await func(handle);
-                    success = result.HasValue && success_func(result.Value);
-                    if (!success)
-                        await Task.Delay(1000);
+                    result = await func(handle, (NFCRWViewModel)dialog.Content);
+                    if (!success(result.data, result.rw))
+                        await Task.Delay(millisecond_delay);
                 }
-                while (!success && reading);
+                while (!success(result.data, result.rw) && reading);
 
-                dialog.ShowAsyncSource.TrySetResult(ContentDialogResult.None);
-                return success;
+                dialog.ShowAsyncSource.TrySetResult((Unit.Default, DialogResult.Primary));
+                return result;
             });
 
-            var success = await Task.WhenAll(dialog_result, reading_result);
-            return (success[1], result);
+            await Task.WhenAll(dialog_result, reading_result);
+            return await reading_result;
         }
-
-
-
-        public Task<Optional<TResult>> UseReader<TResult>(Func<Optional<INFCHandle>, TResult> func, Func<TResult, bool> success_func)
+        public async Task<ValueResult<(TResult, NFCTagRW)>> ShowNFCDialog<TResult>(INFCHandle handle, Func<INFCHandle, INFCRWViewModel, (TResult, NFCTagRW)> func, Func<TResult, NFCTagRW, bool> success, int millisecond_delay = 200)
         {
-            return UseReader(h => func(h).ToOptional(), r => r.HasValue && success_func(r.Value));
+            var reading = true;
+
+            using var dialog = new ContentDialog(this, new NFCRWViewModel(this));
+            var dialog_result = Task.Run(async () =>
+            {
+                var result = await dialog.ShowAsync();
+                reading = false;
+                return result.result == DialogResult.Primary;
+            });
+
+            var reading_result = Task.Run(async () =>
+            {
+                (TResult data, NFCTagRW rw) result = (default, NFCTagRW.None);
+                do
+                {
+                    result = func(handle, (NFCRWViewModel)dialog.Content);
+                    if (!success(result.data, result.rw))
+                        await Task.Delay(millisecond_delay);
+                }
+                while (!success(result.data, result.rw) && reading);
+
+                dialog.ShowAsyncSource.TrySetResult((Unit.Default, DialogResult.Primary));
+                return result;
+            });
+
+            await Task.WhenAll(dialog_result, reading_result);
+            return await reading_result;
         }
-        public Task<Optional<TResult>> UseReader<TResult>(Func<Optional<INFCHandle>, Task<TResult>> func, Func<TResult, bool> success_func)
-        {
-            return UseReader(async h => (await func(h)).ToOptional(), r => r.HasValue && success_func(r.Value));
-        }
-        public async Task<Optional<TResult>> UseReader<TResult>(Func<Optional<INFCHandle>, Optional<TResult>> func, Func<Optional<TResult>, bool> success_func)
+
+        public async Task<ValueResult<(TResult, NFCTagRW)>> UseReader<TResult>(Func<Optional<INFCHandle>, Task<(TResult, NFCTagRW)>> func, Func<TResult, NFCTagRW, bool> success)
         {
             var task = await NFCReader.OpenAsync(log_result);
-            if (task.HasValue)
+            if (task.HasValue && success(task.Value.Item1, task.Value.Item2))
                 return task.Value;
 
-            return func(default);
+            return default;
 
-            async Task<Optional<TResult>> log_result(INFCHandle handle)
+            async Task<ValueResult<(TResult, NFCTagRW)>> log_result(INFCHandle handle)
             {
-                var reading = await ShowNFCDialog(handle.ToOptional(), h => Task.FromResult(func(h)), success_func);
-
-                var light = reading.success ? LightSignalMode.LongGreen : LightSignalMode.LongRed;
-                var beep = reading.success ? BeepSignalMode.TripleShort : BeepSignalMode.DoubleShort;
+                var result = await ShowNFCDialog(handle, (h, card_info) => func(h.ToOptional()), success);
+                var light = result.HasValue && success(result.Value.Item1, result.Value.Item2) ? LightSignalMode.LongGreen : LightSignalMode.LongRed;
+                var beep = result.HasValue && success(result.Value.Item1, result.Value.Item2) ? BeepSignalMode.TripletMelody : BeepSignalMode.Short;
                 handle.ReaderUISignal(light, beep);
-
-                return reading.result;
+                return result;
             }
         }
-        public async Task<Optional<TResult>> UseReader<TResult>(Func<Optional<INFCHandle>, Task<Optional<TResult>>> func, Func<Optional<TResult>, bool> success_func)
+        public async Task<ValueResult<(TResult, NFCTagRW)>> UseReader<TResult>(IFluxTagViewModel tag, Func<Optional<INFCHandle>, INFCSlot, Optional<INFCRWViewModel>, Task<(TResult, NFCTagRW)>> func, Func<TResult, NFCTagRW, bool> success)
+        {
+            var reading = tag.NFCSlot.Nfc;
+            if (!reading.IsVirtualTag.ValueOr(() => false))
+            {
+                var task = await NFCReader.OpenAsync(log_result);
+                if (task.HasValue && success(task.Value.Item1, task.Value.Item2))
+                    return task.Value;
+            }
+
+            return await func(default, tag.NFCSlot, default);
+
+            async Task<ValueResult<(TResult, NFCTagRW)>> log_result(INFCHandle handle)
+            {
+                var result = await ShowNFCDialog(handle, (h, card_info) => func(h.ToOptional(), tag.NFCSlot, card_info.ToOptional()), success);
+                var light = result.HasValue && success(result.Value.Item1, result.Value.Item2) ? LightSignalMode.LongGreen : LightSignalMode.LongRed;
+                var beep = result.HasValue && success(result.Value.Item1, result.Value.Item2) ? BeepSignalMode.TripletMelody : BeepSignalMode.Short;
+                handle.ReaderUISignal(light, beep);
+                return result;
+            }
+        }
+
+        public async Task<ValueResult<(TResult, NFCTagRW)>> UseReader<TResult>(Func<Optional<INFCHandle>, (TResult, NFCTagRW)> func, Func<TResult, NFCTagRW, bool> success)
         {
             var task = await NFCReader.OpenAsync(log_result);
-            if (task.HasValue)
+            if (task.HasValue && success(task.Value.Item1, task.Value.Item2))
                 return task.Value;
 
-            return await func(default);
+            return default;
 
-            async Task<Optional<TResult>> log_result(INFCHandle handle)
+            async Task<ValueResult<(TResult, NFCTagRW)>> log_result(INFCHandle handle)
             {
-                var reading = await ShowNFCDialog(handle.ToOptional(), func, success_func);
-
-                var light = reading.success ? LightSignalMode.LongGreen : LightSignalMode.LongRed;
-                var beep = reading.success ? BeepSignalMode.TripleShort : BeepSignalMode.DoubleShort;
+                var result = await ShowNFCDialog(handle, (h, card_info) => func(h.ToOptional()), success);
+                var light = result.HasValue && success(result.Value.Item1, result.Value.Item2) ? LightSignalMode.LongGreen : LightSignalMode.LongRed;
+                var beep = result.HasValue && success(result.Value.Item1, result.Value.Item2) ? BeepSignalMode.TripletMelody : BeepSignalMode.Short;
                 handle.ReaderUISignal(light, beep);
+                return result;
+            }
+        }
+        public async Task<ValueResult<(TResult, NFCTagRW)>> UseReader<TResult>(IFluxTagViewModel tag, Func<Optional<INFCHandle>, INFCSlot, Optional<INFCRWViewModel>, (TResult, NFCTagRW)> func, Func<TResult, NFCTagRW, bool> success)
+        {
+            var reading = tag.NFCSlot.Nfc;
+            if (!reading.IsVirtualTag.ValueOr(() => false))
+            {
+                var task = await NFCReader.OpenAsync(log_result);
+                if (task.HasValue && success(task.Value.Item1, task.Value.Item2))
+                    return task.Value;
+            }
 
-                return reading.result;
+            return func(default, tag.NFCSlot, default);
+
+            async Task<ValueResult<(TResult, NFCTagRW)>> log_result(INFCHandle handle)
+            {
+                var result = await ShowNFCDialog(handle, (h, card_info) => func(h.ToOptional(), tag.NFCSlot, card_info.ToOptional()), success);
+                var light = result.HasValue && success(result.Value.Item1, result.Value.Item2) ? LightSignalMode.LongGreen : LightSignalMode.LongRed;
+                var beep = result.HasValue && success(result.Value.Item1, result.Value.Item2) ? BeepSignalMode.TripletMelody : BeepSignalMode.Short;
+                handle.ReaderUISignal(light, beep);
+                return result;
+            }
+        }
+
+        // -------
+
+        public async Task<ValueResult<NFCTagRW>> ShowNFCDialog(INFCHandle handle, Func<INFCHandle, INFCRWViewModel, Task<NFCTagRW>> func, Func<NFCTagRW, bool> success, int millisecond_delay = 200)
+        {
+            var reading = true;
+
+            using var dialog = new ContentDialog(this, new NFCRWViewModel(this));
+            var dialog_result = Task.Run(async () =>
+            {
+                var result = await dialog.ShowAsync();
+                reading = false;
+                return result.result == DialogResult.Primary;
+            });
+
+            var reading_result = Task.Run(async () =>
+            {
+                NFCTagRW result = NFCTagRW.None;
+                do
+                {
+                    result = await func(handle, (NFCRWViewModel)dialog.Content);
+                    if (!success(result))
+                        await Task.Delay(millisecond_delay);
+                }
+                while (!success(result) && reading);
+
+                dialog.ShowAsyncSource.TrySetResult((Unit.Default, DialogResult.Primary));
+                return result;
+            });
+
+            await Task.WhenAll(dialog_result, reading_result);
+            return await reading_result;
+        }
+        public async Task<ValueResult<NFCTagRW>> ShowNFCDialog(INFCHandle handle, Func<INFCHandle, INFCRWViewModel, NFCTagRW> func, Func<NFCTagRW, bool> success, int millisecond_delay = 200)
+        {
+            var reading = true;
+
+            using var dialog = new ContentDialog(this, new NFCRWViewModel(this));
+            var dialog_result = Task.Run(async () =>
+            {
+                var result = await dialog.ShowAsync();
+                reading = false;
+                return result.result == DialogResult.Primary;
+            });
+
+            var reading_result = Task.Run(async () =>
+            {
+                NFCTagRW result = NFCTagRW.None;
+                do
+                {
+                    result = func(handle, (NFCRWViewModel)dialog.Content);
+                    if (!success(result))
+                        await Task.Delay(millisecond_delay);
+                }
+                while (!success(result) && reading);
+
+                dialog.ShowAsyncSource.TrySetResult((Unit.Default, DialogResult.Primary));
+                return result;
+            });
+
+            await Task.WhenAll(dialog_result, reading_result);
+            return await reading_result;
+        }
+
+        public async Task<ValueResult<NFCTagRW>> UseReader(Func<Optional<INFCHandle>, Task<NFCTagRW>> func, Func<NFCTagRW, bool> success)
+        {
+            var task = await NFCReader.OpenAsync(log_result);
+            if (task.HasValue && success(task.Value))
+                return task.Value;
+
+            return default;
+
+            async Task<ValueResult<NFCTagRW>> log_result(INFCHandle handle)
+            {
+                var result = await ShowNFCDialog(handle, (h, card_info) => func(h.ToOptional()), success);
+                var light = result.HasValue && success(result.Value) ? LightSignalMode.LongGreen : LightSignalMode.LongRed;
+                var beep = result.HasValue && success(result.Value) ? BeepSignalMode.TripletMelody : BeepSignalMode.Short;
+                handle.ReaderUISignal(light, beep);
+                return result;
+            }
+        }
+        public async Task<ValueResult<NFCTagRW>> UseReader(IFluxTagViewModel tag, Func<Optional<INFCHandle>, INFCSlot, Optional<INFCRWViewModel>, Task<NFCTagRW>> func, Func<NFCTagRW, bool> success)
+        {
+            var reading = tag.NFCSlot.Nfc;
+            if (!reading.IsVirtualTag.ValueOr(() => false))
+            {
+                var task = await NFCReader.OpenAsync(log_result);
+                if (task.HasValue && success(task.Value))
+                    return task.Value;
+            }
+
+            return await func(default, tag.NFCSlot, default);
+
+            async Task<ValueResult<NFCTagRW>> log_result(INFCHandle handle)
+            {
+                var result = await ShowNFCDialog(handle, (h, card_info) => func(h.ToOptional(), tag.NFCSlot, card_info.ToOptional()), success);
+                var light = result.HasValue && success(result.Value) ? LightSignalMode.LongGreen : LightSignalMode.LongRed;
+                var beep = result.HasValue && success(result.Value) ? BeepSignalMode.TripletMelody : BeepSignalMode.Short;
+                handle.ReaderUISignal(light, beep);
+                return result;
+            }
+        }
+
+        public async Task<ValueResult<NFCTagRW>> UseReader(Func<Optional<INFCHandle>, NFCTagRW> func, Func<NFCTagRW, bool> success)
+        {
+            var task = await NFCReader.OpenAsync(log_result);
+            if (task.HasValue && success(task.Value))
+                return task.Value;
+
+            return default;
+
+            async Task<ValueResult<NFCTagRW>> log_result(INFCHandle handle)
+            {
+                var result = await ShowNFCDialog(handle, (h, card_info) => func(h.ToOptional()), success);
+                var light = result.HasValue && success(result.Value) ? LightSignalMode.LongGreen : LightSignalMode.LongRed;
+                var beep = result.HasValue && success(result.Value) ? BeepSignalMode.TripletMelody : BeepSignalMode.Short;
+                handle.ReaderUISignal(light, beep);
+                return result;
+            }
+        }
+        public async Task<ValueResult<NFCTagRW>> UseReader(IFluxTagViewModel tag, Func<Optional<INFCHandle>, INFCSlot, Optional<INFCRWViewModel>, NFCTagRW> func, Func<NFCTagRW, bool> success)
+        {
+            var reading = tag.NFCSlot.Nfc;
+            if (!reading.IsVirtualTag.ValueOr(() => false))
+            {
+                var task = await NFCReader.OpenAsync(log_result);
+                if (task.HasValue && success(task.Value))
+                    return task.Value;
+            }
+
+            return func(default, tag.NFCSlot, default);
+
+            async Task<ValueResult<NFCTagRW>> log_result(INFCHandle handle)
+            {
+                var result = await ShowNFCDialog(handle, (h, card_info) => func(h.ToOptional(), tag.NFCSlot, card_info.ToOptional()), success);
+                var light = result.HasValue && success(result.Value) ? LightSignalMode.LongGreen : LightSignalMode.LongRed;
+                var beep = result.HasValue && success(result.Value) ? BeepSignalMode.TripletMelody : BeepSignalMode.Short;
+                handle.ReaderUISignal(light, beep);
+                return result;
             }
         }
     }
@@ -527,12 +661,12 @@ namespace Flux.ViewModels
 
         public void OnNext(Exception value)
         {
-            //Flux.Messages.LogException(this, value);
+            //// Flux.Messages.LogException(this, value);
         }
 
         public void OnError(Exception error)
         {
-            //Flux.Messages.LogException(this, error);
+            //// Flux.Messages.LogException(this, error);
         }
 
         public void OnCompleted()

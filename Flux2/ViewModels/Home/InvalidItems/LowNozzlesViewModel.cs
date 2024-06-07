@@ -1,6 +1,6 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Reactive.Disposables;
@@ -11,14 +11,10 @@ namespace Flux.ViewModels
 {
     public class LowNozzleViewModel : InvalidValueViewModel<LowNozzleViewModel>
     {
-        public override string ItemName => "UGELLO";
-        public override string CurrentValueName => "PESO RIMANENTE";
-        public override string ExpectedValueName => "PESO RICHIESTO";
-
-        private ObservableAsPropertyHelper<string> _InvalidItemBrush;
+        private readonly ObservableAsPropertyHelper<string> _InvalidItemBrush;
         public override string InvalidItemBrush => _InvalidItemBrush.Value;
 
-        public LowNozzleViewModel(FeederEvaluator eval) : base($"{typeof(LowNozzleViewModel).GetRemoteControlName()}??{eval.Feeder.Position}", eval)
+        public LowNozzleViewModel(FluxViewModel flux, FeederEvaluator eval) : base(flux, eval)
         {
             _InvalidItemBrush = Observable.CombineLatest(
                 eval.ToolNozzle.WhenAnyValue(m => m.CurrentWeight),
@@ -27,18 +23,17 @@ namespace Flux.ViewModels
                 {
                     if (!current_weight.HasValue || !expected_weight.HasValue)
                         return FluxColors.Error;
-                    
+
                     var missing_weight = expected_weight.Value - current_weight.Value;
                     if (missing_weight <= 0)
                         return FluxColors.Active;
-                    
+
                     if (missing_weight < 1000)
                         return FluxColors.Error;
-                    
+
                     return FluxColors.Warning;
                 })
-                .ToProperty(this, v => v.InvalidItemBrush)
-                .DisposeWith(Disposables);
+                .ToPropertyRC(this, v => v.InvalidItemBrush);
         }
 
         public override IObservable<Optional<string>> GetItem(FeederEvaluator eval)
@@ -49,21 +44,19 @@ namespace Flux.ViewModels
         public override IObservable<Optional<string>> GetCurrentValue(FeederEvaluator eval)
         {
             return eval.ToolNozzle.WhenAnyValue(e => e.CurrentWeight)
-                .Convert(w => $"{w:0.##}g");
+                .Convert(w => $"{w:0.##}g".Replace(",", "."));
         }
         public override IObservable<Optional<string>> GetExpectedValue(FeederEvaluator eval)
         {
             return eval.ToolNozzle.WhenAnyValue(e => e.ExpectedWeight)
-                .Convert(w => $"{w:0.##}g");
+                .Convert(w => $"{w:0.##}g".Replace(",", "."));
         }
     }
 
     public class LowNozzlesViewModel : InvalidValuesViewModel<LowNozzlesViewModel>
     {
-        public override string Title => "UTENSILI CONSUMATI";
-        public override string ChangeName => "CAMBIA UTENSILE";
-        public override bool CanStartWithInvalidValues => false;
-
+        public override bool StartWithInvalidValuesEnabled => true;
+        public override bool CanStartWithInvalidValues => true;
         public LowNozzlesViewModel(FluxViewModel flux) : base(flux)
         {
         }
@@ -73,9 +66,10 @@ namespace Flux.ViewModels
             InvalidValues = Flux.StatusProvider.FeederEvaluators.Connect().RemoveKey()
                 .AutoRefresh(line => line.ToolNozzle.HasLowWeight)
                 .Filter(line => line.ToolNozzle.HasLowWeight)
-                .Transform(line => (IInvalidValueViewModel)new LowMaterialViewModel(line))
-                .Sort(EvaluationComparer)
-                .AsObservableList();
+                .Transform(line => (IInvalidValueViewModel)new LowMaterialViewModel(Flux, line))
+                .AsObservableListRC(this);
+
+            base.Initialize();
         }
 
         public override Task ChangeItemsAsync()
@@ -86,7 +80,7 @@ namespace Flux.ViewModels
 
         public override void StartWithInvalidValues()
         {
-            throw new NotImplementedException();
+            Flux.StatusProvider.StartWithLowNozzles = true;
         }
     }
 }

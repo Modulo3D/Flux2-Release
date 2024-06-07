@@ -1,12 +1,13 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using System;
+using Microsoft.Extensions.Logging;
+using System.Diagnostics;
 
 namespace Flux.ViewModels
 {
-    class Program
+    internal class Program
     {
-        static void Main(string[] args)
+        private static void Main(string[] args)
         {
             CreateHostBuilder(args).Build().Run();
         }
@@ -15,14 +16,23 @@ namespace Flux.ViewModels
         {
             return Host.CreateDefaultBuilder(args)
                 .UseSystemd()
+                .ConfigureLogging((_, logging) =>
+                {
+                    logging.ClearProviders();
+                    /*logging.AddFile("../Flux/Log/flux.log", o =>
+                    {
+                        o.Append = true;
+                        o.MaxRollingFiles = 10;
+                        o.UseUtcTimestamp = true;
+                        o.FileSizeLimitBytes = 5242880;
+                    });*/
+
+                    if (Debugger.IsAttached)
+                        logging.AddConsole();
+                })
                 .ConfigureServices((hostContext, services) =>
                 {
-                    services.AddHostedService(p => 
-                    {
-                        var flux_viewmodel = new FluxViewModel();
-                        flux_viewmodel.InitializeRemoteView();
-                        return flux_viewmodel;
-                    });
+                    services.AddHostedService<FluxViewModel>();
                 });
         }
     }

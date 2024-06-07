@@ -1,11 +1,12 @@
 ﻿using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Collections.Immutable;
+using System.IO;
 using System.Text;
 
 namespace Flux.ViewModels
@@ -200,9 +201,9 @@ namespace Flux.ViewModels
         //[JsonProperty("monitors")]
         //public Optional<List<RRF_ObjectModelMonitor>> Monitors { get; set; }
 
-        [JsonProperty("sensor")]
-        [JsonConverter(typeof(JsonConverters.OptionalConverter<short>))]
-        public Optional<short> Sensor { get; set; }
+        //[JsonProperty("sensor")]
+        //[JsonConverter(typeof(JsonConverters.OptionalConverter<short>))]
+        //public Optional<short> Sensor { get; set; }
 
         //[JsonProperty("standby")]
         //public Optional<double> Standby { get; set; }
@@ -235,14 +236,6 @@ namespace Flux.ViewModels
         [JsonProperty("heaters")]
         [JsonConverter(typeof(JsonConverters.OptionalConverter<List<RRF_ObjectModelHeater>>))]
         public Optional<List<RRF_ObjectModelHeater>> Heaters { get; set; }
-
-        public Optional<FLUX_Temp> GetPlateTemperature()
-        {
-            if (!Heaters.HasValue)
-                return default;
-            return Heaters.Value[0]
-                .GetTemperature();
-        }
     }
 
     public class RRF_ObjectModelInput
@@ -348,8 +341,8 @@ namespace Flux.ViewModels
         //[JsonProperty("simulatedTime")]
         //public object SimulatedTime { get; set; }
 
-        //[JsonProperty("size")]
-        //public Optional<long> Size { get; set; }
+        [JsonProperty("size")]
+        public Optional<long> Size { get; set; }
     }
 
     public class RRF_ObjectModelTimesLeft
@@ -357,8 +350,8 @@ namespace Flux.ViewModels
         //[JsonProperty("filament")]
         //public Optional<double> Filament { get; set; }
 
-        //[JsonProperty("file")]
-        //public Optional<double> File { get; set; }
+        [JsonProperty("file")]
+        public Optional<double> File { get; set; }
 
         //[JsonProperty("layer")]
         //public Optional<double> Layer { get; set; }
@@ -375,8 +368,8 @@ namespace Flux.ViewModels
         [JsonProperty("file")]
         public Optional<RRF_ObjectModelFile> File { get; set; }
 
-        //[JsonProperty("filePosition")]
-        //public Optional<long> FilePosition { get; set; }
+        [JsonProperty("filePosition")]
+        public Optional<long> FilePosition { get; set; }
 
         //[JsonProperty("firstLayerDuration")]
         //public Optional<double> FirstLayerDuration { get; set; }
@@ -393,8 +386,8 @@ namespace Flux.ViewModels
         //[JsonProperty("layerTime")]
         //public Optional<double> LayerTime { get; set; }
 
-        //[JsonProperty("timesLeft")]
-        //public RRF_ObjectModelTimesLeft TimesLeft { get; set; }
+        [JsonProperty("timesLeft")]
+        public RRF_ObjectModelTimesLeft TimesLeft { get; set; }
 
         //[JsonProperty("warmUpDuration")]
         //public Optional<double> WarmUpDuration { get; set; }
@@ -761,8 +754,8 @@ namespace Flux.ViewModels
 
     public class RRF_ObjectModelAnalog
     {
-        //[JsonProperty("lastReading")]
-        //public Optional<double> LastReading { get; set; }
+        [JsonProperty("lastReading")]
+        public Optional<double> LastReading { get; set; }
 
         //[JsonProperty("name")]
         //public Optional<string> Name { get; set; }
@@ -782,8 +775,14 @@ namespace Flux.ViewModels
 
     public class RRF_ObjectModelGpIn
     {
-        //[JsonProperty("value")]
-        //public Optional<double> Value { get; set; }
+        [JsonProperty("value")]
+        public Optional<double> Value { get; set; }
+    }
+
+    public class RRF_ObjectModelGpOut
+    {
+        [JsonProperty("pwm")]
+        public Optional<double> Pwm { get; set; }
     }
 
     public class RRF_ObjectModelProbe
@@ -842,18 +841,18 @@ namespace Flux.ViewModels
 
     public class RRF_ObjectModelSensors
     {
-        //[JsonProperty("analog")]
-        //public Optional<List<RRF_ObjectModelAnalog>> Analog { get; set; }
+        [JsonProperty("analog")]
+        public Optional<List<RRF_ObjectModelAnalog>> Analog { get; set; }
 
         [JsonProperty("endstops")]
         [JsonConverter(typeof(JsonConverters.OptionalConverter<List<RRF_ObjectModelEndstop>>))]
         public Optional<List<RRF_ObjectModelEndstop>> Endstops { get; set; }
 
-        //[JsonProperty("filamentMonitors")]
-        //public Optional<List<object>> FilamentMonitors { get; set; }
+        [JsonProperty("filamentMonitors")]
+        public Optional<List<RRF_FilamentMonitor>> FilamentMonitors { get; set; }
 
-        //[JsonProperty("gpIn")]
-        //public Optional<List<RRF_ObjectModelGpIn>> GpIn { get; set; }
+        [JsonProperty("gpIn")]
+        public Optional<List<RRF_ObjectModelGpIn>> GpIn { get; set; }
 
         [JsonProperty("probes")]
         [JsonConverter(typeof(JsonConverters.OptionalConverter<List<RRF_ObjectModelProbe>>))]
@@ -865,6 +864,13 @@ namespace Flux.ViewModels
                 return default;
             return Probes.Value[probe].Value;
         }
+    }
+
+    public class RRF_FilamentMonitor
+    {
+        [JsonProperty("status")]
+        [JsonConverter(typeof(JsonConverters.OptionalConverter<string>))]
+        public Optional<string> Status { get; set; }
     }
 
     public class RRF_ObjectModelSeqs
@@ -885,7 +891,7 @@ namespace Flux.ViewModels
         //public Optional<double> Inputs { get; set; }
 
         //[JsonProperty("job")]
-        //public Optional<double> Job { get; set; }
+        //public Optional<double> FluxJob { get; set; }
 
         //[JsonProperty("move")]
         //public Optional<double> Move { get; set; }
@@ -975,8 +981,8 @@ namespace Flux.ViewModels
         //[JsonProperty("displayMessage")]
         //public Optional<string> DisplayMessage { get; set; }
 
-        //[JsonProperty("gpOut")]
-        //public Optional<List<object>> GpOut { get; set; }
+        [JsonProperty("gpOut")]
+        public Optional<List<RRF_ObjectModelGpOut>> GpOut { get; set; }
 
         //[JsonProperty("laserPwm")]
         //public object LaserPwm { get; set; }
@@ -1045,7 +1051,18 @@ namespace Flux.ViewModels
                 }
             });
         }
+
+        public Optional<bool> IsInChange()
+        {
+            return Status.Convert(s => s switch
+            {
+                "changingTool" => true,
+                _ => false,
+            });
+        }
     }
+
+
 
     public class RRF_ObjectModelRetraction
     {
@@ -1085,14 +1102,14 @@ namespace Flux.ViewModels
         //[JsonProperty("heaters")]
         //public Optional<List<double>> Heaters { get; set; }
 
-        //[JsonProperty("mix")]
-        //public Optional<List<double>> Mix { get; set; }
+        [JsonProperty("mix")]
+        public Optional<List<double>> Mix { get; set; }
 
         //[JsonProperty("name")]
         //public Optional<string> Name { get; set; }
 
-        //[JsonProperty("number")]
-        //public Optional<double> Number { get; set; }
+        [JsonProperty("number")]
+        public Optional<int> Number { get; set; }
 
         //[JsonProperty("offsets")]
         //public Optional<List<double>> Offsets { get; set; }
@@ -1110,14 +1127,14 @@ namespace Flux.ViewModels
         //public Optional<string> State { get; set; }
     }
 
-    public class RRF_GlobalModelConverter : JsonConverter<RRF_GlobalModel>
+    public class RRF_GlobalModelConverter : JsonConverter<RRF_ObjectModelGlobal>
     {
-        public override RRF_GlobalModel ReadJson(JsonReader reader, Type objectType, RRF_GlobalModel existingValue, bool hasExistingValue, JsonSerializer serializer)
+        public override RRF_ObjectModelGlobal ReadJson(JsonReader reader, Type objectType, RRF_ObjectModelGlobal existingValue, bool hasExistingValue, JsonSerializer serializer)
         {
             try
             {
                 var model = serializer.Deserialize<JObject>(reader);
-                return new RRF_GlobalModel(model);
+                return new RRF_ObjectModelGlobal(model);
             }
             catch (Exception)
             {
@@ -1125,7 +1142,7 @@ namespace Flux.ViewModels
             }
         }
 
-        public override void WriteJson(JsonWriter writer, RRF_GlobalModel value, JsonSerializer serializer)
+        public override void WriteJson(JsonWriter writer, RRF_ObjectModelGlobal value, JsonSerializer serializer)
         {
             throw new NotImplementedException();
         }
@@ -1133,12 +1150,12 @@ namespace Flux.ViewModels
 
 
     [JsonConverter(typeof(RRF_GlobalModelConverter))]
-    public class RRF_GlobalModel : JObject
+    public class RRF_ObjectModelGlobal : JObject
     {
-        public RRF_GlobalModel(JObject model) : base(model) { }
+        public RRF_ObjectModelGlobal(JObject model) : base(model) { }
     }
 
-    public class RRF_ObjectModel : ReactiveObject
+    public class RRF_ObjectModel : ReactiveObjectRC<RRF_ObjectModel>
     {
         //private Optional<List<RRF_ObjectModelBoard>> _Boards;
         //public Optional<List<RRF_ObjectModelBoard>> Boards { get => _Boards; set => this.RaiseAndSetIfChanged(ref _Boards, value); }
@@ -1153,7 +1170,7 @@ namespace Flux.ViewModels
         public Optional<List<RRF_ObjectModelInput>> Inputs { get => _Inputs; set => this.RaiseAndSetIfChanged(ref _Inputs, value); }
 
         private Optional<RRF_ObjectModelJob> _Job;
-        public Optional<RRF_ObjectModelJob> Job { get => _Job; set => this.RaiseAndSetIfChanged(ref _Job, value); }
+        public Optional<RRF_ObjectModelJob> FluxJob { get => _Job; set => this.RaiseAndSetIfChanged(ref _Job, value); }
 
         private Optional<RRF_ObjectModelMove> _Move;
         public Optional<RRF_ObjectModelMove> Move { get => _Move; set => this.RaiseAndSetIfChanged(ref _Move, value); }
@@ -1173,14 +1190,23 @@ namespace Flux.ViewModels
         private Optional<List<RRF_ObjectModelTool>> _Tools;
         public Optional<List<RRF_ObjectModelTool>> Tools { get => _Tools; set => this.RaiseAndSetIfChanged(ref _Tools, value); }
 
-        private Optional<RRF_GlobalModel> _Global;
-        public Optional<RRF_GlobalModel> Global { get => _Global; set => this.RaiseAndSetIfChanged(ref _Global, value); }
+        private Optional<RRF_ObjectModelGlobal> _Global;
+        public Optional<RRF_ObjectModelGlobal> Global { get => _Global; set => this.RaiseAndSetIfChanged(ref _Global, value); }
 
         private Optional<FLUX_FileList> _Queue;
         public Optional<FLUX_FileList> Queue { get => _Queue; set => this.RaiseAndSetIfChanged(ref _Queue, value); }
 
         private Optional<FLUX_FileList> _Storage;
         public Optional<FLUX_FileList> Storage { get => _Storage; set => this.RaiseAndSetIfChanged(ref _Storage, value); }
+
+        private Optional<FLUX_FileList> _Extrusions;
+        public Optional<FLUX_FileList> Extrusions { get => _Extrusions; set => this.RaiseAndSetIfChanged(ref _Extrusions, value); }
+
+        private Optional<FLUX_FileList> _JobEvents;
+        public Optional<FLUX_FileList> JobEvents { get => _JobEvents; set => this.RaiseAndSetIfChanged(ref _JobEvents, value); }
+
+        private Optional<FLUX_FileList> _Messages;
+        public Optional<FLUX_FileList> Messages { get => _Messages; set => this.RaiseAndSetIfChanged(ref _Messages, value); }
     }
 
     public class RRF_ObjectModelResponse<T>
@@ -1195,142 +1221,60 @@ namespace Flux.ViewModels
         public T Result { get; set; }
     }
 
+    public class RRF_Err
+    {
+        [JsonProperty("err")]
+        public short Error { get; set; }
+    }
+
     public static class RRF_DataUtils
     {
-        public static Optional<LineNumber> GetBlockNum(this (RRF_ObjectModelJob job, RRF_ObjectModelState state, List<RRF_ObjectModelInput> input) data)
+        public static Optional<FLUX_AxisPosition> GetAxisPosition(this List<RRF_ObjectModelAxis> axis)
+        {
+            return (FLUX_AxisPosition)axis.ToImmutableDictionary(
+                p => p.Letter.ConvertOr(l => l[0], () => ' '),
+                p => p.MachinePosition.ValueOr(() => 0.0));
+        }
+
+        public static MCodeProgress GetParamacroProgress(this RRF_ObjectModelJob job)
         {
             try
             {
-                if (!data.job.File.HasValue)
+                var file = job.File;
+                if (!file.HasValue)
                     return default;
-                var file = data.job.File.Value;
-                if (!file.FileName.HasValue)
-                    return default;
-                if (string.IsNullOrEmpty(file.FileName.Value))
-                    return default;
-
-                if (!data.input[2].StackDepth.HasValue)
-                    return default;
-                if (data.input[2].StackDepth.Value > 0)
-                    return default;
-           
-                if (!data.state.Status.HasValue)
-                    return default;
-                var line_number = data.input[2].LineNumber;
-                if (!line_number.HasValue)
+                
+                var file_name = file.Value.FileName;
+                if (!file_name.HasValue)
                     return default;
 
-                return data.state.Status.Value switch
-                {
-                    "idle" or "halted" => default,
-                    _ => (LineNumber)(line_number.Value / 2),
-                };
+                var file_size = file.Value.Size;
+                if (!file_size.HasValue)
+                    return default;
+                
+                var file_position = job.FilePosition;
+                if (!file_position.HasValue)
+                    return default;
+
+                var filename = Path.GetFileNameWithoutExtension(file_name.Value);
+                if (!MCodeKey.TryParse(filename, out var mcode_key))
+                    return default;
+
+                var percentage = (double)file_position.Value / file_size.Value * 100.0;
+                if (percentage > 100)
+                    percentage = 0;
+
+                var remaining_seconds = job.TimesLeft.File;
+                if(!remaining_seconds.HasValue)
+                    return default;
+
+                return new MCodeProgress(mcode_key, (percentage, remaining_seconds.Value));
             }
             catch
             {
                 return default;
             }
         }
-
-        public static Optional<MCodePartProgram> GetPartProgram(this (RRF_ObjectModelJob job, RRF_GlobalModel global, FLUX_FileList storage, FLUX_FileList queue) data)
-        {
-            try
-            {
-                if (!data.global.TryGetValue("queue_pos", out var queue_pos_obj))
-                    return default;
-
-                var queue_pos = (QueuePosition)queue_pos_obj.ToObject<short>();
-                if (queue_pos.Value < 0)
-                    return default;
-
-                var queue_dict = data.queue.GetGuidDictionaryFromQueue();
-                if (!queue_dict.TryGetValue(queue_pos.Value, out var current_guid))
-                    return default;
-
-                var storage_dict = data.storage.GetPartProgramDictionaryFromStorage();
-                if (!storage_dict.ContainsKey(current_guid))
-                    return default;
-
-                // Full part program from filename
-                var partprogram_filename = data.job.File
-                    .Convert(f => f.FileName)
-                    .ValueOrOptional(() => data.job.LastFileName)
-                    .ValueOr(() => "");
-
-                if (MCodePartProgram.TryParse(partprogram_filename, out var full_part_program) && 
-                    full_part_program.MCodeGuid == current_guid)
-                { 
-                    if (storage_dict.TryGetValue(full_part_program.MCodeGuid, out var part_programs) &&
-                        part_programs.TryGetValue(full_part_program.StartBlock, out var part_program))
-                        return part_program;
-                }
-
-                return storage_dict.FirstOrOptional(kvp => kvp.Key == current_guid)
-                    .Convert(p => p.Value.Values.FirstOrDefault());
-            }
-            catch
-            {
-                return default;
-            }
-        }
-
-        public static IEnumerable<MCodePartProgram> GetPartProgramFromStorage(this FLUX_FileList storage)
-        {
-            foreach (var file in storage.Files)
-            {
-                if (file.Type != FLUX_FileType.File)
-                    continue;
-                if (!MCodePartProgram.TryParse(file.Name, out var part_program))
-                    continue;
-                yield return part_program;
-            }
-        }
-        public static Dictionary<Guid, Dictionary<BlockNumber, MCodePartProgram>> GetPartProgramDictionaryFromStorage(this FLUX_FileList storage)
-        {
-            return storage.GetPartProgramFromStorage()
-                .GroupBy(s => s.MCodeGuid)
-                .ToDictionary(g => g.Key, g => g.ToDictionary(m => m.StartBlock));
-        }
-
-        public static Dictionary<QueuePosition, Guid> GetGuidDictionaryFromQueue(this FLUX_FileList queue)
-        {
-            return queue.GetGuidFromQueue()
-                .GroupBy(s => s.queue_pos)
-                .Select(s => s.First())
-                .ToDictionary(s => s.queue_pos, s => s.mcode_guid);
-        }
-        public static IEnumerable<(QueuePosition queue_pos, Guid mcode_guid)> GetGuidFromQueue(this FLUX_FileList queue)
-        {
-            foreach (var file in queue.Files)
-            {
-                if (file.Type != FLUX_FileType.File)
-                    continue;
-                var parts = file.Name.Split(';',
-                    StringSplitOptions.RemoveEmptyEntries);
-                if (parts.Length != 2)
-                    continue;
-                if (!short.TryParse(parts[0], out var queue_pos))
-                    continue;
-                if (!Guid.TryParse(parts[1], out var queue_guid))
-                    continue;
-                yield return (queue_pos, queue_guid);
-            }
-        }
     }
 
-    public class RRF_MCodeRecovery : IFLUX_MCodeRecovery
-    {
-        public bool IsSelected => true;
-        public Guid MCodeGuid { get; }
-        public short ToolNumber { get; }
-        public BlockNumber StartBlock { get; }
-        public string FileName => $"{MCodeGuid}.{StartBlock.Value}";
-
-        public RRF_MCodeRecovery(Guid mcode_guid, BlockNumber start_block, short tool_number)
-        {
-            MCodeGuid = mcode_guid;
-            StartBlock = start_block;
-            ToolNumber = tool_number;
-        }
-    }
 }

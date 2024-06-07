@@ -1,5 +1,5 @@
 ﻿using DynamicData;
-using Modulo3DStandard;
+using Modulo3DNet;
 using System.Linq;
 using System.Reactive.Linq;
 
@@ -7,18 +7,20 @@ namespace Flux.ViewModels
 {
     public class MemoryViewModel : FluxRoutableViewModel<MemoryViewModel>
     {
-        public SourceCache<MemoryGroupViewModel, string> VariableGroupsSource { get; }
+        public SourceCache<MemoryGroupViewModel, string> VariableGroupsSource { get; private set; }
 
-        [RemoteContent(true)]
+        [RemoteContent(true, comparer:(nameof(MemoryGroupViewModel.VariableName)))]
         public IObservableCache<MemoryGroupViewModel, string> VariableGroups { get; }
 
         public MemoryViewModel(FluxViewModel flux) : base(flux)
         {
-            VariableGroupsSource = new SourceCache<MemoryGroupViewModel, string>(vm => vm.VariableName);
+            SourceCacheRC.Create(this, v => v.VariableGroupsSource, vm => vm.VariableName);
             VariableGroupsSource.Edit(innerList =>
             {
-                var memory = flux.ConnectionProvider.VariableStore;
-                var groups = memory.Variables.Values
+                var variable_store = flux.ConnectionProvider.VariableStoreBase;
+                var variables = variable_store.Variables;
+
+                var groups = variables.Values
                     .GroupBy(v => v.Group)
                     .Select(group => new MemoryGroupViewModel(Flux, group));
 
@@ -27,7 +29,7 @@ namespace Flux.ViewModels
             });
 
             VariableGroups = VariableGroupsSource.Connect()
-                .AsObservableCache();
+                .AsObservableCacheRC(this);
         }
     }
 }

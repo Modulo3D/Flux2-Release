@@ -1,15 +1,16 @@
 ﻿using DynamicData.Kernel;
 using LiteDB;
-using Modulo3DDatabase;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.IO;
 using System.ServiceModel;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
-    public class DatabaseProvider : ReactiveObject, IFluxDatabaseProvider
+    public class DatabaseProvider : ReactiveObjectRC<DatabaseProvider>, IFluxDatabaseProvider
     {
         public FluxViewModel Flux { get; }
 
@@ -23,31 +24,45 @@ namespace Flux.ViewModels
         public DatabaseProvider(FluxViewModel main)
         {
             Flux = main;
+            this.WhenAnyValue(v => v.Database)
+                .DisposePrevious()
+                .SubscribeRC(this);
         }
 
-        public bool Initialize(Action<ILocalDatabase> initialize_callback = default)
+        public override void Dispose()
+        {
+            base.Dispose();
+            Database.IfHasValue(d => d.Dispose());
+        }
+
+        public async Task<bool> InitializeAsync(Func<ILocalDatabase, Task> initialize_callback = default)
         {
             try
             {
                 if (Database.HasValue)
                     Database.Value.Dispose();
+                Database = default;
+                
+                //var service = new DeLoreanClient("http://localhost:5004/DeLorean/");
+                var service = new DeLoreanClient("http://deloreanservice.azurewebsites.net/delorean");
 
-                var delorean_uri = "http://deloreanservice.azurewebsites.net/delorean.svc/delorean";
-                using var client = new BasicHttpClient<IDelorean>(delorean_uri);
-                var channel = client.CreateChannel();
-                var response = channel.GetProfile(DatabaseVisibility.Public);
-                ((IClientChannel)channel).Close();
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+                var response = await service.GetProfileAsync(cts.Token);
 
                 if (response.Length > 0)
                 {
                     if (Files.Database.Exists)
                         Files.Database.Delete();
-                    File.WriteAllBytes(Files.Database.FullName, response);
+
+                    var bytes = Convert.FromBase64String(response);
+                    bytes = await bytes.UnzipAsync();
+
+                    File.WriteAllBytes(Files.Database.FullName, bytes);
                 }
             }
             catch (Exception ex)
             {
-                Flux.Messages?.LogMessage(DatabaseResponse.DATABASE_DOWNLOAD_EXCEPTION, ex: ex);
+                // Flux.Messages?.LogMessage(DatabaseResponse.DATABASE_DOWNLOAD_EXCEPTION, ex: ex);
             }
 
             ILocalDatabase database;
@@ -60,23 +75,22 @@ namespace Flux.ViewModels
                         Filename = Files.Database.FullName,
                     };
 
-                    database = new LocalDatabase(connection);
-                    database.Initialize(Modulo3DStandard.Database.RegisterCuraSlicerDatabase);
-
-                    initialize_callback?.Invoke(database);
+                    database = new LocalDatabase(connection, Modulo3DNet.Database.RegisterCuraSlicerDatabase);
+                    if(initialize_callback != null)
+                        await initialize_callback?.Invoke(database);
+                    
                     Database = database.ToOptional();
-
                     return true;
                 }
                 else
                 {
-                    Flux.Messages?.LogMessage(DatabaseResponse.DATABASE_NOT_FOUND);
+                    // Flux.Messages?.LogMessage(DatabaseResponse.DATABASE_NOT_FOUND);
                     return false;
                 }
             }
             catch (Exception ex)
             {
-                Flux.Messages?.LogMessage(DatabaseResponse.DATABASE_LOAD_EXCEPTION, ex: ex);
+                // Flux.Messages?.LogMessage(DatabaseResponse.DATABASE_LOAD_EXCEPTION, ex: ex);
                 return false;
             }
         }

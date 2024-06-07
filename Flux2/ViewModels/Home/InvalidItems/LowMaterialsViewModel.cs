@@ -1,6 +1,6 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Reactive.Disposables;
@@ -11,14 +11,11 @@ namespace Flux.ViewModels
 {
     public class LowMaterialViewModel : InvalidValueViewModel<LowMaterialViewModel>
     {
-        public override string ItemName => "MATERIALE";
-        public override string CurrentValueName => "PESO RIMANENTE";
-        public override string ExpectedValueName => "PESO RICHIESTO";
 
-        private ObservableAsPropertyHelper<string> _InvalidItemBrush;
+        private readonly ObservableAsPropertyHelper<string> _InvalidItemBrush;
         public override string InvalidItemBrush => _InvalidItemBrush.Value;
 
-        public LowMaterialViewModel(FeederEvaluator eval) : base($"{typeof(LowMaterialViewModel).GetRemoteControlName()}??{eval.Feeder.Position}", eval)
+        public LowMaterialViewModel(FluxViewModel flux, FeederEvaluator eval) : base(flux, eval)
         {
             _InvalidItemBrush = Observable.CombineLatest(
                eval.Material.WhenAnyValue(m => m.CurrentWeight),
@@ -34,11 +31,10 @@ namespace Flux.ViewModels
 
                    if (missing_weight < 10)
                        return FluxColors.Error;
-                   
+
                    return FluxColors.Warning;
                })
-               .ToProperty(this, v => v.InvalidItemBrush)
-               .DisposeWith(Disposables);
+               .ToPropertyRC(this, v => v.InvalidItemBrush);
         }
 
         public override IObservable<Optional<string>> GetItem(FeederEvaluator eval)
@@ -49,19 +45,18 @@ namespace Flux.ViewModels
         public override IObservable<Optional<string>> GetCurrentValue(FeederEvaluator eval)
         {
             return eval.Material.WhenAnyValue(e => e.CurrentWeight)
-                .Convert(w => $"{w:0.##}g");
+                .Convert(w => $"{w:0.##}g".Replace(",", "."));
         }
         public override IObservable<Optional<string>> GetExpectedValue(FeederEvaluator eval)
         {
             return eval.Material.WhenAnyValue(e => e.ExpectedWeight)
-                .Convert(w => $"{w:0.##}g");
+                .Convert(w => $"{w:0.##}g".Replace(",", "."));
         }
     }
 
     public class LowMaterialsViewModel : InvalidValuesViewModel<LowMaterialsViewModel>
     {
-        public override string Title => "MATERIALI NON SUFFICIENTI";
-        public override string ChangeName => "CAMBIA MATERIALE";
+        public override bool StartWithInvalidValuesEnabled => true;
         public override bool CanStartWithInvalidValues => true;
 
         public LowMaterialsViewModel(FluxViewModel flux) : base(flux)
@@ -70,13 +65,13 @@ namespace Flux.ViewModels
 
         public override void Initialize()
         {
-            base.Initialize();
             InvalidValues = Flux.StatusProvider.FeederEvaluators.Connect().RemoveKey()
                 .AutoRefresh(line => line.Material.HasLowWeight)
                 .Filter(line => line.Material.HasLowWeight)
-                .Transform(line => (IInvalidValueViewModel)new LowMaterialViewModel(line))
-                .Sort(EvaluationComparer)
-                .AsObservableList();
+                .Transform(line => (IInvalidValueViewModel)new LowMaterialViewModel(Flux, line))
+                .AsObservableListRC(this);
+
+            base.Initialize();
         }
 
         public override void StartWithInvalidValues()

@@ -1,5 +1,4 @@
-﻿using DynamicData.Kernel;
-using Modulo3DStandard;
+﻿using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Reactive;
@@ -10,7 +9,7 @@ namespace Flux.ViewModels
     public interface IHomePhaseViewModel : IRemoteControl
     {
         FluxViewModel Flux { get; }
-        ReactiveCommand<Unit, Unit> CancelPrintCommand { get; }
+        ReactiveCommandBaseRC<Unit, Unit> CancelPrintCommand { get; }
     }
 
     public abstract class HomePhaseViewModel<THomePhase> : RemoteControl<THomePhase>, IHomePhaseViewModel
@@ -18,16 +17,15 @@ namespace Flux.ViewModels
     {
         public FluxViewModel Flux { get; }
         [RemoteCommand]
-        public ReactiveCommand<Unit, Unit> CancelPrintCommand { get; }
-        public HomePhaseViewModel(FluxViewModel flux, string name = default) : base(name)
+        public ReactiveCommandBaseRC<Unit, Unit> CancelPrintCommand { get; }
+        public HomePhaseViewModel(FluxViewModel flux)
         {
             Flux = flux;
-            var can_cancel = Flux.StatusProvider.CanSafeStop;
-            CancelPrintCommand = ReactiveCommand.CreateFromTask(async () => { await Flux.ConnectionProvider.CancelPrintAsync(false); }, can_cancel);
+            var can_cancel = Flux.StatusProvider.WhenAnyValue(s => s.StatusEvaluation).Select(s => s.CanSafeStop);
+            CancelPrintCommand = ReactiveCommandBaseRC.CreateFromTask(async () => { await Flux.ConnectionProvider.CancelPrintAsync(false); }, (THomePhase)this, can_cancel);
         }
         public virtual void Initialize()
         {
-            InitializeRemoteView();
         }
     }
 
@@ -35,32 +33,34 @@ namespace Flux.ViewModels
     {
         public WelcomeViewModel WelcomePhase { get; }
         public PrintingViewModel PrintingPhase { get; }
-        public RecoveryViewModel RecoveryPhase { get; }
         public LowNozzlesViewModel LowNozzlesPhase { get; }
         public PurgeNozzlesViewModel ColdNozzlesPhase { get; }
         public PreparePrintViewModel PreparePrintPhase { get; }
-        public InvalidToolsViewModel InvalidToolsPhase { get; }
+        public InvalidNozzlesViewModel InvalidToolsPhase { get; }
         public LowMaterialsViewModel LowMaterialsPhase { get; }
         public InvalidProbesViewModel InvalidProbesPhase { get; }
+        public InvalidPrinterViewModel InvalidPrinterPhase { get; }
         public InvalidMaterialsViewModel InvalidMaterialsPhase { get; }
 
-        private ObservableAsPropertyHelper<IHomePhaseViewModel> _HomePhase;
+        private readonly ObservableAsPropertyHelper<IHomePhaseViewModel> _HomePhase;
         [RemoteContent(true)]
         public IHomePhaseViewModel HomePhase => _HomePhase.Value;
 
         public HomeViewModel(FluxViewModel flux) : base(flux)
         {
             WelcomePhase = new WelcomeViewModel(Flux);
-            RecoveryPhase = new RecoveryViewModel(Flux);
             PrintingPhase = new PrintingViewModel(Flux);
+            LowNozzlesPhase = new LowNozzlesViewModel(Flux);
             ColdNozzlesPhase = new PurgeNozzlesViewModel(Flux);
             PreparePrintPhase = new PreparePrintViewModel(Flux);
-            InvalidToolsPhase = new InvalidToolsViewModel(Flux);
+            InvalidToolsPhase = new InvalidNozzlesViewModel(Flux);
             LowMaterialsPhase = new LowMaterialsViewModel(Flux);
             InvalidProbesPhase = new InvalidProbesViewModel(Flux);
+            InvalidPrinterPhase = new InvalidPrinterViewModel(Flux);
             InvalidMaterialsPhase = new InvalidMaterialsViewModel(Flux);
 
             PrintingPhase.Initialize();
+            LowNozzlesPhase.Initialize();
             ColdNozzlesPhase.Initialize();
             PreparePrintPhase.Initialize();
             InvalidToolsPhase.Initialize();
@@ -73,20 +73,17 @@ namespace Flux.ViewModels
                 Flux.StatusProvider.WhenAnyValue(v => v.StartEvaluation),
                 Flux.StatusProvider.WhenAnyValue(v => v.PrintingEvaluation),
                 GetHomeViewModel)
+                .Throttle(TimeSpan.FromSeconds(0.25))
                 .ToProperty(this, h => h.HomePhase);
         }
 
         private IHomePhaseViewModel GetHomeViewModel(StatusEvaluation status_eval, StartEvaluation start_eval, PrintingEvaluation printing_eval)
         {
-            if (printing_eval.Recovery.HasValue)
-                if(!printing_eval.Recovery.Value.IsSelected)
-                    return RecoveryPhase;
-
-            if (!printing_eval.SelectedMCode.HasValue)
+            if (!printing_eval.MCode.HasValue)
                 return WelcomePhase;
 
-            if (!status_eval.IsCycle.HasValue)
-                return WelcomePhase;
+            if (start_eval.HasInvalidPrinter)
+                return InvalidPrinterPhase;
 
             if (start_eval.HasInvalidTools)
                 return InvalidToolsPhase;
@@ -97,15 +94,16 @@ namespace Flux.ViewModels
             if (start_eval.HasInvalidProbes)
                 return InvalidProbesPhase;
 
-            if (!status_eval.IsCycle.Value)
+            if (!status_eval.IsCycle)
             {
                 if (start_eval.HasLowMaterials)
-                    if(!start_eval.StartWithLowMaterials)
+                    if (!start_eval.StartWithLowMaterials)
                         return LowMaterialsPhase;
-                
+
                 if (start_eval.HasLowNozzles)
-                    return LowMaterialsPhase;
-                
+                    if (!start_eval.StartWithLowNozzles)
+                        return LowNozzlesPhase;
+
                 if (!status_eval.CanSafePrint)
                     return PreparePrintPhase;
             }

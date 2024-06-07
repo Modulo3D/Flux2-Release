@@ -1,6 +1,6 @@
 ﻿using DynamicData;
 using DynamicData.Kernel;
-using Modulo3DStandard;
+using Modulo3DNet;
 using ReactiveUI;
 using System.Collections.Generic;
 using System.Reactive.Linq;
@@ -9,7 +9,7 @@ namespace Flux.ViewModels
 {
     public class TemperaturesViewModel : FluxRoutableViewModel<TemperaturesViewModel>
     {
-        [RemoteContent(true)]
+        [RemoteContent(true, comparer:(nameof(TemperatureViewModel.Position)))]
         public IObservableCache<TemperatureViewModel, string> Temperatures { get; set; }
 
         public TemperaturesViewModel(FluxViewModel flux) : base(flux)
@@ -17,36 +17,44 @@ namespace Flux.ViewModels
             Temperatures = Flux.SettingsProvider
                 .WhenAnyValue(v => v.ExtrudersCount)
                 .Select(FindTemperatures)
-                .ToObservableChangeSet(t => t.Name)
-                .AsObservableCache();
+                .AsObservableChangeSet(t => t.Name)
+                .AsObservableCacheRC(this);
         }
 
-        private IEnumerable<TemperatureViewModel> FindTemperatures(Optional<ushort> extruders)
+        private IEnumerable<TemperatureViewModel> FindTemperatures(Optional<(ushort machine_extruders, ushort mixing_extruders)> extruders)
         {
-            if (extruders.HasValue && Flux.ConnectionProvider.VariableStore.HasVariable(m => m.TEMP_TOOL))
+            ushort temp_pos = 0;
+
+            if (extruders.HasValue)
             {
-                for (ushort i = 0; i < extruders.Value; i++)
+                var variable_store = Flux.ConnectionProvider.VariableStoreBase;
+
+                for (ushort i = 0; i < extruders.Value.machine_extruders; i++)
                 {
-                    var extruder = i;
-                    var extr_key = Flux.ConnectionProvider.VariableStore.GetArrayUnit(m => m.TEMP_TOOL, i);
-                    if (!extr_key.HasValue)
+                    var extr_index = ArrayIndex.FromZeroBase(i, variable_store);
+                    var extr_key = Flux.ConnectionProvider.GetArrayUnit(m => m.TEMP_TOOL, extr_index);
+                    var extr_temp = Flux.ConnectionProvider.GetVariable(m => m.TEMP_TOOL, extr_key);
+                    if (!extr_temp.HasValue)
                         continue;
 
-                    var extr_temp = Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_TOOL, extr_key.Value);
-                    yield return new TemperatureViewModel(this, $"Estrusore {i + 1}", $"{i}", t => Flux.ConnectionProvider.WriteVariableAsync(m => m.TEMP_TOOL, extr_key.Value, t), extr_temp);
+                    yield return new TemperatureViewModel(Flux, this, temp_pos++, extr_temp.Value);
                 }
             }
 
-            if (Flux.ConnectionProvider.VariableStore.HasVariable(m => m.TEMP_CHAMBER))
+            var chamber_units = Flux.ConnectionProvider.GetArrayUnits(c => c.TEMP_CHAMBER);
+            foreach (var chamber_unit in chamber_units)
             {
-                var chamber_temp = Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_CHAMBER);
-                yield return new TemperatureViewModel(this, "Camera", $"chamber", t => Flux.ConnectionProvider.WriteVariableAsync(m => m.TEMP_CHAMBER, t), chamber_temp);
+                var chamber_temp = Flux.ConnectionProvider.GetVariable(m => m.TEMP_CHAMBER, chamber_unit.Alias);
+                if (chamber_temp.HasValue)
+                    yield return new TemperatureViewModel(Flux, this, temp_pos++, chamber_temp.Value);
             }
 
-            if (Flux.ConnectionProvider.VariableStore.HasVariable(m => m.TEMP_PLATE))
+            var plate_units = Flux.ConnectionProvider.GetArrayUnits(c => c.TEMP_PLATE);
+            foreach (var plate_unit in plate_units)
             {
-                var plate_temp = Flux.ConnectionProvider.ObserveVariable(m => m.TEMP_PLATE);
-                yield return new TemperatureViewModel(this, "Piatto", $"plate", t => Flux.ConnectionProvider.WriteVariableAsync(m => m.TEMP_PLATE, t), plate_temp);
+                var plate_temp = Flux.ConnectionProvider.GetVariable(m => m.TEMP_PLATE, plate_unit.Alias);
+                if (plate_temp.HasValue)
+                    yield return new TemperatureViewModel(Flux, this, temp_pos++, plate_temp.Value);
             }
         }
     }
