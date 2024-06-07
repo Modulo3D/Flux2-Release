@@ -23,8 +23,17 @@ namespace Flux.ViewModels
         private readonly ObservableAsPropertyHelper<Optional<Printer>> _Printer;
         public Optional<Printer> Printer => _Printer.Value;
 
-        private readonly ObservableAsPropertyHelper<Optional<IPAddress>> _HostAddress;
-        public Optional<IPAddress> HostAddress => _HostAddress.Value;
+        private readonly ObservableAsPropertyHelper<Optional<IPEndPoint>> _FluxEndpoint;
+        public Optional<IPEndPoint> FluxEndPoint => _FluxEndpoint.Value;
+
+        private readonly ObservableAsPropertyHelper<Optional<IPEndPoint>> _PLCEndPoint;
+        public Optional<IPEndPoint> PLCEndPoint => _PLCEndPoint.Value;
+        
+        private readonly ObservableAsPropertyHelper<Optional<int>> _PassthroughPort;
+        public Optional<int> PassthroughPort => _PassthroughPort.Value;
+
+        private readonly ObservableAsPropertyHelper<Optional<int>> _VPNPort;
+        public Optional<int> VPNPort => _VPNPort.Value;
 
         private LocalSettingsProvider<FluxCoreSettings> _CoreSettings;
         public LocalSettingsProvider<FluxCoreSettings> CoreSettings
@@ -45,6 +54,17 @@ namespace Flux.ViewModels
                 if (_UserSettings == default)
                     _UserSettings = new LocalSettingsProvider<FluxUserSettings>(Files.UserSettings);
                 return _UserSettings;
+            }
+        }
+
+        private LocalSettingsProvider<FluxMemorySettings> _MemorySettings;
+        public LocalSettingsProvider<FluxMemorySettings> MemorySettings
+        {
+            get
+            {
+                if (_MemorySettings == default)
+                    _MemorySettings = new LocalSettingsProvider<FluxMemorySettings>(Files.MemorySettings);
+                return _MemorySettings;
             }
         }
 
@@ -74,9 +94,32 @@ namespace Flux.ViewModels
                 .Transform(ip => ip.Value)
                 .AsObservableCacheRC(this);
 
-            _HostAddress = CoreSettings.Local.WhenAnyValue(s => s.HostID)
-                .Convert(HostAddressCache.Lookup)
-                .ToPropertyRC(this, v => v.HostAddress);
+            _FluxEndpoint = Observable.CombineLatest(
+                HostAddressCache.Connect().QueryWhenChanged(),
+                CoreSettings.Local.WhenAnyValue(s => s.HostID),
+                CoreSettings.Local.WhenAnyValue(s => s.HostPort),
+                (host_address_cache, host_id, host_port) =>
+                {
+                    if (!host_id.HasValue)
+                        return Optional<IPEndPoint>.None;
+                    if (!host_port.HasValue)
+                        return Optional<IPEndPoint>.None;
+                    var flux_address = host_address_cache.Lookup(host_id.Value);
+                    if (!flux_address.HasValue)
+                        return Optional<IPEndPoint>.None;
+                    return new IPEndPoint(flux_address.Value, host_port.Value);
+                })
+                .ToPropertyRC(this, v => v.FluxEndPoint);
+
+            _PassthroughPort = CoreSettings.Local.WhenAnyValue(s => s.PassthroughPort)
+               .ToPropertyRC(this, v => v.PassthroughPort);
+
+            _VPNPort = CoreSettings.Local.WhenAnyValue(s => s.VPNPort)
+               .ToPropertyRC(this, v => v.VPNPort);
+
+            _PLCEndPoint = CoreSettings.Local.WhenAnyValue(s => s.PLCAddress)
+                .Convert(address => address.ParseAsIPv4EndPoint())
+                .ToPropertyRC(this, v => v.PLCEndPoint);
 
             _ExtrudersCount = this.WhenAnyValue(v => v.Printer)
                 .Convert(p =>
@@ -88,32 +131,10 @@ namespace Flux.ViewModels
                 .ToPropertyRC(this, v => v.ExtrudersCount);
 
             UserSettings.Local.WhenAnyValue(s => s.StandbyMinutes)
-                .SubscribeRC(s =>
+                .SubscribeRC(async s =>
                 {
-                    try
-                    {
-                        if (!s.HasValue)
-                            return;
-
-                        var seconds = (int)TimeSpan.FromMinutes(s.Value).TotalSeconds;
-                        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-                        {
-                            using var process = new Process
-                            {
-                                StartInfo = new ProcessStartInfo
-                                {
-                                    UseShellExecute = true,
-                                    FileName = "/bin/bash",
-                                    Arguments = $"-c \"xset s {seconds} {seconds}\"",
-                                }
-                            };
-                            process.Start();
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine(ex.ToString());
-                    }
+                    var seconds = (int)TimeSpan.FromMinutes(s.Value).TotalSeconds;
+                    await ProcessUtils.RunLinuxCommandsAsync("DISPLAY=:0 xset s reset", $"DISPLAY=:0 xset s {seconds}");
                 }, this);
         }
 
@@ -133,8 +154,8 @@ namespace Flux.ViewModels
         // GET EXTRUDERS
         public bool PersistLocalSettings()
         {
-            var result = CoreSettings.PersistLocalSettings() && UserSettings.PersistLocalSettings();
-            Flux.Messages.LogMessage("Salvataggio impostazioni", result ? "Impostazioni salvate" : "Errore di salvataggio", result ? MessageLevel.DEBUG : MessageLevel.ERROR, 0);
+            var result = CoreSettings.PersistLocalSettings() && UserSettings.PersistLocalSettings() && MemorySettings.PersistLocalSettings();
+            // Flux.Messages.LogMessage("Salvataggio impostazioni", result ? "Impostazioni salvate" : "Errore di salvataggio", result ? MessageLevel.DEBUG : MessageLevel.ERROR, 0);
             return result;
         }
     }

@@ -38,11 +38,12 @@ M92 X100 Y100 Z800 C91.022 U800 B800 E409:409:409:409	; Set steps per mm assumin
 M350 E16:16:16:16 I1 									; Configure microstepping with interpolation
 M350 C16 I10											; Configure microstepping without interpolation
 M350 X16 Y16 Z16 U16 B16 I1								; Configure microstepping with interpolation
-M566 X400 Y400 Z8 C2 U8 B8 E200:200:200:200				; Set maximum instantaneous speed changes (mm/min)
-M203 X35000 Y35000 Z1200 C5000 U2000 B2000 E5000:5000:5000:5000		; Set maximum speeds (mm/min)
-M201 X6000 Y6000 Z400 C5000 U400 B400 E2500:2500:2500:2500		; Set accelerations (mm/s^2)
-M906 X1800 Y1800 Z1600 U1600 B2000 I30   							; Idle motion motors to 30%
-M906 E1600:1600:1600:1600 C500 I10     					; Idle extruder motors to 10%
+M566 X400 Y400 Z8 C2 U8 B2 E200:200:200:200				; Set maximum instantaneous speed changes (mm/min)
+M203 X35000 Y35000 Z1200 C5000 U2000 B1000 E5000:5000:5000:5000		; Set maximum speeds (mm/min)
+M201 X6000 Y6000 Z400 C5000 U400 B100 E2500:2500:2500:2500		; Set accelerations (mm/s^2)
+906 X1800 Y1800 Z1300 B2000 I30   							; Idle motion motors to 30%
+M906 U1600 I70											; Idle unloader current to 70%
+M906 E2000:2000:2000:2000 C500 I10     					; Idle extruder motors to 10% 					; Idle extruder motors to 10%
 
 ; Endstops
 M574 X2 S1 P"duex.e4_stop"   	; X min active high endstop switch

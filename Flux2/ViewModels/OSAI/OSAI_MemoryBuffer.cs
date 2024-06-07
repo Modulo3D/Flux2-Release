@@ -37,7 +37,7 @@ namespace Flux.ViewModels
 
     public class OSAI_MemoryReaderGroup : FLUX_MemoryReaderGroup<OSAI_MemoryReaderGroup, OSAI_MemoryBuffer, OSAI_ConnectionProvider, OSAI_VariableStore>
     {
-        public OSAI_MemoryReaderGroup(OSAI_MemoryBuffer memory_buffer, TimeSpan period) : base(memory_buffer, period)
+        public OSAI_MemoryReaderGroup(IFlux flux, OSAI_MemoryBuffer memory_buffer, FLUX_MemoryReaderGroupPeriod period) : base(flux, memory_buffer, period)
         {
         }
         public void AddMemoryReader(IGrouping<OSAI_ReadPriority, IOSAI_AsyncVariable> variables)
@@ -48,6 +48,7 @@ namespace Flux.ViewModels
 
     public class OSAI_MemoryBuffer : FLUX_MemoryBuffer<OSAI_MemoryBuffer, OSAI_ConnectionProvider, OSAI_VariableStore>
     {
+        public IFlux Flux;
         public override OSAI_ConnectionProvider ConnectionProvider { get; }
 
         private (ushort start_addr, ushort end_addr) _GD_BUFFER_RANGE;
@@ -177,17 +178,18 @@ namespace Flux.ViewModels
         private ObservableAsPropertyHelper<bool> _HasFullMemoryRead;
         public override bool HasFullMemoryRead => _HasFullMemoryRead.Value;
 
-        private SourceCache<OSAI_MemoryReaderGroup, TimeSpan> MemoryReaders { get; set; }
+        private SourceCache<OSAI_MemoryReaderGroup, FLUX_MemoryReaderGroupPeriod> MemoryReaderGroups { get; set; }
 
-        public OSAI_MemoryBuffer(OSAI_ConnectionProvider connection_provider)
+        public OSAI_MemoryBuffer(IFlux flux, OSAI_ConnectionProvider connection_provider)
         {
+            Flux = flux;
             ConnectionProvider = connection_provider;
             GD_BUFFER_CHANGED = this.WhenAnyValue(plc => plc.GD_BUFFER);
             GW_BUFFER_CHANGED = this.WhenAnyValue(plc => plc.GW_BUFFER);
             MW_BUFFER_CHANGED = this.WhenAnyValue(plc => plc.MW_BUFFER);
             L_BUFFER_CHANGED = this.WhenAnyValue(plc => plc.L_BUFFER);
 
-            SourceCacheRC.Create(this, v => v.MemoryReaders, g => g.Period);
+            SourceCacheRC.Create(this, v => v.MemoryReaderGroups, g => g.Period);
         }
         public override void Initialize(OSAI_VariableStore variableStore)
         {
@@ -209,13 +211,13 @@ namespace Flux.ViewModels
 
             DisposableThread.Start(UpdateBuffersAsync, TimeSpan.FromMilliseconds(100));
 
-            AddModelReader(plc_variables, OSAI_ReadPriority.LOW, TimeSpan.FromMilliseconds(1000));
-            AddModelReader(plc_variables, OSAI_ReadPriority.HIGH, TimeSpan.FromMilliseconds(500));
-            AddModelReader(plc_variables, OSAI_ReadPriority.MEDIUM, TimeSpan.FromMilliseconds(800));
-            AddModelReader(plc_variables, OSAI_ReadPriority.ULTRALOW, TimeSpan.FromMilliseconds(1500));
-            AddModelReader(plc_variables, OSAI_ReadPriority.ULTRAHIGH, TimeSpan.FromMilliseconds(200));
+            AddModelReader(plc_variables, OSAI_ReadPriority.LOW, FLUX_MemoryReaderGroupPeriod.SLOW);
+            AddModelReader(plc_variables, OSAI_ReadPriority.HIGH, FLUX_MemoryReaderGroupPeriod.FAST);
+            AddModelReader(plc_variables, OSAI_ReadPriority.MEDIUM, FLUX_MemoryReaderGroupPeriod.MEDIUM);
+            AddModelReader(plc_variables, OSAI_ReadPriority.ULTRALOW, FLUX_MemoryReaderGroupPeriod.ULTRA_SLOW);
+            AddModelReader(plc_variables, OSAI_ReadPriority.ULTRAHIGH, FLUX_MemoryReaderGroupPeriod.ULTRA_FAST);
 
-            var has_full_variables_read = MemoryReaders.Connect()
+            var has_full_variables_read = MemoryReaderGroups.Connect()
                 .TrueForAll(f => f.WhenAnyValue(f => f.HasMemoryRead), r => r);
 
             _HasFullMemoryRead = Observable.CombineLatest(
@@ -227,17 +229,20 @@ namespace Flux.ViewModels
                 (gd, gw, mw, l, v) => gd.HasValue && gw.HasValue && mw.HasValue && l.HasValue && v)
                 .ToProperty(this, v => v.HasFullMemoryRead)
                 .DisposeWith(Disposables);
+
+            foreach (var memory_reader_group in MemoryReaderGroups.Items)
+                memory_reader_group.Start();
         }
-        private void AddModelReader(Dictionary<OSAI_ReadPriority, IGrouping<OSAI_ReadPriority, IOSAI_AsyncVariable>> variables, OSAI_ReadPriority priority, TimeSpan period)
+        private void AddModelReader(Dictionary<OSAI_ReadPriority, IGrouping<OSAI_ReadPriority, IOSAI_AsyncVariable>> variables, OSAI_ReadPriority priority, FLUX_MemoryReaderGroupPeriod period)
         {
             var priority_variables = variables.Lookup(priority);
             if (!priority_variables.HasValue || !priority_variables.Value.Any())
                 return;
 
-            var memory_reader = MemoryReaders.Lookup(period);
+            var memory_reader = MemoryReaderGroups.Lookup(period);
             if (!memory_reader.HasValue)
-                MemoryReaders.AddOrUpdate(new OSAI_MemoryReaderGroup(this, period));
-            memory_reader = MemoryReaders.Lookup(period);
+                MemoryReaderGroups.AddOrUpdate(new OSAI_MemoryReaderGroup(Flux, this, period));
+            memory_reader = MemoryReaderGroups.Lookup(period);
             if (!memory_reader.HasValue)
                 return;
 

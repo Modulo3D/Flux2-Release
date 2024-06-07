@@ -33,7 +33,7 @@ namespace Flux.ViewModels
         public bool PersistLocalSettings()
         {
             var result = Stats.PersistLocalSettings();
-            Flux.Messages.LogMessage("Salvataggio statistiche", result ? "Statistiche salvate" : "Errore di salvataggio", result ? MessageLevel.DEBUG : MessageLevel.ERROR, 0);
+            // Flux.Messages.LogMessage("Salvataggio statistiche", result ? "Statistiche salvate" : "Errore di salvataggio", result ? MessageLevel.DEBUG : MessageLevel.ERROR, 0);
             return result;
         }
     }

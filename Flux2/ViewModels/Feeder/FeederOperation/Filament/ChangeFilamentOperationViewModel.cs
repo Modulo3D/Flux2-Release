@@ -85,7 +85,7 @@ namespace Flux.ViewModels
                 using var wait_cancel_filament_op_cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
                 if (!await Flux.ConnectionProvider.ExecuteParamacroAsync(f => cancel_filament_operation(f)(feeder_index), put_cancel_filament_op_cts.Token, true, wait_cancel_filament_op_cts.Token))
                 {
-                    Flux.Messages.LogMessage(MaterialChangeResult.MATERIAL_CHANGE_ERROR_PARAMACRO, default);
+                    // Flux.Messages.LogMessage(MaterialChangeResult.MATERIAL_CHANGE_ERROR_PARAMACRO, default);
                     return false;
                 }
 
@@ -93,7 +93,7 @@ namespace Flux.ViewModels
             }
             catch (Exception ex)
             {
-                Flux.Messages.LogException(this, ex);
+                // Flux.Messages.LogException(this, ex);
                 return false;
             }
         }
@@ -113,7 +113,7 @@ namespace Flux.ViewModels
                 using var wait_filament_op_cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
                 if (!await Flux.ConnectionProvider.ExecuteParamacroAsync(f => filament_operation(f)(settings.Value), put_filament_op_cts.Token, true, wait_filament_op_cts.Token, true))
                 {
-                    Flux.Messages.LogMessage(MaterialChangeResult.MATERIAL_CHANGE_ERROR_PARAMACRO, default);
+                    // Flux.Messages.LogMessage(MaterialChangeResult.MATERIAL_CHANGE_ERROR_PARAMACRO, default);
                     return false;
                 }
 
@@ -121,7 +121,7 @@ namespace Flux.ViewModels
             }
             catch (Exception ex)
             {
-                Flux.Messages.LogException(this, ex);
+                // Flux.Messages.LogException(this, ex);
                 return false;
             }
         }

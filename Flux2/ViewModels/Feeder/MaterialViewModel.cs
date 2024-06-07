@@ -203,7 +203,7 @@ namespace Flux.ViewModels
                     NFCSlot.StoreTag(t => t.SetInserted(core_setting.PrinterGuid, default));
                 }, this);
 
-            // insert filament if it's the only one after gear and on after gear is closed
+            // insert filament if after gear is closed
             Observable.CombineLatest(
                 other_filament_after_gear,
                 NFCSlot.WhenAnyValue(m => m.Nfc),
@@ -212,8 +212,6 @@ namespace Flux.ViewModels
                 .SubscribeOn(RxApp.MainThreadScheduler)
                 .SubscribeRC(t =>
                 {
-                    if (t.other_after_gear)
-                        return;
                     if (!t.after_gear.HasValue)
                         return;
                     if (!t.after_gear.Value)

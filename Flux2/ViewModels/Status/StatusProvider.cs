@@ -308,11 +308,7 @@ namespace Flux.ViewModels
 
         public void Initialize()
         {
-            // Status with messages
-            var messages = Flux.Messages
-                .WhenAnyValue(m => m.MessageCounter);
-
-            _FluxStatus = messages.CombineLatest(
+            _FluxStatus = Observable.CombineLatest(
                 Flux.ConnectionProvider.ObserveVariable(m => m.PROCESS_STATUS),
                 this.WhenAnyValue(v => v.PrintingEvaluation),
                 Flux.Navigator.WhenAnyValue(nav => nav.CurrentViewModel),
@@ -322,7 +318,6 @@ namespace Flux.ViewModels
         }
 
         private FLUX_ProcessStatus FindFluxStatus(
-            MessageCounter messages,
             Optional<FLUX_ProcessStatus> status,
             PrintingEvaluation printing_eval,
             Optional<IFluxRoutableViewModel> current_vm,
@@ -336,12 +331,6 @@ namespace Flux.ViewModels
 
             if (is_connecting)
                 return FLUX_ProcessStatus.NONE;
-
-            if (messages.EmergencyMessagesCount > 0)
-                return FLUX_ProcessStatus.EMERG;
-
-            if (messages.ErrorMessagesCount > 0)
-                return FLUX_ProcessStatus.ERROR;
 
             switch (status.Value)
             {
@@ -401,8 +390,8 @@ namespace Flux.ViewModels
             if (!percentage.HasValue)
                 return PrintProgress;
 
-            var remaining_ticks = (double)duration.Ticks / 100 * (100 - percentage.Value);
-            return new PrintProgress(percentage.Value, new TimeSpan((long)remaining_ticks));
+            var remaining_time = progress.GetRemainingTime(duration, percentage.Value);
+            return new PrintProgress(percentage.Value, remaining_time);
         }
 
         private IEnumerable<FeederEvaluator> CreateFeederEvaluator(IQuery<IFluxFeederViewModel, ushort> query)

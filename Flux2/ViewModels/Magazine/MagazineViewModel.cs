@@ -28,8 +28,8 @@ namespace Flux.ViewModels
             if (Flux.ConnectionProvider.VariableStoreBase.HasToolChange)
                 ResetMagazineCommand = ReactiveCommandBaseRC.CreateFromTask(async () => { await Flux.ConnectionProvider.ResetMagazineAsync(); }, this, is_idle);
 
-            var top_lock_unit = Flux.ConnectionProvider.GetArrayUnit(m => m.LOCK_CLOSED, "top");
-            if (Flux.ConnectionProvider.HasVariable(m => m.LOCK_CLOSED, top_lock_unit))
+            var top_lock_unit = Flux.ConnectionProvider.GetArrayUnit(m => m.OPEN_LOCK, "top.lock");
+            if (Flux.ConnectionProvider.HasVariable(m => m.OPEN_LOCK, top_lock_unit))
                 AddCommand("toggleTopLock", ReactiveCommandBaseRC.CreateFromTask(async () => { await Flux.ConnectionProvider.ToggleVariableAsync(c => c.OPEN_LOCK, top_lock_unit); }, this), Unit.Default);
         }
     }

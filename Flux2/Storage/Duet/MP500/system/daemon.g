@@ -7,7 +7,7 @@ while global.run_daemon == true
 	;spin extrusions
 	if state.upTime - var.last_extrusion_spin > 30
 		set var.last_extrusion_spin = state.upTime
-		M98 P"/macros/job/spin.g"
+		M98 P"/gcodes/queue/inner/spin.g"
 
 	; locks control
 	if (!exists(global.chamber_lock_timer))

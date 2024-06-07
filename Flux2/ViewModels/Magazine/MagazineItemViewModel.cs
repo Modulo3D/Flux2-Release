@@ -52,7 +52,9 @@ namespace Flux.ViewModels
                 .ToProperty(this, v => v.Nozzle);
 
             // TODO
-            ResetHeaterFaultCommand = ReactiveCommandBaseRC.Create(() => { }, this, Observable.Return(false));
+            ResetHeaterFaultCommand = ReactiveCommandBaseRC.Create(() => 
+            {
+            }, this, Observable.Return(false));
         }
     }
 }

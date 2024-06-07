@@ -106,6 +106,7 @@ namespace Flux.ViewModels
 
                 model.CreateVariable(c => c.AXIS_POSITION, OSAI_ReadPriority.HIGH, GetAxisPositionAsync);
                 
+                model.CreateVariable(c => c.MESSAGES, OSAI_ReadPriority.HIGH, GetMessagesAsync);
                 model.CreateVariable(c => c.QUEUE, OSAI_ReadPriority.HIGH, GetJobQueuePreviewAsync);
                 model.CreateVariable(c => c.STORAGE, OSAI_ReadPriority.MEDIUM, GetMCodeStorageAsync);
                 model.CreateVariable(c => c.BOOT_PHASE, OSAI_ReadPriority.ULTRAHIGH, GetBootPhaseAsync);
@@ -238,6 +239,11 @@ namespace Flux.ViewModels
                 return default;
 
             return queue_files.Value.GetJobQueuePreview();
+        }
+        private static async Task<Optional<FLUX_FileList>> GetMessagesAsync(OSAI_ConnectionProvider connection_provider, CancellationToken ct)
+        {
+            var connection = connection_provider.Connection;
+            return await connection.ListFilesAsync(c => c.MessageEventPath, ct);
         }
         private static async Task<Optional<ExtrusionSetQueuePreview<ExtrusionMM>>> GetExtrusionSetQueueAsync(OSAI_ConnectionProvider connection_provider, CancellationToken ct)
         {

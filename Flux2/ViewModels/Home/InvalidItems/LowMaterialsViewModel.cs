@@ -56,8 +56,7 @@ namespace Flux.ViewModels
 
     public class LowMaterialsViewModel : InvalidValuesViewModel<LowMaterialsViewModel>
     {
-        private ObservableAsPropertyHelper<bool> _StartWithInvalidValuesEnabled;
-        public override bool StartWithInvalidValuesEnabled => _StartWithInvalidValuesEnabled.Value;
+        public override bool StartWithInvalidValuesEnabled => true;
         public override bool CanStartWithInvalidValues => true;
 
         public LowMaterialsViewModel(FluxViewModel flux) : base(flux)
@@ -71,10 +70,6 @@ namespace Flux.ViewModels
                 .Filter(line => line.Material.HasLowWeight)
                 .Transform(line => (IInvalidValueViewModel)new LowMaterialViewModel(Flux, line))
                 .AsObservableListRC(this);
-
-            _StartWithInvalidValuesEnabled = Flux.StatusProvider.FeederEvaluators.Connect()
-                .TrueForAll(line => line.Material.WhenAnyValue(m => m.HasEmptyWeight), e => !e)
-                .ToPropertyRC(this, v => v.StartWithInvalidValuesEnabled);
 
             base.Initialize();
         }

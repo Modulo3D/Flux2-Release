@@ -123,9 +123,9 @@ namespace Flux.ViewModels
     public class LockClosedConditionViewModel : ConditionViewModel<LockClosedConditionViewModel>
     {
         public IFLUX_Variable<bool, bool> LockClosed { get; }
-        public IFLUX_Variable<bool, bool> OpenLock { get; }
-        public LockClosedConditionViewModel(FluxViewModel flux, ConditionsProvider conditions, IFLUX_Variable<bool, bool> lock_closed, IFLUX_Variable<bool, bool> open_lock) 
-            : base(flux, conditions, open_lock.Unit.Alias)
+        public Optional<IFLUX_Variable<bool, bool>> OpenLock { get; }
+        public LockClosedConditionViewModel(FluxViewModel flux, ConditionsProvider conditions, IFLUX_Variable<bool, bool> lock_closed, Optional<IFLUX_Variable<bool, bool>> open_lock) 
+            : base(flux, conditions, lock_closed.Unit.Alias)
         {
             OpenLock = open_lock;
             LockClosed = lock_closed;
@@ -139,17 +139,17 @@ namespace Flux.ViewModels
         {
             return Observable.CombineLatest(
                 LockClosed.ValueChanged.ValueOrDefault(),
-                OpenLock.ValueChanged.ValueOrDefault(),
+                OpenLock.ConvertToObservable(o => o.ValueChanged).ObservableOr(() => false),
                 is_idle,
                 (closed, open, is_idle) =>
                 {
                     if (!closed || open)
                     {
                         if (!is_idle)
-                            return new ConditionState(EConditionState.Warning, new RemoteText($"openDuringCycle;{OpenLock.Unit}", true));
-                        return new ConditionState(EConditionState.Warning, new RemoteText($"close;{OpenLock.Unit}", true));
+                            return new ConditionState(EConditionState.Warning, new RemoteText($"openDuringCycle;{LockClosed.Unit}", true));
+                        return new ConditionState(EConditionState.Warning, new RemoteText($"close;{LockClosed.Unit}", true));
                     }
-                    return new ConditionState(EConditionState.Stable, new RemoteText($"closed;{OpenLock.Unit}", true));
+                    return new ConditionState(EConditionState.Stable, new RemoteText($"closed;{LockClosed.Unit}", true));
                 });
         }
     }
@@ -511,16 +511,14 @@ namespace Flux.ViewModels
 
         protected override IObservable<ConditionState> GetState(IObservable<bool> is_idle)
         {
-            return Flux.Messages.WhenAnyValue(v => v.MessageCounter)
+            return Flux.Messages.WhenAnyValue(m => m.MessageFlags)
                 .Select(message_counter =>
                 {
-                    if (message_counter.EmergencyMessagesCount > 0)
+                    if (message_counter.HasEmergency)
                         return new ConditionState(EConditionState.Error, new RemoteText("emerg", true));
-                    if (message_counter.ErrorMessagesCount > 0)
+                    if (message_counter.HasError)
                         return new ConditionState(EConditionState.Warning, new RemoteText("error", true));
-                    if (message_counter.WarningMessagesCount > 0)
-                        return new ConditionState(EConditionState.Warning, new RemoteText("warning", true));
-                    if (message_counter.InfoMessagesCount > 0)
+                    if (message_counter.HasInfo)
                         return new ConditionState(EConditionState.Stable, new RemoteText("info", true));
                     return new ConditionState(EConditionState.Disabled, new RemoteText("none", true));
                 });

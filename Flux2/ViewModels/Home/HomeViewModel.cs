@@ -101,7 +101,8 @@ namespace Flux.ViewModels
                         return LowMaterialsPhase;
 
                 if (start_eval.HasLowNozzles)
-                    return LowNozzlesPhase;
+                    if (!start_eval.StartWithLowNozzles)
+                        return LowNozzlesPhase;
 
                 if (!status_eval.CanSafePrint)
                     return PreparePrintPhase;

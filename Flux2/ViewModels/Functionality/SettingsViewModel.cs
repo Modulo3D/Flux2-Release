@@ -4,10 +4,12 @@ using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Reactive;
 using System.Reactive.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Markup;
@@ -16,6 +18,18 @@ namespace Flux.ViewModels
 {
     public class SettingsViewModel : FluxRoutableNavBarViewModel<SettingsViewModel>
     {
+        private string _FluxReleaseDate = "";
+        [RemoteOutput(false)]
+        public string FluxReleaseDate
+        {
+            get
+            {
+                if (string.IsNullOrEmpty(_FluxReleaseDate))
+                    _FluxReleaseDate = $"Data del software: {File.GetCreationTime(Assembly.GetExecutingAssembly().Location):dd/MM/yyyy}";
+                return _FluxReleaseDate;
+            }
+        }
+
         private string _PrinterGuid = "";
         [RemoteOutput(true)]
         public string PrinterGuid
@@ -42,6 +56,30 @@ namespace Flux.ViewModels
         {
             get => _PlcAddress;
             set => this.RaiseAndSetIfChanged(ref _PlcAddress, value);
+        }
+
+        private Optional<string> _HostPort = "3001";
+        [RemoteInput]
+        public Optional<string> HostPort
+        {
+            get => _HostPort;
+            set => this.RaiseAndSetIfChanged(ref _HostPort, value);
+        }
+
+        private Optional<string> _PassthroughPort = default;
+        [RemoteInput]
+        public Optional<string> PassthroughPort
+        {
+            get => _PassthroughPort;
+            set => this.RaiseAndSetIfChanged(ref _PassthroughPort, value);
+        }
+
+        private Optional<string> _VPNPort = default;
+        [RemoteInput]
+        public Optional<string> VpnPort
+        {
+            get => _VPNPort;
+            set => this.RaiseAndSetIfChanged(ref _VPNPort, value);
         }
 
         private Optional<string> _LoggerAddress = "";
@@ -92,6 +130,42 @@ namespace Flux.ViewModels
             set => this.RaiseAndSetIfChanged(ref _StandbyMinutes, value);
         }
 
+        private Optional<int> _UltraFastReaderPeriod = 0;
+        [RemoteInput(step: 10, min: 0)]
+        public Optional<int> UltraFastReaderPeriod
+        {
+            get => _UltraFastReaderPeriod;
+            set => this.RaiseAndSetIfChanged(ref _UltraFastReaderPeriod, value);
+        }
+        private Optional<int> _FastReaderPeriod = 0;
+        [RemoteInput(step: 10, min: 0)]
+        public Optional<int> FastReaderPeriod
+        {
+            get => _FastReaderPeriod;
+            set => this.RaiseAndSetIfChanged(ref _FastReaderPeriod, value);
+        }
+        private Optional<int> _MediumReaderPeriod = 0;
+        [RemoteInput(step: 50, min: 0)]
+        public Optional<int> MediumReaderPeriod
+        {
+            get => _MediumReaderPeriod;
+            set => this.RaiseAndSetIfChanged(ref _MediumReaderPeriod, value);
+        }
+        private Optional<int> _SlowReaderPeriod = 0;
+        [RemoteInput(step: 50, min: 0)]
+        public Optional<int> SlowReaderPeriod
+        {
+            get => _SlowReaderPeriod;
+            set => this.RaiseAndSetIfChanged(ref _SlowReaderPeriod, value);
+        }
+        private Optional<int> _UltraSlowReaderPeriod = 0;
+        [RemoteInput(step: 100, min: 0)]
+        public Optional<int> UltraSlowReaderPeriod
+        {
+            get => _UltraSlowReaderPeriod;
+            set => this.RaiseAndSetIfChanged(ref _UltraSlowReaderPeriod, value);
+        }
+
         [RemoteCommand]
         public ReactiveCommandBaseRC<Unit, Unit> SaveSettingsCommand { get; }
         
@@ -128,6 +202,7 @@ namespace Flux.ViewModels
 
             var user_settings = Flux.SettingsProvider.UserSettings.Local;
             var core_settings = Flux.SettingsProvider.CoreSettings.Local;
+            var memory_settings = Flux.SettingsProvider.MemorySettings.Local;
 
             core_settings.WhenAnyValue(s => s.PrinterGuid)
                 .Select(g => g.ToString())
@@ -138,6 +213,18 @@ namespace Flux.ViewModels
 
             core_settings.WhenAnyValue(s => s.HostID)
                 .BindToRC(this, v => v.HostAddress.SelectedKey);
+
+            core_settings.WhenAnyValue(s => s.HostPort)
+                .Convert(host_port => $"{host_port}")
+                .BindToRC(this, v => v.HostPort);
+
+            core_settings.WhenAnyValue(s => s.PassthroughPort)
+                .Convert(passthrough_port => $"{passthrough_port}")
+                .BindToRC(this, v => v.PassthroughPort);
+
+            core_settings.WhenAnyValue(s => s.VPNPort)
+                .Convert(vpn_port => $"{vpn_port}")
+                .BindToRC(this, v => v.VpnPort);
 
             core_settings.WhenAnyValue(s => s.NFCFormat)
                 .BindToRC(this, v => v.NFCFormats.SelectedKey);
@@ -162,6 +249,21 @@ namespace Flux.ViewModels
 
             user_settings.WhenAnyValue(s => s.StandbyMinutes)
                 .BindToRC(this, v => v.StandbyMinutes);
+
+            memory_settings.WhenAnyValue(s => s.UltraFastReaderPeriod)
+                .BindToRC(this, v => v.UltraFastReaderPeriod);
+
+            memory_settings.WhenAnyValue(s => s.FastReaderPeriod)
+                .BindToRC(this, v => v.FastReaderPeriod);
+
+            memory_settings.WhenAnyValue(s => s.MediumReaderPeriod)
+                .BindToRC(this, v => v.MediumReaderPeriod);
+
+            memory_settings.WhenAnyValue(s => s.SlowReaderPeriod)
+                .BindToRC(this, v => v.SlowReaderPeriod);
+
+            memory_settings.WhenAnyValue(s => s.UltraSlowReaderPeriod)
+                .BindToRC(this, v => v.UltraSlowReaderPeriod);
 
             SaveSettingsCommand = ReactiveCommandBaseRC.Create(SaveSettings, this);
             GenerateGuidCommand = ReactiveCommandBaseRC.Create(GenerateGuid, this);
@@ -196,7 +298,7 @@ namespace Flux.ViewModels
                 return (tag, NFCTagRW.Success);
             }, (tag, rw) => tag.HasValue);
 
-            Flux.Messages.LogMessage($"LETTURA TAG {NFCTagType.SelectedKey}", JsonUtils.Serialize(nfc_tag), MessageLevel.INFO, 0);
+            // Flux.Messages.LogMessage($"LETTURA TAG {NFCTagType.SelectedKey}", JsonUtils.Serialize(nfc_tag), MessageLevel.INFO, 0);
         }
 
         private void SaveSettings()
@@ -205,25 +307,52 @@ namespace Flux.ViewModels
             {
                 var user_settings = Flux.SettingsProvider.UserSettings.Local;
                 var core_settings = Flux.SettingsProvider.CoreSettings.Local;
+                var memory_settings = Flux.SettingsProvider.MemorySettings.Local;
 
-                user_settings.CostHour = CostHour;
                 core_settings.PLCAddress = PlcAddress;
-                user_settings.StartupCost = StartupCost;
-                user_settings.PrinterName = PrinterName;
+                core_settings.HostPort = HostPort.Convert(host_port_str =>
+                {
+                    if (!int.TryParse(host_port_str, out var host_port))
+                        return Optional<int>.None;
+                    return host_port;
+                });
+                core_settings.PassthroughPort = PassthroughPort.Convert(passthrough_port_str =>
+                {
+                    if (!int.TryParse(passthrough_port_str, out var passthrough_port))
+                        return Optional<int>.None;
+                    return passthrough_port;
+                });
+                core_settings.VPNPort = VpnPort.Convert(vpn_port_str =>
+                {
+                    if (!int.TryParse(vpn_port_str, out var vpn_port))
+                        return Optional<int>.None;
+                    return vpn_port;
+                });
+
                 core_settings.WebcamAddress = WebcamAddress;
                 core_settings.LoggerAddress = LoggerAddress;
-                user_settings.StandbyMinutes = StandbyMinutes;
                 core_settings.PrinterID = Printers.SelectedKey;
                 core_settings.HostID = HostAddress.SelectedKey;
                 core_settings.NFCFormat = NFCFormats.SelectedKey;
                 core_settings.PrinterGuid = Guid.Parse(PrinterGuid);
+
+                user_settings.CostHour = CostHour;
+                user_settings.StartupCost = StartupCost;
+                user_settings.PrinterName = PrinterName;
+                user_settings.StandbyMinutes = StandbyMinutes;
+
+                memory_settings.UltraFastReaderPeriod = UltraFastReaderPeriod;
+                memory_settings.FastReaderPeriod = FastReaderPeriod;
+                memory_settings.MediumReaderPeriod = MediumReaderPeriod;
+                memory_settings.SlowReaderPeriod = SlowReaderPeriod;
+                memory_settings.UltraSlowReaderPeriod = UltraSlowReaderPeriod;
 
                 if (!Flux.SettingsProvider.PersistLocalSettings())
                     return;
             }
             catch (Exception ex)
             {
-                Flux.Messages.LogException(this, ex);
+                // Flux.Messages.LogException(this, ex);
             }
         }
 

@@ -73,12 +73,18 @@ namespace Flux.ViewModels
         {
             get
             {
-                if (Err.Err == 0 || !Content.HasValue)
+                var ok = (Content.HasValue, Err.Err, Err.ErrClass, Err.ErrNum) switch
                 {
-                    Console.WriteLine(this);
-                    return false;
-                }
-                return true;
+                    (false, _, _, _) => false,
+                    (_, 0, 5, 17) => true,
+                    (_, 0, _, _) => false,
+                    _ => true
+                };
+
+                //if (!ok)
+                //    Console.WriteLine(this);
+
+                return ok;
             }
         }
 
@@ -104,12 +110,18 @@ namespace Flux.ViewModels
         public override string StoragePath => "PROGRAMS\\STORAGE";
         public override string JobEventPath => CombinePaths(EventPath, "JOB");
         public override string InnerQueuePath => CombinePaths(QueuePath, "INNER");
+        public override string MessageEventPath => CombinePaths(EventPath, "LOG");
         public override string ExtrusionEventPath => CombinePaths(EventPath, "EXTR");
-        public override string CombinePaths(params string[] paths) => string.Join("\\", paths);
+        public override string ExtrusionHistoryPath => CombinePaths(EventPath, "EXTR_HISTORY");
+        public override string CombinePaths(params string[] paths) => string.Join("\\", paths.Where(x => !string.IsNullOrEmpty(x)));
 
         public FluxViewModel Flux { get; }
 
         // MEMORY VARIABLES
+        public override Optional<Message> ParseMessage(MessageLevel level, string message)
+        {
+            return default;
+        }
         public OSAI_Connection(FluxViewModel flux, OSAI_ConnectionProvider connection_provider) : base(connection_provider)
         {
             Flux = flux;
@@ -589,9 +601,8 @@ namespace Flux.ViewModels
                 }
 
                 // upload a partprogram
-
-                using var delete_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                var remove_file_response = await DeleteAsync(folder, $"file_upload_{tmp_guid}.tmp", delete_cts.Token);
+                using var delete_temp_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                var remove_file_response = await DeleteAsync(folder, $"file_upload_{tmp_guid}.tmp", delete_temp_cts.Token);
                 if (!remove_file_response)
                     return false;
 
@@ -696,15 +707,24 @@ namespace Flux.ViewModels
                 if (close_file_response.retval == 0)
                     return false;
 
+                Console.WriteLine("1");
+
                 using var delete_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 var remove_file_response = await DeleteAsync(folder, filename, delete_cts.Token);
                 if (!remove_file_response)
                     return false;
 
+                Console.WriteLine("2");
+
+                var old_path = CombinePaths(folder, $"file_upload_{tmp_guid}.tmp");
+                var new_path = CombinePaths(folder, filename);
                 using var rename_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                var rename_response = await RenameAsync(folder, $"file_upload_{tmp_guid}.tmp", filename, rename_cts.Token); ;
+                var rename_response = await RenameAsync(old_path, new_path, rename_cts.Token); ;
                 if (!rename_response)
                     return false;
+
+
+                Console.WriteLine("3");
 
                 return true;
             }
@@ -738,7 +758,7 @@ namespace Flux.ViewModels
             var remove_file_response = await TryEnqueueRequestAsync(
                 (c, ct) => c.LogFSRemoveFileAsync(new LogFSRemoveFileRequest($"{folder}\\", filename)),
                 r => new(r.retval, r.ErrClass, r.ErrNum), FLUX_RequestPriority.Immediate, ct);
-            return remove_file_response.Ok;// || (remove_file_response.Err.ErrClass == 5 && remove_file_response.Err.ErrNum == 17);
+            return remove_file_response.Ok;
         }
         public override async Task<bool> CreateFolderAsync(string folder, string name, CancellationToken ct)
         {
@@ -768,7 +788,7 @@ namespace Flux.ViewModels
                 if (find_first_result.Value.Finder == 0xFFFFFFFF)
                     return files_data;
 
-                var file = parse_file(find_first_result.Value.FindData);
+                var file = ParseFILEINFDATA(find_first_result.Value.FindData);
                 if (file.HasValue)
                     files_data.Files.Add(file.Value);
 
@@ -784,14 +804,15 @@ namespace Flux.ViewModels
                     if (!find_next_result.HasValue)
                         return files_data;
 
-                    file = parse_file(find_next_result.Value.FindData);
+                    file = ParseFILEINFDATA(find_next_result.Value.FindData);
                     if (file.HasValue)
                         files_data.Files.Add(file.Value);
                 }
                 while (find_next_result.ConvertOr(r => r.Found, () => false));
             }
-            catch 
-            { 
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex);
                 return default;
             }
             finally
@@ -806,27 +827,28 @@ namespace Flux.ViewModels
 
             return files_data;
 
-            static Optional<FLUX_File> parse_file(FILEFINDDATA data)
+          
+        }
+        static Optional<FLUX_File> ParseFILEINFDATA(FILEFINDDATA data)
+        {
+            if (string.IsNullOrEmpty(data.FileName))
+                return default;
+
+            var file_name = data.FileName;
+            var file_attributes = (OSAI_FileAttributes)data.FileAttributes;
+            var file_size = (ulong)data.FileSizeHigh << 32 | data.FileSizeLow;
+            var has_directory_flag = file_attributes.HasFlag(OSAI_FileAttributes.FILE_ATTRIBUTE_DIRECTORY);
+            var file_type = has_directory_flag ? FLUX_FileType.Directory : FLUX_FileType.File;
+
+            var file_date = DateTime.FromFileTime((long)data.HighDateLastWriteTime << 32 | data.LowDateLastWriteTime);
+
+            return new FLUX_File()
             {
-                if (string.IsNullOrEmpty(data.FileName))
-                    return default;
-
-                var file_name = data.FileName;
-                var file_attributes = (OSAI_FileAttributes)data.FileAttributes;
-                var file_size = (ulong)data.FileSizeHigh << 32 | data.FileSizeLow;
-                var has_directory_flag = file_attributes.HasFlag(OSAI_FileAttributes.FILE_ATTRIBUTE_DIRECTORY);
-                var file_type = has_directory_flag ? FLUX_FileType.Directory : FLUX_FileType.File;
-
-                var file_date = DateTime.FromFileTime((long)data.HighDateLastWriteTime << 32 | data.LowDateLastWriteTime);
-
-                return new FLUX_File()
-                {
-                    Name = file_name,
-                    Type = file_type,
-                    Date = file_date,
-                    Size = file_size,
-                };
-            }
+                Name = file_name,
+                Type = file_type,
+                Date = file_date,
+                Size = file_size,
+            };
         }
         public override Task<bool> PutFileStreamAsync(string folder, string name, Stream data, CancellationToken ct)
         {
@@ -853,11 +875,34 @@ namespace Flux.ViewModels
 
             return get_file_response.Data;
         }
-        public override async Task<bool> RenameAsync(string folder, string old_filename, string new_filename, CancellationToken ct)
+        public override async Task<bool> RenameAsync(string old_path, string new_path, CancellationToken ct)
         {
+            // aspetto che fabio accenda la macchina e mi richiami
+
+            // Delete if exists
+            var file_parts = new_path.Split("\\", StringSplitOptions.RemoveEmptyEntries);
+
+            var folder = string.Join("\\", file_parts.SkipLast(1));
+            var filename = file_parts.LastOrDefault();
+
+            Console.WriteLine("Renaming file");
+            Console.WriteLine(old_path);
+            Console.WriteLine(new_path);
+
+            var delete_cts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+            var delete_result = await DeleteAsync(folder, filename, delete_cts.Token);
+            if (!delete_result)
+            {
+                Console.WriteLine("Il file esiste già ma non è stato cancellato");
+                return false;
+            }
+
             var rename_response = await TryEnqueueRequestAsync(
-                (c, ct) => Client.Value.LogFSRenameAsync(new LogFSRenameRequest($"{folder}\\{old_filename}", $"{folder}\\{new_filename}")),
+                (c, ct) => Client.Value.LogFSRenameAsync(new LogFSRenameRequest(old_path, new_path)),
                 r => new(r.retval, r.ErrClass, r.ErrNum), FLUX_RequestPriority.Immediate, ct);
+
+            Console.WriteLine(rename_response);
+
             return rename_response.Ok;
         }
 
@@ -1059,6 +1104,12 @@ namespace Flux.ViewModels
         public override GCodeString GetGotoMaintenancePositionGCode()
         {
             return $"(CLS, MACRO\\goto_maintenance_position)";
+        }
+
+        public override GCodeString GetLogExtrusionCommentGCode(ArrayIndex position, Optional<ExtrusionKey> extr_key, FluxJob job, FluxEventType event_type)
+        {
+            // TODO
+            return "";
         }
     }
 }

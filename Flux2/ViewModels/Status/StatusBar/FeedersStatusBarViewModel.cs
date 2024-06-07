@@ -56,15 +56,15 @@
 
             tool.Throttle(TimeSpan.FromSeconds(5))
                 .Where(t => !t.connecting && !t.in_mateinance && t.not_found)
-                .SubscribeRC(_ => Flux.Messages.LogMessage("Utensile", "Sensore di temperatura non trovato", MessageLevel.EMERG, 27001));
+                .SubscribeRC(_ => // Flux.Messages.LogMessage("Utensile", "Sensore di temperatura non trovato", MessageLevel.EMERG, 27001));
 
             tool.Throttle(TimeSpan.FromSeconds(5))
                 .Where(t => !t.connecting && !t.in_mateinance && t.error)
-                .SubscribeRC(_ => Flux.Messages.LogMessage("Utensile", "Stato utensile non corretto", MessageLevel.ERROR, 27002));
+                .SubscribeRC(_ => // Flux.Messages.LogMessage("Utensile", "Stato utensile non corretto", MessageLevel.ERROR, 27002));
 
             tool.Throttle(TimeSpan.FromSeconds(5))
                 .Where(t => !t.connecting && !t.in_mateinance && !t.not_found && t.hot && t.open)
-                .SubscribeRC(_ => Flux.Messages.LogMessage("Utensile", "Temperatura dell'utensile elevata", MessageLevel.WARNING, 27003));
+                .SubscribeRC(_ => // Flux.Messages.LogMessage("Utensile", "Temperatura dell'utensile elevata", MessageLevel.WARNING, 27003));
 
             return tool.Select(
                 tool =>

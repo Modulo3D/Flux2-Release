@@ -162,7 +162,7 @@ namespace Flux.ViewModels
             var s_value = sanitize_value(v);
             if (!await connection.PostGCodeAsync(new[] { $"set global.{variable} = {s_value}" }, ct))
             {
-                connection_provider.Flux.Messages.LogMessage($"Impossibile scrivere la variabile {variable}", "Errore durante l'esecuzione del gcode", MessageLevel.ERROR, 0);
+                // connection_provider.Flux.Messages.LogMessage($"Impossibile scrivere la variabile {variable}", "Errore durante l'esecuzione del gcode", MessageLevel.ERROR, 0);
                 return false;
             }
 
@@ -173,7 +173,7 @@ namespace Flux.ViewModels
                 using var put_file_cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
                 if (!await connection.PutFileAsync(c => ((RRF_Connection)c).GlobalPath, load_var_macro, true, put_file_cts.Token, gcode))
                 {
-                    connection_provider.Flux.Messages.LogMessage($"Impossibile salvare la variabile {variable}", "Errore durante la scrittura del file", MessageLevel.ERROR, 0);
+                    // connection_provider.Flux.Messages.LogMessage($"Impossibile salvare la variabile {variable}", "Errore durante la scrittura del file", MessageLevel.ERROR, 0);
                     return false;
                 }
             }

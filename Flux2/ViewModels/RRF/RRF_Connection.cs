@@ -10,6 +10,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Reflection.Metadata;
@@ -89,7 +90,7 @@ namespace Flux.ViewModels
 
     public class RRF_Connection : FLUX_Connection<RRF_Connection, RRF_ConnectionProvider, RRF_VariableStoreBase, HttpClient>
     {
-        public override string CombinePaths(params string[] paths) => string.Join("/", paths);
+        public override string CombinePaths(params string[] paths) => string.Join("/", paths.Where(x => !string.IsNullOrEmpty(x)));
         public static string SystemPath => "sys";
         public override string RootPath => "";
         public override string MacroPath => "macros";
@@ -99,7 +100,9 @@ namespace Flux.ViewModels
         public string GlobalPath => CombinePaths(SystemPath, "global");
         public override string JobEventPath => CombinePaths(EventPath, "job");
         public override string InnerQueuePath => CombinePaths(QueuePath, "inner");
+        public override string MessageEventPath => CombinePaths(EventPath, "log");
         public override string ExtrusionEventPath => CombinePaths(EventPath, "extr");
+        public override string ExtrusionHistoryPath => CombinePaths(EventPath, "extr_history");
 
         public FluxViewModel Flux { get; }
 
@@ -109,6 +112,13 @@ namespace Flux.ViewModels
         }
 
         // BASIC OPERATIONS
+        public override Optional<Message> ParseMessage(MessageLevel level, string message)
+        {
+            var split_message = message.Split(' ', 3);
+            if (!DateTime.TryParse(split_message[0], out var timestamp))
+                return default;
+            return new Message(level, timestamp, split_message[1], split_message[2]);
+        }
         public static int GetGCodeLenght(GCodeString paramacro)
         {
             return $"rr_gcode?gcode={string.Join("%0A", paramacro)}".Length;
@@ -154,7 +164,12 @@ namespace Flux.ViewModels
                 .Select(v => GetExecuteMacroGCode(GlobalPath, v.LoadVariableMacro)));
 
             var source_hash = SHA256.HashData(Encoding.UTF8.GetBytes(string.Join("", source_variables))).ToHex();
-            var written_hash = written_file.Convert(w => SHA256.HashData(Encoding.UTF8.GetBytes(string.Join("", w.SplitLines()))).ToHex());
+            var written_hash = written_file.Convert(w => SHA256.HashData(Encoding.UTF8.GetBytes(string.Join("", w.Trim().SplitLines()))).ToHex());
+
+            //Console.WriteLine("init hash");
+            //Console.WriteLine(source_hash);
+            //Console.WriteLine(written_hash);
+
             if (!written_hash.HasValue || written_hash != source_hash)
             {
                 if (!await PutFileAsync(GlobalPath, "init_vars.g", true, ct, source_variables))
@@ -187,7 +202,7 @@ namespace Flux.ViewModels
                 var resource = $"rr_gcode?gcode={string.Join("%0A", gcode)}";
                 if (resource.Length >= 160)
                 {
-                    Flux.Messages.LogMessage("Errore esecuzione gcode", $"Lunghezza gcode oltre i limiti", MessageLevel.EMERG, 0);
+                    // Flux.Messages.LogMessage("Errore esecuzione gcode", $"Lunghezza gcode oltre i limiti", MessageLevel.EMERG, 0);
                     return false;
                 }
 
@@ -195,7 +210,7 @@ namespace Flux.ViewModels
                 var response = await TryEnqueueRequestAsync<RRF_Request<string>, RRF_Response<string>>(request);
                 if (!response.Ok)
                 {
-                    Flux.Messages.LogMessage($"{request}", $"{response}", MessageLevel.ERROR, 0);
+                    // Flux.Messages.LogMessage($"{request}", $"{response}", MessageLevel.ERROR, 0);
                     return false;
                 }
 
@@ -379,10 +394,10 @@ namespace Flux.ViewModels
                 client.BaseAddress = new Uri(plc_address.Value);
                 client.DefaultRequestHeaders.Add("Connection", "Keep-Alive");
                 var response = await client.PostAsync($"rr_upload?name=0:/{folder}/{filename}&time={DateTime.Now:s}", content_stream, ct);
-
-                if (response.StatusCode != HttpStatusCode.OK)
+                var response_body = await response.Content.ReadFromJsonAsync<RRF_Err>();
+                if (response.StatusCode != HttpStatusCode.OK || response_body.Error != 0)
                 {
-                    Flux.Messages.LogMessage("Errore durante l'upload del file", $"Stato: {Enum.GetName(typeof(HttpStatusCode), response.StatusCode)}", MessageLevel.ERROR, 0);
+                    // Flux.Messages.LogMessage("Errore durante l'upload del file", $"Stato: {Enum.GetName(typeof(HttpStatusCode), response.StatusCode)}", MessageLevel.ERROR, 0);
                     return false;
                 }
 
@@ -429,8 +444,8 @@ namespace Flux.ViewModels
             }
             catch (Exception ex)
             {
-                if (ex is not OperationCanceledException)
-                    Flux.Messages.LogException(this, ex);
+                //if (ex is not OperationCanceledException)
+                    // Flux.Messages.LogException(this, ex);
                 return false;
             }
         }
@@ -487,7 +502,7 @@ namespace Flux.ViewModels
                 var file_list = await ListFilesAsync(folder, ct);
                 if (!file_list.HasValue)
                 {
-                    Flux.Messages.LogMessage("Errore pulizia cartella", $"Impossibile leggere lista file", MessageLevel.EMERG, 0);
+                    // Flux.Messages.LogMessage("Errore pulizia cartella", $"Impossibile leggere lista file", MessageLevel.EMERG, 0);
                     return false;
                 }
 
@@ -495,7 +510,7 @@ namespace Flux.ViewModels
                 {
                     if (!await DeleteAsync(folder, file.Name, ct))
                     {
-                        Flux.Messages.LogMessage("Errore pulizia cartella", $"Impossibile cancellare file", MessageLevel.EMERG, 0);
+                        // Flux.Messages.LogMessage("Errore pulizia cartella", $"Impossibile cancellare file", MessageLevel.EMERG, 0);
                         return false;
                     }
                 }
@@ -504,7 +519,7 @@ namespace Flux.ViewModels
             }
             catch (Exception ex)
             {
-                Flux.Messages.LogException(this, ex);
+                // Flux.Messages.LogException(this, ex);
                 return false;
             }
         }
@@ -519,9 +534,17 @@ namespace Flux.ViewModels
                 if (ct.IsCancellationRequested)
                     return default;
 
-                var request = new RRF_Request<string>($"rr_download?name=0:/{folder}/{filename}", HttpMethod.Get, FLUX_RequestPriority.Immediate, ct);
-                var response = await TryEnqueueRequestAsync<RRF_Request<string>, RRF_Response<string>>(request);
-                return response.Content;
+                var plc_address = Flux.SettingsProvider.CoreSettings.Local.PLCAddress;
+                if (!plc_address.HasValue)
+                    return default;
+
+                using var client = new HttpClient();
+                client.Timeout = TimeSpan.FromHours(1);
+                client.BaseAddress = new Uri(plc_address.Value);
+                client.DefaultRequestHeaders.Add("Connection", "Keep-Alive");
+                var response = await client.GetAsync($"rr_download?name=0:/{folder}/{filename}", ct);
+
+                return await response.Content.ReadAsStringAsync();
             }
             catch
             {
@@ -564,15 +587,12 @@ namespace Flux.ViewModels
                 return false;
             }
         }
-        public override async Task<bool> RenameAsync(string folder, string old_filename, string new_filename, CancellationToken ct = default)
+        public override async Task<bool> RenameAsync(string old_path, string new_path, CancellationToken ct = default)
         {
             try
             {
                 if (ct.IsCancellationRequested)
                     return false;
-
-                var old_path = $"{folder}/{old_filename}".TrimStart('/');
-                var new_path = $"{folder}/{new_filename}".TrimStart('/');
 
                 var request = new RRF_Request<RRF_Err>($"rr_move?old=0:/{old_path}&new=0:/{new_path}&deleteexisting=yes", HttpMethod.Get, FLUX_RequestPriority.Immediate, ct);
                 var response = await TryEnqueueRequestAsync(request);
@@ -682,11 +702,13 @@ namespace Flux.ViewModels
         }
         public override GCodeString GetFilamentSensorSettingsGCode(ArrayIndex position, bool enabled)
         {
-            var filament_unit = VariableStore.GetArrayUnit(c => c.FILAMENT_BEFORE_GEAR, position);
-            if (!filament_unit.HasValue)
-                return default;
+            // TODO
+            //var filament_unit = VariableStore.GetArrayUnit(c => c.FILAMENT_BEFORE_GEAR, position);
+            //if (!filament_unit.HasValue)
+            //    return default;
 
-            return $"M591 D{filament_unit.Value.Index} S{(enabled ? 1 : 0)}";
+            //return $"M591 D{filament_unit.Value.Index} S{(enabled ? 1 : 0)}";
+            return "";
         }
         public override GCodeString GetSetToolOffsetGCode(ArrayIndex position, double x, double y, double z)
         {
@@ -779,7 +801,47 @@ namespace Flux.ViewModels
             var event_path = CombinePaths(JobEventPath, $"{job.MCodeKey};{job.JobKey}");
             var event_type_str = event_type.ToEnumString();
 
-            return $"echo >>\"0:/{event_path}\" \"{event_type_str};\"^{{state.time}}";
+            var mcode = Flux.MCodes.AvaiableMCodes.Lookup(job.MCodeKey);
+            // MCODE name max 48 chars 128 chars limit on duet row)
+            var mcode_name = mcode.Convert(mcode => truncated_name(mcode.Analyzer.MCode.Name, 48)).ValueOr(() => "GCode non trovato");
+
+            return GCodeString.Create(
+                $"echo >>\"0:/{event_path}\" \"{event_type_str};\"^{{state.time}}",
+                event_type switch
+                {
+                    FluxEventType.Begin => $"echo >>\"0:/gcodes/events/log/info\" state.time^\" 201 Inizio lavorazione {mcode_name}\"",
+                    FluxEventType.End => $"echo >>\"0:/gcodes/events/log/info\" state.time^\" 202 Fine lavorazione {mcode_name}\"",
+                    FluxEventType.Pause => $"echo >>\"0:/gcodes/events/log/info\" state.time^\" 203 Lavorazione {mcode_name} in pausa\"",
+                    FluxEventType.Resume => $"echo >>\"0:/gcodes/events/log/info\" state.time^\" 204 Ripresa lavorazione {mcode_name}\"",
+                    FluxEventType.Cancel => $"echo >>\"0:/gcodes/events/log/info\" state.time^\" 205 Lavorazione {mcode_name} annullata\"",
+                    _ => ""
+                });
+
+            string truncated_name(string name, int max_lenght) 
+            {
+                return name.Length > max_lenght ? $"{name.Substring(0, max_lenght - 3)}..." : name;
+            }
+        }
+        public override GCodeString GetLogExtrusionCommentGCode(ArrayIndex position, Optional<ExtrusionKey> extr_key, FluxJob job, FluxEventType event_type)
+        {
+            if (!extr_key.HasValue)
+                return default;
+
+            var extr_mm_array_unit = GetArrayUnit(c => c.EXTR_MM, position);
+            var extr_mm_var = GetVariable(c => c.EXTR_MM, extr_mm_array_unit);
+            if (!extr_mm_var.HasValue)
+                return default;
+
+            var extr_key_array_unit = GetArrayUnit(c => c.EXTR_KEY, position);
+            var extr_key_var = GetVariable(c => c.EXTR_KEY, extr_key_array_unit);
+            if (!extr_key_var.HasValue)
+                return default;
+
+            var extrusion_path = CombinePaths(ExtrusionEventPath, $"{extr_key.Value}");
+
+            var event_type_str = event_type.ToEnumString();
+
+            return $"echo >>\"0:/{extrusion_path}\" \"; {event_type_str} at \"^{{state.time}}";
         }
         public override GCodeString GetWriteExtrusionMMGCode(ArrayIndex position, double distance_mm)
         {

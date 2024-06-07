@@ -94,7 +94,9 @@ namespace Flux.ViewModels
             switch (result.data.Value.file_modify)
             {
                 case FLUX_FileModify.Rename:
-                    var rename_result = await Flux.ConnectionProvider.RenameAsync(fs.FSPath, fs.FSName, result.data.Value.file_name, fs_cts.Token);
+                    var old_path = Flux.ConnectionProvider.CombinePaths(fs.FSPath, fs.FSName);
+                    var new_path = Flux.ConnectionProvider.CombinePaths(fs.FSPath, result.data.Value.file_name);
+                    var rename_result = await Flux.ConnectionProvider.RenameAsync(old_path, new_path, fs_cts.Token);
                     if (rename_result)
                         UpdateFolder.OnNext(Unit.Default);
                     break;
@@ -119,29 +121,29 @@ namespace Flux.ViewModels
 
         public async Task EditFileAsync(FileViewModel file)
         {
-            /*using var download_cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            var file_source = await Flux.ConnectionProvider.GetFileAsync(file.FSPath, file.FSName, download_cts.Token);
-            if (!file_source.HasValue)
-                return;
+            //using var download_cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            //var file_source = await Flux.ConnectionProvider.GetFileAsync(file.FSPath, file.FSName, download_cts.Token);
+            //if (!file_source.HasValue)
+            //    return;
 
-            var result = await Flux.ShowDialogAsync(f => new FileEditorDialog(f, new RemoteText(file.FSName, false)));
+            //var result = await Flux.ShowDialogAsync(f => new FileEditorDialog(f, new RemoteText(file.FSName, false)));
 
-            if (result != DialogResult.Primary)
-                return;
+            //if (result != DialogResult.Primary)
+            //    return;
 
-            var source = read_source(file_source.Value)
-                .ToOptional();
+            //var source = read_source(file_source.Value)
+            //    .ToOptional();
 
-            using var upload_cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            await Flux.ConnectionProvider.PutFileAsync(file.FSPath, file.FSName, true, upload_cts.Token, source);
+            //using var upload_cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            //await Flux.ConnectionProvider.PutFileAsync(file.FSPath, file.FSName, true, upload_cts.Token, source);
 
-            IEnumerable<string> read_source(string source)
-            {
-                string line;
-                using var reader = new StringReader(textbox.Value);
-                while ((line = reader.ReadLine()) != null)
-                    yield return line;
-            }*/
+            //IEnumerable<string> read_source(string source)
+            //{
+            //    string line;
+            //    using var reader = new StringReader(textbox.Value);
+            //    while ((line = reader.ReadLine()) != null)
+            //        yield return line;
+            //}
         }
 
         public async Task<(Optional<FolderViewModel>, Optional<FLUX_FileList>)> ListFilesAsync(Optional<FolderViewModel> folder)

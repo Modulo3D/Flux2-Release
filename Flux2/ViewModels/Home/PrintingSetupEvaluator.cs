@@ -191,7 +191,7 @@ namespace Flux.ViewModels
                 return false;
             if (!current.HasValue)
                 return true;
-            return current.Value < 0.1;
+            return false;
         }
     }
 

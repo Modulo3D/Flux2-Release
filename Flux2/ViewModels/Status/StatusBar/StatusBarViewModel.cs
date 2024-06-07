@@ -3,8 +3,10 @@ using DynamicData.Kernel;
 using Flux.ViewModels;
 using Modulo3DNet;
 using ReactiveUI;
+using System;
 using System.Linq;
 using System.Reactive;
+using System.Threading.Tasks;
 
 namespace Flux.ViewModels
 {
@@ -46,10 +48,20 @@ namespace Flux.ViewModels
             ShowMessagesCommand = ReactiveCommandBaseRC.Create(() => { Content = Flux.Messages; }, this);
             ShowWebcamCommand = ReactiveCommandBaseRC.Create(() => { Content = Flux.Webcam; }, this);
             Content = Flux.Messages;
+        }
 
+        public void Initialize()
+        {
             var conditions = Flux.ConditionsProvider.GetConditions<StatusBarConditionAttribute>();
             foreach (var kvp in conditions)
-                StatusBarItemsSource.AddOrUpdate(new StatusBarItemViewModel(flux, kvp.Key, kvp.Value.Select(v => v.condition)));
+                StatusBarItemsSource.AddOrUpdate(new StatusBarItemViewModel(Flux, kvp.Key, kvp.Value.Select(v => v.condition)));
         }
+
+        public override Task OnNavigatedFromAsync(Optional<IFluxRoutableViewModel> from)
+        {
+            Flux.Messages.CurrentTimestamp = DateTime.Now;
+            return Task.CompletedTask;
+        }
+
     }
 }

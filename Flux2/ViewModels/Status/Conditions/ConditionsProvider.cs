@@ -33,8 +33,8 @@ namespace Flux.ViewModels
 
         [PrintCondition]
         [StatusBarCondition]
+        [PreparePrintCondition]
         [CycleCondition(exclude_alias: new[] { "spools.lock" })]
-        [PreparePrintCondition(exclude_alias: new[] { "spools.lock" })]
         [FilamentOperationCondition(exclude_alias: new[] { "spools.lock" })]
         public SourceCache<IConditionViewModel, string> LockClosedConditions
         {
@@ -49,12 +49,9 @@ namespace Flux.ViewModels
                         foreach (var lock_closed in locks_closed.Value.KeyValues)
                         {
                             var open_lock = Flux.ConnectionProvider.GetVariable(c => c.OPEN_LOCK, lock_closed.Key.Alias);
-                            if (open_lock.HasValue)
-                            {
-                                var lock_closed_condition = new LockClosedConditionViewModel(Flux, this, lock_closed.Value, open_lock.Value);
-                                lock_closed_condition.Initialize();
-                                _LockClosedConditions.AddOrUpdate(lock_closed_condition);
-                            }
+                            var lock_closed_condition = new LockClosedConditionViewModel(Flux, this, lock_closed.Value, open_lock);
+                            lock_closed_condition.Initialize();
+                            _LockClosedConditions.AddOrUpdate(lock_closed_condition);
                         }
                     }
                 }

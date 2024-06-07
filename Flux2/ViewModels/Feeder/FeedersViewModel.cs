@@ -273,6 +273,11 @@ namespace Flux.ViewModels
 
             Nozzles = SelectableCache.Create(nozzles, start_value.NozzleGuid);
             Nozzles.AutoSelect = Nozzles.ItemsChanged.Select(n => n.Keys.FirstOrOptional(k => k != Guid.Empty)).ToOptional();
+
+            Nozzles.SelectedValueChanged
+                .Convert(n => n[s => s.NozzleLife])
+                .ValueOr(() => 10000.0)
+                .BindToRC(this, v => v.MaxWeight);
         }
         public override Optional<NFCToolNozzle> Confirm() => StartValue.Value with
         {

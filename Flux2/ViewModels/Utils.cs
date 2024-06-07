@@ -5,11 +5,13 @@ using Modulo3DNet;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -196,69 +198,10 @@ namespace Flux.ViewModels
         public static string Selected = "#00B189";
         public static string Warning = "#fec02f";
         public static string Error = "#f75a5c";
+        public static string Emergency = "#f75a5c";
         public static string Inactive = "#AAA";
         public static string Idle = "#275ac3";
         public static string Active = "#FFF";
         public static string Empty = "#444";
-    }
-
-    public static class FluxUtils 
-    {
-        public static Dictionary<string, Dictionary<string, string>> GetTranslations()
-        {
-            var translations = new Dictionary<string, Dictionary<string, string>>();
-            try
-            {
-                extract_translations(Assembly.GetAssembly(typeof(IFlux)));
-                extract_translations(Assembly.GetAssembly(typeof(FluxViewModel)));
-                return translations;
-
-                void extract_translations(Assembly assembly)
-                {
-                    foreach (var type in assembly.GetTypes())
-                    {
-                        var control_attribute = type.GetCustomAttribute<RemoteControlAttribute>();
-                        if (!control_attribute.HasValue)
-                            continue;
-
-                        var className = type.GetRemoteElementClass();
-                        if (!translations.ContainsKey(className))
-                            translations.Add(className, new Dictionary<string, string>());
-
-                        var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
-                        foreach (var property in properties)
-                        {
-                            var input_attribute = type.GetCustomAttribute<RemoteInputAttribute>();
-                            if (input_attribute.HasValue)
-                            {
-                                var propertyName = property.GetRemoteInputName();
-                                if (!translations[className].ContainsKey(propertyName))
-                                    translations[className].Add(propertyName, "");
-                            }
-
-                            var output_attribute = property.GetCustomAttribute<RemoteOutputAttribute>();
-                            if (output_attribute.HasValue)
-                            {
-                                var propertyName = property.GetRemoteOutputName();
-                                if (!translations[className].ContainsKey(propertyName))
-                                    translations[className].Add(propertyName, "");
-                            }
-
-                            var command_attribute = property.GetCustomAttribute<RemoteCommandAttribute>();
-                            if (command_attribute.HasValue)
-                            {
-                                var propertyName = property.GetRemoteCommandName();
-                                if (!translations[className].ContainsKey(propertyName))
-                                    translations[className].Add(propertyName, "");
-                            }
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                return translations;
-            }
-        }
     }
 }

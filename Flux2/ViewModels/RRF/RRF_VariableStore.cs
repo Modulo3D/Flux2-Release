@@ -17,6 +17,7 @@ namespace Flux.ViewModels
         public RRF_GlobalModelBuilder.RRF_InnerGlobalModelBuilder Global { get; }
         public RRF_ModelBuilder.RRF_InnerModelBuilder<FLUX_FileList> Queue { get; }
         public RRF_ModelBuilder.RRF_InnerModelBuilder<FLUX_FileList> Storage { get; }
+        public RRF_ModelBuilder.RRF_InnerModelBuilder<FLUX_FileList> Messages { get; }
         public RRF_ModelBuilder.RRF_InnerModelBuilder<FLUX_FileList> JobEvents { get; }
         public RRF_ModelBuilder.RRF_InnerModelBuilder<FLUX_FileList> Extrusions { get; }
         public RRF_ModelBuilder.RRF_InnerModelBuilder<RRF_ObjectModelJob> FluxJob { get; }
@@ -69,6 +70,7 @@ namespace Flux.ViewModels
                 Inputs = RRF_ModelBuilder.CreateModel(this, m => m.Inputs, read_timeout);
                 Storage = RRF_ModelBuilder.CreateModel(this, m => m.Storage, read_timeout);
                 Sensors = RRF_ModelBuilder.CreateModel(this, m => m.Sensors, read_timeout);
+                Messages = RRF_ModelBuilder.CreateModel(this, m => m.Messages, read_timeout);
                 JobEvents = RRF_ModelBuilder.CreateModel(this, m => m.JobEvents, read_timeout);
                 Extrusions = RRF_ModelBuilder.CreateModel(this, m => m.Extrusions, read_timeout);
 
@@ -93,6 +95,7 @@ namespace Flux.ViewModels
                 FluxJob.CreateVariable(c => c.PROGRESS, (c, m) => m.GetParamacroProgress());
                 JobEvents.CreateVariable(c => c.MCODE_EVENT, (c, m) => m.GetMCodeEvents());
                 Extrusions.CreateVariable(c => c.EXTRUSIONS, (c, m) => m.GetExtrusionSetQueue());
+                Messages.CreateVariable(c => c.MESSAGES, (c, m) => m);
 
                 State.CreateVariable(c => c.TOOL_CUR, (c, s) => s.CurrentTool.Convert(t => ArrayIndex.FromArrayBase(t, this)));
                 State.CreateVariable(c => c.PROCESS_STATUS, (c, m) => m.GetProcessStatus());
@@ -248,7 +251,7 @@ namespace Flux.ViewModels
         public override VariableUnits EndstopsUnits => new("X", "Y", "Z", "U", "V");
 
         public override VariableUnits FilamentUnits => new(MaxExtruders, ("M", MaxFilaments));
-        public override VariableUnits GpInUnits => new("main.lock", "spools.lock", ("M", MaxFilaments), ("T", MaxExtruders));
+        public override VariableUnits GpInUnits => new("main.lock", "spools.lock", ("M", MaxFilaments), ("T", MaxExtruders), "top.lock");
         public override VariableUnits GpOutUnits => new("main.lock", "spools.lock", "main.light", "main.vacuum", "shutdown");
 
         public override VariableUnits HeaterUnits => new("main.plate", "main.chamber", ("T", MaxExtruders));
@@ -270,10 +273,10 @@ namespace Flux.ViewModels
                 Analog.CreateArray(c => c.FILAMENT_HUMIDITY, (c, h) => read_humidity(h), ("H", MaxFilaments));
                 Analog.CreateVariable(c => c.VACUUM_PRESENCE, (c, v) => read_pressure(v), "main.vacuum");
                 
-                GpIn.CreateArray(c => c.LOCK_CLOSED, (c, m) => m.Value == 1, "main.lock", "spools.lock");
+                GpIn.CreateArray(c => c.LOCK_CLOSED, (c, m) => m.Value == 1, "main.lock", "spools.lock", "top.lock");
+
                 GpIn.CreateArray(c => c.FILAMENT_AFTER_GEAR, (c, m) => m.Value == 1, ("M", 4));
                 GpIn.CreateArray(c => c.FILAMENT_ON_HEAD, (c, m) => m.Value == 1, ("T", 2));
-
                 Filaments.CreateArray(c => c.FILAMENT_BEFORE_GEAR, (c, m) => m.Status == "ok", ("M", MaxFilaments));
 
                 Global.CreateArray(c => c.X_HOME_OFFSET, true, 0.0, MaxExtruders);

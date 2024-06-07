@@ -1,14 +1,17 @@
-﻿using DynamicData.Kernel;
+﻿using DynamicData;
+using DynamicData.Kernel;
 using EmbedIO;
 using EmbedIO.Routing;
 using EmbedIO.WebApi;
 using EmbedIO.WebSockets;
 using HttpMultipartParser;
+using Microsoft.FSharp.Data.UnitSystems.SI.UnitNames;
 using Modulo3DNet;
 using ReactiveUI;
 using RestSharp;
 using Swan.Logging;
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -16,6 +19,7 @@ using System.Net;
 using System.Net.NetworkInformation;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -33,6 +37,8 @@ namespace Flux.ViewModels
             InternetAvaiable = internet;
         }
     }
+
+    public record struct DNATSource(string NetworkCard, int Port);
 
     internal class RemoteControlWebSocket : WebSocketModule
     {
@@ -155,12 +161,12 @@ namespace Flux.ViewModels
                 }
                 catch (Exception ex)
                 {
-                    Flux.Messages.LogException(this, ex);
+                    // Flux.Messages.LogException(this, ex);
                 }
             }
             catch (Exception ex)
             {
-                Flux.Messages.LogException(this, ex);
+                // Flux.Messages.LogException(this, ex);
             }
 
             return Task.CompletedTask;
@@ -212,8 +218,62 @@ namespace Flux.ViewModels
             InitializeWebServer();
             InitializeUDPDiscovery();
 
+            Observable.CombineLatest(
+                Flux.SettingsProvider.WhenAnyValue(s => s.PLCEndPoint),
+                Flux.SettingsProvider.WhenAnyValue(s => s.PassthroughPort),
+                (plc_endpoint, passthrough_port) =>
+                {
+                    if (!plc_endpoint.HasValue)
+                        return Optional<string[]>.None;
+                    if(!passthrough_port.HasValue)
+                        return Optional < string[]>.None;
+                    var source = new DNATSource("eth1", passthrough_port.Value);
+                    return GetEnableDNATCommands(source, plc_endpoint.Value);
+                })
+                .SubscribeRC(async dnat_commands => 
+                {
+                    if (!dnat_commands.HasValue)
+                        return;
+                    await ProcessUtils.RunLinuxCommandsAsync(dnat_commands.Value);
+                }, this);
+
+            Observable.CombineLatest(
+                Flux.SettingsProvider.WhenAnyValue(s => s.FluxEndPoint),
+                Flux.SettingsProvider.WhenAnyValue(s => s.VPNPort),
+                (flux_endpoint, vpn_port) =>
+                {
+                    if (!flux_endpoint.HasValue)
+                        return Optional<string[]>.None;
+                    if (!vpn_port.HasValue)
+                        return Optional<string[]>.None;
+                    var source = new DNATSource("eth2", vpn_port.Value);
+                    return GetEnableDNATCommands(source, flux_endpoint.Value);
+                })
+                .SubscribeRC(async dnat_commands =>
+                {
+                    if (!dnat_commands.HasValue)
+                        return;
+                    await ProcessUtils.RunLinuxCommandsAsync(dnat_commands.Value);
+                }, this);
+
+
             DisposableThread.Start(PingPLCNetworkAsync, TimeSpan.FromSeconds(5));
             DisposableThread.Start(PingInterNetworkAsync, TimeSpan.FromSeconds(10));
+        }
+
+        private string[] GetEnableDNATCommands(DNATSource source, IPEndPoint dest_endpoint)
+        {
+            var source_network_card = source.NetworkCard;
+            var source_port = source.Port;
+
+            var dest_address = dest_endpoint.Address;
+            var dest_port = dest_endpoint.Port;
+
+            return new[]
+            {
+                $"sudo iptables -A PREROUTING -t nat -p tcp -i {source_network_card} --dport {source_port} -j DNAT --to-destination {dest_address}:{dest_port}",
+                $"sudo iptables -A POSTROUTING -t nat -p tcp -d {dest_address} --dport {dest_port} -j MASQUERADE"
+            };
         }
 
         private async Task PingPLCNetworkAsync()
@@ -285,15 +345,15 @@ namespace Flux.ViewModels
             {
                 UdpDiscovery.StartSending(() =>
                 {
-                    var address = Flux.SettingsProvider.HostAddress;
-                    if (address.HasValue)
-                        return new IPEndPoint(address.Value, WebServerPort);
-                    return new IPEndPoint(IPAddress.Loopback, WebServerPort);
+                    var flux_endpoint = Flux.SettingsProvider.FluxEndPoint;
+                    if (!flux_endpoint.HasValue)
+                        return new IPEndPoint(IPAddress.Loopback, WebServerPort);
+                    return new IPEndPoint(flux_endpoint.Value.Address, WebServerPort);
                 }, TimeSpan.FromSeconds(5));
             }
             catch (Exception ex)
             {
-                Flux.Messages.LogMessage(NetResponse.UDP_DISCOVERY_EXCEPTION, ex);
+                // Flux.Messages.LogMessage(NetResponse.UDP_DISCOVERY_EXCEPTION, ex);
             }
         }
     }
@@ -329,7 +389,7 @@ namespace Flux.ViewModels
             }
             catch (Exception ex)
             {
-                Flux.Messages.LogMessage(NetResponse.PUT_MCODE_EXCEPTION, ex);
+                // Flux.Messages.LogMessage(NetResponse.PUT_MCODE_EXCEPTION, ex);
                 return false;
             }
         }
@@ -355,7 +415,7 @@ namespace Flux.ViewModels
             }
             catch (Exception ex)
             {
-                Flux.Messages.LogMessage(NetResponse.PUT_MCODE_EXCEPTION, ex);
+                // Flux.Messages.LogMessage(NetResponse.PUT_MCODE_EXCEPTION, ex);
                 return false;
             }
 
@@ -411,7 +471,7 @@ namespace Flux.ViewModels
         public Task<bool> DeleteAsync([QueryField] string folder, [QueryField] string name) => Flux.ConnectionProvider.DeleteAsync(folder, name, HttpContext.CancellationToken);
 
         [Route(HttpVerbs.Get, "/rename")]
-        public Task<bool> RenameAsync([QueryField] string folder, [QueryField] string old_name, [QueryField] string new_name) => Flux.ConnectionProvider.RenameAsync(folder, old_name, new_name, HttpContext.CancellationToken);
+        public Task<bool> RenameAsync([QueryField] string old_path, [QueryField] string new_path) => Flux.ConnectionProvider.RenameAsync(old_path, new_path, HttpContext.CancellationToken);
 
 
         [Route(HttpVerbs.Get, "/list")]

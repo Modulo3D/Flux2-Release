@@ -31,6 +31,10 @@ namespace Flux.ViewModels
             var variable_store = Flux.ConnectionProvider.VariableStoreBase;
             var feeder_index = ArrayIndex.FromZeroBase(Feeder.Position, variable_store);
 
+            var filament_on_head_index = ArrayIndex.FromZeroBase(Feeder.Position, variable_store);
+            var filament_on_head_unit = Flux.ConnectionProvider.GetArrayUnit(c => c.FILAMENT_ON_HEAD, filament_on_head_index);
+            var has_filament_on_head = await Flux.ConnectionProvider.ReadVariableAsync(c => c.FILAMENT_ON_HEAD, filament_on_head_unit).ValueOrAsync(() => false);
+
             if (!Flux.ConnectionProvider.HasVariable(c => c.FILAMENT_AFTER_GEAR))
             {
                 var insert_iteration_dist = 10;
@@ -39,21 +43,24 @@ namespace Flux.ViewModels
                     () => Flux.ConnectionProvider.ManualFilamentInsert(feeder_index, insert_iteration_dist, 100)))
                     return await Flux.ConnectionProvider.ManualFilamentExtract(feeder_index, max_insert_iterations, insert_iteration_dist, 500);
 
-                Material.NFCSlot.StoreTag(m => m.SetInserted(core_settings.PrinterGuid, Material.Position));
+                Material.NFCSlot.StoreTag(m => m.SetInserted(core_settings.PrinterGuid, Feeder.Position));
             }
 
             var filament_settings = GCodeFilamentOperation.Create(Material, park_tool: false, keep_temp: true);
             if (!await ExecuteFilamentOperation(filament_settings, c => c.GetLoadFilamentGCode))
                 return false;
 
-            ushort max_purge_iterations = 3;
-            if (!await Flux.IterateDialogAsync(f => new ConfirmDialog(f, new RemoteText("purgeFilament", true), new RemoteText()), max_purge_iterations,
-                () => Flux.ConnectionProvider.PurgeAsync(filament_settings.Value)))
-                return false;
+            if(!has_filament_on_head)
+            {
+                ushort max_purge_iterations = 3;
+                if (!await Flux.IterateDialogAsync(f => new ConfirmDialog(f, new RemoteText("purgeFilament", true), new RemoteText()), max_purge_iterations,
+                    () => Flux.ConnectionProvider.PurgeAsync(filament_settings.Value)))
+                    return false;
+            }
 
             Feeder.ToolNozzle.NFCSlot.StoreTag(n => n.SetLastBreakTemp(core_settings.PrinterGuid, filament_settings.Value.CurBreakTemp));
             if (!Flux.ConnectionProvider.HasVariable(c => c.FILAMENT_ON_HEAD))
-                Material.NFCSlot.StoreTag(m => m.SetLoaded(core_settings.PrinterGuid, Material.Position));
+                Material.NFCSlot.StoreTag(m => m.SetLoaded(core_settings.PrinterGuid, Feeder.Position));  
 
             return true;
         }

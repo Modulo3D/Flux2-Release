@@ -2,6 +2,7 @@
 using DynamicData.Binding;
 using DynamicData.Kernel;
 using DynamicData.PLinq;
+using DynamicData.Aggregation;
 using Microsoft.FSharp.Data.UnitSystems.SI.UnitNames;
 using Modulo3DNet;
 using ReactiveUI;
@@ -15,6 +16,7 @@ using System.Reactive;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -22,18 +24,44 @@ namespace Flux.ViewModels
 {
     public class MCodesViewModel : FluxRoutableNavBarViewModel<MCodesViewModel>, IFluxMCodesViewModel
     {
+        public const int MCodePageSize = 5;
+
+        private readonly ObservableAsPropertyHelper<int> _MCodePageCount;
+        public int MCodePageCount => _MCodePageCount.Value;
+
+
+        private readonly ObservableAsPropertyHelper<string> _Page;
+        [RemoteOutput(true)]
+        public string Page => _Page.Value;
+
         private SemaphoreSlim PrepareMCodeSemaphore { get; set; }
         private CancellationTokenSource PrepareMCodeCTS { get; set; }
 
-        [RemoteContent(true, nameof(IFluxMCodeStorageViewModel.FileNumber))]
         public ISourceCache<IFluxMCodeStorageViewModel, MCodeKey> AvaiableMCodes { get; private set; }
+
+        private PageRequest _MCodePage = new PageRequest(1, MCodePageSize);
+        public PageRequest MCodePage
+        {
+            get => _MCodePage;
+            set => this.RaiseAndSetIfChanged(ref _MCodePage, value);
+        }
+
+        [RemoteContent(true, nameof(IFluxMCodeStorageViewModel.FileNumber))]
+        public IObservableList<IFluxMCodeStorageViewModel> PagedMCodes { get; private set; }
+
 
         [RemoteContent(true, nameof(IFluxMCodeQueueViewModel.QueuePosition))]
         public IObservableCache<IFluxMCodeQueueViewModel, QueuePosition> QueuedMCodes { get; private set; }
 
         [RemoteCommand]
         public ReactiveCommandBaseRC<Unit, Unit> DeleteAllCommand { get; }
+        [RemoteCommand]
+        public ReactiveCommandBaseRC<Unit, Unit> NextPageCommand { get; }
+        [RemoteCommand]
+        public ReactiveCommandBaseRC<Unit, Unit> PreviousPageCommand { get; }
+
         public ReactiveCommandBaseRC<IFluxMCodeStorageViewModel, bool> AddToQueueCommand { get; }
+
 
         private Optional<DirectoryInfo[]> _RemovableDrivePaths;
         public Optional<DirectoryInfo[]> RemovableDrivePaths
@@ -71,6 +99,27 @@ namespace Flux.ViewModels
 
             SourceCacheRC.Create(this, v => v.AvaiableMCodes, f => f.MCodeKey);
 
+            _MCodePageCount = AvaiableMCodes.Connect().Count()
+                .Select(count => (int)Math.Ceiling(Math.Max(1, count / (float)MCodePageSize)))
+                .ToPropertyRC(this, v => v.MCodePageCount);
+
+            _Page = Observable.CombineLatest(
+                this.WhenAnyValue(v => v.MCodePage),
+                this.WhenAnyValue(v => v.MCodePageCount),
+                (page_request, page_count) =>
+                $"{page_request.Page}/{page_count}")
+                .ToPropertyRC(this, v => v.Page);
+
+            var page_request = this.WhenAnyValue(v => v.MCodePage);
+            var mcode_sort = SortExpressionComparer<IFluxMCodeStorageViewModel>
+                .Descending(v => v.Analyzer.MCode.Created);
+
+            PagedMCodes = AvaiableMCodes.Connect()
+                .RemoveKey()
+                .Sort(mcode_sort)
+                .Page(page_request)
+                .AsObservableListRC(this);
+
             var can_delete_all = AvaiableMCodes.Connect()
                 .TrueForAll(mcode => mcode.WhenAnyValue(m => m.CanDelete), d => d);
 
@@ -96,7 +145,17 @@ namespace Flux.ViewModels
             DeleteAllCommand = ReactiveCommandBaseRC.CreateFromTask(async () => { await ClearMCodeStorageAsync(); }, this, can_delete_all);
             AddToQueueCommand = ReactiveCommandBaseRC.CreateFromTask((Func<IFluxMCodeStorageViewModel, Task<bool>>)AddToQueueAsync, this, can_select);
             this.WhenAnyValue(v => v.RemovableDrivePaths)
-                .SubscribeRC(ExploreDrives, this);
+                .SubscribeRC(async drives => await ExploreDrivesAsync(drives), this);
+
+            var can_next_page_command = Observable.CombineLatest(
+                this.WhenAnyValue(v => v.MCodePage),
+                this.WhenAnyValue(v => v.MCodePageCount),
+                (page_request, page_count) => page_request.Page < page_count);
+
+            var can_previous_page_command = this.WhenAnyValue(v => v.MCodePage).Select(page_request => page_request.Page > 1);
+
+            NextPageCommand = ReactiveCommandBaseRC.Create(() => { MCodePage = new PageRequest(MCodePage.Page + 1, MCodePageSize); }, this, can_next_page_command);
+            PreviousPageCommand = ReactiveCommandBaseRC.Create(() => { MCodePage = new PageRequest(MCodePage.Page - 1, MCodePageSize); }, this, can_previous_page_command);
         }
 
         private bool CanSelectMCode(bool selecting, Optional<FLUX_ProcessStatus> status, PrintingEvaluation printing_eval)
@@ -127,18 +186,6 @@ namespace Flux.ViewModels
                .Filter(filter_queue)
                .DisposeMany()
                .AsObservableCacheRC(this);
-
-            var storage_comparer = SortExpressionComparer<IFluxMCodeStorageViewModel>
-                .Ascending(storage => storage.FileNumber);
-
-            var queue_comparer = SortExpressionComparer<IFluxMCodeQueueViewModel>
-                .Ascending(storage => storage.FluxJob.QueuePosition);
-
-            Flux.StatusProvider
-                .WhenAnyValue(s => s.JobQueue)
-                .Where(q => q.HasValue)
-                .Throttle(TimeSpan.FromSeconds(1))
-                .SubscribeRC(async q => await Flux.ConnectionProvider.GenerateInnerQueueAsync(q.Value), this);
         }
 
         public void FindDrive()
@@ -148,16 +195,15 @@ namespace Flux.ViewModels
                 var media = new DirectoryInfo("/media");
                 RemovableDrivePaths = media.ToOptional(m => m.Exists)
                     .Convert(m => m.GetDirectories())
-                    .Convert(m => m.Where(d => d.Name.StartsWith("usb")))
                     .Convert(m => m.ToArray());
             }
             catch (Exception ex)
             {
                 RemovableDrivePaths = default;
-                Flux.Messages.LogException(this, ex);
+                // Flux.Messages.LogException(this, ex);
             }
         }
-        private void ExploreDrives(Optional<DirectoryInfo[]> folders)
+        private async Task ExploreDrivesAsync(Optional<DirectoryInfo[]> folders)
         {
             try
             {
@@ -176,10 +222,11 @@ namespace Flux.ViewModels
                     }
                     catch (Exception ex)
                     {
-                        Flux.Messages.LogException(this, ex);
+                        // Flux.Messages.LogException(this, ex);
                     }
 
-                    if (parse_ip_file(folder))
+                    var parse_ip_file_result = await parse_ip_file_async(folder);
+                    if (parse_ip_file_result)
                         return;
 
                     //if (parse_operator_file(folder))
@@ -209,13 +256,13 @@ namespace Flux.ViewModels
                 }
                 catch (Exception ex)
                 {
-                    Flux.Messages.LogException(this, ex);
+                    // Flux.Messages.LogException(this, ex);
                     OperatorUSB = default;
                     return false;
                 }
             }
 
-            bool parse_ip_file(DirectoryInfo folder)
+            async Task<bool> parse_ip_file_async(DirectoryInfo folder)
             {
                 var ipaddress_file = folder.GetFiles("ipaddress.modulo").FirstOrOptional(_ => true);
                 if (!ipaddress_file.HasValue)
@@ -256,16 +303,7 @@ namespace Flux.ViewModels
                         dhcpcd_conf_writer.WriteLine($"static routers={ipaddress_config.Value.Eth1Router}");
                         dhcpcd_conf_writer.WriteLine($"static domain_name_servers={ipaddress_config.Value.Eth1DNS}");
 
-                        using var process = new Process
-                        {
-                            StartInfo = new ProcessStartInfo
-                            {
-                                UseShellExecute = true,
-                                FileName = "/bin/bash",
-                                Arguments = $"-c \"sudo reboot\"",
-                            }
-                        };
-                        process.Start();
+                        await ProcessUtils.RunLinuxCommandsAsync("sudo reboot");
                     }
 
                     return true;
@@ -344,7 +382,7 @@ namespace Flux.ViewModels
             }
             catch (Exception ex)
             {
-                Flux.Messages.LogException(this, ex);
+                // Flux.Messages.LogException(this, ex);
             }
             finally
             {
@@ -391,7 +429,7 @@ namespace Flux.ViewModels
                 mcode_vm = AvaiableMCodes.Lookup(mcode.MCodeKey);
                 if (!mcode_vm.HasValue)
                 {
-                    Flux.Messages.LogMessage("Impossibile preparare il lavoro", "MCode non disponibile", MessageLevel.ERROR, 0);
+                    // Flux.Messages.LogMessage("Impossibile preparare il lavoro", "MCode non disponibile", MessageLevel.ERROR, 0);
                     return false;
                 }
 
@@ -403,7 +441,7 @@ namespace Flux.ViewModels
                 {
                     if (!await Flux.ConnectionProvider.WriteVariableAsync(m => m.ENABLE_VACUUM, true))
                     {
-                        Flux.Messages.LogMessage("Impossibile preparare il lavoro", "Impossibile attivare la pompa a vuoto", MessageLevel.ERROR, 0);
+                        // Flux.Messages.LogMessage("Impossibile preparare il lavoro", "Impossibile attivare la pompa a vuoto", MessageLevel.ERROR, 0);
                         return false;
                     }
                 }
@@ -454,12 +492,12 @@ namespace Flux.ViewModels
                 if (!await Flux.ConnectionProvider.DeleteAsync(c => c.StoragePath, $"{file.MCodeKey}", delete_cts.Token))
                     return false;
 
-                Flux.Messages.LogMessage(FileResponse.FILE_DELETED, file);
+                // Flux.Messages.LogMessage(FileResponse.FILE_DELETED, file);
                 return true;
             }
             catch (Exception ex)
             {
-                Flux.Messages.LogMessage(FileResponse.FILE_DELETE_ERROR, file, ex);
+                // Flux.Messages.LogMessage(FileResponse.FILE_DELETE_ERROR, file, ex);
                 return false;
             }
         }
@@ -496,26 +534,82 @@ namespace Flux.ViewModels
         }
         public async Task<bool> GenerateQueueAsync(IEnumerable<FluxJob> queue)
         {
+            queue = queue
+                .OrderBy(job => job.QueuePosition)
+                .Select((j, i) => j with { QueuePosition = i });
+
             var connection_provider = Flux.ConnectionProvider;
 
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            var source = queue
-                .OrderBy(j => j.QueuePosition.Value)
-                .Select((j, i) => $"{j with { QueuePosition = i }}");
-
-            if (!await connection_provider.PutFileAsync(
-                c => c.QueuePath, "queue", true, cts.Token, new GCodeString(source)))
-            {
-                Console.WriteLine("Impossibile caricare il file \"queue\"");
-                return false;
-            }
-
-            var queue_pos = await Flux.ConnectionProvider
-               .ReadVariableAsync(c => c.QUEUE_POS);
-
+            var queue_pos = await Flux.ConnectionProvider.ReadVariableAsync(c => c.QUEUE_POS);
             if (!queue_pos.HasValue)
             {
                 Console.WriteLine("Impossibile leggere la posizione della coda");
+                return false;
+            }
+
+            var queue_source_gcode_lines = queue.Select(job => job.ToString());
+            var queue_source_gcode = new GCodeString(queue_source_gcode_lines);
+            using var put_queue_cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            if (!await connection_provider.PutFileAsync(
+                c => c.QueuePath, "queue.temp", true, put_queue_cts.Token, queue_source_gcode))
+            {
+                Console.WriteLine("Impossibile caricare il file \"queue.temp\"");
+                return false;
+            }
+
+            var get_queue_file_cts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+            var queue_file_str = await connection_provider.GetFileAsync(c => c.QueuePath, "queue.temp", get_queue_file_cts.Token);
+            if(!queue_file_str.HasValue)
+            {
+                Console.WriteLine("Impossibile leggere il file \"queue.temp\"");
+                return false;
+            }
+
+            if(!queue_source_gcode.VerifySHA256(queue_file_str.Value))
+            {
+                Console.WriteLine("Hash non valido per il file \"queue.temp\"");
+                return false;
+            }
+
+            var job_queue = new JobQueue(queue_pos.Value);
+            foreach(var flux_job in queue)
+                job_queue.Add(flux_job.QueuePosition, flux_job);
+
+            var inner_queue_gcodes = job_queue
+                .Select(j => connection_provider.ConnectionBase.GenerateInnerQueueGCodes(j.Value));
+
+            if(!await generate_temp_inner_queue(
+                ("end.g", g => g.End),
+                ("spin.g", g => g.Spin),
+                ("pause.g", g => g.Pause),
+                ("begin.g", g => g.Begin),
+                ("start.g", g => g.Start),
+                ("resume.g", g => g.Resume),
+                ("cancel.g", g => g.Cancel)))
+            {
+                Console.WriteLine("Impossibile creare la coda interna");
+                return false;
+            }
+
+            var queue_temp_path = connection_provider.CombinePaths(connection_provider.QueuePath, "queue.temp");
+            var queue_path = connection_provider.CombinePaths(connection_provider.QueuePath, "queue");
+            var rename_inner_queue_cts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+            if (!await connection_provider.RenameAsync(queue_temp_path, queue_path, rename_inner_queue_cts.Token))
+            {
+                Console.WriteLine("Impossibile rinominare il file \"queue.temp\"");
+                return false;
+            }
+
+            if (!await rename_temp_inner_queue(
+                  "end.g",
+                  "spin.g",
+                  "pause.g",
+                  "begin.g",
+                  "start.g",
+                  "resume.g",
+                  "cancel.g"))
+            {
+                Console.WriteLine("Impossibile rinominare la coda interna");
                 return false;
             }
 
@@ -544,6 +638,66 @@ namespace Flux.ViewModels
                 await Flux.ConnectionProvider.CancelPrintAsync(true);
 
             return true;
+
+
+            async Task<bool> generate_temp_inner_queue(params (string filename, Func<InnerQueueGCodes, GCodeString> get_gcode)[] macros)
+            {
+                foreach (var (inner_queue_filename, get_inner_queue_gcode) in macros)
+                {
+                    var inner_queue_gcode_lines = inner_queue_gcodes.Select((g, i) =>
+                    {
+                        var (start_compare, end_compare) = connection_provider.GetCompareQueuePosGCode(i);
+                        return GCodeString.Create(
+                            start_compare,
+                            get_inner_queue_gcode(g).Pad(4),
+                            end_compare);
+                    });
+
+                    var inner_queue_gcode_string = new GCodeString(inner_queue_gcode_lines);
+
+                    var temp_filename = Path.ChangeExtension(inner_queue_filename, ".temp");
+                    using var put_cts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+                    if (!await connection_provider.PutFileAsync(c => c.InnerQueuePath, temp_filename, true, put_cts.Token, inner_queue_gcode_string))
+                    {
+                        Console.WriteLine("Impossibile caricare il file coda interna");
+                        return false;
+                    }
+
+                    using var get_inner_queue_cts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+                    var inner_queue_file_str = await connection_provider.GetFileAsync(c => c.InnerQueuePath, temp_filename, get_inner_queue_cts.Token);
+                    if (!inner_queue_file_str.HasValue)
+                    {
+                        Console.WriteLine("Impossibile leggere il file coda interna");
+                        return false;
+                    }
+
+                    if (!inner_queue_gcode_string.VerifySHA256(inner_queue_file_str.Value))
+                    {
+                        Console.WriteLine($"Hash non valido per il file \"{inner_queue_filename}\"");
+                        return false;
+                    }
+                }
+                return true;
+            }
+
+            async Task<bool> rename_temp_inner_queue(params string[] macros)
+            {
+
+                foreach (var inner_queue_filename in macros)
+                {
+                    var inner_queue_temp_filename = Path.ChangeExtension(inner_queue_filename, ".temp");
+                    var inner_queue_temp_path = connection_provider.CombinePaths(connection_provider.InnerQueuePath, inner_queue_temp_filename);
+                    var inner_queue_path = connection_provider.CombinePaths(connection_provider.InnerQueuePath, inner_queue_filename);
+
+                    var rename_inner_queue_cts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+                    if (!await connection_provider.RenameAsync(inner_queue_temp_path, inner_queue_path, rename_inner_queue_cts.Token))
+                    {
+                        Console.WriteLine("Impossibile rinominare il file coda interna");
+                        return false;
+                    }
+                }
+                return true;
+            }
         }
         public async Task<bool> AddToQueueAsync(IFluxMCodeStorageViewModel mcode)
         {

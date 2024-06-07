@@ -32,7 +32,7 @@ namespace Flux.ViewModels
         public FluxViewModel Flux { get; }
         public OSAI_ConnectionProvider(FluxViewModel flux) : base(flux,
             OSAI_ConnectionPhase.START_PHASE, OSAI_ConnectionPhase.END_PHASE, p => (int)p,
-            c => new OSAI_VariableStore(c), c => new OSAI_Connection(flux, c), c => new OSAI_MemoryBuffer(c))
+            c => new OSAI_VariableStore(c), c => new OSAI_Connection(flux, c), c => new OSAI_MemoryBuffer(flux, c))
         {
             Flux = flux;
             Flux.MCodes.WhenAnyValue(c => c.OperatorUSB)
@@ -160,10 +160,10 @@ namespace Flux.ViewModels
             }
             catch (Exception ex)
             {
-                Flux.Messages.LogException(this, ex);
+                // Flux.Messages.LogException(this, ex);
             }
         }
-        protected override (GCodeString start_compare, GCodeString end_compare) CompareQueuePosGCode(int queue_pos)
+        public override (GCodeString start_compare, GCodeString end_compare) GetCompareQueuePosGCode(int queue_pos)
         {
             return ($"(IF, !QUEUE_POS = {queue_pos})", "(ENDIF)");
         }

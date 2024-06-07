@@ -20,7 +20,8 @@ namespace Flux.ViewModels
         DISCONNECTING_CLIENT = 1,
         CONNECTING_CLIENT = 2,
         READING_STATUS = 3,
-        INITIALIZING_VARIABLES = 4,
+        INITIALIZING_DATETIME = 4,
+        INITIALIZING_VARIABLES = 5,
         READING_MEMORY = 6,
         END_PHASE = 7,
     }
@@ -32,7 +33,7 @@ namespace Flux.ViewModels
 
         public RRF_ConnectionProvider(FluxViewModel flux, Func<RRF_ConnectionProvider, RRF_VariableStoreBase> get_variable_store) : base(flux,
             RRF_ConnectionPhase.START_PHASE, RRF_ConnectionPhase.END_PHASE, p => (int)p,
-            get_variable_store, c => new RRF_Connection(flux, c), c => new RRF_MemoryBuffer(c))
+            get_variable_store, c => new RRF_Connection(flux, c), c => new RRF_MemoryBuffer(flux, c))
         {
             Flux = flux;
         }
@@ -81,7 +82,7 @@ namespace Flux.ViewModels
                         break;
 
                     case RRF_ConnectionPhase.READING_STATUS:
-                        Flux.Messages.Messages.Clear();
+                        // Flux.Messages.Messages.Clear();
                         var state = await MemoryBuffer.GetModelDataAsync(m => m.State, ct);
                         if (!state.HasValue)
                             return;
@@ -91,7 +92,16 @@ namespace Flux.ViewModels
                         if (status.Value == FLUX_ProcessStatus.CYCLE)
                             ConnectionPhase = RRF_ConnectionPhase.READING_MEMORY;
                         else
-                            ConnectionPhase = RRF_ConnectionPhase.INITIALIZING_VARIABLES;
+                            ConnectionPhase = RRF_ConnectionPhase.INITIALIZING_DATETIME;
+                        break;
+
+                    case RRF_ConnectionPhase.INITIALIZING_DATETIME:
+                        var current_datetime = DateTime.Now;
+                        var current_date = $"{current_datetime:yyyy-MM-dd}";
+                        var current_time = $"{current_datetime:HH:mm:ss}";
+                        // TODO - timezone 
+                        var init_datetime = await Connection.PostGCodeAsync($"M905 P{current_date} S{current_time}", ct);
+                        ConnectionPhase = init_datetime ? RRF_ConnectionPhase.INITIALIZING_VARIABLES: RRF_ConnectionPhase.INITIALIZING_DATETIME;
                         break;
 
                     case RRF_ConnectionPhase.INITIALIZING_VARIABLES:
@@ -111,7 +121,7 @@ namespace Flux.ViewModels
             }
             catch (Exception ex)
             {
-                Flux.Messages.LogException(this, ex);
+                // Flux.Messages.LogException(this, ex);
             }
         }
         public override Optional<FluxJobRecovery> GetFluxJobRecoveryFromSource(FluxJob current_job, string source)
@@ -211,7 +221,7 @@ namespace Flux.ViewModels
                 return default;
             }
         }
-        protected override (GCodeString start_compare, GCodeString end_compare) CompareQueuePosGCode(int queue_pos)
+        public override (GCodeString start_compare, GCodeString end_compare) GetCompareQueuePosGCode(int queue_pos)
         {
             return ($"{(queue_pos == 0 ? "if" : "elif")} global.queue_pos = {queue_pos}", default);
         }

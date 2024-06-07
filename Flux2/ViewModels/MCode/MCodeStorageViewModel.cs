@@ -15,6 +15,7 @@ namespace Flux.ViewModels
 {
     public class MCodeStorageViewModel : RemoteControl<MCodeStorageViewModel>, IFluxMCodeStorageViewModel
     {
+
         public MCodeAnalyzer Analyzer { get; }
 
         public MCodeKey MCodeKey { get; }

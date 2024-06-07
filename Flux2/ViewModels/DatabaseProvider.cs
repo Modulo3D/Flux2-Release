@@ -62,7 +62,7 @@ namespace Flux.ViewModels
             }
             catch (Exception ex)
             {
-                Flux.Messages?.LogMessage(DatabaseResponse.DATABASE_DOWNLOAD_EXCEPTION, ex: ex);
+                // Flux.Messages?.LogMessage(DatabaseResponse.DATABASE_DOWNLOAD_EXCEPTION, ex: ex);
             }
 
             ILocalDatabase database;
@@ -84,13 +84,13 @@ namespace Flux.ViewModels
                 }
                 else
                 {
-                    Flux.Messages?.LogMessage(DatabaseResponse.DATABASE_NOT_FOUND);
+                    // Flux.Messages?.LogMessage(DatabaseResponse.DATABASE_NOT_FOUND);
                     return false;
                 }
             }
             catch (Exception ex)
             {
-                Flux.Messages?.LogMessage(DatabaseResponse.DATABASE_LOAD_EXCEPTION, ex: ex);
+                // Flux.Messages?.LogMessage(DatabaseResponse.DATABASE_LOAD_EXCEPTION, ex: ex);
                 return false;
             }
         }

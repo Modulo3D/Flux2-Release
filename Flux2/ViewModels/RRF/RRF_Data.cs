@@ -350,8 +350,8 @@ namespace Flux.ViewModels
         //[JsonProperty("filament")]
         //public Optional<double> Filament { get; set; }
 
-        //[JsonProperty("file")]
-        //public Optional<double> File { get; set; }
+        [JsonProperty("file")]
+        public Optional<double> File { get; set; }
 
         //[JsonProperty("layer")]
         //public Optional<double> Layer { get; set; }
@@ -386,8 +386,8 @@ namespace Flux.ViewModels
         //[JsonProperty("layerTime")]
         //public Optional<double> LayerTime { get; set; }
 
-        //[JsonProperty("timesLeft")]
-        //public RRF_ObjectModelTimesLeft TimesLeft { get; set; }
+        [JsonProperty("timesLeft")]
+        public RRF_ObjectModelTimesLeft TimesLeft { get; set; }
 
         //[JsonProperty("warmUpDuration")]
         //public Optional<double> WarmUpDuration { get; set; }
@@ -1204,6 +1204,9 @@ namespace Flux.ViewModels
 
         private Optional<FLUX_FileList> _JobEvents;
         public Optional<FLUX_FileList> JobEvents { get => _JobEvents; set => this.RaiseAndSetIfChanged(ref _JobEvents, value); }
+
+        private Optional<FLUX_FileList> _Messages;
+        public Optional<FLUX_FileList> Messages { get => _Messages; set => this.RaiseAndSetIfChanged(ref _Messages, value); }
     }
 
     public class RRF_ObjectModelResponse<T>
@@ -1261,7 +1264,11 @@ namespace Flux.ViewModels
                 if (percentage > 100)
                     percentage = 0;
 
-                return new MCodeProgress(mcode_key, percentage);
+                var remaining_seconds = job.TimesLeft.File;
+                if(!remaining_seconds.HasValue)
+                    return default;
+
+                return new MCodeProgress(mcode_key, (percentage, remaining_seconds.Value));
             }
             catch
             {

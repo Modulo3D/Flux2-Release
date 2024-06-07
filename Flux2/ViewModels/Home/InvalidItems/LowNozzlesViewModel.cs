@@ -68,6 +68,8 @@ namespace Flux.ViewModels
                 .Filter(line => line.ToolNozzle.HasLowWeight)
                 .Transform(line => (IInvalidValueViewModel)new LowMaterialViewModel(Flux, line))
                 .AsObservableListRC(this);
+
+            base.Initialize();
         }
 
         public override Task ChangeItemsAsync()

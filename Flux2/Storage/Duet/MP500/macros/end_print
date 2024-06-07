@@ -28,8 +28,5 @@ M42 P2 S0
 ; turn off vacuum
 M42 P3 S0
 
-; stop job
-M98 P"/macros/job/stop" R0 D{state.time}
-
 ; reset the queue
 set global.queue_pos = -1

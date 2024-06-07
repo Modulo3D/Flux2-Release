@@ -26,10 +26,6 @@ namespace Flux.ViewModels
         [RemoteOutput(false, typeof(ToStringConverter))]
         public FluxJob FluxJob { get; }
 
-        public ObservableAsPropertyHelper<QueuePosition> _QueuePosition;
-        [RemoteOutput(true)]
-        public QueuePosition QueuePosition => _QueuePosition.Value;
-
         private readonly ObservableAsPropertyHelper<short> _FileNumber;
         [RemoteOutput(true)]
         public short FileNumber => _FileNumber.Value;
@@ -37,6 +33,9 @@ namespace Flux.ViewModels
         private readonly ObservableAsPropertyHelper<bool> _CurrentIndex;
         [RemoteOutput(true)]
         public bool CurrentIndex => _CurrentIndex.Value;
+
+        [RemoteOutput(true)]
+        public short QueuePosition => FluxJob.QueuePosition;
 
         [RemoteCommand]
         public ReactiveCommandBaseRC<Unit, Unit> DeleteMCodeQueueCommand { get; }
@@ -57,17 +56,16 @@ namespace Flux.ViewModels
             FluxJob = job;
             MCodes = mcodes;
 
-           _QueuePosition = MCodes.Flux.ConnectionProvider
-                .ObserveVariable(c => c.QUEUE_POS)
-                .ValueOr(() => (short)-1)
-                .DistinctUntilChanged()
-                .ToPropertyRC(this, v => v.QueuePosition);
+            var queue_position = MCodes.Flux.ConnectionProvider
+                 .ObserveVariable(c => c.QUEUE_POS)
+                 .ValueOr(() => (short)-1)
+                 .DistinctUntilChanged();
 
             var print_progress = MCodes.Flux.StatusProvider
                 .WhenAnyValue(s => s.PrintProgress)
                 .DistinctUntilChanged();
 
-            _CurrentIndex = this.WhenAnyValue(v => v.QueuePosition)
+            _CurrentIndex = queue_position
                 .Select(q => q == job.QueuePosition)
                 .ToPropertyRC(this, v => v.CurrentIndex);
 
@@ -85,7 +83,7 @@ namespace Flux.ViewModels
 
             _EndTime = Observable.CombineLatest(
                 mcodes.Flux.WhenAnyValue(f => f.CurrentTime),
-                this.WhenAnyValue(v => v.QueuePosition),
+                queue_position,
                 print_progress,
                 mcode_analyzers,
                 FindEndTime)
@@ -115,9 +113,9 @@ namespace Flux.ViewModels
                 .Convert(c => new QueuePosition((short)c))
                 .ValueOr(() => new QueuePosition(-1));
 
-            var can_move_up = Observable.CombineLatest(is_idle, this.WhenAnyValue(v => v.QueuePosition), CanMoveUpQueue);
-            var can_delete = Observable.CombineLatest(can_safe_cycle, this.WhenAnyValue(v => v.QueuePosition), CanDeleteQueue);
-            var can_move_down = Observable.CombineLatest(is_idle, this.WhenAnyValue(v => v.QueuePosition), last_queue_pos, CanMoveDownQueue);
+            var can_move_up = Observable.CombineLatest(is_idle, queue_position, CanMoveUpQueue);
+            var can_delete = Observable.CombineLatest(can_safe_cycle, queue_position, CanDeleteQueue);
+            var can_move_down = Observable.CombineLatest(is_idle, queue_position, last_queue_pos, CanMoveDownQueue);
 
             DeleteMCodeQueueCommand = ReactiveCommandBaseRC.CreateFromTask(async () => { await MCodes.DeleteFromQueueAsync(this); }, this, can_delete);
             MoveUpMCodeQueueCommand = ReactiveCommandBaseRC.CreateFromTask(async () => { await MCodes.MoveInQueueAsync(this, i => (short)(i - 1)); }, this, can_move_up);

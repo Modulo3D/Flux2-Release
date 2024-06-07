@@ -13,6 +13,7 @@ using System.Net;
 using System.Reactive;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
+using System.ServiceModel.Channels;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -27,6 +28,7 @@ namespace Flux.ViewModels
         public static FileInfo Stats => AccessFile(Directories.Storage, "Stats.json");
         public static FileInfo CoreSettings => AccessFile(Directories.Storage, "CoreSettings.json");
         public static FileInfo UserSettings => AccessFile(Directories.Storage, "UserSettings.json");
+        public static FileInfo MemorySettings => AccessFile(Directories.Storage, "MemorySettings.json");
         public static FileInfo Status => AccessFile(Directories.Storage, "Status.json");
         public static FileInfo Database => AccessFile(Directories.Storage, "Database.db");
         public static FileInfo MCode => AccessFile(Directories.Storage, "MCode.mcode");
@@ -184,7 +186,6 @@ namespace Flux.ViewModels
             {
                 try
                 {
-                    Messages = new MessagesViewModel(this);
                     NetProvider = new NetProvider(this);
 
                     var printer_id = SettingsProvider.CoreSettings.Local.PrinterID;
@@ -206,6 +207,7 @@ namespace Flux.ViewModels
                         13 => new RRF_ConnectionProvider(this, c => new RRF_VariableStoreS300A(c)),
                         14 => new RRF_ConnectionProvider(this, c => new RRF_VariableStoreS300A(c)),
                         15 => new OSAI_ConnectionProvider(this),
+                        16 => new RRF_ConnectionProvider(this, c => new RRF_VariableStoreS300(c)),
                         _ => Optional<IFLUX_ConnectionProvider>.None
                     };
 
@@ -217,6 +219,7 @@ namespace Flux.ViewModels
                     }
 
                     ConnectionProvider = connection_provider.Value;
+                    Messages = new MessagesViewModel(this);
 
                     Feeders = new FeedersViewModel(this);
                     MCodes = new MCodesViewModel(this);
@@ -261,9 +264,13 @@ namespace Flux.ViewModels
                     OpenStatusBarCommand = ReactiveCommandBaseRC.Create(() => { Navigator.Navigate(status_bar_nav); }, this);
 
                     ConnectionProvider.Initialize();
+                    Messages.Initialize();
+
                     StatusProvider.Initialize();
                     NetProvider.Initialize();
                     MCodes.Initialize();
+
+                    StatusBar.Initialize(); 
 
                     _StatusText = Observable.CombineLatest(
                         StatusProvider.WhenAnyValue(v => v.FluxStatus),
@@ -654,12 +661,12 @@ namespace Flux.ViewModels
 
         public void OnNext(Exception value)
         {
-            //Flux.Messages.LogException(this, value);
+            //// Flux.Messages.LogException(this, value);
         }
 
         public void OnError(Exception error)
         {
-            //Flux.Messages.LogException(this, error);
+            //// Flux.Messages.LogException(this, error);
         }
 
         public void OnCompleted()

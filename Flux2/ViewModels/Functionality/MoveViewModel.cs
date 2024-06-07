@@ -78,10 +78,10 @@ namespace Flux.ViewModels
 
             ShowRoutinesCommand = ReactiveCommandBaseRC.CreateFromTask(async () => { await Flux.ShowModalDialogAsync(f => f.Functionality.Routines); }, this);
 
-            var has_limits = variable_store.HasMovementLimits;
+            //var has_limits = variable_store.HasMovementLimits;
             var can_move_xyz = Flux.StatusProvider
                 .WhenAnyValue(s => s.StatusEvaluation)
-                .Select(e => e.CanSafeCycle && has_limits);
+                .Select(e => e.CanSafeCycle /*&& has_limits*/);
             
             var can_move_e = Flux.StatusProvider
                 .WhenAnyValue(s => s.StatusEvaluation)
